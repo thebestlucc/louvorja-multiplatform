@@ -119,4 +119,16 @@ pub struct MonitorInfo {
     pub width: u32,
     pub height: u32,
     pub is_primary: bool,
+    pub x: i32,
+    pub y: i32,
+    pub scale_factor: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlideContent {
+    pub slide_type: String,
+    pub text: Option<String>,
+    pub title: Option<String>,
+    pub subtitle: Option<String>,
+    pub label: Option<String>,
 }

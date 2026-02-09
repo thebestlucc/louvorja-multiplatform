@@ -42,5 +42,18 @@
   "commandPalette": {
     "placeholder": "Digite um comando...",
     "noResults": "Nenhum resultado encontrado"
+  },
+  "hymnal": {
+    "searchPlaceholder": "Pesquisar hinos por número, título ou letra...",
+    "albums": "Álbuns",
+    "loading": "Carregando...",
+    "noResults": "Nenhum hino encontrado",
+    "noAlbums": "Nenhum álbum encontrado",
+    "noLyrics": "Este hino não possui letra cadastrada",
+    "notFound": "Hino não encontrado",
+    "author": "Autor",
+    "project": "Projetar",
+    "stopProjection": "Parar projeção",
+    "slides": "Slides"
   }
 }

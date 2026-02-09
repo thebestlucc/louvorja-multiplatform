@@ -1,4 +1,4 @@
-import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
@@ -9,7 +9,15 @@ export const Route = createRootRoute({
   component: RootLayout,
 });
 
+const BARE_ROUTES = ["/projector", "/return"];
+
 function RootLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  if (BARE_ROUTES.includes(pathname)) {
+    return <Outlet />;
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
       <Sidebar />

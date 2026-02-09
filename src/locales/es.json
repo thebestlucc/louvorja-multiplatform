@@ -42,5 +42,18 @@
   "commandPalette": {
     "placeholder": "Escriba un comando...",
     "noResults": "No se encontraron resultados"
+  },
+  "hymnal": {
+    "searchPlaceholder": "Buscar himnos por número, título o letra...",
+    "albums": "Álbumes",
+    "loading": "Cargando...",
+    "noResults": "No se encontraron himnos",
+    "noAlbums": "No se encontraron álbumes",
+    "noLyrics": "Este himno no tiene letra",
+    "notFound": "Himno no encontrado",
+    "author": "Autor",
+    "project": "Proyectar",
+    "stopProjection": "Detener proyección",
+    "slides": "Diapositivas"
   }
 }

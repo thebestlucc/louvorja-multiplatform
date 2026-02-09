@@ -1,21 +1,115 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, Row, params};
 use crate::db::models::{Hymn, Album};
 use crate::error::AppError;
 
-pub fn search_hymns(_conn: &Connection, _query: &str) -> Result<Vec<Hymn>, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
+    Ok(Hymn {
+        id: row.get("id")?,
+        number: row.get("number")?,
+        title: row.get("title")?,
+        author: row.get("author")?,
+        album: row.get("album")?,
+        lyrics: row.get("lyrics")?,
+        chords: row.get("chords")?,
+        audio_path: row.get("audio_path")?,
+        category: row.get("category")?,
+        notes: row.get("notes")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
 }
 
-pub fn get_hymn_by_id(_conn: &Connection, _id: i64) -> Result<Hymn, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+fn sanitize_fts_query(query: &str) -> String {
+    query
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
 }
 
-pub fn get_albums(_conn: &Connection) -> Result<Vec<Album>, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppError> {
+    let trimmed = query.trim();
+
+    if trimmed.is_empty() {
+        let mut stmt = conn.prepare(
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+             FROM hymns ORDER BY number, title"
+        )?;
+        let hymns = stmt.query_map([], |row| map_hymn_row(row))?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
+    // If numeric, search by number
+    if let Ok(num) = trimmed.parse::<i64>() {
+        let mut stmt = conn.prepare(
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+             FROM hymns WHERE number = ?1 ORDER BY title"
+        )?;
+        let hymns = stmt.query_map(params![num], |row| map_hymn_row(row))?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
+    // Text search via FTS5
+    let sanitized = sanitize_fts_query(trimmed);
+    if sanitized.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let fts_query = format!("{}*", sanitized);
+    let mut stmt = conn.prepare(
+        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.category, h.notes, h.created_at, h.updated_at
+         FROM hymns h
+         JOIN hymns_fts ON hymns_fts.rowid = h.id
+         WHERE hymns_fts MATCH ?1
+         ORDER BY rank"
+    )?;
+    let hymns = stmt.query_map(params![fts_query], |row| map_hymn_row(row))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(hymns)
 }
 
-pub fn get_hymns_by_album(_conn: &Connection, _album: &str) -> Result<Vec<Hymn>, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn get_hymn_by_id(conn: &Connection, id: i64) -> Result<Hymn, AppError> {
+    conn.query_row(
+        "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+         FROM hymns WHERE id = ?1",
+        params![id],
+        |row| map_hymn_row(row),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("Hymn with id {} not found", id)),
+        other => AppError::Database(other),
+    })
+}
+
+pub fn get_albums(conn: &Connection) -> Result<Vec<Album>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT album, COUNT(*) as hymn_count
+         FROM hymns
+         WHERE album IS NOT NULL AND album != ''
+         GROUP BY album
+         ORDER BY album"
+    )?;
+    let albums = stmt.query_map([], |row| {
+        Ok(Album {
+            name: row.get("album")?,
+            hymn_count: row.get("hymn_count")?,
+        })
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+    Ok(albums)
+}
+
+pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+         FROM hymns WHERE album = ?1 ORDER BY number, title"
+    )?;
+    let hymns = stmt.query_map(params![album], |row| map_hymn_row(row))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(hymns)
 }
 
 pub fn insert_hymn(_conn: &Connection, _hymn: &Hymn) -> Result<i64, AppError> {
