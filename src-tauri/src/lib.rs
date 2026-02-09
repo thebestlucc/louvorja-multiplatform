@@ -9,7 +9,7 @@ mod error;
 
 use std::sync::Mutex;
 use tauri::Manager;
-use state::AppState;
+use state::{AppState, AudioState};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -34,6 +34,10 @@ pub fn run() {
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),
             });
+
+            let audio_state = AudioState::new()
+                .expect("Failed to initialize audio state");
+            app.manage(audio_state);
 
             Ok(())
         })
@@ -75,11 +79,14 @@ pub fn run() {
             // Audio
             commands::audio::audio_play,
             commands::audio::audio_pause,
+            commands::audio::audio_resume,
             commands::audio::audio_stop,
             commands::audio::audio_seek,
             commands::audio::audio_set_volume,
             commands::audio::audio_get_position,
             commands::audio::audio_get_status,
+            commands::audio::get_sync_points,
+            commands::audio::save_sync_points,
             // Display
             commands::display::get_available_monitors,
             commands::display::open_projector_window,

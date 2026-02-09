@@ -20,6 +20,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (1)", [])?;
     }
 
+    if current_version < 2 {
+        migrate_v2(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (2)", [])?;
+    }
+
     Ok(())
 }
 
@@ -132,6 +137,23 @@ fn migrate_v1(conn: &Connection) -> Result<(), AppError> {
         CREATE VIRTUAL TABLE IF NOT EXISTS bible_fts USING fts5(
             text, book, content=bible_verses, content_rowid=id
         );
+        "
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v2(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS audio_sync_points (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hymn_id INTEGER NOT NULL REFERENCES hymns(id) ON DELETE CASCADE,
+            slide_index INTEGER NOT NULL,
+            timestamp_ms INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audio_sync_hymn ON audio_sync_points(hymn_id);
         "
     )?;
 

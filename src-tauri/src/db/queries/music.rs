@@ -123,3 +123,28 @@ pub fn update_hymn(_conn: &Connection, _hymn: &Hymn) -> Result<(), AppError> {
 pub fn delete_hymn(_conn: &Connection, _id: i64) -> Result<(), AppError> {
     Err(AppError::Internal("Not implemented".into()))
 }
+
+pub fn get_sync_points(conn: &Connection, hymn_id: i64) -> Result<Vec<crate::audio::SyncPoint>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT slide_index, timestamp_ms FROM audio_sync_points WHERE hymn_id = ?1 ORDER BY timestamp_ms"
+    )?;
+    let points = stmt.query_map(params![hymn_id], |row| {
+        Ok(crate::audio::SyncPoint {
+            slide_index: row.get::<_, i64>("slide_index")? as usize,
+            timestamp_ms: row.get::<_, i64>("timestamp_ms")? as u64,
+        })
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+    Ok(points)
+}
+
+pub fn save_sync_points(conn: &Connection, hymn_id: i64, points: &[crate::audio::SyncPoint]) -> Result<(), AppError> {
+    conn.execute("DELETE FROM audio_sync_points WHERE hymn_id = ?1", params![hymn_id])?;
+    let mut stmt = conn.prepare(
+        "INSERT INTO audio_sync_points (hymn_id, slide_index, timestamp_ms) VALUES (?1, ?2, ?3)"
+    )?;
+    for point in points {
+        stmt.execute(params![hymn_id, point.slide_index as i64, point.timestamp_ms as i64])?;
+    }
+    Ok(())
+}
