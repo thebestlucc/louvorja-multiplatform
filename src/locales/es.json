@@ -55,5 +55,24 @@
     "project": "Proyectar",
     "stopProjection": "Detener proyección",
     "slides": "Diapositivas"
+  },
+  "audio": {
+    "play": "Reproducir",
+    "pause": "Pausar",
+    "stop": "Detener",
+    "resume": "Reanudar",
+    "volume": "Volumen",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido",
+    "progress": "Progreso",
+    "sung": "Cantado",
+    "karaoke": "Karaoke",
+    "silent": "Silencioso",
+    "syncEditor": "Editor de Sincronización",
+    "record": "Grabar",
+    "preview": "Vista previa",
+    "clearAll": "Borrar Todo",
+    "save": "Guardar",
+    "discard": "Descartar"
   }
 }

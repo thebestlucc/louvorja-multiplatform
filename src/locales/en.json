@@ -55,5 +55,24 @@
     "project": "Project",
     "stopProjection": "Stop projection",
     "slides": "Slides"
+  },
+  "audio": {
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "resume": "Resume",
+    "volume": "Volume",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "progress": "Progress",
+    "sung": "Sung",
+    "karaoke": "Karaoke",
+    "silent": "Silent",
+    "syncEditor": "Sync Editor",
+    "record": "Record",
+    "preview": "Preview",
+    "clearAll": "Clear All",
+    "save": "Save",
+    "discard": "Discard"
   }
 }

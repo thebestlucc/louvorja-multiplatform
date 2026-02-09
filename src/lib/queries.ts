@@ -1,6 +1,7 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { searchHymns, getHymn, getAlbums, getHymnsByAlbum, getAvailableMonitors, setCurrentSlide } from "./tauri";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { searchHymns, getHymn, getAlbums, getHymnsByAlbum, getAvailableMonitors, setCurrentSlide, getSyncPoints, saveSyncPoints } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
+import type { SyncPoint } from "../types/audio";
 
 export const queryKeys = {
   hymns: {
@@ -35,6 +36,9 @@ export const queryKeys = {
   },
   monitors: {
     all: ["monitors"] as const,
+  },
+  syncPoints: {
+    byHymn: (hymnId: number) => ["syncPoints", hymnId] as const,
   },
 } as const;
 
@@ -78,5 +82,24 @@ export function useMonitors() {
 export function useProjectSlide() {
   return useMutation({
     mutationFn: (slideData: SlideContentFlat) => setCurrentSlide(slideData),
+  });
+}
+
+export function useSyncPoints(hymnId: number) {
+  return useQuery({
+    queryKey: queryKeys.syncPoints.byHymn(hymnId),
+    queryFn: () => getSyncPoints(hymnId),
+    enabled: hymnId > 0,
+  });
+}
+
+export function useSaveSyncPoints() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ hymnId, points }: { hymnId: number; points: SyncPoint[] }) =>
+      saveSyncPoints(hymnId, points),
+    onSuccess: (_, { hymnId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.syncPoints.byHymn(hymnId) });
+    },
   });
 }

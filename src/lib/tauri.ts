@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Hymn, Album } from "../types/hymn";
 import type { MonitorInfo } from "../types/settings";
 import type { SlideContentFlat } from "../types/presentation";
+import type { AudioStatusPayload, SyncPoint } from "../types/audio";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -46,4 +47,46 @@ export async function closeProjectorWindow(): Promise<void> {
 
 export async function setCurrentSlide(slideData: SlideContentFlat): Promise<void> {
   return tauriInvoke<void>("set_current_slide", { slideData });
+}
+
+// Audio
+export async function audioPlay(filePath: string): Promise<void> {
+  return tauriInvoke<void>("audio_play", { filePath });
+}
+
+export async function audioPause(): Promise<void> {
+  return tauriInvoke<void>("audio_pause");
+}
+
+export async function audioResume(): Promise<void> {
+  return tauriInvoke<void>("audio_resume");
+}
+
+export async function audioStop(): Promise<void> {
+  return tauriInvoke<void>("audio_stop");
+}
+
+export async function audioSeek(positionMs: number): Promise<void> {
+  return tauriInvoke<void>("audio_seek", { positionMs });
+}
+
+export async function audioSetVolume(volume: number): Promise<void> {
+  return tauriInvoke<void>("audio_set_volume", { volume });
+}
+
+export async function audioGetPosition(): Promise<number> {
+  return tauriInvoke<number>("audio_get_position");
+}
+
+export async function audioGetStatus(): Promise<AudioStatusPayload> {
+  return tauriInvoke<AudioStatusPayload>("audio_get_status");
+}
+
+// Sync Points
+export async function getSyncPoints(hymnId: number): Promise<SyncPoint[]> {
+  return tauriInvoke<SyncPoint[]>("get_sync_points", { hymnId });
+}
+
+export async function saveSyncPoints(hymnId: number, points: SyncPoint[]): Promise<void> {
+  return tauriInvoke<void>("save_sync_points", { hymnId, points });
 }
