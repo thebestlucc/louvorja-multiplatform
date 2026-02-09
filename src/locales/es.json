@@ -1,0 +1,46 @@
+{
+  "app": {
+    "name": "LouvorJA"
+  },
+  "nav": {
+    "home": "Inicio",
+    "hymnal": "Himnario",
+    "bible": "Biblia",
+    "presentations": "Presentaciones",
+    "services": "Cultos",
+    "utilities": "Utilidades",
+    "settings": "Configuración"
+  },
+  "actions": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "search": "Buscar",
+    "create": "Crear",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "open": "Abrir",
+    "add": "Agregar",
+    "remove": "Quitar"
+  },
+  "themes": {
+    "azure": "Azul",
+    "white": "Blanco",
+    "gray": "Gris",
+    "orange": "Naranja",
+    "black": "Negro"
+  },
+  "status": {
+    "ready": "Listo",
+    "projectorOff": "Proyector apagado",
+    "streamingOff": "Streaming apagado"
+  },
+  "dashboard": {
+    "welcome": "Bienvenido a LouvorJA",
+    "subtitle": "Seleccione una opción del menú lateral para comenzar"
+  },
+  "commandPalette": {
+    "placeholder": "Escriba un comando...",
+    "noResults": "No se encontraron resultados"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "app": {
+    "name": "LouvorJA"
+  },
+  "nav": {
+    "home": "Home",
+    "hymnal": "Hymnal",
+    "bible": "Bible",
+    "presentations": "Presentations",
+    "services": "Services",
+    "utilities": "Utilities",
+    "settings": "Settings"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "search": "Search",
+    "create": "Create",
+    "edit": "Edit",
+    "close": "Close",
+    "open": "Open",
+    "add": "Add",
+    "remove": "Remove"
+  },
+  "themes": {
+    "azure": "Azure",
+    "white": "White",
+    "gray": "Gray",
+    "orange": "Orange",
+    "black": "Black"
+  },
+  "status": {
+    "ready": "Ready",
+    "projectorOff": "Projector off",
+    "streamingOff": "Streaming off"
+  },
+  "dashboard": {
+    "welcome": "Welcome to LouvorJA",
+    "subtitle": "Select an option from the sidebar to get started"
+  },
+  "commandPalette": {
+    "placeholder": "Type a command...",
+    "noResults": "No results found"
+  }
+}
