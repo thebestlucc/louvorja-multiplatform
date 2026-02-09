@@ -42,5 +42,18 @@
   "commandPalette": {
     "placeholder": "Type a command...",
     "noResults": "No results found"
+  },
+  "hymnal": {
+    "searchPlaceholder": "Search hymns by number, title or lyrics...",
+    "albums": "Albums",
+    "loading": "Loading...",
+    "noResults": "No hymns found",
+    "noAlbums": "No albums found",
+    "noLyrics": "This hymn has no lyrics",
+    "notFound": "Hymn not found",
+    "author": "Author",
+    "project": "Project",
+    "stopProjection": "Stop projection",
+    "slides": "Slides"
   }
 }

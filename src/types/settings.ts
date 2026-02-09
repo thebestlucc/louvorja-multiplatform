@@ -18,4 +18,7 @@ export interface MonitorInfo {
   width: number;
   height: number;
   is_primary: boolean;
+  x: number;
+  y: number;
+  scale_factor: number;
 }

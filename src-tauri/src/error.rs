@@ -16,6 +16,9 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Tauri error: {0}")]
+    Tauri(String),
 }
 
 impl Serialize for AppError {

@@ -31,6 +31,8 @@ pub fn run() {
 
             app.manage(AppState {
                 db: Mutex::new(conn),
+                current_slide: Mutex::new(None),
+                projector_open: Mutex::new(false),
             });
 
             Ok(())
@@ -85,6 +87,7 @@ pub fn run() {
             commands::display::open_return_window,
             commands::display::close_return_window,
             commands::display::set_monitor_config,
+            commands::display::set_current_slide,
             // Streaming
             commands::streaming::start_streaming_server,
             commands::streaming::stop_streaming_server,
