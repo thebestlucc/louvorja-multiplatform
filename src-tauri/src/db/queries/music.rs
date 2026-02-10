@@ -1,6 +1,6 @@
-use rusqlite::{Connection, Row, params};
-use crate::db::models::{Hymn, Album};
+use crate::db::models::{Album, Hymn};
 use crate::error::AppError;
+use rusqlite::{params, Connection, Row};
 
 fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
     Ok(Hymn {
@@ -37,7 +37,8 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
             "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
              FROM hymns ORDER BY number, title"
         )?;
-        let hymns = stmt.query_map([], |row| map_hymn_row(row))?
+        let hymns = stmt
+            .query_map([], |row| map_hymn_row(row))?
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(hymns);
     }
@@ -48,7 +49,8 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
             "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
              FROM hymns WHERE number = ?1 ORDER BY title"
         )?;
-        let hymns = stmt.query_map(params![num], |row| map_hymn_row(row))?
+        let hymns = stmt
+            .query_map(params![num], |row| map_hymn_row(row))?
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(hymns);
     }
@@ -67,7 +69,8 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
          WHERE hymns_fts MATCH ?1
          ORDER BY rank"
     )?;
-    let hymns = stmt.query_map(params![fts_query], |row| map_hymn_row(row))?
+    let hymns = stmt
+        .query_map(params![fts_query], |row| map_hymn_row(row))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
 }
@@ -90,15 +93,16 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<Album>, AppError> {
          FROM hymns
          WHERE album IS NOT NULL AND album != ''
          GROUP BY album
-         ORDER BY album"
+         ORDER BY album",
     )?;
-    let albums = stmt.query_map([], |row| {
-        Ok(Album {
-            name: row.get("album")?,
-            hymn_count: row.get("hymn_count")?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let albums = stmt
+        .query_map([], |row| {
+            Ok(Album {
+                name: row.get("album")?,
+                hymn_count: row.get("hymn_count")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(albums)
 }
 
@@ -107,7 +111,8 @@ pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, A
         "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
          FROM hymns WHERE album = ?1 ORDER BY number, title"
     )?;
-    let hymns = stmt.query_map(params![album], |row| map_hymn_row(row))?
+    let hymns = stmt
+        .query_map(params![album], |row| map_hymn_row(row))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
 }
@@ -124,27 +129,42 @@ pub fn delete_hymn(_conn: &Connection, _id: i64) -> Result<(), AppError> {
     Err(AppError::Internal("Not implemented".into()))
 }
 
-pub fn get_sync_points(conn: &Connection, hymn_id: i64) -> Result<Vec<crate::audio::SyncPoint>, AppError> {
+pub fn get_sync_points(
+    conn: &Connection,
+    hymn_id: i64,
+) -> Result<Vec<crate::audio::SyncPoint>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT slide_index, timestamp_ms FROM audio_sync_points WHERE hymn_id = ?1 ORDER BY timestamp_ms"
     )?;
-    let points = stmt.query_map(params![hymn_id], |row| {
-        Ok(crate::audio::SyncPoint {
-            slide_index: row.get::<_, i64>("slide_index")? as usize,
-            timestamp_ms: row.get::<_, i64>("timestamp_ms")? as u64,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let points = stmt
+        .query_map(params![hymn_id], |row| {
+            Ok(crate::audio::SyncPoint {
+                slide_index: row.get::<_, i64>("slide_index")? as usize,
+                timestamp_ms: row.get::<_, i64>("timestamp_ms")? as u64,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(points)
 }
 
-pub fn save_sync_points(conn: &Connection, hymn_id: i64, points: &[crate::audio::SyncPoint]) -> Result<(), AppError> {
-    conn.execute("DELETE FROM audio_sync_points WHERE hymn_id = ?1", params![hymn_id])?;
+pub fn save_sync_points(
+    conn: &Connection,
+    hymn_id: i64,
+    points: &[crate::audio::SyncPoint],
+) -> Result<(), AppError> {
+    conn.execute(
+        "DELETE FROM audio_sync_points WHERE hymn_id = ?1",
+        params![hymn_id],
+    )?;
     let mut stmt = conn.prepare(
-        "INSERT INTO audio_sync_points (hymn_id, slide_index, timestamp_ms) VALUES (?1, ?2, ?3)"
+        "INSERT INTO audio_sync_points (hymn_id, slide_index, timestamp_ms) VALUES (?1, ?2, ?3)",
     )?;
     for point in points {
-        stmt.execute(params![hymn_id, point.slide_index as i64, point.timestamp_ms as i64])?;
+        stmt.execute(params![
+            hymn_id,
+            point.slide_index as i64,
+            point.timestamp_ms as i64
+        ])?;
     }
     Ok(())
 }

@@ -36,6 +36,32 @@ export type SlideContent =
   | { type: "bible"; book: string; chapter: number; verseStart: number; verseEnd: number; text: string }
   | { type: "video"; src: string };
 
+/** Raw slide row from DB — content is a JSON string */
+export interface SlideRow {
+  id: number;
+  presentation_id: number;
+  slide_index: number;
+  slide_type: string;
+  content: string;
+  notes: string | null;
+  transition: string | null;
+}
+
+/** Parse a SlideRow into a Slide with parsed content */
+export function parseSlideRow(row: SlideRow): Slide {
+  let content: SlideContent;
+  try {
+    content = JSON.parse(row.content) as SlideContent;
+  } catch {
+    content = { type: "text", text: row.content };
+  }
+  return {
+    ...row,
+    slide_type: content.type as SlideType,
+    content,
+  };
+}
+
 /** Flat struct matching Rust SlideContent for Tauri IPC */
 export interface SlideContentFlat {
   slide_type: string;

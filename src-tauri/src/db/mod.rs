@@ -2,9 +2,9 @@ pub mod migrations;
 pub mod models;
 pub mod queries;
 
-use std::path::Path;
-use rusqlite::Connection;
 use crate::error::AppError;
+use rusqlite::Connection;
+use std::path::Path;
 
 pub fn init_db(app_data_dir: &Path) -> Result<Connection, AppError> {
     std::fs::create_dir_all(app_data_dir)?;

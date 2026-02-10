@@ -8,7 +8,6 @@ export function useSlides() {
   const {
     slides,
     activeSlideIndex,
-    setActiveSlideIndex,
   } = usePresentationStore();
 
   const projectSlide = useCallback(
@@ -20,21 +19,25 @@ export function useSlides() {
 
   const goToSlide = useCallback(
     async (index: number) => {
-      if (index >= 0 && index < slides.length) {
-        setActiveSlideIndex(index);
-        await projectSlide(slides[index]);
+      // Read fresh state to avoid stale closure (e.g. after setSlides + setTimeout)
+      const state = usePresentationStore.getState();
+      if (index >= 0 && index < state.slides.length) {
+        state.setActiveSlideIndex(index);
+        await projectSlide(state.slides[index]);
       }
     },
-    [slides, setActiveSlideIndex, projectSlide],
+    [projectSlide],
   );
 
   const nextSlide = useCallback(async () => {
-    await goToSlide(activeSlideIndex + 1);
-  }, [activeSlideIndex, goToSlide]);
+    const { activeSlideIndex: idx } = usePresentationStore.getState();
+    await goToSlide(idx + 1);
+  }, [goToSlide]);
 
   const prevSlide = useCallback(async () => {
-    await goToSlide(activeSlideIndex - 1);
-  }, [activeSlideIndex, goToSlide]);
+    const { activeSlideIndex: idx } = usePresentationStore.getState();
+    await goToSlide(idx - 1);
+  }, [goToSlide]);
 
   return {
     slides,

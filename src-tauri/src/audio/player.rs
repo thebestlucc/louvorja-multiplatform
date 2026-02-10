@@ -1,9 +1,9 @@
+use crate::error::AppError;
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::time::Duration;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
-use crate::error::AppError;
 
 pub struct AudioPlayer {
     sink: Option<Sink>,
@@ -45,11 +45,11 @@ impl AudioPlayer {
         // Read duration from a separate decoder
         self.duration_ms = Self::read_duration(path);
 
-        let source = Decoder::new(BufReader::new(
-            File::open(&path_buf)
-                .map_err(|e| AppError::Internal(format!("Failed to open audio file: {}", e)))?,
-        ))
-        .map_err(|e| AppError::Internal(format!("Failed to decode audio: {}", e)))?;
+        let source =
+            Decoder::new(BufReader::new(File::open(&path_buf).map_err(|e| {
+                AppError::Internal(format!("Failed to open audio file: {}", e))
+            })?))
+            .map_err(|e| AppError::Internal(format!("Failed to decode audio: {}", e)))?;
 
         let sink = Sink::try_new(&self.stream_handle)
             .map_err(|e| AppError::Internal(format!("Failed to create audio sink: {}", e)))?;
@@ -117,10 +117,7 @@ impl AudioPlayer {
     }
 
     pub fn is_paused(&self) -> bool {
-        self.sink
-            .as_ref()
-            .map(|s| s.is_paused())
-            .unwrap_or(false)
+        self.sink.as_ref().map(|s| s.is_paused()).unwrap_or(false)
     }
 
     pub fn volume(&self) -> f32 {
@@ -128,7 +125,9 @@ impl AudioPlayer {
     }
 
     pub fn current_file(&self) -> Option<String> {
-        self.current_file.as_ref().map(|p| p.to_string_lossy().to_string())
+        self.current_file
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
     }
 
     fn read_duration(path: &str) -> Option<u64> {

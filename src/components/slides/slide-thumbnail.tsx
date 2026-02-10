@@ -13,15 +13,15 @@ export function SlideThumbnail({ slide, index, isActive, onClick }: SlideThumbna
   return (
     <button
       className={cn(
-        "relative w-40 shrink-0 overflow-hidden rounded-md border-2 transition-colors",
+        "relative w-full shrink-0 overflow-hidden rounded-md border-2 transition-colors",
         isActive ? "border-primary ring-2 ring-primary" : "border-border hover:border-muted-foreground",
       )}
       onClick={onClick}
     >
-      <div className="aspect-video">
-        <SlideRenderer slide={slide} className="h-full w-full text-[6px]" />
+      <div className="aspect-video overflow-hidden">
+        <SlideRenderer slide={slide} className="h-full w-full scale-100 text-[5px] [&_h1]:!text-[8px] [&_p]:!text-[5px]" />
       </div>
-      <div className="absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded bg-black/60 text-[10px] font-medium text-white">
+      <div className="absolute bottom-0.5 left-0.5 flex h-4 w-4 items-center justify-center rounded bg-black/60 text-[8px] font-medium text-white">
         {index + 1}
       </div>
     </button>

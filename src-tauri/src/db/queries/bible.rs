@@ -1,6 +1,6 @@
-use rusqlite::Connection;
 use crate::db::models::{BibleVersion, Book, Verse};
 use crate::error::AppError;
+use rusqlite::Connection;
 
 pub fn get_versions(_conn: &Connection) -> Result<Vec<BibleVersion>, AppError> {
     Err(AppError::Internal("Not implemented".into()))

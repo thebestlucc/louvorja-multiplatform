@@ -1,5 +1,5 @@
-use crate::error::AppError;
 use crate::db::models::{BibleVersion, Verse};
+use crate::error::AppError;
 
 #[tauri::command]
 pub fn get_bible_versions() -> Result<Vec<BibleVersion>, AppError> {

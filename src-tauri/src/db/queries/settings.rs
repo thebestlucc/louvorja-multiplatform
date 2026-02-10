@@ -1,6 +1,6 @@
-use rusqlite::Connection;
-use crate::db::models::{Setting, MonitorConfig};
+use crate::db::models::{MonitorConfig, Setting};
 use crate::error::AppError;
+use rusqlite::Connection;
 
 pub fn get_setting(_conn: &Connection, _key: &str) -> Result<Setting, AppError> {
     Err(AppError::Internal("Not implemented".into()))

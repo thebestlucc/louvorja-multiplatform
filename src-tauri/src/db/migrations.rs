@@ -1,19 +1,18 @@
-use rusqlite::Connection;
 use crate::error::AppError;
+use rusqlite::Connection;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY
-        );"
+        );",
     )?;
 
-    let current_version: i64 = conn
-        .query_row(
-            "SELECT COALESCE(MAX(version), 0) FROM schema_version",
-            [],
-            |row| row.get(0),
-        )?;
+    let current_version: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+        [],
+        |row| row.get(0),
+    )?;
 
     if current_version < 1 {
         migrate_v1(conn)?;
@@ -154,7 +153,7 @@ fn migrate_v2(conn: &Connection) -> Result<(), AppError> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_audio_sync_hymn ON audio_sync_points(hymn_id);
-        "
+        ",
     )?;
 
     Ok(())

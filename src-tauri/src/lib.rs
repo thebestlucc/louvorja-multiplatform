@@ -1,24 +1,28 @@
+mod archive;
+mod audio;
 mod commands;
 mod db;
-mod audio;
-mod archive;
 mod display;
-mod streaming;
-mod state;
 mod error;
+mod state;
+mod streaming;
 
+use state::{AppState, AudioState};
 use std::sync::Mutex;
 use tauri::Manager;
-use state::{AppState, AudioState};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {}! welcome to the new multiplatform LouvorJA!", name)
+    format!(
+        "Hello, {}! welcome to the new multiplatform LouvorJA!",
+        name
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_data_dir = app
@@ -26,8 +30,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data dir");
 
-            let conn = db::init_db(&app_data_dir)
-                .expect("Failed to initialize database");
+            let conn = db::init_db(&app_data_dir).expect("Failed to initialize database");
 
             app.manage(AppState {
                 db: Mutex::new(conn),
@@ -35,8 +38,7 @@ pub fn run() {
                 projector_open: Mutex::new(false),
             });
 
-            let audio_state = AudioState::new()
-                .expect("Failed to initialize audio state");
+            let audio_state = AudioState::new().expect("Failed to initialize audio state");
             app.manage(audio_state);
 
             Ok(())
@@ -67,6 +69,8 @@ pub fn run() {
             commands::slides::update_slide,
             commands::slides::delete_slide,
             commands::slides::reorder_slides,
+            commands::slides::import_slja,
+            commands::slides::export_slja,
             // Liturgy
             commands::liturgy::get_services,
             commands::liturgy::get_service,
