@@ -1,8 +1,8 @@
-use std::sync::Mutex;
-use rusqlite::Connection;
 use crate::audio::{AudioPlayer, SyncTimeline};
 use crate::db::models::SlideContent;
 use crate::error::AppError;
+use rusqlite::Connection;
+use std::sync::Mutex;
 
 pub struct AppState {
     pub db: Mutex<Connection>,

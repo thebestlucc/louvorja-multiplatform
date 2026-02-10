@@ -12,7 +12,7 @@
 | 0 | 01 | Foundation | COMPLETE |
 | 1 | 02 | Music & Lyrics Core | COMPLETE |
 | 2 | 03 | Audio Playback & Synchronization | COMPLETE |
-| 3 | 04 | Presentation Editor & .slja Archive | Pending |
+| 3 | 04 | Presentation Editor & .slja Archive | COMPLETE |
 | 4 | 05 | Bible Module | Pending |
 | 5 | 06 | Worship Service / Liturgy Manager | Pending |
 | 6 | 07 | Multi-Monitor Display System | Pending |
@@ -21,7 +21,7 @@
 | 9 | 10 | Utilities & Polish | Pending |
 | 10 | 11 | Migration Tools & Deployment | Pending |
 
-**Progress: 3 / 11 phases complete**
+**Progress: 4 / 11 phases complete**
 
 ---
 
@@ -125,9 +125,46 @@ Rodio audio engine, playback controls, audio-slide synchronization with sync poi
 
 ## Phase 3 — Presentation Editor & .slja Archive (SPEC 04)
 
-**Status:** Pending
+**Status:** COMPLETE
 
-Slide editor with drag-and-drop, custom .slja archive format, background picker, aspect ratio selection.
+Slide editor with drag-and-drop, custom .slja archive format, .pptx import support, background picker, aspect ratio selection.
+
+### What was done
+
+#### Rust Backend
+- **zip 2.1** dependency for .slja (ZIP-based) archive read/write
+- **quick-xml 0.36** dependency for .pptx XML parsing
+- **tempfile 3** dependency for archive operations
+- **tauri-plugin-dialog** for native file open/save dialogs
+- **Archive module** (`archive/mod.rs`): `read_slja()`, `write_slja()`, `import_presentation()` (auto-detects .slja vs .pptx)
+- **PPTX parser** (`archive/pptx.rs`): reads .pptx ZIP files, extracts slide text from XML (handles namespaced `a:t` tags), extracts media files
+- **Manifest** (`archive/manifest.rs`): `Manifest` struct with `from_json()`/`to_json()`, fields: title, author, aspect_ratio, slide_count, created_at, updated_at
+- **DB queries** (`db/queries/slides.rs`): full CRUD for presentations and slides — get_presentations, get_presentation_by_id, insert/update/delete_presentation, get_slides, insert/update/delete_slide, update_slide_orders
+- **Slide commands** (`commands/slides.rs`): 12 Tauri commands replacing stubs — get_presentations, get_presentation, create_presentation, update_presentation, delete_presentation, get_slides, create_slide, update_slide, delete_slide, reorder_slides, import_slja, export_slja
+
+#### Frontend
+- **Types**: `SlideRow` interface (raw DB row with string content), `parseSlideRow()` converter
+- **Tauri wrappers**: 12 typed invoke functions for all presentation/slide CRUD + import/export
+- **TanStack Query hooks**: `usePresentations`, `usePresentation`, `useSlides`, mutations for create/update/delete/reorder/import/export with cache invalidation
+- **`usePresentation2` hook**: loads presentation + slides by ID, provides slide CRUD actions (add, delete, duplicate, reorder, update content), debounced auto-save (1s), active slide tracking
+- **Slide components**:
+  - `SlideEditor`: type selector (cover/lyrics/pause/text/image), type-specific form fields, live preview via `SlideRenderer`
+  - `SlideList` (updated): `@dnd-kit/sortable` drag-and-drop reordering, add/duplicate/delete buttons on hover, grip handle
+  - `BackgroundPicker`: tabs for solid/image/gradient, preset color grid, custom color picker, 9-position grid, opacity slider
+  - `AspectRatioSelector`: visual ratio cards (16:9, 4:3, free)
+  - `TransitionSelector`: type dropdown (none/fade/slide variants), duration slider (100-2000ms)
+- **Routes**:
+  - `presentations/route.tsx`: layout with `<Outlet />`
+  - `presentations/index.tsx`: presentation list with grid cards, search/filter, create new, import .slja/.pptx, export/delete context menu
+  - `presentations/$presentationId.tsx`: 3-panel editor (slide list | slide editor | properties panel), toolbar with title editing, export, preview
+- **Dependencies**: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@tauri-apps/plugin-dialog`
+- **i18n**: `presentations.*` keys in en/pt/es (40+ keys for all UI labels)
+
+### Key patterns established
+- `SlideRow` → `Slide` conversion via `parseSlideRow()` (content JSON string → parsed discriminated union)
+- Archive format auto-detection by file extension (.slja vs .pptx)
+- Debounced auto-save in presentation hook (1s after last content change)
+- `@dnd-kit` sortable with per-item grip handle and action overlays
 
 ---
 

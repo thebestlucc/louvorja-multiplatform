@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for LouvorJA",
-  "windows": ["main", "projector", "return"],
+  "windows": [
+    "main",
+    "projector",
+    "return"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-create",
@@ -20,6 +24,7 @@
     "core:event:allow-emit",
     "core:webview:default",
     "core:webview:allow-create-webview-window",
-    "opener:default"
+    "opener:default",
+    "dialog:default"
   ]
 }

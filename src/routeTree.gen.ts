@@ -14,11 +14,13 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as ReturnRouteImport } from './routes/return'
 import { Route as ProjectorRouteImport } from './routes/projector'
-import { Route as PresentationsRouteImport } from './routes/presentations'
 import { Route as BibleRouteImport } from './routes/bible'
+import { Route as PresentationsRouteRouteImport } from './routes/presentations/route'
 import { Route as HymnalRouteRouteImport } from './routes/hymnal/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
 import { Route as HymnalIndexRouteImport } from './routes/hymnal/index'
+import { Route as PresentationsPresentationIdRouteImport } from './routes/presentations/$presentationId'
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
 
 const UtilitiesRoute = UtilitiesRouteImport.update({
@@ -46,14 +48,14 @@ const ProjectorRoute = ProjectorRouteImport.update({
   path: '/projector',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PresentationsRoute = PresentationsRouteImport.update({
-  id: '/presentations',
-  path: '/presentations',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BibleRoute = BibleRouteImport.update({
   id: '/bible',
   path: '/bible',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PresentationsRouteRoute = PresentationsRouteRouteImport.update({
+  id: '/presentations',
+  path: '/presentations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HymnalRouteRoute = HymnalRouteRouteImport.update({
@@ -66,11 +68,22 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PresentationsIndexRoute = PresentationsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PresentationsRouteRoute,
+} as any)
 const HymnalIndexRoute = HymnalIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => HymnalRouteRoute,
 } as any)
+const PresentationsPresentationIdRoute =
+  PresentationsPresentationIdRouteImport.update({
+    id: '/$presentationId',
+    path: '/$presentationId',
+    getParentRoute: () => PresentationsRouteRoute,
+  } as any)
 const HymnalHymnIdRoute = HymnalHymnIdRouteImport.update({
   id: '/$hymnId',
   path: '/$hymnId',
@@ -80,88 +93,98 @@ const HymnalHymnIdRoute = HymnalHymnIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
+  '/presentations': typeof PresentationsRouteRouteWithChildren
   '/bible': typeof BibleRoute
-  '/presentations': typeof PresentationsRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/utilities': typeof UtilitiesRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
+  '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/hymnal/': typeof HymnalIndexRoute
+  '/presentations/': typeof PresentationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bible': typeof BibleRoute
-  '/presentations': typeof PresentationsRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/utilities': typeof UtilitiesRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
+  '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/hymnal': typeof HymnalIndexRoute
+  '/presentations': typeof PresentationsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
+  '/presentations': typeof PresentationsRouteRouteWithChildren
   '/bible': typeof BibleRoute
-  '/presentations': typeof PresentationsRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/utilities': typeof UtilitiesRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
+  '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/hymnal/': typeof HymnalIndexRoute
+  '/presentations/': typeof PresentationsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/hymnal'
-    | '/bible'
     | '/presentations'
+    | '/bible'
     | '/projector'
     | '/return'
     | '/services'
     | '/settings'
     | '/utilities'
     | '/hymnal/$hymnId'
+    | '/presentations/$presentationId'
     | '/hymnal/'
+    | '/presentations/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/bible'
-    | '/presentations'
     | '/projector'
     | '/return'
     | '/services'
     | '/settings'
     | '/utilities'
     | '/hymnal/$hymnId'
+    | '/presentations/$presentationId'
     | '/hymnal'
+    | '/presentations'
   id:
     | '__root__'
     | '/'
     | '/hymnal'
-    | '/bible'
     | '/presentations'
+    | '/bible'
     | '/projector'
     | '/return'
     | '/services'
     | '/settings'
     | '/utilities'
     | '/hymnal/$hymnId'
+    | '/presentations/$presentationId'
     | '/hymnal/'
+    | '/presentations/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HymnalRouteRoute: typeof HymnalRouteRouteWithChildren
+  PresentationsRouteRoute: typeof PresentationsRouteRouteWithChildren
   BibleRoute: typeof BibleRoute
-  PresentationsRoute: typeof PresentationsRoute
   ProjectorRoute: typeof ProjectorRoute
   ReturnRoute: typeof ReturnRoute
   ServicesRoute: typeof ServicesRoute
@@ -206,18 +229,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/presentations': {
-      id: '/presentations'
-      path: '/presentations'
-      fullPath: '/presentations'
-      preLoaderRoute: typeof PresentationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/bible': {
       id: '/bible'
       path: '/bible'
       fullPath: '/bible'
       preLoaderRoute: typeof BibleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/presentations': {
+      id: '/presentations'
+      path: '/presentations'
+      fullPath: '/presentations'
+      preLoaderRoute: typeof PresentationsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hymnal': {
@@ -234,12 +257,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/presentations/': {
+      id: '/presentations/'
+      path: '/'
+      fullPath: '/presentations/'
+      preLoaderRoute: typeof PresentationsIndexRouteImport
+      parentRoute: typeof PresentationsRouteRoute
+    }
     '/hymnal/': {
       id: '/hymnal/'
       path: '/'
       fullPath: '/hymnal/'
       preLoaderRoute: typeof HymnalIndexRouteImport
       parentRoute: typeof HymnalRouteRoute
+    }
+    '/presentations/$presentationId': {
+      id: '/presentations/$presentationId'
+      path: '/$presentationId'
+      fullPath: '/presentations/$presentationId'
+      preLoaderRoute: typeof PresentationsPresentationIdRouteImport
+      parentRoute: typeof PresentationsRouteRoute
     }
     '/hymnal/$hymnId': {
       id: '/hymnal/$hymnId'
@@ -265,11 +302,24 @@ const HymnalRouteRouteWithChildren = HymnalRouteRoute._addFileChildren(
   HymnalRouteRouteChildren,
 )
 
+interface PresentationsRouteRouteChildren {
+  PresentationsPresentationIdRoute: typeof PresentationsPresentationIdRoute
+  PresentationsIndexRoute: typeof PresentationsIndexRoute
+}
+
+const PresentationsRouteRouteChildren: PresentationsRouteRouteChildren = {
+  PresentationsPresentationIdRoute: PresentationsPresentationIdRoute,
+  PresentationsIndexRoute: PresentationsIndexRoute,
+}
+
+const PresentationsRouteRouteWithChildren =
+  PresentationsRouteRoute._addFileChildren(PresentationsRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HymnalRouteRoute: HymnalRouteRouteWithChildren,
+  PresentationsRouteRoute: PresentationsRouteRouteWithChildren,
   BibleRoute: BibleRoute,
-  PresentationsRoute: PresentationsRoute,
   ProjectorRoute: ProjectorRoute,
   ReturnRoute: ReturnRoute,
   ServicesRoute: ServicesRoute,

@@ -1,5 +1,5 @@
-use crate::error::AppError;
 use crate::db::models::{Service, ServiceItem};
+use crate::error::AppError;
 
 #[tauri::command]
 pub fn get_services() -> Result<Vec<Service>, AppError> {
@@ -27,7 +27,11 @@ pub fn delete_service(_id: i64) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub fn add_service_item(_service_id: i64, _item_type: String, _title: String) -> Result<i64, AppError> {
+pub fn add_service_item(
+    _service_id: i64,
+    _item_type: String,
+    _title: String,
+) -> Result<i64, AppError> {
     Err(AppError::Internal("Not implemented".into()))
 }
 

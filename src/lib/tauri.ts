@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Hymn, Album } from "../types/hymn";
 import type { MonitorInfo } from "../types/settings";
-import type { SlideContentFlat } from "../types/presentation";
+import type { Presentation, SlideContentFlat } from "../types/presentation";
+import type { SlideRow } from "../types/presentation";
 import type { AudioStatusPayload, SyncPoint } from "../types/audio";
 
 export async function tauriInvoke<T>(
@@ -89,4 +90,54 @@ export async function getSyncPoints(hymnId: number): Promise<SyncPoint[]> {
 
 export async function saveSyncPoints(hymnId: number, points: SyncPoint[]): Promise<void> {
   return tauriInvoke<void>("save_sync_points", { hymnId, points });
+}
+
+// Presentations
+export async function getPresentations(): Promise<Presentation[]> {
+  return tauriInvoke<Presentation[]>("get_presentations");
+}
+
+export async function getPresentation(id: number): Promise<Presentation> {
+  return tauriInvoke<Presentation>("get_presentation", { id });
+}
+
+export async function createPresentation(title: string, aspectRatio: string): Promise<Presentation> {
+  return tauriInvoke<Presentation>("create_presentation", { title, aspectRatio });
+}
+
+export async function updatePresentation(id: number, title: string, aspectRatio: string): Promise<void> {
+  return tauriInvoke<void>("update_presentation", { id, title, aspectRatio });
+}
+
+export async function deletePresentation(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_presentation", { id });
+}
+
+// Slides
+export async function getSlides(presentationId: number): Promise<SlideRow[]> {
+  return tauriInvoke<SlideRow[]>("get_slides", { presentationId });
+}
+
+export async function createSlide(presentationId: number, contentJson: string, sortOrder: number): Promise<SlideRow> {
+  return tauriInvoke<SlideRow>("create_slide", { presentationId, contentJson, sortOrder });
+}
+
+export async function updateSlide(id: number, contentJson: string): Promise<void> {
+  return tauriInvoke<void>("update_slide", { id, contentJson });
+}
+
+export async function deleteSlide(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_slide", { id });
+}
+
+export async function reorderSlides(presentationId: number, slideIds: number[]): Promise<void> {
+  return tauriInvoke<void>("reorder_slides", { presentationId, slideIds });
+}
+
+export async function importSlja(path: string): Promise<Presentation> {
+  return tauriInvoke<Presentation>("import_slja", { path });
+}
+
+export async function exportSlja(presentationId: number, path: string): Promise<void> {
+  return tauriInvoke<void>("export_slja", { presentationId, path });
 }

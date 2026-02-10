@@ -1,5 +1,5 @@
-use crate::error::AppError;
 use crate::db::models::Setting;
+use crate::error::AppError;
 
 #[tauri::command]
 pub fn get_setting(_key: String) -> Result<Setting, AppError> {

@@ -1,10 +1,10 @@
-pub mod music;
-pub mod bible;
-pub mod slides;
-pub mod liturgy;
 pub mod audio;
+pub mod bible;
 pub mod display;
-pub mod streaming;
+pub mod liturgy;
+pub mod music;
 pub mod settings;
+pub mod slides;
+pub mod streaming;
 pub mod timer;
 pub mod utility;
