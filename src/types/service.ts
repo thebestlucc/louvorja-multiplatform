@@ -11,16 +11,21 @@ export interface Service {
   title: string;
   date: string | null;
   notes: string | null;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ServiceItem {
   id: number;
-  service_id: number;
-  item_type: ServiceItemType;
-  item_id: number | null;
+  serviceId: number;
+  itemType: ServiceItemType;
+  itemId: number | null;
   title: string;
-  item_order: number;
+  itemOrder: number;
   notes: string | null;
+}
+
+export interface ServiceWithItems {
+  service: Service;
+  items: ServiceItem[];
 }

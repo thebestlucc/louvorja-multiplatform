@@ -117,6 +117,29 @@
     "selectChapter": "Seleccione un capítulo",
     "comparison": "Comparación de Versiones"
   },
+  "services": {
+    "new": "Nuevo Culto",
+    "empty": "Sin cultos aún",
+    "searchPlaceholder": "Buscar cultos...",
+    "untitled": "Culto sin título",
+    "title": "Título",
+    "date": "Fecha",
+    "notes": "Notas",
+    "items": "Elementos",
+    "noItems": "Sin elementos. Haga clic en \"Agregar Elemento\" para comenzar.",
+    "addItem": "Agregar Elemento",
+    "duplicate": "Duplicar",
+    "editNotes": "Editar Notas",
+    "serviceNotes": "Notas del Culto",
+    "addToService": "Agregar al Culto",
+    "activeService": "Culto Activo",
+    "itemTypes": {
+      "hymn": "Himno",
+      "bible": "Biblia",
+      "presentation": "Presentación",
+      "annotation": "Anotación"
+    }
+  },
   "audio": {
     "play": "Reproducir",
     "pause": "Pausar",

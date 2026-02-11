@@ -6,10 +6,12 @@ interface PresentationState {
   activeSlideIndex: number;
   isProjectorOpen: boolean;
   slides: SlideContent[];
+  activeServiceId: number | null;
   setCurrentPresentation: (id: number | null) => void;
   setActiveSlideIndex: (index: number) => void;
   setProjectorOpen: (open: boolean) => void;
   setSlides: (slides: SlideContent[]) => void;
+  setActiveService: (id: number | null) => void;
   nextSlide: () => void;
   prevSlide: () => void;
 }
@@ -19,7 +21,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   activeSlideIndex: 0,
   isProjectorOpen: false,
   slides: [],
+  activeServiceId: null,
   setCurrentPresentation: (id) => set({ currentPresentationId: id }),
+  setActiveService: (id) => set({ activeServiceId: id }),
   setActiveSlideIndex: (index) => set({ activeSlideIndex: index }),
   setProjectorOpen: (open) => set({ isProjectorOpen: open }),
   setSlides: (slides) => set({ slides, activeSlideIndex: 0 }),

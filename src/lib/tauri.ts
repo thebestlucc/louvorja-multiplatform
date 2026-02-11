@@ -5,6 +5,7 @@ import type { Presentation, SlideContentFlat } from "../types/presentation";
 import type { SlideRow } from "../types/presentation";
 import type { AudioStatusPayload, SyncPoint } from "../types/audio";
 import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bible";
+import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -174,4 +175,45 @@ export async function projectBibleVerse(versionId: number, book: string, chapter
 
 export async function importBibleVersion(name: string, abbreviation: string, language: string, versesJson: string): Promise<number> {
   return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
+}
+
+// Services
+export async function getServices(): Promise<Service[]> {
+  return tauriInvoke<Service[]>("get_services");
+}
+
+export async function getService(id: number): Promise<ServiceWithItems> {
+  return tauriInvoke<ServiceWithItems>("get_service", { id });
+}
+
+export async function createService(title: string, date: string | null, notes: string | null): Promise<Service> {
+  return tauriInvoke<Service>("create_service", { title, date, notes });
+}
+
+export async function updateService(id: number, title: string, date: string | null, notes: string | null): Promise<void> {
+  return tauriInvoke<void>("update_service", { id, title, date, notes });
+}
+
+export async function deleteService(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_service", { id });
+}
+
+export async function addServiceItem(serviceId: number, itemType: string, title: string, itemId: number | null, notes: string | null): Promise<ServiceItem> {
+  return tauriInvoke<ServiceItem>("add_service_item", { serviceId, itemType, title, itemId, notes });
+}
+
+export async function removeServiceItem(id: number): Promise<void> {
+  return tauriInvoke<void>("remove_service_item", { id });
+}
+
+export async function reorderServiceItems(serviceId: number, itemIds: number[]): Promise<void> {
+  return tauriInvoke<void>("reorder_service_items", { serviceId, itemIds });
+}
+
+export async function duplicateService(id: number): Promise<Service> {
+  return tauriInvoke<Service>("duplicate_service", { id });
+}
+
+export async function updateServiceItem(id: number, title: string, notes: string | null): Promise<void> {
+  return tauriInvoke<void>("update_service_item", { id, title, notes });
 }

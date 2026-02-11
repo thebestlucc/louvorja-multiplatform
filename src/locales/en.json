@@ -117,6 +117,29 @@
     "selectChapter": "Select a chapter",
     "comparison": "Version Comparison"
   },
+  "services": {
+    "new": "New Service",
+    "empty": "No services yet",
+    "searchPlaceholder": "Search services...",
+    "untitled": "Untitled Service",
+    "title": "Title",
+    "date": "Date",
+    "notes": "Notes",
+    "items": "Items",
+    "noItems": "No items. Click \"Add Item\" to get started.",
+    "addItem": "Add Item",
+    "duplicate": "Duplicate",
+    "editNotes": "Edit Notes",
+    "serviceNotes": "Service Notes",
+    "addToService": "Add to Service",
+    "activeService": "Active Service",
+    "itemTypes": {
+      "hymn": "Hymn",
+      "bible": "Bible",
+      "presentation": "Presentation",
+      "annotation": "Annotation"
+    }
+  },
   "audio": {
     "play": "Play",
     "pause": "Pause",
