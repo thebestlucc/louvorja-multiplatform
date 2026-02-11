@@ -4,6 +4,7 @@ import type { MonitorInfo } from "../types/settings";
 import type { Presentation, SlideContentFlat } from "../types/presentation";
 import type { SlideRow } from "../types/presentation";
 import type { AudioStatusPayload, SyncPoint } from "../types/audio";
+import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bible";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -48,6 +49,10 @@ export async function closeProjectorWindow(): Promise<void> {
 
 export async function setCurrentSlide(slideData: SlideContentFlat): Promise<void> {
   return tauriInvoke<void>("set_current_slide", { slideData });
+}
+
+export async function getCurrentSlide(): Promise<SlideContentFlat | null> {
+  return tauriInvoke<SlideContentFlat | null>("get_current_slide");
 }
 
 // Audio
@@ -140,4 +145,33 @@ export async function importSlja(path: string): Promise<Presentation> {
 
 export async function exportSlja(presentationId: number, path: string): Promise<void> {
   return tauriInvoke<void>("export_slja", { presentationId, path });
+}
+
+// Bible
+export async function getBibleVersions(): Promise<BibleVersion[]> {
+  return tauriInvoke<BibleVersion[]>("get_bible_versions");
+}
+
+export async function getBooks(versionId: number): Promise<Book[]> {
+  return tauriInvoke<Book[]>("get_books", { versionId });
+}
+
+export async function getVerses(versionId: number, book: string, chapter: number): Promise<Verse[]> {
+  return tauriInvoke<Verse[]>("get_verses", { versionId, book, chapter });
+}
+
+export async function getVerseRange(versionId: number, book: string, chapter: number, start: number, end: number): Promise<Verse[]> {
+  return tauriInvoke<Verse[]>("get_verse_range", { versionId, book, chapter, start, end });
+}
+
+export async function searchBible(query: string, versionId: number | null): Promise<BibleSearchResult[]> {
+  return tauriInvoke<BibleSearchResult[]>("search_bible", { query, versionId });
+}
+
+export async function projectBibleVerse(versionId: number, book: string, chapter: number, start: number, end: number): Promise<void> {
+  return tauriInvoke<void>("project_bible_verse", { versionId, book, chapter, start, end });
+}
+
+export async function importBibleVersion(name: string, abbreviation: string, language: string, versesJson: string): Promise<number> {
+  return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
 }

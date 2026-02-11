@@ -3,23 +3,17 @@ export interface BibleVersion {
   name: string;
   abbreviation: string;
   language: string;
-  file_path: string | null;
+  filePath: string | null;
 }
 
 export interface Book {
   name: string;
-  chapter_count: number;
-}
-
-export interface Chapter {
-  book: string;
-  chapter: number;
-  verse_count: number;
+  chapterCount: number;
 }
 
 export interface Verse {
   id: number;
-  version_id: number;
+  versionId: number;
   book: string;
   chapter: number;
   verse: number;
@@ -28,5 +22,6 @@ export interface Verse {
 
 export interface BibleSearchResult {
   verse: Verse;
-  highlight: string;
+  bookName: string;
+  snippet: string;
 }

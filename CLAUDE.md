@@ -1,6 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 
 ## LouvorJA Multiplatform
 
@@ -9,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 10-phase roadmap in `.specs/` directory (01–11). PRD at `PRD.md`.
 
-**Phases 0–3 are COMPLETE.** Phase 4+ is pending.
+**Phases 0–4 are COMPLETE.** Phase 5+ is pending.
 
 ## Tech Stack
 
@@ -185,7 +186,7 @@ src-tauri/src/                # Backend (Rust)
 | 1 | Music & Lyrics (02) | COMPLETE |
 | 2 | Audio Playback (03) | COMPLETE |
 | 3 | Presentation Editor (04) | COMPLETE |
-| 4 | Bible (05) | Pending |
+| 4 | Bible (05) | COMPLETE |
 | 5 | Liturgy/Services (06) | Pending |
 | 6 | Multi-Monitor (07) | Pending |
 | 7 | Streaming (08) | Pending |

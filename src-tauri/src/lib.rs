@@ -57,7 +57,10 @@ pub fn run() {
             commands::bible::get_bible_versions,
             commands::bible::get_books,
             commands::bible::get_verses,
+            commands::bible::get_verse_range,
             commands::bible::search_bible,
+            commands::bible::project_bible_verse,
+            commands::bible::import_bible_version,
             // Slides
             commands::slides::get_presentations,
             commands::slides::get_presentation,
@@ -99,6 +102,7 @@ pub fn run() {
             commands::display::close_return_window,
             commands::display::set_monitor_config,
             commands::display::set_current_slide,
+            commands::display::get_current_slide,
             // Streaming
             commands::streaming::start_streaming_server,
             commands::streaming::stop_streaming_server,

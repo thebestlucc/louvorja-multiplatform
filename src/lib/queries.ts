@@ -3,6 +3,7 @@ import {
   searchHymns, getHymn, getAlbums, getHymnsByAlbum, getAvailableMonitors, setCurrentSlide, getSyncPoints, saveSyncPoints,
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
+  getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
@@ -22,7 +23,7 @@ export const queryKeys = {
     books: (versionId: number) => ["bible", "books", versionId] as const,
     verses: (versionId: number, book: string, chapter: number) =>
       ["bible", "verses", versionId, book, chapter] as const,
-    search: (query: string) => ["bible", "search", query] as const,
+    search: (query: string, versionId: number | null) => ["bible", "search", query, versionId] as const,
   },
   presentations: {
     all: ["presentations"] as const,
@@ -223,5 +224,48 @@ export function useExportSlja() {
   return useMutation({
     mutationFn: ({ presentationId, path }: { presentationId: number; path: string }) =>
       exportSlja(presentationId, path),
+  });
+}
+
+// Bible
+export function useBibleVersions() {
+  return useQuery({
+    queryKey: queryKeys.bible.versions,
+    queryFn: () => getBibleVersions(),
+  });
+}
+
+export function useBooks(versionId: number) {
+  return useQuery({
+    queryKey: queryKeys.bible.books(versionId),
+    queryFn: () => getBooks(versionId),
+    enabled: versionId > 0,
+  });
+}
+
+export function useVerses(versionId: number, book: string, chapter: number) {
+  return useQuery({
+    queryKey: queryKeys.bible.verses(versionId, book, chapter),
+    queryFn: () => getVerses(versionId, book, chapter),
+    enabled: versionId > 0 && book.length > 0 && chapter > 0,
+  });
+}
+
+export function useBibleSearch(query: string, versionId: number | null) {
+  return useQuery({
+    queryKey: queryKeys.bible.search(query, versionId),
+    queryFn: () => searchBible(query, versionId),
+    enabled: query.trim().length >= 2,
+  });
+}
+
+export function useImportBible() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { name: string; abbreviation: string; language: string; versesJson: string }) =>
+      importBibleVersion(vars.name, vars.abbreviation, vars.language, vars.versesJson),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
+    },
   });
 }

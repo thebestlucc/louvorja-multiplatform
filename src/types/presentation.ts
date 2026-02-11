@@ -103,6 +103,19 @@ export function flatToSlideContent(flat: SlideContentFlat): SlideContent {
       return { type: "pause" };
     case "text":
       return { type: "text", text: flat.text ?? "" };
+    case "bible": {
+      // title is formatted as "Book Chapter:Start-End" by the backend
+      const ref = flat.title ?? "";
+      const match = ref.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
+      if (match) {
+        const book = match[1];
+        const chapter = parseInt(match[2], 10);
+        const verseStart = parseInt(match[3], 10);
+        const verseEnd = match[4] ? parseInt(match[4], 10) : verseStart;
+        return { type: "bible", book, chapter, verseStart, verseEnd, text: flat.text ?? "" };
+      }
+      return { type: "bible", book: "", chapter: 0, verseStart: 0, verseEnd: 0, text: flat.text ?? "" };
+    }
     default:
       return { type: "text", text: flat.text ?? "" };
   }

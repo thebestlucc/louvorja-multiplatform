@@ -101,6 +101,22 @@
       "image": "Imagen"
     }
   },
+  "bible": {
+    "versions": "Versiones",
+    "books": "Libros",
+    "chapters": "Capítulos",
+    "verses": "Versículos",
+    "searchPlaceholder": "Buscar texto bíblico...",
+    "noResults": "No se encontraron resultados",
+    "loading": "Cargando...",
+    "project": "Proyectar",
+    "oldTestament": "Antiguo Testamento",
+    "newTestament": "Nuevo Testamento",
+    "selectVersion": "Versión:",
+    "selectBook": "Seleccione un libro y capítulo para comenzar a leer",
+    "selectChapter": "Seleccione un capítulo",
+    "comparison": "Comparación de Versiones"
+  },
   "audio": {
     "play": "Reproducir",
     "pause": "Pausar",
