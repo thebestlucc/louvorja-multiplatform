@@ -13,7 +13,7 @@
 | 1 | 02 | Music & Lyrics Core | COMPLETE |
 | 2 | 03 | Audio Playback & Synchronization | COMPLETE |
 | 3 | 04 | Presentation Editor & .slja Archive | COMPLETE |
-| 4 | 05 | Bible Module | Pending |
+| 4 | 05 | Bible Module | COMPLETE |
 | 5 | 06 | Worship Service / Liturgy Manager | Pending |
 | 6 | 07 | Multi-Monitor Display System | Pending |
 | 7 | 08 | HTTP Streaming Server | Pending |
@@ -21,7 +21,7 @@
 | 9 | 10 | Utilities & Polish | Pending |
 | 10 | 11 | Migration Tools & Deployment | Pending |
 
-**Progress: 4 / 11 phases complete**
+**Progress: 5 / 11 phases complete**
 
 ---
 
@@ -170,9 +170,46 @@ Slide editor with drag-and-drop, custom .slja archive format, .pptx import suppo
 
 ## Phase 4 — Bible Module (SPEC 05)
 
-**Status:** Pending
+**Status:** COMPLETE
 
 Bible text display with multi-version support, book/chapter/verse navigation, full-text search with FTS5, multi-version comparison.
+
+### What was done
+
+#### Rust Backend
+- **DB migration v3**: Seeded sample ARA (Almeida Revista e Atualizada) version with Genesis 1–3 (~80 verses)
+- **DB models**: `BibleVersion`, `Book`, `Verse`, `BibleSearchResult` structs with `#[serde(rename_all = "camelCase")]`; `BOOK_NAMES_PT`/`BOOK_NAMES_EN` constants
+- **DB queries** (`db/queries/bible.rs`): `get_versions`, `get_books`, `get_verses`, `get_verse_range`, `search_bible_text` (FTS5 with LIKE fallback), `get_chapter_count`, `import_bible_version` (bulk insert + FTS rebuild)
+- **7 Tauri commands**: `get_bible_versions`, `get_books`, `get_verses`, `get_verse_range`, `search_bible`, `project_bible_verse`, `import_bible_version`
+- **`get_current_slide`** command added for projector window to fetch current slide on mount (fixes race condition)
+- **Projector state sync**: `open_projector_window` and `close_projector_window` emit `"projector-state-changed"` event so frontend Zustand store stays in sync
+- **HiDPI fix**: Projector window now uses logical pixels (physical / scale_factor) for correct sizing on Retina displays
+- **No OS fullscreen**: Projector uses decorationless full-size window instead of `set_fullscreen(true)`, so ESC is not intercepted by macOS
+
+#### Frontend
+- **Types** (`types/bible.ts`): `BibleVersion`, `Book`, `Verse`, `BibleSearchResult` with camelCase fields
+- **Tauri wrappers** (`lib/tauri.ts`): `getBibleVersions`, `getBooks`, `getVerses`, `getVerseRange`, `searchBible`, `projectBibleVerse`, `importBibleVersion`, `getCurrentSlide`
+- **TanStack Query hooks** (`lib/queries.ts`): `useBibleVersions`, `useBooks`, `useVerses`, `useBibleSearch`, `useImportBible`
+- **`useBible` hook** (`hooks/use-bible.ts`): Navigation state (version/book/chapter/verse selection), `projectSelectedVerses` (opens projector + sends slide via `setCurrentSlide`), `projectVerse` (single verse on double-click), `lastSelectedVerse` for scroll-to-verse
+- **`useMonitorsControl` hook** (updated): Listens for `"projector-state-changed"` events to keep Zustand store in sync
+- **`ProjectorView`** (updated): Fetches `getCurrentSlide()` on mount (race condition fix), ESC calls `closeProjectorWindow()` command
+- **Bible components**:
+  - `BookSelector`: Periodic-table layout (6×11 grid, 66 books, 10 color-coded categories), chapter number grid, verse number grid with selection highlighting, double-click to project
+  - `VerseDisplay`: Paragraph-style verses with click-to-select, scroll-to-verse via refs, sticky header with opaque `bg-surface`, project button, double-click to project single verse
+  - `BibleSearch`: Instant book name/abbreviation matching (accent-insensitive), reference parsing ("Gn 1:3"), debounced FTS text search (300ms), grouped results dropdown with `bg-surface`/`shadow-2xl`/`z-50`
+  - `VersionComparison`: Side-by-side verse comparison across installed versions
+- **Routes**: `bible/route.tsx` (layout), `bible/index.tsx` (two-panel: left verses + right periodic table/chapters/verses)
+- **Keyboard navigation**: Arrow Right/Left (chapters, wraps across books), Arrow Down/Up (verse selection), Enter (project), ESC (close projector)
+- **Slide renderer** (updated): Bible slide type with serif font, reference header, newline-separated verses with spacing
+- **i18n**: `bible.*` keys in all 3 locale files (versions, books, chapters, verses, searchPlaceholder, noResults, loading, project, selectBook, selectChapter, comparison, etc.)
+
+### Key patterns established
+- Projector state sync via Rust events (`"projector-state-changed"`) instead of relying only on frontend state
+- `getCurrentSlide()` on projector mount to handle race condition when slide is set before projector finishes loading
+- Logical pixel conversion for HiDPI: `physical_size / scale_factor` for Tauri window positioning
+- No OS fullscreen: decorationless full-size window avoids ESC interception on macOS
+- Multi-strategy search: local book matching (instant) → reference parsing (instant) → debounced FTS5 + LIKE fallback (300ms)
+- Double-click to project pattern: single click selects, double-click projects immediately
 
 ---
 

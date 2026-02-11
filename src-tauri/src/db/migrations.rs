@@ -24,6 +24,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (2)", [])?;
     }
 
+    if current_version < 3 {
+        migrate_v3(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (3)", [])?;
+    }
+
     Ok(())
 }
 
@@ -154,6 +159,142 @@ fn migrate_v2(conn: &Connection) -> Result<(), AppError> {
 
         CREATE INDEX IF NOT EXISTS idx_audio_sync_hymn ON audio_sync_points(hymn_id);
         ",
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v3(conn: &Connection) -> Result<(), AppError> {
+    // Check if ARA version already exists
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM bible_versions WHERE abbreviation = 'ARA'",
+        [],
+        |row| row.get(0),
+    )?;
+    if count > 0 {
+        return Ok(());
+    }
+
+    conn.execute(
+        "INSERT INTO bible_versions (name, abbreviation, language) VALUES ('Almeida Revista e Atualizada', 'ARA', 'pt')",
+        [],
+    )?;
+    let version_id = conn.last_insert_rowid();
+
+    let mut stmt = conn.prepare(
+        "INSERT INTO bible_verses (version_id, book, chapter, verse, text) VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+
+    let book = "Gênesis";
+
+    // Genesis 1
+    let gen1: &[(i64, &str)] = &[
+        (1, "No princípio, criou Deus os céus e a terra."),
+        (2, "A terra, porém, estava sem forma e vazia; havia trevas sobre a face do abismo, e o Espírito de Deus pairava por sobre as águas."),
+        (3, "Disse Deus: Haja luz; e houve luz."),
+        (4, "E viu Deus que a luz era boa; e fez separação entre a luz e as trevas."),
+        (5, "Chamou Deus à luz Dia e às trevas, Noite. Houve tarde e manhã, o primeiro dia."),
+        (6, "E disse Deus: Haja firmamento no meio das águas e separação entre águas e águas."),
+        (7, "Fez, pois, Deus o firmamento e separação entre as águas debaixo do firmamento e as águas sobre o firmamento. E assim se fez."),
+        (8, "E chamou Deus ao firmamento Céus. Houve tarde e manhã, o segundo dia."),
+        (9, "Disse também Deus: Ajuntem-se as águas debaixo dos céus num só lugar, e apareça a porção seca. E assim se fez."),
+        (10, "À porção seca chamou Deus Terra e ao ajuntamento das águas, Mares. E viu Deus que isso era bom."),
+        (11, "E disse: Produza a terra relva, ervas que deem semente e árvores frutíferas que deem fruto segundo a sua espécie, cuja semente esteja nele, sobre a terra. E assim se fez."),
+        (12, "A terra, pois, produziu relva, ervas que davam semente segundo a sua espécie e árvores que davam fruto, cuja semente estava nele, conforme a sua espécie. E viu Deus que isso era bom."),
+        (13, "Houve tarde e manhã, o terceiro dia."),
+        (14, "Disse também Deus: Haja luzeiros no firmamento dos céus, para fazerem separação entre o dia e a noite; e sejam eles para sinais, para estações, para dias e anos."),
+        (15, "E sejam para luzeiros no firmamento dos céus, para alumiar a terra. E assim se fez."),
+        (16, "Fez Deus os dois grandes luzeiros: o maior para governar o dia, e o menor para governar a noite; e fez também as estrelas."),
+        (17, "E os colocou no firmamento dos céus para alumiarem a terra,"),
+        (18, "para governarem o dia e a noite e fazerem separação entre a luz e as trevas. E viu Deus que isso era bom."),
+        (19, "Houve tarde e manhã, o quarto dia."),
+        (20, "Disse também Deus: Produzam as águas enxames de seres viventes; e voem as aves sobre a terra, sob o firmamento dos céus."),
+        (21, "Criou, pois, Deus os grandes animais marinhos e todos os seres viventes que rastejam, os quais povoavam as águas, segundo as suas espécies; e todas as aves, segundo as suas espécies. E viu Deus que isso era bom."),
+        (22, "E Deus os abençoou, dizendo: Sede fecundos, multiplicai-vos e enchei as águas dos mares; e, na terra, se multipliquem as aves."),
+        (23, "Houve tarde e manhã, o quinto dia."),
+        (24, "Disse também Deus: Produza a terra seres viventes, conforme a sua espécie: animais domésticos, répteis e animais selváticos, segundo a sua espécie. E assim se fez."),
+        (25, "E fez Deus os animais selváticos, segundo a sua espécie, e os animais domésticos, conforme a sua espécie, e todos os répteis da terra, conforme a sua espécie. E viu Deus que isso era bom."),
+        (26, "Também disse Deus: Façamos o homem à nossa imagem, conforme a nossa semelhança; tenha ele domínio sobre os peixes do mar, sobre as aves dos céus, sobre os animais domésticos, sobre toda a terra e sobre todos os répteis que rastejam pela terra."),
+        (27, "Criou Deus, pois, o homem à sua imagem, à imagem de Deus o criou; homem e mulher os criou."),
+        (28, "E Deus os abençoou e lhes disse: Sede fecundos, multiplicai-vos, enchei a terra e sujeitai-a; dominai sobre os peixes do mar, sobre as aves dos céus e sobre todo animal que rasteja pela terra."),
+        (29, "E disse Deus ainda: Eis que vos tenho dado todas as ervas que dão semente e se acham na superfície de toda a terra e todas as árvores em que há fruto que dê semente; isso vos será para mantimento."),
+        (30, "E a todos os animais da terra, e a todas as aves dos céus, e a todos os répteis da terra, em que há fôlego de vida, toda erva verde lhes será para mantimento. E assim se fez."),
+        (31, "Viu Deus tudo quanto fizera, e eis que era muito bom. Houve tarde e manhã, o sexto dia."),
+    ];
+
+    for (verse, text) in gen1 {
+        stmt.execute(rusqlite::params![version_id, book, 1i64, verse, text])?;
+    }
+
+    // Genesis 2
+    let gen2: &[(i64, &str)] = &[
+        (1, "Assim, pois, foram acabados os céus e a terra e todo o seu exército."),
+        (2, "E, havendo Deus terminado no dia sétimo a sua obra, que fizera, descansou nesse dia de toda a sua obra que tinha feito."),
+        (3, "E abençoou Deus o dia sétimo e o santificou; porque nele descansou de toda a obra que, como Criador, fizera."),
+        (4, "Esta é a gênese dos céus e da terra quando foram criados, quando o SENHOR Deus os criou."),
+        (5, "Não havia ainda nenhuma planta do campo na terra, pois nenhuma erva do campo havia ainda brotado; porque o SENHOR Deus não fizera chover sobre a terra, e também não havia homem para lavrar o solo."),
+        (6, "Mas uma neblina subia da terra e regava toda a superfície do solo."),
+        (7, "Então, formou o SENHOR Deus ao homem do pó da terra e lhe soprou nas narinas o fôlego de vida, e o homem passou a ser alma vivente."),
+        (8, "E plantou o SENHOR Deus um jardim no Éden, na direção do Oriente, e pôs nele o homem que havia formado."),
+        (9, "Do solo fez o SENHOR Deus brotar toda sorte de árvores agradáveis à vista e boas para alimento; e também a árvore da vida no meio do jardim e a árvore do conhecimento do bem e do mal."),
+        (10, "E saía um rio do Éden para regar o jardim e dali se dividia, repartindo-se em quatro braços."),
+        (11, "O primeiro chama-se Pisom; é o que rodeia a terra de Havilá, onde há ouro."),
+        (12, "O ouro dessa terra é bom; também se encontram lá o bdélio e a pedra de ônix."),
+        (13, "O segundo rio chama-se Giom; é o que circunda a terra de Cuxe."),
+        (14, "O nome do terceiro rio é Tigre; é o que corre pelo oriente da Assíria. E o quarto rio é o Eufrates."),
+        (15, "Tomou, pois, o SENHOR Deus ao homem e o colocou no jardim do Éden para o cultivar e o guardar."),
+        (16, "E o SENHOR Deus lhe deu esta ordem: De toda árvore do jardim comerás livremente,"),
+        (17, "mas da árvore do conhecimento do bem e do mal não comerás; porque, no dia em que dela comeres, certamente morrerás."),
+        (18, "Disse mais o SENHOR Deus: Não é bom que o homem esteja só; far-lhe-ei uma auxiliadora que lhe seja idônea."),
+        (19, "Havendo, pois, o SENHOR Deus formado da terra todos os animais do campo e todas as aves dos céus, trouxe-os ao homem, para ver como este lhes chamaria; e o nome que o homem desse a todos os seres viventes, esse seria o nome deles."),
+        (20, "Deu nome o homem a todos os animais domésticos, às aves dos céus e a todos os animais selváticos; para o homem, todavia, não se achava uma auxiliadora que lhe fosse idônea."),
+        (21, "Então, o SENHOR Deus fez cair pesado sono sobre o homem, e este adormeceu; tomou uma das suas costelas e fechou o lugar com carne."),
+        (22, "E a costela que o SENHOR Deus tomara ao homem, transformou-a numa mulher e lha trouxe."),
+        (23, "E disse o homem: Esta, afinal, é osso dos meus ossos e carne da minha carne; chamar-se-á varoa, porquanto do varão foi tomada."),
+        (24, "Por isso, deixa o homem pai e mãe e se une à sua mulher, tornando-se os dois uma só carne."),
+        (25, "Ora, um e outro, o homem e sua mulher, estavam nus e não se envergonhavam."),
+    ];
+
+    for (verse, text) in gen2 {
+        stmt.execute(rusqlite::params![version_id, book, 2i64, verse, text])?;
+    }
+
+    // Genesis 3
+    let gen3: &[(i64, &str)] = &[
+        (1, "Mas a serpente, mais sagaz que todos os animais selváticos que o SENHOR Deus tinha feito, disse à mulher: É assim que Deus disse: Não comereis de toda árvore do jardim?"),
+        (2, "Respondeu-lhe a mulher: Do fruto das árvores do jardim podemos comer,"),
+        (3, "mas do fruto da árvore que está no meio do jardim, disse Deus: Dele não comereis, nem tocareis nele, para que não morrais."),
+        (4, "Então, a serpente disse à mulher: É certo que não morrereis."),
+        (5, "Porque Deus sabe que no dia em que dele comerdes se vos abrirão os olhos e, como Deus, sereis conhecedores do bem e do mal."),
+        (6, "Vendo a mulher que a árvore era boa para se comer, agradável aos olhos e árvore desejável para dar entendimento, tomou-lhe do fruto e comeu e deu também ao marido, e ele comeu."),
+        (7, "Abriram-se, então, os olhos de ambos e perceberam que estavam nus; coseram folhas de figueira e fizeram cintas para si."),
+        (8, "Quando ouviram a voz do SENHOR Deus, que passeava no jardim pela viração do dia, esconderam-se da presença do SENHOR Deus, o homem e sua mulher, por entre as árvores do jardim."),
+        (9, "E chamou o SENHOR Deus ao homem e lhe perguntou: Onde estás?"),
+        (10, "Ele respondeu: Ouvi a tua voz no jardim, e, porque estava nu, tive medo, e me escondi."),
+        (11, "Perguntou-lhe Deus: Quem te fez saber que estavas nu? Comeste da árvore de que te ordenei que não comesses?"),
+        (12, "Então, disse o homem: A mulher que me deste por esposa, ela me deu da árvore, e eu comi."),
+        (13, "Disse o SENHOR Deus à mulher: Que é isso que fizeste? Respondeu a mulher: A serpente me enganou, e eu comi."),
+        (14, "Então, o SENHOR Deus disse à serpente: Visto que isso fizeste, maldita és entre todos os animais domésticos e o és entre todos os animais selváticos; rastejarás sobre o teu ventre e comerás pó todos os dias da tua vida."),
+        (15, "Porei inimizade entre ti e a mulher, entre a tua descendência e o seu descendente. Este te ferirá a cabeça, e tu lhe ferirás o calcanhar."),
+        (16, "E à mulher disse: Multiplicarei sobremodo os sofrimentos da tua gravidez; em meio de dores darás à luz filhos; o teu desejo será para o teu marido, e ele te governará."),
+        (17, "E a Adão disse: Visto que atendeste a voz de tua mulher e comeste da árvore que eu te ordenara não comesses, maldita é a terra por tua causa; em fadigas obterás dela o sustento durante os dias de tua vida."),
+        (18, "Ela produzirá também cardos e abrolhos, e tu comerás a erva do campo."),
+        (19, "No suor do rosto comerás o teu pão, até que tornes à terra, pois dela foste formado; porque tu és pó e ao pó tornarás."),
+        (20, "E deu o homem o nome de Eva a sua mulher, por ser a mãe de todos os seres humanos."),
+        (21, "Fez o SENHOR Deus vestimenta de peles para Adão e sua mulher e os vestiu."),
+        (22, "Então, disse o SENHOR Deus: Eis que o homem se tornou como um de nós, conhecedor do bem e do mal; assim, que não estenda a mão, e tome também da árvore da vida, e coma, e viva eternamente."),
+        (23, "O SENHOR Deus, por isso, o lançou fora do jardim do Éden, para lavrar a terra de que fora tomado."),
+        (24, "E, expulso o homem, colocou querubins ao oriente do jardim do Éden e o refulgir de uma espada que se revolvia, para guardar o caminho da árvore da vida."),
+    ];
+
+    for (verse, text) in gen3 {
+        stmt.execute(rusqlite::params![version_id, book, 3i64, verse, text])?;
+    }
+
+    // Rebuild FTS index
+    conn.execute_batch(
+        "DELETE FROM bible_fts;
+         INSERT INTO bible_fts(rowid, text, book) SELECT id, text, book FROM bible_verses;",
     )?;
 
     Ok(())

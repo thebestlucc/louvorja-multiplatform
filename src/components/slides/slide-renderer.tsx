@@ -38,6 +38,19 @@ export function SlideRenderer({ slide, className }: SlideRendererProps) {
         <div className="px-8 text-center">
           <p className="whitespace-pre-line text-2xl">{slide.text}</p>
         </div>
+      ) : slide.type === "bible" ? (
+        <div className="flex flex-col items-center gap-6 px-12 text-center">
+          <p className="text-sm uppercase tracking-[0.25em] text-white/50 font-serif">
+            {`${slide.book} ${slide.chapter}:${slide.verseStart}${slide.verseEnd !== slide.verseStart ? `-${slide.verseEnd}` : ""}`}
+          </p>
+          <div className="flex flex-col gap-3">
+            {slide.text.split("\n").map((line, i) => (
+              <p key={i} className="text-2xl font-serif leading-relaxed">
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
       ) : null}
     </div>
   );
