@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentSlide, closeProjectorWindow } from "../../lib/tauri";
+import { getCurrentSlide, closeProjectorWindow, navigateBibleVerse } from "../../lib/tauri";
 import type { SlideContentFlat } from "../../types/presentation";
 import { flatToSlideContent } from "../../types/presentation";
 import { SlideRenderer } from "./slide-renderer";
@@ -25,18 +25,26 @@ export function ProjectorView() {
     };
   }, []);
 
-  // Close the projector window on ESC (uses Tauri command so backend state stays in sync).
-  // Use capture phase to intercept before OS fullscreen handler can swallow the event.
+  // Keyboard handling: ESC to close, arrows for Bible navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        closeProjectorWindow().catch(() => {});
+      switch (e.key) {
+        case "Escape":
+          e.preventDefault();
+          closeProjectorWindow().catch(() => {});
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          navigateBibleVerse("next").catch(() => {});
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          navigateBibleVerse("prev").catch(() => {});
+          break;
       }
     };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   return (
