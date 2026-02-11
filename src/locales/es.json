@@ -133,6 +133,7 @@
     "serviceNotes": "Notas del Culto",
     "addToService": "Agregar al Culto",
     "activeService": "Culto Activo",
+    "timeline": "Línea de Tiempo",
     "itemTypes": {
       "hymn": "Himno",
       "bible": "Biblia",

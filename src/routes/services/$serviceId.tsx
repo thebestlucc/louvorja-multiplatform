@@ -5,9 +5,11 @@ import { useState, useEffect, useRef } from "react";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { ServiceItemList } from "../../components/services/service-item-list";
+import { ServiceTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { cn } from "../../lib/utils";
 
 export const Route = createFileRoute("/services/$serviceId")({
   component: ServiceEditor,
@@ -70,6 +72,7 @@ function ServiceEditor() {
   }, [service]);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [rightTab, setRightTab] = useState<"notes" | "timeline">("notes");
 
   const handleTitleChange = (title: string) => {
     setLocalTitle(title);
@@ -159,15 +162,47 @@ function ServiceEditor() {
           />
         </div>
 
-        {/* Right panel — Notes */}
-        <div className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto rounded-lg border border-border p-3 lg:flex">
-          <h3 className="text-sm font-medium">{t("services.serviceNotes")}</h3>
-          <textarea
-            className="flex-1 resize-none rounded-md border border-border bg-transparent p-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder={t("services.notes")}
-            value={localNotes}
-            onChange={(e) => handleNotesChange(e.target.value)}
-          />
+        {/* Right panel — Notes / Timeline */}
+        <div className="hidden w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-border lg:flex">
+          {/* Tab switcher */}
+          <div className="flex border-b border-border">
+            <button
+              className={cn(
+                "flex-1 px-3 py-2 text-xs font-medium transition-colors",
+                rightTab === "notes"
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setRightTab("notes")}
+            >
+              {t("services.serviceNotes")}
+            </button>
+            <button
+              className={cn(
+                "flex-1 px-3 py-2 text-xs font-medium transition-colors",
+                rightTab === "timeline"
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setRightTab("timeline")}
+            >
+              {t("services.timeline")}
+            </button>
+          </div>
+
+          {/* Tab content */}
+          {rightTab === "notes" ? (
+            <div className="flex flex-1 flex-col gap-3 overflow-auto p-3">
+              <textarea
+                className="flex-1 resize-none rounded-md border border-border bg-transparent p-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder={t("services.notes")}
+                value={localNotes}
+                onChange={(e) => handleNotesChange(e.target.value)}
+              />
+            </div>
+          ) : (
+            <ServiceTimeline items={items} />
+          )}
         </div>
       </div>
 

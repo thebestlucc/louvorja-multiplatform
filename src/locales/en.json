@@ -133,6 +133,7 @@
     "serviceNotes": "Service Notes",
     "addToService": "Add to Service",
     "activeService": "Active Service",
+    "timeline": "Timeline",
     "itemTypes": {
       "hymn": "Hymn",
       "bible": "Bible",

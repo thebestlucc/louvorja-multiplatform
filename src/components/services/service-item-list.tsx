@@ -37,6 +37,15 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   file: "text-gray-500",
 };
 
+const itemTypeBorders: Record<ServiceItemType, string> = {
+  hymn: "border-l-blue-500",
+  bible: "border-l-amber-600",
+  presentation: "border-l-purple-500",
+  annotation: "border-l-green-500",
+  url: "border-l-cyan-500",
+  file: "border-l-gray-500",
+};
+
 interface ServiceItemListProps {
   items: ServiceItem[];
   onRemove: (id: number) => void;
@@ -122,13 +131,14 @@ function SortableServiceItem({
 
   const Icon = itemTypeIcons[item.itemType as ServiceItemType] ?? StickyNote;
   const colorClass = itemTypeColors[item.itemType as ServiceItemType] ?? "text-gray-500";
+  const borderClass = itemTypeBorders[item.itemType as ServiceItemType] ?? "border-l-gray-500";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-2 rounded-md border border-border bg-surface p-2 transition-colors hover:bg-surface-hover"
+      className={`group flex cursor-pointer items-center gap-2 rounded-md border border-border border-l-[3px] ${borderClass} bg-surface p-2 transition-all hover:bg-surface-hover hover:shadow-sm`}
     >
       <button
         className="cursor-grab p-0.5 text-muted-foreground hover:text-foreground"

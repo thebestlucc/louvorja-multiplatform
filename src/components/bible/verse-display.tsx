@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import type { Verse } from "../../types/bible";
-import { Monitor } from "lucide-react";
+import { Monitor, Plus } from "lucide-react";
+import { usePresentationStore } from "../../stores/presentation-store";
+import { useAddServiceItem } from "../../lib/queries";
 
 interface VerseDisplayProps {
   verses: Verse[];
@@ -31,6 +33,8 @@ export function VerseDisplay({
   isLoading,
 }: VerseDisplayProps) {
   const { t } = useTranslation();
+  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
+  const addItemMutation = useAddServiceItem();
   const verseRefs = useRef<Map<number, HTMLParagraphElement>>(new Map());
 
   const setVerseRef = useCallback((verse: number, el: HTMLParagraphElement | null) => {
@@ -49,6 +53,23 @@ export function VerseDisplay({
       }
     }
   }, [scrollToVerse]);
+
+  const handleAddToService = () => {
+    if (!activeServiceId || selectedVerses.length === 0) return;
+    const sorted = [...selectedVerses].sort((a, b) => a - b);
+    const verseRange =
+      sorted.length === 1
+        ? String(sorted[0])
+        : `${sorted[0]}-${sorted[sorted.length - 1]}`;
+    const title = `${book} ${chapter}:${verseRange}${versionAbbr ? ` (${versionAbbr})` : ""}`;
+    addItemMutation.mutate({
+      serviceId: activeServiceId,
+      itemType: "bible",
+      title,
+      itemId: null,
+      notes: null,
+    });
+  };
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">{t("bible.loading")}</p>;
@@ -72,10 +93,18 @@ export function VerseDisplay({
           )}
         </div>
         {selectedVerses.length > 0 && (
-          <Button size="sm" onClick={onProjectSelected}>
-            <Monitor className="mr-1.5 h-3.5 w-3.5" />
-            {t("bible.project")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {activeServiceId && (
+              <Button size="sm" variant="outline" onClick={handleAddToService}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                {t("services.addToService")}
+              </Button>
+            )}
+            <Button size="sm" onClick={onProjectSelected}>
+              <Monitor className="mr-1.5 h-3.5 w-3.5" />
+              {t("bible.project")}
+            </Button>
+          </div>
         )}
       </div>
       <div className="space-y-0.5">
