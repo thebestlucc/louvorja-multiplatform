@@ -61,6 +61,7 @@ pub fn run() {
             commands::bible::search_bible,
             commands::bible::project_bible_verse,
             commands::bible::import_bible_version,
+            commands::bible::navigate_bible_verse,
             // Slides
             commands::slides::get_presentations,
             commands::slides::get_presentation,

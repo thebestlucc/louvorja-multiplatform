@@ -177,6 +177,10 @@ export async function importBibleVersion(name: string, abbreviation: string, lan
   return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
 }
 
+export async function navigateBibleVerse(direction: "next" | "prev"): Promise<void> {
+  return tauriInvoke<void>("navigate_bible_verse", { direction });
+}
+
 // Services
 export async function getServices(): Promise<Service[]> {
   return tauriInvoke<Service[]>("get_services");

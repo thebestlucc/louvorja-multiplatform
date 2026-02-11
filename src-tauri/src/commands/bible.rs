@@ -123,6 +123,188 @@ pub fn project_bible_verse(
     Ok(())
 }
 
+/// Navigate bible projection by one verse forward or backward.
+/// Handles chapter and book boundaries:
+/// - Right arrow: next verse; if last verse in chapter, go to next chapter; if last chapter, go to next book.
+/// - Left arrow: previous verse; if first verse in chapter, go to previous chapter's last verse; if first chapter, go to previous book's last chapter.
+#[tauri::command]
+pub fn navigate_bible_verse(
+    direction: String, // "next" or "prev"
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    // Read current slide
+    let current_slide = {
+        let current = state
+            .current_slide
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        current.clone()
+    };
+
+    let slide = current_slide.ok_or_else(|| AppError::Internal("No slide projected".into()))?;
+    if slide.slide_type != "bible" {
+        return Ok(()); // Not a bible slide, ignore
+    }
+
+    // Parse reference from title: "Book Chapter:Start" or "Book Chapter:Start-End"
+    let reference = slide.title.as_deref().unwrap_or("");
+    let (book, chapter, verse_start) = parse_bible_reference(reference)?;
+
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // We need to figure out the version_id from the current verse
+    let version_id: i64 = conn
+        .query_row(
+            "SELECT version_id FROM bible_verses WHERE book = ?1 AND chapter = ?2 AND verse = ?3 LIMIT 1",
+            rusqlite::params![book, chapter, verse_start],
+            |row| row.get(0),
+        )
+        .map_err(|_| AppError::Internal("Could not determine bible version".into()))?;
+
+    // Get ordered list of books for this version
+    let books = crate::db::queries::bible::get_books(&conn, version_id)?;
+
+    let book_idx = books
+        .iter()
+        .position(|b| b.name == book)
+        .ok_or_else(|| AppError::Internal(format!("Book '{}' not found", book)))?;
+
+    let (new_book, new_chapter, new_verse) = if direction == "next" {
+        // Get max verse in current chapter
+        let max_verse: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(verse), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2 AND chapter = ?3",
+                rusqlite::params![version_id, book, chapter],
+                |row| row.get(0),
+            )?;
+
+        if verse_start < max_verse {
+            // Next verse in same chapter
+            (book.clone(), chapter, verse_start + 1)
+        } else {
+            // Try next chapter in same book
+            let max_chapter = books[book_idx].chapter_count;
+            if chapter < max_chapter {
+                (book.clone(), chapter + 1, 1)
+            } else {
+                // Try next book
+                if book_idx + 1 < books.len() {
+                    (books[book_idx + 1].name.clone(), 1, 1)
+                } else {
+                    return Ok(()); // Last verse of last book, do nothing
+                }
+            }
+        }
+    } else {
+        // "prev"
+        if verse_start > 1 {
+            // Previous verse in same chapter
+            (book.clone(), chapter, verse_start - 1)
+        } else {
+            // Try previous chapter
+            if chapter > 1 {
+                let prev_chapter = chapter - 1;
+                let max_verse: i64 = conn
+                    .query_row(
+                        "SELECT COALESCE(MAX(verse), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2 AND chapter = ?3",
+                        rusqlite::params![version_id, book, prev_chapter],
+                        |row| row.get(0),
+                    )?;
+                (book.clone(), prev_chapter, max_verse)
+            } else {
+                // Try previous book
+                if book_idx > 0 {
+                    let prev_book = &books[book_idx - 1];
+                    let prev_chapter = prev_book.chapter_count;
+                    let max_verse: i64 = conn
+                        .query_row(
+                            "SELECT COALESCE(MAX(verse), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2 AND chapter = ?3",
+                            rusqlite::params![version_id, prev_book.name, prev_chapter],
+                            |row| row.get(0),
+                        )?;
+                    (prev_book.name.clone(), prev_chapter, max_verse)
+                } else {
+                    return Ok(()); // First verse of first book, do nothing
+                }
+            }
+        }
+    };
+
+    // Fetch the new verse
+    let verses = crate::db::queries::bible::get_verse_range(
+        &conn,
+        version_id,
+        &new_book,
+        new_chapter,
+        new_verse,
+        new_verse,
+    )?;
+
+    if verses.is_empty() {
+        return Ok(());
+    }
+
+    let v = &verses[0];
+    let text = format!("{} {}", v.verse, v.text);
+    let new_reference = format!("{} {}:{}", new_book, new_chapter, new_verse);
+
+    let slide_data = SlideContent {
+        slide_type: "bible".to_string(),
+        text: Some(text),
+        title: Some(new_reference),
+        subtitle: None,
+        label: None,
+    };
+
+    // Update current slide state
+    {
+        let mut current = state
+            .current_slide
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *current = Some(slide_data.clone());
+    }
+
+    app.emit("slide-changed", &slide_data)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    Ok(())
+}
+
+/// Parse a bible reference string like "Gênesis 1:3" or "1 Samuel 2:5-8"
+fn parse_bible_reference(reference: &str) -> Result<(String, i64, i64), AppError> {
+    // Match patterns like "Book Chapter:Verse" or "Book Chapter:Start-End"
+    // Book name can contain spaces and numbers (e.g., "1 Samuel", "Song of Solomon")
+    let re_err = || AppError::Internal(format!("Invalid bible reference: '{}'", reference));
+
+    // Find the last space-separated "N:N" or "N:N-N" pattern
+    if let Some(colon_pos) = reference.rfind(':') {
+        // Everything after colon is verse part (possibly "3" or "3-8")
+        let verse_part = &reference[colon_pos + 1..];
+        let verse_start: i64 = if let Some(dash_pos) = verse_part.find('-') {
+            verse_part[..dash_pos].trim().parse().map_err(|_| re_err())?
+        } else {
+            verse_part.trim().parse().map_err(|_| re_err())?
+        };
+
+        // Everything before colon: find the chapter number (last space-separated token)
+        let before_colon = &reference[..colon_pos];
+        if let Some(space_pos) = before_colon.rfind(' ') {
+            let chapter: i64 = before_colon[space_pos + 1..].trim().parse().map_err(|_| re_err())?;
+            let book = before_colon[..space_pos].trim().to_string();
+            Ok((book, chapter, verse_start))
+        } else {
+            Err(re_err())
+        }
+    } else {
+        Err(re_err())
+    }
+}
+
 #[tauri::command]
 pub fn import_bible_version(
     name: String,
