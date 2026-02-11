@@ -10,7 +10,7 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 10-phase roadmap in `.specs/` directory (01–11). PRD at `PRD.md`.
 
-**Phases 0–4 are COMPLETE.** Phase 5+ is pending.
+**Phases 0–5 are COMPLETE.** Phase 6+ is pending.
 
 ## Tech Stack
 
@@ -54,11 +54,12 @@ src/                          # Frontend (React)
 │   ├── layout/               # sidebar, header, status-bar
 │   ├── music/                # hymn-search, hymn-card, album-card, lyrics-display,
 │   │                         # audio-controls, audio-sync-editor
+│   ├── services/             # service-item-list, service-timeline, add-item-modal
 │   ├── slides/               # slide-renderer, slide-thumbnail, slide-list, slide-editor,
 │   │                         # projector-view, background-picker, aspect-ratio-selector,
 │   │                         # transition-selector
 │   └── ui/                   # Radix-based primitives (button, card, badge, input, etc.)
-├── hooks/                    # use-slides, use-keyboard, use-monitors, use-audio, use-presentation
+├── hooks/                    # use-slides, use-keyboard, use-monitors, use-audio, use-presentation, use-service
 ├── lib/
 │   ├── tauri.ts              # Typed `invoke()` wrappers — one function per Tauri command
 │   ├── queries.ts            # TanStack Query hooks (useQuery/useMutation wrappers)
@@ -68,7 +69,8 @@ src/                          # Frontend (React)
 │   ├── __root.tsx            # Root layout (sidebar + header + bare routes for /projector, /return)
 │   ├── index.tsx             # Dashboard home
 │   ├── hymnal/               # route.tsx, index.tsx, $hymnId.tsx
-│   └── presentations/        # route.tsx, index.tsx, $presentationId.tsx
+│   ├── presentations/        # route.tsx, index.tsx, $presentationId.tsx
+│   └── services/             # route.tsx, index.tsx, $serviceId.tsx
 ├── stores/                   # Zustand stores (presentation-store, display-store, audio-store, ui-store)
 └── types/                    # TypeScript type definitions
 
@@ -177,6 +179,9 @@ src-tauri/src/                # Backend (Rust)
 - **New Tauri commands checklist:** (1) Add query in `db/queries/*.rs`, (2) Add command in `commands/*.rs`, (3) Register in `lib.rs` handler, (4) Add wrapper in `lib/tauri.ts`, (5) Add hook in `lib/queries.ts`.
 - **Projector event flow:** `setCurrentSlide` (Rust) → `app.emit("slide-changed", &slide_data)` → `ProjectorView` listens via `listen<SlideContentFlat>("slide-changed")` → converts with `flatToSlideContent`.
 - **Link navigation:** Always use TanStack Router `<Link to="/path">` for internal navigation, never `<a href>` or `window.location`.
+- **Cross-module "Add to X" pattern:** When a module (e.g., Bible, Hymnal) needs to add items to another module (e.g., Services), use `usePresentationStore.activeServiceId` to check if a service is active, and `useAddServiceItem()` mutation to add. Show the button conditionally only when `activeServiceId` is set. See `hymn-card.tsx` and `verse-display.tsx` for reference.
+- **Color-coded type maps:** When items have types (e.g., `ServiceItemType`), define parallel `Record<Type, string>` maps for icons, text colors, border colors, and bg colors. Keep them co-located in the component that uses them (e.g., `service-item-list.tsx`).
+- **Tab switcher in panels:** For right-side panels with multiple views, use a simple state toggle (`useState<"tab1" | "tab2">`) with inline tab buttons styled via `cn()` + conditional `border-b-2 border-primary`. No need for a full tabs library.
 
 ## Phase Status
 
@@ -187,9 +192,22 @@ src-tauri/src/                # Backend (Rust)
 | 2 | Audio Playback (03) | COMPLETE |
 | 3 | Presentation Editor (04) | COMPLETE |
 | 4 | Bible (05) | COMPLETE |
-| 5 | Liturgy/Services (06) | Pending |
+| 5 | Liturgy/Services (06) | COMPLETE |
 | 6 | Multi-Monitor (07) | Pending |
 | 7 | Streaming (08) | Pending |
 | 8 | Video/Multimedia (09) | Pending |
 | 9 | Utilities & Polish (10) | Pending |
 | 10 | Migration & Deploy (11) | Pending |
+
+## Self-Improvement Protocol
+
+After completing any task (feature, bugfix, refactor), Claude MUST:
+
+1. **Update phase status** in the table above if a phase was completed or progressed.
+2. **Update project structure** if new directories, components, or route groups were added.
+3. **Record new patterns** in the "General" section above if a reusable pattern was established (e.g., cross-module integration, new UI pattern, new data flow).
+4. **Record new errors to avoid** if a non-obvious bug was encountered and solved during implementation.
+5. **Update memory files** (`~/.claude/projects/.../memory/MEMORY.md`) with session-specific learnings that don't belong in CLAUDE.md.
+6. **Keep CLAUDE.md concise** — don't duplicate information, remove outdated notes, prefer terse bullet points over verbose explanations.
+
+The goal: every session should leave the project in a better-documented state than it started, so future sessions (even with a fresh context) can onboard instantly.

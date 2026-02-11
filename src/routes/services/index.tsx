@@ -108,12 +108,14 @@ function ServiceCard({
       to="/services/$serviceId"
       params={{ serviceId: String(service.id) }}
       className={cn(
-        "group flex flex-col rounded-lg border border-border bg-surface p-4 transition-colors",
-        "hover:border-primary/50 hover:bg-surface-hover",
+        "group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-border bg-surface transition-all",
+        "hover:border-primary/50 hover:bg-surface-hover hover:shadow-md",
       )}
     >
-      <div className="mb-3 flex h-16 items-center justify-center rounded-md bg-primary/5">
-        <ListChecks className="h-8 w-8 text-primary/30" />
+      <div className="h-1 bg-primary/40" />
+      <div className="p-4">
+      <div className="mb-3 flex h-14 items-center justify-center rounded-md bg-primary/5">
+        <ListChecks className="h-7 w-7 text-primary/25 transition-colors group-hover:text-primary/50" />
       </div>
 
       <div className="flex items-start justify-between gap-2">
@@ -150,6 +152,7 @@ function ServiceCard({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
       </div>
     </Link>
   );
