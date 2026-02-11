@@ -115,6 +115,7 @@ pub struct Slide {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Service {
     pub id: i64,
     pub title: String,
@@ -125,6 +126,7 @@ pub struct Service {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServiceItem {
     pub id: i64,
     pub service_id: i64,
@@ -133,6 +135,13 @@ pub struct ServiceItem {
     pub title: String,
     pub item_order: i64,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceWithItems {
+    pub service: Service,
+    pub items: Vec<ServiceItem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

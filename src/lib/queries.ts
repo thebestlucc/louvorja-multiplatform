@@ -4,6 +4,8 @@ import {
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
+  getServices, getService, createService, updateService, deleteService,
+  addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
@@ -34,6 +36,7 @@ export const queryKeys = {
   services: {
     all: ["services"] as const,
     detail: (id: number) => ["services", id] as const,
+    items: (serviceId: number) => ["services", serviceId, "items"] as const,
   },
   settings: {
     all: ["settings"] as const,
@@ -266,6 +269,108 @@ export function useImportBible() {
       importBibleVersion(vars.name, vars.abbreviation, vars.language, vars.versesJson),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
+    },
+  });
+}
+
+// Services
+export function useServices() {
+  return useQuery({
+    queryKey: queryKeys.services.all,
+    queryFn: () => getServices(),
+  });
+}
+
+export function useService(id: number) {
+  return useQuery({
+    queryKey: queryKeys.services.detail(id),
+    queryFn: () => getService(id),
+    enabled: id > 0,
+  });
+}
+
+export function useCreateService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { title: string; date: string | null; notes: string | null }) =>
+      createService(vars.title, vars.date, vars.notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+    },
+  });
+}
+
+export function useUpdateService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; title: string; date: string | null; notes: string | null }) =>
+      updateService(vars.id, vars.title, vars.date, vars.notes),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.id) });
+    },
+  });
+}
+
+export function useDeleteService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteService(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+    },
+  });
+}
+
+export function useDuplicateService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => duplicateService(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+    },
+  });
+}
+
+export function useAddServiceItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { serviceId: number; itemType: string; title: string; itemId: number | null; notes: string | null }) =>
+      addServiceItem(vars.serviceId, vars.itemType, vars.title, vars.itemId, vars.notes),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+export function useRemoveServiceItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; serviceId: number }) => removeServiceItem(vars.id),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+export function useReorderServiceItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { serviceId: number; itemIds: number[] }) =>
+      reorderServiceItems(vars.serviceId, vars.itemIds),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+export function useUpdateServiceItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; serviceId: number; title: string; notes: string | null }) =>
+      updateServiceItem(vars.id, vars.title, vars.notes),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
     },
   });
 }

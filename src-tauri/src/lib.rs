@@ -83,6 +83,8 @@ pub fn run() {
             commands::liturgy::add_service_item,
             commands::liturgy::remove_service_item,
             commands::liturgy::reorder_service_items,
+            commands::liturgy::duplicate_service,
+            commands::liturgy::update_service_item,
             // Audio
             commands::audio::audio_play,
             commands::audio::audio_pause,

@@ -25,16 +25,18 @@ export function ProjectorView() {
     };
   }, []);
 
-  // Close the projector window on ESC (uses Tauri command so backend state stays in sync)
+  // Close the projector window on ESC (uses Tauri command so backend state stays in sync).
+  // Use capture phase to intercept before OS fullscreen handler can swallow the event.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         closeProjectorWindow().catch(() => {});
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, []);
 
   return (

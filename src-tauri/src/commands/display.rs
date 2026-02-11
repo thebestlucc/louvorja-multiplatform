@@ -69,15 +69,21 @@ pub fn open_projector_window(
     .visible(false)
     .decorations(false)
     .resizable(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
     .inner_size(logical_width, logical_height)
     .position(logical_x, logical_y)
     .build()
     .map_err(|e| AppError::Tauri(e.to_string()))?;
 
-    // Small delay then show (no OS fullscreen — decorations:false + full size already covers the screen,
-    // and avoids macOS intercepting ESC to exit fullscreen before our JS handler fires)
+    // Small delay then show + set fullscreen.
+    // We use OS fullscreen for proper display coverage (covers menu bar/dock on macOS).
+    // ESC handling is done in the frontend JS before the OS can intercept it.
     std::thread::sleep(std::time::Duration::from_millis(150));
     window.show().map_err(|e| AppError::Tauri(e.to_string()))?;
+    window
+        .set_fullscreen(true)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     let mut projector_open = state
         .projector_open

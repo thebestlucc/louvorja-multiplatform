@@ -12,6 +12,8 @@ import {
   PanelLeft,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui-store";
+import { usePresentationStore } from "../../stores/presentation-store";
+import { useService } from "../../lib/queries";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
@@ -28,6 +30,8 @@ const navItems = [
 
 export function Sidebar() {
   const { sidebarOpen, toggleSidebar } = useUIStore();
+  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
+  const { data: activeServiceData } = useService(activeServiceId ?? 0);
   const { t } = useTranslation();
   const matchRoute = useMatchRoute();
 
@@ -91,6 +95,26 @@ export function Sidebar() {
           return link;
         })}
       </nav>
+
+      {activeServiceId && activeServiceData && (
+        <div className="border-t border-border p-2">
+          <Link
+            to="/services/$serviceId"
+            params={{ serviceId: String(activeServiceId) }}
+            className={cn(
+              "flex items-center gap-2 rounded-md px-3 py-2 text-xs transition-colors hover:bg-surface-hover",
+              !sidebarOpen && "justify-center px-0",
+            )}
+          >
+            <ListChecks className="h-3.5 w-3.5 shrink-0 text-primary" />
+            {sidebarOpen && (
+              <span className="truncate text-muted-foreground">
+                {activeServiceData.service.title}
+              </span>
+            )}
+          </Link>
+        </div>
+      )}
     </aside>
   );
 }
