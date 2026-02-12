@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Hymn, Album } from "../types/hymn";
 import type { MonitorInfo } from "../types/settings";
-import type { Presentation, SlideContentFlat } from "../types/presentation";
+import type { Presentation, SlideContentFlat, SlideContextFlat, OverlayState } from "../types/presentation";
 import type { SlideRow } from "../types/presentation";
+import type { MonitorConfig } from "../types/settings";
 import type { AudioStatusPayload, SyncPoint } from "../types/audio";
 import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bible";
 import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
@@ -54,6 +55,46 @@ export async function setCurrentSlide(slideData: SlideContentFlat): Promise<void
 
 export async function getCurrentSlide(): Promise<SlideContentFlat | null> {
   return tauriInvoke<SlideContentFlat | null>("get_current_slide");
+}
+
+export async function clearCurrentSlide(): Promise<void> {
+  return tauriInvoke<void>("clear_current_slide");
+}
+
+export async function openReturnWindow(monitorIndex: number): Promise<void> {
+  return tauriInvoke<void>("open_return_window", { monitorIndex });
+}
+
+export async function closeReturnWindow(): Promise<void> {
+  return tauriInvoke<void>("close_return_window");
+}
+
+export async function toggleBlackScreen(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("toggle_black_screen");
+}
+
+export async function toggleLogoScreen(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("toggle_logo_screen");
+}
+
+export async function getOverlayState(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("get_overlay_state");
+}
+
+export async function setSlideContext(contextData: SlideContextFlat): Promise<void> {
+  return tauriInvoke<void>("set_slide_context", { contextData });
+}
+
+export async function getSlideContext(): Promise<SlideContextFlat | null> {
+  return tauriInvoke<SlideContextFlat | null>("get_slide_context");
+}
+
+export async function setMonitorConfig(monitorId: string, role: string): Promise<void> {
+  return tauriInvoke<void>("set_monitor_config", { monitorId, role });
+}
+
+export async function getMonitorConfigs(): Promise<MonitorConfig[]> {
+  return tauriInvoke<MonitorConfig[]>("get_monitor_configs");
 }
 
 // Audio

@@ -1,15 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Plus } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Plus, Play, Square, SkipForward, SkipBack } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { setCurrentSlide, setSlideContext } from "../../lib/tauri";
 import { ServiceItemList } from "../../components/services/service-item-list";
 import { ServiceTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { cn } from "../../lib/utils";
+import type { ServiceItem } from "../../types/service";
+import type { SlideContentFlat } from "../../types/presentation";
 
 export const Route = createFileRoute("/services/$serviceId")({
   component: ServiceEditor,
@@ -27,15 +31,25 @@ function ServiceEditor() {
     addItem,
     removeItem,
     reorderItems,
+    editItem,
   } = useServiceEditor({ serviceId: id });
 
-  const { setActiveService } = usePresentationStore();
+  const {
+    setActiveService,
+    isPlayingService,
+    activeServiceItemIndex,
+    setPlayingService,
+    setActiveServiceItemIndex,
+  } = usePresentationStore();
 
   // Set active service for cross-module integration
   useEffect(() => {
     setActiveService(id);
-    return () => setActiveService(null);
-  }, [id, setActiveService]);
+    return () => {
+      setActiveService(null);
+      setPlayingService(false);
+    };
+  }, [id, setActiveService, setPlayingService]);
 
   // Local title state for responsive typing
   const [localTitle, setLocalTitle] = useState("");
@@ -107,6 +121,75 @@ function ServiceEditor() {
     }, 800);
   };
 
+  // Project a single service item to the projector
+  const projectItem = useCallback(async (item: ServiceItem) => {
+    let slideData: SlideContentFlat;
+
+    switch (item.itemType) {
+      case "hymn":
+        slideData = { slide_type: "lyrics", title: item.title, text: item.notes ?? "" };
+        break;
+      case "bible":
+        slideData = { slide_type: "bible", title: item.title, text: item.notes ?? "" };
+        break;
+      case "presentation":
+        slideData = { slide_type: "text", title: item.title, text: "" };
+        break;
+      case "annotation":
+        slideData = { slide_type: "text", title: item.title, text: item.notes ?? "" };
+        break;
+      default:
+        slideData = { slide_type: "text", title: item.title, text: item.notes ?? "" };
+        break;
+    }
+
+    try {
+      await setCurrentSlide(slideData);
+      // Find the item index in the list for return monitor context
+      const itemIndex = items.findIndex((i) => i.id === item.id);
+      const nextItem = itemIndex + 1 < items.length ? items[itemIndex + 1] : null;
+      await setSlideContext({
+        next: nextItem
+          ? { slide_type: "text", title: nextItem.title, text: nextItem.notes ?? "" }
+          : null,
+        index: itemIndex >= 0 ? itemIndex : 0,
+        total: items.length,
+        title: item.title,
+      });
+    } catch (err) {
+      toast.error(String(err));
+    }
+  }, [items]);
+
+  // Play Service: project the active item whenever the index changes
+  useEffect(() => {
+    if (isPlayingService && activeServiceItemIndex >= 0 && activeServiceItemIndex < items.length) {
+      projectItem(items[activeServiceItemIndex]);
+    }
+  }, [isPlayingService, activeServiceItemIndex, items, projectItem]);
+
+  const handlePlayService = () => {
+    if (items.length === 0) return;
+    setPlayingService(true);
+    setRightTab("timeline");
+  };
+
+  const handleStopService = () => {
+    setPlayingService(false);
+  };
+
+  const handleNextItem = () => {
+    if (activeServiceItemIndex < items.length - 1) {
+      setActiveServiceItemIndex(activeServiceItemIndex + 1);
+    }
+  };
+
+  const handlePrevItem = () => {
+    if (activeServiceItemIndex > 0) {
+      setActiveServiceItemIndex(activeServiceItemIndex - 1);
+    }
+  };
+
   // Cleanup timers
   useEffect(() => {
     return () => {
@@ -143,11 +226,50 @@ function ServiceEditor() {
           onChange={(e) => handleDateChange(e.target.value)}
         />
 
-        <div className="ml-auto">
-          <Button size="sm" onClick={() => setAddModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t("services.addItem")}
-          </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {isPlayingService ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePrevItem}
+                disabled={activeServiceItemIndex <= 0}
+              >
+                <SkipBack className="h-4 w-4" />
+              </Button>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {activeServiceItemIndex + 1}/{items.length}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleNextItem}
+                disabled={activeServiceItemIndex >= items.length - 1}
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="destructive" onClick={handleStopService}>
+                <Square className="mr-2 h-4 w-4" />
+                {t("services.stopService")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePlayService}
+                disabled={items.length === 0}
+              >
+                <Play className="mr-2 h-4 w-4" />
+                {t("services.playService")}
+              </Button>
+              <Button size="sm" onClick={() => setAddModalOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t("services.addItem")}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -157,8 +279,11 @@ function ServiceEditor() {
         <div className="flex-1 overflow-auto rounded-lg border border-border">
           <ServiceItemList
             items={items}
+            activeItemIndex={isPlayingService ? activeServiceItemIndex : -1}
             onRemove={removeItem}
             onReorder={reorderItems}
+            onProject={projectItem}
+            onEditItem={editItem}
           />
         </div>
 
@@ -201,7 +326,10 @@ function ServiceEditor() {
               />
             </div>
           ) : (
-            <ServiceTimeline items={items} />
+            <ServiceTimeline
+              items={items}
+              activeIndex={isPlayingService ? activeServiceItemIndex : -1}
+            />
           )}
         </div>
       </div>

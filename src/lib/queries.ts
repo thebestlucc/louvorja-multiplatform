@@ -6,6 +6,7 @@ import {
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
+  getMonitorConfigs, setMonitorConfig,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
@@ -44,6 +45,7 @@ export const queryKeys = {
   },
   monitors: {
     all: ["monitors"] as const,
+    configs: ["monitorConfigs"] as const,
   },
   syncPoints: {
     byHymn: (hymnId: number) => ["syncPoints", hymnId] as const,
@@ -371,6 +373,25 @@ export function useUpdateServiceItem() {
       updateServiceItem(vars.id, vars.title, vars.notes),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+// Monitor Configs
+export function useMonitorConfigs() {
+  return useQuery({
+    queryKey: queryKeys.monitors.configs,
+    queryFn: () => getMonitorConfigs(),
+  });
+}
+
+export function useSaveMonitorConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { monitorId: string; role: string }) =>
+      setMonitorConfig(vars.monitorId, vars.role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
     },
   });
 }

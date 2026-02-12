@@ -9,7 +9,7 @@ mod streaming;
 
 use state::{AppState, AudioState};
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -36,6 +36,10 @@ pub fn run() {
                 db: Mutex::new(conn),
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),
+                is_black_screen: Mutex::new(false),
+                is_logo_screen: Mutex::new(false),
+                return_open: Mutex::new(false),
+                slide_context: Mutex::new(None),
             });
 
             let audio_state = AudioState::new().expect("Failed to initialize audio state");
@@ -103,9 +107,16 @@ pub fn run() {
             commands::display::close_projector_window,
             commands::display::open_return_window,
             commands::display::close_return_window,
-            commands::display::set_monitor_config,
             commands::display::set_current_slide,
             commands::display::get_current_slide,
+            commands::display::clear_current_slide,
+            commands::display::set_slide_context,
+            commands::display::get_slide_context,
+            commands::display::toggle_black_screen,
+            commands::display::toggle_logo_screen,
+            commands::display::get_overlay_state,
+            commands::display::set_monitor_config,
+            commands::display::get_monitor_configs,
             // Streaming
             commands::streaming::start_streaming_server,
             commands::streaming::stop_streaming_server,
@@ -123,6 +134,31 @@ pub fn run() {
             commands::utility::run_lottery,
             commands::utility::format_text,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let label = window.label();
+                let app = window.app_handle();
+                match label {
+                    "projector" => {
+                        if let Some(state) = app.try_state::<AppState>() {
+                            if let Ok(mut open) = state.projector_open.lock() {
+                                *open = false;
+                            }
+                        }
+                        let _ = app.emit("projector-state-changed", false);
+                    }
+                    "return" => {
+                        if let Some(state) = app.try_state::<AppState>() {
+                            if let Ok(mut open) = state.return_open.lock() {
+                                *open = false;
+                            }
+                        }
+                        let _ = app.emit("return-state-changed", false);
+                    }
+                    _ => {}
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

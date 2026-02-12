@@ -15,7 +15,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import type { ServiceItem, ServiceItemType } from "../../types/service";
 
@@ -24,8 +25,8 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   bible: BookOpen,
   presentation: Presentation,
   annotation: StickyNote,
-  url: StickyNote,
-  file: StickyNote,
+  url: Link2,
+  file: FileIcon,
 };
 
 const itemTypeColors: Record<ServiceItemType, string> = {
@@ -48,11 +49,14 @@ const itemTypeBorders: Record<ServiceItemType, string> = {
 
 interface ServiceItemListProps {
   items: ServiceItem[];
+  activeItemIndex?: number;
   onRemove: (id: number) => void;
   onReorder: (from: number, to: number) => void;
+  onProject?: (item: ServiceItem) => void;
+  onEditItem?: (id: number, title: string, notes: string | null) => void;
 }
 
-export function ServiceItemList({ items, onRemove, onReorder }: ServiceItemListProps) {
+export function ServiceItemList({ items, activeItemIndex = -1, onRemove, onReorder, onProject, onEditItem }: ServiceItemListProps) {
   const { t } = useTranslation();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -94,7 +98,10 @@ export function ServiceItemList({ items, onRemove, onReorder }: ServiceItemListP
                 key={item.id}
                 item={item}
                 index={index}
+                isActive={index === activeItemIndex}
                 onRemove={() => onRemove(item.id)}
+                onProject={onProject ? () => onProject(item) : undefined}
+                onEditItem={onEditItem}
               />
             ))}
           </div>
@@ -107,13 +114,44 @@ export function ServiceItemList({ items, onRemove, onReorder }: ServiceItemListP
 function SortableServiceItem({
   item,
   index,
+  isActive,
   onRemove,
+  onProject,
+  onEditItem,
 }: {
   item: ServiceItem;
   index: number;
+  isActive: boolean;
   onRemove: () => void;
+  onProject?: () => void;
+  onEditItem?: (id: number, title: string, notes: string | null) => void;
 }) {
   const { t } = useTranslation();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(item.title);
+  const [editNotes, setEditNotes] = useState(item.notes ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSaveEdit = () => {
+    if (editTitle.trim() && onEditItem) {
+      onEditItem(item.id, editTitle.trim(), editNotes.trim() || null);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(item.title);
+    setEditNotes(item.notes ?? "");
+    setIsEditing(false);
+  };
+
   const {
     attributes,
     listeners,
@@ -138,7 +176,11 @@ function SortableServiceItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex cursor-pointer items-center gap-2 rounded-md border border-border border-l-[3px] ${borderClass} bg-surface p-2 transition-all hover:bg-surface-hover hover:shadow-sm`}
+      className={`group flex cursor-pointer items-center gap-2 rounded-md border border-l-[3px] ${borderClass} p-2 transition-all hover:shadow-sm ${
+        isActive
+          ? "border-primary/50 bg-primary/10"
+          : "border-border bg-surface hover:bg-surface-hover"
+      }`}
     >
       <button
         className="cursor-grab p-0.5 text-muted-foreground hover:text-foreground"
@@ -154,17 +196,72 @@ function SortableServiceItem({
 
       <Icon className={`h-4 w-4 shrink-0 ${colorClass}`} />
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{item.title}</p>
-        <p className="text-xs text-muted-foreground">{typeLabel}</p>
-      </div>
+      {isEditing ? (
+        <div className="min-w-0 flex-1 space-y-1">
+          <input
+            ref={inputRef}
+            className="w-full rounded border border-border bg-transparent px-1.5 py-0.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveEdit();
+              if (e.key === "Escape") handleCancelEdit();
+            }}
+          />
+          <input
+            className="w-full rounded border border-border bg-transparent px-1.5 py-0.5 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder={t("services.notes")}
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveEdit();
+              if (e.key === "Escape") handleCancelEdit();
+            }}
+          />
+          <div className="flex gap-1">
+            <button className="rounded p-0.5 text-primary hover:bg-primary/10" onClick={handleSaveEdit}>
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button className="rounded p-0.5 text-muted-foreground hover:bg-muted" onClick={handleCancelEdit}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{item.title}</p>
+          <p className="text-xs text-muted-foreground">{typeLabel}</p>
+        </div>
+      )}
 
-      <button
-        className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-        onClick={onRemove}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      {!isEditing && (
+        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          {onProject && (
+            <button
+              className="rounded p-1 text-muted-foreground hover:text-primary"
+              onClick={onProject}
+              title={t("services.projectItem")}
+            >
+              <Monitor className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onEditItem && (
+            <button
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              onClick={() => setIsEditing(true)}
+              title={t("services.editItem")}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button
+            className="rounded p-1 text-muted-foreground hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

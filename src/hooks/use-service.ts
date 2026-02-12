@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useService, useUpdateService, useAddServiceItem, useRemoveServiceItem, useReorderServiceItems } from "../lib/queries";
+import { useService, useUpdateService, useAddServiceItem, useRemoveServiceItem, useReorderServiceItems, useUpdateServiceItem } from "../lib/queries";
 import type { ServiceItem } from "../types/service";
 
 interface UseServiceEditorOptions {
@@ -12,6 +12,7 @@ export function useServiceEditor({ serviceId }: UseServiceEditorOptions) {
   const addItemMutation = useAddServiceItem();
   const removeItemMutation = useRemoveServiceItem();
   const reorderMutation = useReorderServiceItems();
+  const editItemMutation = useUpdateServiceItem();
 
   const service = data?.service ?? null;
   const items: ServiceItem[] = data?.items ?? [];
@@ -48,6 +49,13 @@ export function useServiceEditor({ serviceId }: UseServiceEditorOptions) {
     [items, serviceId, reorderMutation],
   );
 
+  const editItem = useCallback(
+    (itemId: number, title: string, notes: string | null) => {
+      editItemMutation.mutate({ id: itemId, serviceId, title, notes });
+    },
+    [serviceId, editItemMutation],
+  );
+
   return {
     service,
     items,
@@ -55,5 +63,6 @@ export function useServiceEditor({ serviceId }: UseServiceEditorOptions) {
     addItem,
     removeItem,
     reorderItems,
+    editItem,
   };
 }

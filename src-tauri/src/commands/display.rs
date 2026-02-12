@@ -1,4 +1,4 @@
-use crate::db::models::{MonitorInfo, SlideContent};
+use crate::db::models::{MonitorConfig, MonitorInfo, OverlayState, SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::state::AppState;
 use tauri::{AppHandle, Emitter, Manager};
@@ -32,11 +32,13 @@ pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppErr
     Ok(infos)
 }
 
-#[tauri::command]
-pub fn open_projector_window(
+/// Helper: open a fullscreen window on the given monitor
+fn open_fullscreen_window(
+    label: &str,
+    url: &str,
+    title: &str,
     monitor_index: usize,
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
+    app: &AppHandle,
 ) -> Result<(), AppError> {
     let monitors = app
         .available_monitors()
@@ -49,23 +51,22 @@ pub fn open_projector_window(
     let size = monitor.size();
     let scale = monitor.scale_factor();
 
-    // Convert physical pixels to logical pixels for Tauri window API
     let logical_width = size.width as f64 / scale;
     let logical_height = size.height as f64 / scale;
     let logical_x = position.x as f64 / scale;
     let logical_y = position.y as f64 / scale;
 
-    // Close existing projector window if open
-    if let Some(existing) = app.get_webview_window("projector") {
+    // Close existing window if open
+    if let Some(existing) = app.get_webview_window(label) {
         let _ = existing.close();
     }
 
     let window = tauri::WebviewWindowBuilder::new(
-        &app,
-        "projector",
-        tauri::WebviewUrl::App("/projector".into()),
+        app,
+        label,
+        tauri::WebviewUrl::App(url.into()),
     )
-    .title("LouvorJA - Projector")
+    .title(title)
     .visible(false)
     .decorations(false)
     .resizable(false)
@@ -76,14 +77,22 @@ pub fn open_projector_window(
     .build()
     .map_err(|e| AppError::Tauri(e.to_string()))?;
 
-    // Small delay then show + set fullscreen.
-    // We use OS fullscreen for proper display coverage (covers menu bar/dock on macOS).
-    // ESC handling is done in the frontend JS before the OS can intercept it.
     std::thread::sleep(std::time::Duration::from_millis(150));
     window.show().map_err(|e| AppError::Tauri(e.to_string()))?;
     window
         .set_fullscreen(true)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_projector_window(
+    monitor_index: usize,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    open_fullscreen_window("projector", "/projector", "LouvorJA - Projector", monitor_index, &app)?;
 
     let mut projector_open = state
         .projector_open
@@ -108,10 +117,46 @@ pub fn close_projector_window(
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     *projector_open = false;
-    // Notify all windows so frontend state stays in sync
     let _ = app.emit("projector-state-changed", false);
     Ok(())
 }
+
+#[tauri::command]
+pub fn open_return_window(
+    monitor_index: usize,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    open_fullscreen_window("return", "/return", "LouvorJA - Return Monitor", monitor_index, &app)?;
+
+    let mut return_open = state
+        .return_open
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    *return_open = true;
+    let _ = app.emit("return-state-changed", true);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn close_return_window(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    if let Some(window) = app.get_webview_window("return") {
+        window.close().map_err(|e| AppError::Tauri(e.to_string()))?;
+    }
+    let mut return_open = state
+        .return_open
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    *return_open = false;
+    let _ = app.emit("return-state-changed", false);
+    Ok(())
+}
+
+// Slide projection
 
 #[tauri::command]
 pub fn set_current_slide(
@@ -143,16 +188,161 @@ pub fn get_current_slide(
 }
 
 #[tauri::command]
-pub fn open_return_window() -> Result<(), AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn clear_current_slide(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    {
+        let mut current = state
+            .current_slide
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *current = None;
+    }
+    {
+        let mut ctx = state
+            .slide_context
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *ctx = None;
+    }
+    let _ = app.emit("slide-cleared", ());
+    Ok(())
+}
+
+// Slide context (for return monitor)
+
+#[tauri::command]
+pub fn set_slide_context(
+    context_data: SlideContext,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    {
+        let mut ctx = state
+            .slide_context
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *ctx = Some(context_data.clone());
+    }
+    app.emit("slide-context", &context_data)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn close_return_window() -> Result<(), AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn get_slide_context(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<SlideContext>, AppError> {
+    let ctx = state
+        .slide_context
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    Ok(ctx.clone())
+}
+
+// Overlay state (black/logo screen)
+
+#[tauri::command]
+pub fn toggle_black_screen(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<OverlayState, AppError> {
+    let mut black = state
+        .is_black_screen
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    *black = !*black;
+    // If black screen activates, turn off logo screen
+    let mut logo = state
+        .is_logo_screen
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    if *black {
+        *logo = false;
+    }
+    let overlay = OverlayState {
+        black_screen: *black,
+        logo_screen: *logo,
+    };
+    let _ = app.emit("overlay-changed", &overlay);
+    Ok(overlay)
 }
 
 #[tauri::command]
-pub fn set_monitor_config(_monitor_id: String, _role: String) -> Result<(), AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn toggle_logo_screen(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<OverlayState, AppError> {
+    let mut logo = state
+        .is_logo_screen
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    *logo = !*logo;
+    // If logo screen activates, turn off black screen
+    let mut black = state
+        .is_black_screen
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    if *logo {
+        *black = false;
+    }
+    let overlay = OverlayState {
+        black_screen: *black,
+        logo_screen: *logo,
+    };
+    let _ = app.emit("overlay-changed", &overlay);
+    Ok(overlay)
+}
+
+#[tauri::command]
+pub fn get_overlay_state(
+    state: tauri::State<'_, AppState>,
+) -> Result<OverlayState, AppError> {
+    let black = state
+        .is_black_screen
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let logo = state
+        .is_logo_screen
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    Ok(OverlayState {
+        black_screen: *black,
+        logo_screen: *logo,
+    })
+}
+
+// Monitor config persistence
+
+#[tauri::command]
+pub fn set_monitor_config(
+    monitor_id: String,
+    role: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::settings::set_monitor_config(
+        &conn,
+        &MonitorConfig {
+            id: 0,
+            monitor_id,
+            role,
+            enabled: true,
+        },
+    )
+}
+
+#[tauri::command]
+pub fn get_monitor_configs(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<MonitorConfig>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::settings::get_monitor_configs(&conn)
 }

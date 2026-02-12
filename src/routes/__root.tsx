@@ -3,7 +3,9 @@ import { Toaster } from "sonner";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
 import { StatusBar } from "../components/layout/status-bar";
+import { SlideNavBar } from "../components/display/slide-nav-bar";
 import { CommandPalette } from "../components/ui/command-palette";
+import { useKeyboard } from "../hooks/use-keyboard";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -13,8 +15,11 @@ const BARE_ROUTES = ["/projector", "/return"];
 
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isBareRoute = BARE_ROUTES.includes(pathname);
 
-  if (BARE_ROUTES.includes(pathname)) {
+  useKeyboard({ enabled: !isBareRoute });
+
+  if (isBareRoute) {
     return <Outlet />;
   }
 
@@ -26,6 +31,7 @@ function RootLayout() {
         <main className="flex-1 overflow-auto p-4">
           <Outlet />
         </main>
+        <SlideNavBar />
         <StatusBar />
       </div>
       <CommandPalette />

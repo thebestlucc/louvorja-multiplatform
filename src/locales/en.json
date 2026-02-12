@@ -33,7 +33,25 @@
   "status": {
     "ready": "Ready",
     "projectorOff": "Projector off",
+    "projectorOn": "Projector on",
+    "returnOn": "Return on",
+    "returnOff": "Return off",
     "streamingOff": "Streaming off"
+  },
+  "display": {
+    "projector": "Projector",
+    "return": "Return Monitor",
+    "blackScreen": "Black Screen",
+    "logoScreen": "Logo Screen",
+    "openProjector": "Open Projector (F5)",
+    "closeProjector": "Close Projector (F5)",
+    "openReturn": "Open Return Monitor (Shift+F5)",
+    "closeReturn": "Close Return Monitor (Shift+F5)",
+    "toggleBlack": "Toggle Black Screen (B)",
+    "toggleLogo": "Toggle Logo Screen (L)",
+    "slideOf": "{{current}} / {{total}}",
+    "nextSlide": "Next",
+    "slideNav": "Slide Navigation"
   },
   "dashboard": {
     "welcome": "Welcome to LouvorJA",
@@ -134,11 +152,21 @@
     "addToService": "Add to Service",
     "activeService": "Active Service",
     "timeline": "Timeline",
+    "playService": "Play Service",
+    "stopService": "Stop",
+    "projectItem": "Project",
+    "editItem": "Edit",
+    "urlTitlePlaceholder": "Link title...",
+    "invalidUrl": "Please enter a valid URL",
+    "filePlaceholder": "Select a file...",
+    "browse": "Browse",
     "itemTypes": {
       "hymn": "Hymn",
       "bible": "Bible",
       "presentation": "Presentation",
-      "annotation": "Annotation"
+      "annotation": "Annotation",
+      "url": "URL",
+      "file": "File"
     }
   },
   "audio": {
