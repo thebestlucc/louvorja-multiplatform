@@ -1,13 +1,21 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
-import { setCurrentSlide } from "../lib/tauri";
+import { usePresentationStore } from "../stores/presentation-store";
+import { clearCurrentSlide } from "../lib/tauri";
 
-export function useKeyboard() {
+export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const { nextSlide, prevSlide } = useSlides();
-  const { toggleProjector, isProjectorOpen } = useMonitorsControl();
+  const { toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen } = useMonitorsControl();
+
+  const clearPresentation = useCallback(() => {
+    usePresentationStore.getState().setSlides([]);
+    clearCurrentSlide();
+  }, []);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -30,17 +38,30 @@ export function useKeyboard() {
           break;
         case "Escape":
           e.preventDefault();
-          // Project black screen
-          setCurrentSlide({ slide_type: "pause" });
+          clearPresentation();
           break;
         case "F5":
           e.preventDefault();
-          toggleProjector();
+          if (e.shiftKey) {
+            toggleReturn();
+          } else {
+            toggleProjector();
+          }
+          break;
+        case "b":
+        case "B":
+          e.preventDefault();
+          toggleBlackScreen();
+          break;
+        case "l":
+        case "L":
+          e.preventDefault();
+          toggleLogoScreen();
           break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [nextSlide, prevSlide, toggleProjector, isProjectorOpen]);
+  }, [enabled, nextSlide, prevSlide, toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen, clearPresentation]);
 }

@@ -33,7 +33,25 @@
   "status": {
     "ready": "Pronto",
     "projectorOff": "Projetor desligado",
+    "projectorOn": "Projetor ligado",
+    "returnOn": "Retorno ligado",
+    "returnOff": "Retorno desligado",
     "streamingOff": "Streaming desligado"
+  },
+  "display": {
+    "projector": "Projetor",
+    "return": "Monitor de Retorno",
+    "blackScreen": "Tela Preta",
+    "logoScreen": "Tela de Logo",
+    "openProjector": "Abrir Projetor (F5)",
+    "closeProjector": "Fechar Projetor (F5)",
+    "openReturn": "Abrir Monitor de Retorno (Shift+F5)",
+    "closeReturn": "Fechar Monitor de Retorno (Shift+F5)",
+    "toggleBlack": "Alternar Tela Preta (B)",
+    "toggleLogo": "Alternar Tela de Logo (L)",
+    "slideOf": "{{current}} / {{total}}",
+    "nextSlide": "Próximo",
+    "slideNav": "Navegação de Slides"
   },
   "dashboard": {
     "welcome": "Bem-vindo ao LouvorJA",
@@ -134,11 +152,21 @@
     "addToService": "Adicionar ao Culto",
     "activeService": "Culto Ativo",
     "timeline": "Linha do Tempo",
+    "playService": "Iniciar Culto",
+    "stopService": "Parar",
+    "projectItem": "Projetar",
+    "editItem": "Editar",
+    "urlTitlePlaceholder": "Título do link...",
+    "invalidUrl": "Por favor, insira uma URL válida",
+    "filePlaceholder": "Selecione um arquivo...",
+    "browse": "Procurar",
     "itemTypes": {
       "hymn": "Hino",
       "bible": "Bíblia",
       "presentation": "Apresentação",
-      "annotation": "Anotação"
+      "annotation": "Anotação",
+      "url": "URL",
+      "file": "Arquivo"
     }
   },
   "audio": {

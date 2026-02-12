@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { usePresentationStore } from "../stores/presentation-store";
-import { setCurrentSlide } from "../lib/tauri";
+import { setCurrentSlide, setSlideContext } from "../lib/tauri";
 import type { SlideContent } from "../types/presentation";
 import { slideContentToFlat } from "../types/presentation";
 
@@ -17,16 +17,37 @@ export function useSlides() {
     [],
   );
 
+  const projectSlideWithContext = useCallback(
+    async (
+      slide: SlideContent,
+      next: SlideContent | null,
+      index: number,
+      total: number,
+      title: string,
+    ) => {
+      await setCurrentSlide(slideContentToFlat(slide));
+      await setSlideContext({
+        next: next ? slideContentToFlat(next) : null,
+        index,
+        total,
+        title,
+      });
+    },
+    [],
+  );
+
   const goToSlide = useCallback(
     async (index: number) => {
-      // Read fresh state to avoid stale closure (e.g. after setSlides + setTimeout)
       const state = usePresentationStore.getState();
       if (index >= 0 && index < state.slides.length) {
         state.setActiveSlideIndex(index);
-        await projectSlide(state.slides[index]);
+        const slide = state.slides[index];
+        const next = index + 1 < state.slides.length ? state.slides[index + 1] : null;
+        const title = getSlideTitle(slide);
+        await projectSlideWithContext(slide, next, index, state.slides.length, title);
       }
     },
-    [projectSlide],
+    [projectSlideWithContext],
   );
 
   const nextSlide = useCallback(async () => {
@@ -47,5 +68,26 @@ export function useSlides() {
     prevSlide,
     goToSlide,
     projectSlide,
+    projectSlideWithContext,
   };
+}
+
+/** Extract a display title from a slide for the return monitor */
+function getSlideTitle(slide: SlideContent): string {
+  switch (slide.type) {
+    case "cover":
+      return slide.title;
+    case "lyrics":
+      return slide.label ?? "Lyrics";
+    case "bible":
+      return `${slide.book} ${slide.chapter}:${slide.verseStart}-${slide.verseEnd}`;
+    case "text":
+      return slide.text.substring(0, 40);
+    case "pause":
+      return "Pause";
+    case "image":
+      return slide.alt ?? "Image";
+    case "video":
+      return "Video";
+  }
 }

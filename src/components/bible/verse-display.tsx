@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import type { Verse } from "../../types/bible";
-import { Monitor, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
 
@@ -16,7 +16,6 @@ interface VerseDisplayProps {
   versionAbbr?: string;
   onSelectVerse: (verse: number) => void;
   onDoubleClickVerse: (verse: number) => void;
-  onProjectSelected: () => void;
   isLoading: boolean;
 }
 
@@ -29,7 +28,6 @@ export function VerseDisplay({
   versionAbbr,
   onSelectVerse,
   onDoubleClickVerse,
-  onProjectSelected,
   isLoading,
 }: VerseDisplayProps) {
   const { t } = useTranslation();
@@ -92,19 +90,11 @@ export function VerseDisplay({
             </span>
           )}
         </div>
-        {selectedVerses.length > 0 && (
-          <div className="flex items-center gap-2">
-            {activeServiceId && (
-              <Button size="sm" variant="outline" onClick={handleAddToService}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                {t("services.addToService")}
-              </Button>
-            )}
-            <Button size="sm" onClick={onProjectSelected}>
-              <Monitor className="mr-1.5 h-3.5 w-3.5" />
-              {t("bible.project")}
-            </Button>
-          </div>
+        {selectedVerses.length > 0 && activeServiceId && (
+          <Button size="sm" variant="outline" onClick={handleAddToService}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            {t("services.addToService")}
+          </Button>
         )}
       </div>
       <div className="space-y-0.5">

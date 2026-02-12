@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { MonitorOff } from "lucide-react";
 import { useBible } from "../../hooks/use-bible";
-import { useMonitorsControl } from "../../hooks/use-monitors";
 import { BookSelector, PERIODIC_BOOKS } from "../../components/bible/book-selector";
 import { VerseDisplay } from "../../components/bible/verse-display";
 import { BibleSearch } from "../../components/bible/bible-search";
 import { VersionComparison } from "../../components/bible/version-comparison";
-import { Button } from "../../components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 
 export const Route = createFileRoute("/bible/")({
   component: BibleIndex,
@@ -17,7 +15,6 @@ export const Route = createFileRoute("/bible/")({
 function BibleIndex() {
   const { t } = useTranslation();
   const bible = useBible();
-  const { isProjectorOpen, closeProjector } = useMonitorsControl();
   const [searchQuery, setSearchQuery] = useState("");
 
   // Auto-select first version when loaded
@@ -55,12 +52,6 @@ function BibleIndex() {
       const bookIdx = availableBooksArray.indexOf(currentBook);
 
       switch (e.key) {
-        case "Escape":
-          e.preventDefault();
-          if (isProjectorOpen) {
-            closeProjector();
-          }
-          break;
         case "ArrowRight":
           e.preventDefault();
           if (currentBook && currentChapter > 0) {
@@ -121,7 +112,7 @@ function BibleIndex() {
           break;
       }
     },
-    [bible, availableBooksArray, isProjectorOpen, closeProjector],
+    [bible, availableBooksArray],
   );
 
   useEffect(() => {
@@ -134,33 +125,26 @@ function BibleIndex() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">{t("nav.bible")}</h1>
-        <div className="flex items-center gap-2">
-          {bible.versions.length > 0 && (
-            <div className="flex gap-1">
-              {bible.versions.map((v) => (
-                <Button
-                  key={v.id}
-                  variant={v.id === bible.currentVersionId ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => bible.setVersion(v.id)}
-                >
-                  {v.abbreviation}
-                </Button>
-              ))}
-            </div>
-          )}
-          {isProjectorOpen && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={closeProjector}
-              title="Fechar projetor (ESC)"
+        {bible.versions.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{t("bible.selectVersion")}</span>
+            <Select
+              value={String(bible.currentVersionId)}
+              onValueChange={(val) => bible.setVersion(Number(val))}
             >
-              <MonitorOff className="mr-1.5 h-3.5 w-3.5" />
-              {t("bible.project")}
-            </Button>
-          )}
-        </div>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {bible.versions.map((v) => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.abbreviation} — {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {bible.isLoadingVersions && (
@@ -183,7 +167,6 @@ function BibleIndex() {
                   versionAbbr={currentVersion?.abbreviation}
                   onSelectVerse={bible.selectVerse}
                   onDoubleClickVerse={bible.projectVerse}
-                  onProjectSelected={bible.projectSelectedVerses}
                   isLoading={bible.isLoadingVerses}
                 />
 

@@ -186,3 +186,19 @@ pub struct SlideContent {
     pub subtitle: Option<String>,
     pub label: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayState {
+    pub black_screen: bool,
+    pub logo_screen: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideContext {
+    pub next: Option<SlideContent>,
+    pub index: i32,
+    pub total: i32,
+    pub title: String,
+}

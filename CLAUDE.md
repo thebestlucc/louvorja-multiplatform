@@ -10,7 +10,7 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 10-phase roadmap in `.specs/` directory (01–11). PRD at `PRD.md`.
 
-**Phases 0–5 are COMPLETE.** Phase 6+ is pending.
+**Phases 0–6 are COMPLETE.** Phase 7+ is pending.
 
 ## Tech Stack
 
@@ -51,6 +51,7 @@ pnpm tauri dev             # full dev mode (frontend + Rust)
 ```
 src/                          # Frontend (React)
 ├── components/
+│   ├── display/              # projector-controls
 │   ├── layout/               # sidebar, header, status-bar
 │   ├── music/                # hymn-search, hymn-card, album-card, lyrics-display,
 │   │                         # audio-controls, audio-sync-editor
@@ -173,6 +174,13 @@ src-tauri/src/                # Backend (Rust)
 
 8. **Package manager:** This project uses **pnpm**. Running `npm install` will fail or create conflicts.
 
+9. **Conditional hooks in root layout:** Never call hooks after an early `return` in a component. For bare routes (e.g., `/projector`, `/return`), pass `{ enabled: false }` to hooks instead:
+   ```ts
+   const isBareRoute = BARE_ROUTES.includes(pathname);
+   useKeyboard({ enabled: !isBareRoute }); // always called, conditionally active
+   if (isBareRoute) return <Outlet />;
+   ```
+
 ### General
 
 - **i18n:** Always add keys to ALL THREE locale files (`en.json`, `pt.json`, `es.json`). Missing keys render as raw key strings.
@@ -182,6 +190,13 @@ src-tauri/src/                # Backend (Rust)
 - **Cross-module "Add to X" pattern:** When a module (e.g., Bible, Hymnal) needs to add items to another module (e.g., Services), use `usePresentationStore.activeServiceId` to check if a service is active, and `useAddServiceItem()` mutation to add. Show the button conditionally only when `activeServiceId` is set. See `hymn-card.tsx` and `verse-display.tsx` for reference.
 - **Color-coded type maps:** When items have types (e.g., `ServiceItemType`), define parallel `Record<Type, string>` maps for icons, text colors, border colors, and bg colors. Keep them co-located in the component that uses them (e.g., `service-item-list.tsx`).
 - **Tab switcher in panels:** For right-side panels with multiple views, use a simple state toggle (`useState<"tab1" | "tab2">`) with inline tab buttons styled via `cn()` + conditional `border-b-2 border-primary`. No need for a full tabs library.
+- **Service item projection:** Items project to the projector via `setCurrentSlide()` with `SlideContentFlat`. Each item type maps to a slide_type: hymn→lyrics, bible→bible, annotation/url/file→text. Always check `isProjectorOpen` and call `toggleProjector()` first if closed.
+- **Play Service mode:** Uses `isPlayingService` + `activeServiceItemIndex` in the presentation store. Toolbar shows prev/next/stop controls. The `useEffect` on `activeServiceItemIndex` auto-projects the current item. Stop resets index to -1.
+- **Inline editing in lists:** Use local `useState` + `useRef` for focus management. Show save/cancel buttons (Check/X icons). Commit via `onEditItem` callback. Escape cancels, Enter saves.
+- **Multi-monitor pattern:** `open_fullscreen_window()` helper in `display.rs` for reusable fullscreen window creation. `useMonitorsControl()` hook exposes projector, return, and overlay controls. Status bar uses `<ProjectorControls />` with icon buttons + green/gray status dots.
+- **Overlay state:** Black/logo screen overlays managed in Rust state, synced via `"overlay-changed"` events. Projector view renders overlay layers with CSS fade transitions. Overlays are mutually exclusive (activating one deactivates the other).
+- **Return monitor:** Two-panel layout (70/30 split) showing current + next slide. Context data (next slide, index, total, title) sent via `setSlideContext()` alongside `setCurrentSlide()`, wrapped in `projectSlideWithContext()` helper in `use-slides.ts`.
+- **Keyboard shortcuts:** B=black screen, L=logo screen, F5=projector, Shift+F5=return monitor, Escape=toggle black screen.
 
 ## Phase Status
 
@@ -193,7 +208,7 @@ src-tauri/src/                # Backend (Rust)
 | 3 | Presentation Editor (04) | COMPLETE |
 | 4 | Bible (05) | COMPLETE |
 | 5 | Liturgy/Services (06) | COMPLETE |
-| 6 | Multi-Monitor (07) | Pending |
+| 6 | Multi-Monitor (07) | COMPLETE |
 | 7 | Streaming (08) | Pending |
 | 8 | Video/Multimedia (09) | Pending |
 | 9 | Utilities & Polish (10) | Pending |

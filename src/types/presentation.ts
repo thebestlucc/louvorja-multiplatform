@@ -62,6 +62,20 @@ export function parseSlideRow(row: SlideRow): Slide {
   };
 }
 
+/** Context for return monitor: next slide, position, title */
+export interface SlideContextFlat {
+  next: SlideContentFlat | null;
+  index: number;
+  total: number;
+  title: string;
+}
+
+/** Overlay state from Rust */
+export interface OverlayState {
+  blackScreen: boolean;
+  logoScreen: boolean;
+}
+
 /** Flat struct matching Rust SlideContent for Tauri IPC */
 export interface SlideContentFlat {
   slide_type: string;

@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Play, Download } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { usePresentation2 } from "../../hooks/use-presentation";
-import { useMonitorsControl } from "../../hooks/use-monitors";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useSlides as useSlidesNav } from "../../hooks/use-slides";
+import { useDisplayStore } from "../../stores/display-store";
 import { useExportSlja } from "../../lib/queries";
 import { SlideList } from "../../components/slides/slide-list";
 import { SlideEditor } from "../../components/slides/slide-editor";
@@ -42,7 +42,7 @@ function PresentationEditor() {
 
   const { setSlides } = usePresentationStore();
   const { goToSlide } = useSlidesNav();
-  const { toggleProjector, isProjectorOpen, closeProjector } = useMonitorsControl();
+  const isProjectorOpen = useDisplayStore((s) => s.projectorWindowOpen);
   const exportMutation = useExportSlja();
 
   // Local title state for responsive typing
@@ -69,28 +69,13 @@ function PresentationEditor() {
     [activeSlideIndex, updateSlideContent],
   );
 
-  const handlePreview = useCallback(() => {
+  // Load slides into the store and project the current one
+  const handleLoadSlides = useCallback(() => {
     setSlides(slideContents);
-    if (!isProjectorOpen) {
-      toggleProjector().then(() => {
-        // Small delay to let projector window initialize before sending slide
-        setTimeout(() => {
-          if (slideContents.length > 0) {
-            goToSlide(0);
-          }
-        }, 300);
-      });
-    } else {
-      // Already open — just project the current slide
-      if (slideContents.length > 0) {
-        goToSlide(activeSlideIndex);
-      }
+    if (slideContents.length > 0) {
+      goToSlide(0);
     }
-  }, [slideContents, isProjectorOpen, toggleProjector, goToSlide, setSlides, activeSlideIndex]);
-
-  const handleStopPreview = useCallback(() => {
-    closeProjector();
-  }, [closeProjector]);
+  }, [slideContents, goToSlide, setSlides]);
 
   const handleExport = async () => {
     if (!presentation) return;
@@ -152,24 +137,13 @@ function PresentationEditor() {
             <Download className="mr-2 h-4 w-4" />
             {t("presentations.export")}
           </Button>
-          {isProjectorOpen ? (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleStopPreview}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              {t("hymnal.stopProjection")}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={handlePreview}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              {t("presentations.preview")}
-            </Button>
-          )}
+          <Button
+            size="sm"
+            onClick={handleLoadSlides}
+            disabled={slideContents.length === 0}
+          >
+            {t("presentations.preview")}
+          </Button>
         </div>
       </div>
 
@@ -180,7 +154,12 @@ function PresentationEditor() {
           <SlideList
             slides={slideContents}
             activeIndex={activeSlideIndex}
-            onSelect={setActiveSlideIndex}
+            onSelect={(index) => {
+              setActiveSlideIndex(index);
+              if (isProjectorOpen) {
+                goToSlide(index);
+              }
+            }}
             onReorder={reorderSlides}
             onAdd={addSlide}
             onDuplicate={duplicateSlide}

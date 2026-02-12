@@ -1,12 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Play, Music } from "lucide-react";
+import { ArrowLeft, Music } from "lucide-react";
 import { useHymn, useSyncPoints } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useSlides } from "../../hooks/use-slides";
-import { useKeyboard } from "../../hooks/use-keyboard";
-import { useMonitorsControl } from "../../hooks/use-monitors";
 import { LyricsDisplay } from "../../components/music/lyrics-display";
 import { AudioControls } from "../../components/music/audio-controls";
 import { AudioSyncEditor } from "../../components/music/audio-sync-editor";
@@ -54,13 +52,10 @@ function HymnDetail() {
   const { data: hymn, isLoading } = useHymn(id);
   const { setSlides } = usePresentationStore();
   const { slides, activeSlideIndex, goToSlide } = useSlides();
-  const { toggleProjector, isProjectorOpen } = useMonitorsControl();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
 
   const { data: syncPointsData } = useSyncPoints(id);
   const setSyncPoints = useAudioStore((s) => s.setSyncPoints);
-
-  useKeyboard();
 
   const generatedSlides = useMemo(() => {
     if (!hymn) return [];
@@ -116,16 +111,8 @@ function HymnDetail() {
           </p>
         )}
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant={isProjectorOpen ? "destructive" : "default"}
-            size="sm"
-            onClick={toggleProjector}
-          >
-            <Play className="mr-2 h-4 w-4" />
-            {isProjectorOpen ? t("hymnal.stopProjection") : t("hymnal.project")}
-          </Button>
-          {hymn.audio_path && (
+        {hymn.audio_path && (
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -134,8 +121,8 @@ function HymnDetail() {
               <Music className="mr-2 h-4 w-4" />
               {t("audio.syncEditor")}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Audio controls */}
         {hymn.audio_path && <AudioControls filePath={hymn.audio_path} />}

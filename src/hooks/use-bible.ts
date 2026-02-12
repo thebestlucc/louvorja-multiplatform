@@ -1,8 +1,7 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
-import { setCurrentSlide } from "../lib/tauri";
-import { useMonitorsControl } from "./use-monitors";
+import { setCurrentSlide, setSlideContext } from "../lib/tauri";
 import type { SlideContentFlat } from "../types/presentation";
 
 export function useBible() {
@@ -11,8 +10,6 @@ export function useBible() {
   const [currentChapter, setCurrentChapter] = useState(0);
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const [lastSelectedVerse, setLastSelectedVerse] = useState<number | null>(null);
-
-  const { isProjectorOpen, toggleProjector } = useMonitorsControl();
 
   const versionsQuery = useBibleVersions();
   const booksQuery = useBooks(currentVersionId);
@@ -68,21 +65,22 @@ export function useBible() {
     const verseData = (versesQuery.data ?? []).find((v) => v.verse === verseNum);
     if (!verseData) return;
 
+    const reference = `${currentBook} ${currentChapter}:${verseNum}`;
     const slideData: SlideContentFlat = {
       slide_type: "bible",
       text: `${verseData.verse} ${verseData.text}`,
-      title: `${currentBook} ${currentChapter}:${verseNum}`,
+      title: reference,
     };
 
     try {
-      if (!isProjectorOpen) {
-        await toggleProjector();
-      }
       await setCurrentSlide(slideData);
+      await setSlideContext({ next: null, index: 0, total: 1, title: reference });
+      setSelectedVerses([]);
+      setLastSelectedVerse(null);
     } catch (err) {
       toast.error(String(err));
     }
-  }, [currentVersionId, currentBook, currentChapter, versesQuery.data, isProjectorOpen, toggleProjector]);
+  }, [currentVersionId, currentBook, currentChapter, versesQuery.data]);
 
   const projectSelectedVerses = useCallback(async () => {
     if (selectedVerses.length === 0 || !currentVersionId || !currentBook || !currentChapter) return;
@@ -90,7 +88,6 @@ export function useBible() {
     const start = sorted[0];
     const end = sorted[sorted.length - 1];
 
-    // Build verse text from locally loaded verses (newline-separated for projector)
     const selectedTexts = (versesQuery.data ?? [])
       .filter((v) => sorted.includes(v.verse))
       .map((v) => `${v.verse} ${v.text}`)
@@ -108,15 +105,14 @@ export function useBible() {
     };
 
     try {
-      // Open projector window if not already open
-      if (!isProjectorOpen) {
-        await toggleProjector();
-      }
       await setCurrentSlide(slideData);
+      await setSlideContext({ next: null, index: 0, total: 1, title: reference });
+      setSelectedVerses([]);
+      setLastSelectedVerse(null);
     } catch (err) {
       toast.error(String(err));
     }
-  }, [selectedVerses, currentVersionId, currentBook, currentChapter, versesQuery.data, isProjectorOpen, toggleProjector]);
+  }, [selectedVerses, currentVersionId, currentBook, currentChapter, versesQuery.data]);
 
   return {
     currentVersionId,
