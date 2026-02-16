@@ -7,6 +7,8 @@ import {
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   getMonitorConfigs, setMonitorConfig,
+  startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
+  getSetting, setSetting, getAllSettings,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
@@ -49,6 +51,9 @@ export const queryKeys = {
   },
   syncPoints: {
     byHymn: (hymnId: number) => ["syncPoints", hymnId] as const,
+  },
+  streaming: {
+    status: ["streaming", "status"] as const,
   },
 } as const;
 
@@ -373,6 +378,74 @@ export function useUpdateServiceItem() {
       updateServiceItem(vars.id, vars.title, vars.notes),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+// Settings
+export function useSetting(key: string) {
+  return useQuery({
+    queryKey: queryKeys.settings.detail(key),
+    queryFn: () => getSetting(key),
+  });
+}
+
+export function useAllSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings.all,
+    queryFn: () => getAllSettings(),
+  });
+}
+
+export function useSetSetting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { key: string; value: string }) =>
+      setSetting(vars.key, vars.value),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.detail(vars.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
+    },
+  });
+}
+
+// Streaming
+export function useStreamingStatus() {
+  return useQuery({
+    queryKey: queryKeys.streaming.status,
+    queryFn: () => getStreamingStatus(),
+    refetchInterval: (query) => {
+      return query.state.data?.isRunning ? 2000 : 30000;
+    },
+  });
+}
+
+export function useStartStreaming() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (port?: number) => startStreamingServer(port),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
+    },
+  });
+}
+
+export function useStopStreaming() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => stopStreamingServer(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
+    },
+  });
+}
+
+export function useSetStreamingBroadcast() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => setStreamingBroadcast(enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
     },
   });
 }

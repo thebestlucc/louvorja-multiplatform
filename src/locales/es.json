@@ -36,7 +36,8 @@
     "projectorOn": "Proyector encendido",
     "returnOn": "Retorno encendido",
     "returnOff": "Retorno apagado",
-    "streamingOff": "Streaming apagado"
+    "streamingOff": "Streaming: APAGADO",
+    "streamingOn": "Streaming: ENCENDIDO (puerto {{port}}, {{count}})"
   },
   "display": {
     "projector": "Proyector",
@@ -59,7 +60,11 @@
   },
   "commandPalette": {
     "placeholder": "Escriba un comando...",
-    "noResults": "No se encontraron resultados"
+    "noResults": "No se encontraron resultados",
+    "navigation": "Navegación",
+    "hymns": "Himnos",
+    "bible": "Versículos Bíblicos",
+    "searching": "Buscando..."
   },
   "hymnal": {
     "searchPlaceholder": "Buscar himnos por número, título o letra...",
@@ -187,5 +192,35 @@
     "clearAll": "Borrar Todo",
     "save": "Guardar",
     "discard": "Descartar"
+  },
+  "settings": {
+    "defaultPort": "Puerto predeterminado",
+    "autoStart": "Iniciar streaming autom\u00e1ticamente",
+    "autoStartDesc": "Iniciar autom\u00e1ticamente el servidor de streaming al abrir la aplicaci\u00f3n"
+  },
+  "streaming": {
+    "title": "Streaming",
+    "server": "Servidor",
+    "runningOn": "Ejecutando en {{ip}}:{{port}}",
+    "notRunning": "El servidor no está ejecutando. Inicie para transmitir contenido a navegadores y tablets.",
+    "start": "Iniciar",
+    "stop": "Detener",
+    "started": "Servidor de streaming iniciado",
+    "stopped": "Servidor de streaming detenido",
+    "startFailed": "Error al iniciar el servidor de streaming",
+    "stopFailed": "Error al detener el servidor de streaming",
+    "musicLyrics": "Música / Letras",
+    "bible": "Biblia",
+    "returnMonitor": "Monitor de Retorno",
+    "connections_one": "{{count}} conexión",
+    "connections_other": "{{count}} conexiones",
+    "copyUrl": "Copiar URL",
+    "openInBrowser": "Abrir en el navegador",
+    "urlCopied": "URL copiada al portapapeles",
+    "copyFailed": "No se pudo copiar la URL. Cópiela manualmente.",
+    "openFailed": "No se pudo abrir la URL. Ábrala manualmente en el navegador.",
+    "invalidPort": "Puerto inválido. Use un valor entre 1024 y 65535.",
+    "broadcastEnabled": "Transmitiendo",
+    "broadcastDisabled": "Transmisión Pausada"
   }
 }

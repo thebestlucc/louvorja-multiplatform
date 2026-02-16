@@ -46,6 +46,11 @@ export function useBible() {
     setLastSelectedVerse(verse);
   }, []);
 
+  const selectSingleVerse = useCallback((verse: number) => {
+    setSelectedVerses([verse]);
+    setLastSelectedVerse(verse);
+  }, []);
+
   const selectVerseRange = useCallback((start: number, end: number) => {
     const range: number[] = [];
     for (let i = start; i <= end; i++) {
@@ -130,6 +135,7 @@ export function useBible() {
     setBook,
     setChapter,
     selectVerse,
+    selectSingleVerse,
     selectVerseRange,
     clearSelection,
     projectVerse,

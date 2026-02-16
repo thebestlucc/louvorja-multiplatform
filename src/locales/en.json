@@ -36,7 +36,8 @@
     "projectorOn": "Projector on",
     "returnOn": "Return on",
     "returnOff": "Return off",
-    "streamingOff": "Streaming off"
+    "streamingOff": "Streaming: OFF",
+    "streamingOn": "Streaming: ON (port {{port}}, {{count}})"
   },
   "display": {
     "projector": "Projector",
@@ -59,7 +60,11 @@
   },
   "commandPalette": {
     "placeholder": "Type a command...",
-    "noResults": "No results found"
+    "noResults": "No results found",
+    "navigation": "Navigation",
+    "hymns": "Hymns",
+    "bible": "Bible Verses",
+    "searching": "Searching..."
   },
   "hymnal": {
     "searchPlaceholder": "Search hymns by number, title or lyrics...",
@@ -187,5 +192,35 @@
     "clearAll": "Clear All",
     "save": "Save",
     "discard": "Discard"
+  },
+  "settings": {
+    "defaultPort": "Default port",
+    "autoStart": "Auto-start streaming",
+    "autoStartDesc": "Automatically start the streaming server when the app opens"
+  },
+  "streaming": {
+    "title": "Streaming",
+    "server": "Server",
+    "runningOn": "Running on {{ip}}:{{port}}",
+    "notRunning": "Server is not running. Start to stream content to browsers and tablets.",
+    "start": "Start",
+    "stop": "Stop",
+    "started": "Streaming server started",
+    "stopped": "Streaming server stopped",
+    "startFailed": "Failed to start streaming server",
+    "stopFailed": "Failed to stop streaming server",
+    "musicLyrics": "Music / Lyrics",
+    "bible": "Bible",
+    "returnMonitor": "Return Monitor",
+    "connections_one": "{{count}} connection",
+    "connections_other": "{{count}} connections",
+    "copyUrl": "Copy URL",
+    "openInBrowser": "Open in browser",
+    "urlCopied": "URL copied to clipboard",
+    "copyFailed": "Could not copy URL. Please copy it manually.",
+    "openFailed": "Could not open URL. Please open it manually in your browser.",
+    "invalidPort": "Invalid port. Use a value between 1024 and 65535.",
+    "broadcastEnabled": "Broadcasting",
+    "broadcastDisabled": "Broadcast Paused"
   }
 }

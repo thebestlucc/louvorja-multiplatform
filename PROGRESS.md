@@ -14,14 +14,14 @@
 | 2 | 03 | Audio Playback & Synchronization | COMPLETE |
 | 3 | 04 | Presentation Editor & .slja Archive | COMPLETE |
 | 4 | 05 | Bible Module | COMPLETE |
-| 5 | 06 | Worship Service / Liturgy Manager | Pending |
-| 6 | 07 | Multi-Monitor Display System | Pending |
-| 7 | 08 | HTTP Streaming Server | Pending |
+| 5 | 06 | Worship Service / Liturgy Manager | COMPLETE |
+| 6 | 07 | Multi-Monitor Display System | COMPLETE |
+| 7 | 08 | HTTP Streaming Server | COMPLETE |
 | 8 | 09 | Video & Multimedia | Pending |
 | 9 | 10 | Utilities & Polish | Pending |
 | 10 | 11 | Migration Tools & Deployment | Pending |
 
-**Progress: 5 / 11 phases complete**
+**Progress: 8 / 11 phases complete (Phase 8 pending)**
 
 ---
 
@@ -215,7 +215,7 @@ Bible text display with multi-version support, book/chapter/verse navigation, fu
 
 ## Phase 5 — Worship Service / Liturgy Manager (SPEC 06)
 
-**Status:** Pending
+**Status:** COMPLETE
 
 Worship service editor with drag-and-drop item management, service timeline, "Add to Service" integration across modules.
 
@@ -223,7 +223,7 @@ Worship service editor with drag-and-drop item management, service timeline, "Ad
 
 ## Phase 6 — Multi-Monitor Display System (SPEC 07)
 
-**Status:** Pending
+**Status:** COMPLETE
 
 Full multi-monitor support with operator, projector, and return monitor views. Monitor detection, configuration, and black/logo screen controls.
 
@@ -231,9 +231,9 @@ Full multi-monitor support with operator, projector, and return monitor views. M
 
 ## Phase 7 — HTTP Streaming Server (SPEC 08)
 
-**Status:** Pending
+**Status:** COMPLETE
 
-Embedded Rust HTTP server (tiny_http) with Server-Sent Events (SSE), QR code generation, streaming controls UI.
+Embedded Rust HTTP server (`std::net::TcpListener`) with Server-Sent Events (SSE), QR code generation, streaming controls UI.
 
 ---
 

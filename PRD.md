@@ -75,7 +75,7 @@ The existing Tauri project is a minimal scaffolding with:
 | rusqlite | 0.31 (bundled) | SQLite database access |
 | rodio | 0.19 | Audio playback engine (replaces BASS) |
 | zip | 2.1 | .slja archive handling |
-| tiny_http | 0.12 | Embedded HTTP streaming server |
+| std::net (TcpListener/TcpStream) | Rust stdlib | Embedded HTTP streaming server (SSE) |
 | thiserror | 1.0 | Error type definitions |
 | tokio | 1.x | Async runtime |
 | chrono | 0.4 | Date/time handling |
@@ -99,7 +99,7 @@ The existing Tauri project is a minimal scaffolding with:
 |  |  Zustand (client state)   |  |  SQLite (rusqlite)          |  |
 |  |  TanStack Query (server)  |  |  Rodio (audio engine)       |  |
 |  |  Tailwind CSS v4          |  |  zip crate (.slja files)    |  |
-|  |  Radix UI (primitives)    |  |  tiny_http (streaming srv)  |  |
+|  |  Radix UI (primitives)    |  |  TcpListener/TcpStream (streaming srv) |  |
 |  |  Slide renderer (DOM)     |  |  File system operations     |  |
 |  |                           |  |  Monitor management         |  |
 |  +---------------------------+  +-----------------------------+  |
@@ -111,7 +111,7 @@ The existing Tauri project is a minimal scaffolding with:
 |                                                                  |
 |  +---------------------------+                                   |
 |  | HTTP Streaming Server     |                                   |
-|  | (Rust-side, tiny_http)    |                                   |
+|  | (Rust-side, raw TCP + SSE) |                                   |
 |  +---------------------------+                                   |
 +------------------------------------------------------------------+
 ```
@@ -307,7 +307,7 @@ Complete mapping of the original Delphi application (33 forms + 1 data module) t
 
 | Original Capability | New Implementation |
 |---|---|
-| HTTP server for content streaming | `tiny_http` Rust crate |
+| HTTP server for content streaming | Raw `std::net::TcpListener` + SSE fanout |
 | 3 endpoints: `/musica`, `/biblia`, `/retorno` | SSE-powered endpoints for real-time updates |
 | Configurable IP/port (default 7070) | Settings UI + `settings` table |
 | Shareable URLs | QR code generation (`qrcode` crate + `qrcode.react`) |
@@ -636,7 +636,7 @@ src-tauri/
 | `rodio` | Audio playback engine | 2 |
 | `zip` | .slja archive read/write | 3 |
 | `tempfile` | Temp file management for archives | 3 |
-| `tiny_http` | Embedded HTTP streaming server | 7 |
+| `std::net` (TcpListener/TcpStream) | Embedded HTTP streaming server | 7 |
 | `qrcode` | QR code generation | 7 |
 | `rand` | Random number generation (lottery) | 9 |
 
@@ -821,7 +821,7 @@ search_bible(query: String, version_id: i64) -> Vec<SearchResult>
 **Goal:** Replace the Delphi HTTP server with a Rust-native streaming server.
 
 **Deliverables:**
-- Embedded HTTP server using `tiny_http`
+- Embedded HTTP server using raw `TcpListener`/`TcpStream`
 - Endpoints: `/` (status), `/music`, `/bible`, `/return`
 - Server-Sent Events (SSE) for real-time content updates
 - Configurable port via settings
@@ -933,11 +933,11 @@ search_bible(query: String, version_id: i64) -> Vec<SearchResult>
 
 **Rationale:** Canvas provides pixel-perfect rendering but complicates text editing, accessibility, and content reuse. DOM rendering allows the same component to work in the editor (interactive), projector (read-only), return monitor (different layout), and HTTP streaming output (plain HTML). CSS transitions handle fade animations naturally.
 
-### Decision 6: tiny_http vs. axum/actix-web for streaming
+### Decision 6: raw TcpListener vs. tiny_http/axum for streaming
 
-**Choice:** `tiny_http` for the embedded streaming server.
+**Choice:** Raw `std::net::TcpListener` + `TcpStream` writes with explicit flush/heartbeat.
 
-**Rationale:** The streaming server has minimal requirements — serve static HTML that updates via SSE. `tiny_http` is lightweight (no async runtime dependency conflicts with Tauri's Tokio), simple to embed, and sufficient for a handful of concurrent LAN connections. If requirements grow, upgrade to `axum`.
+**Rationale:** SSE delivery must flush small chunks immediately; buffered HTTP abstractions caused delayed/inconsistent live updates. Raw TCP gives deterministic write/flush behavior, simpler heartbeat/disconnect control, and reliable low-latency LAN streaming. If requirements grow, evaluate `axum` with explicit streaming primitives.
 
 ### Decision 7: Sidebar + command palette vs. Ribbon UI
 

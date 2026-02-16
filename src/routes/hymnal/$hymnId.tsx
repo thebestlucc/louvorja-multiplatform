@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Music } from "lucide-react";
+import { ArrowLeft, Monitor, Music, Square } from "lucide-react";
 import { useHymn, useSyncPoints } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useSlides } from "../../hooks/use-slides";
+import { clearCurrentSlide } from "../../lib/tauri";
 import { LyricsDisplay } from "../../components/music/lyrics-display";
 import { AudioControls } from "../../components/music/audio-controls";
 import { AudioSyncEditor } from "../../components/music/audio-sync-editor";
@@ -53,6 +54,8 @@ function HymnDetail() {
   const { setSlides } = usePresentationStore();
   const { slides, activeSlideIndex, goToSlide } = useSlides();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
+  const [isProjecting, setIsProjecting] = useState(false);
+  const [localActiveIndex, setLocalActiveIndex] = useState(0);
 
   const { data: syncPointsData } = useSyncPoints(id);
   const setSyncPoints = useAudioStore((s) => s.setSyncPoints);
@@ -103,6 +106,33 @@ function HymnDetail() {
           {hymn.album && (
             <span className="text-sm text-muted-foreground">{hymn.album}</span>
           )}
+          <div className="ml-auto">
+            {isProjecting ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  await clearCurrentSlide();
+                  setIsProjecting(false);
+                }}
+              >
+                <Square className="mr-2 h-4 w-4" />
+                {t("hymnal.stopProjection")}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsProjecting(true);
+                  goToSlide(localActiveIndex);
+                }}
+              >
+                <Monitor className="mr-2 h-4 w-4" />
+                {t("hymnal.project")}
+              </Button>
+            )}
+          </div>
         </div>
 
         {hymn.author && (
@@ -140,8 +170,14 @@ function HymnDetail() {
         {hymn.lyrics ? (
           <LyricsDisplay
             lyrics={hymn.lyrics}
-            activeStanza={Math.max(0, activeSlideIndex - 1)}
-            onStanzaClick={(i) => goToSlide(i + 1)}
+            activeStanza={isProjecting ? Math.max(0, activeSlideIndex - 1) : localActiveIndex}
+            onStanzaClick={(i) => {
+              if (isProjecting) {
+                goToSlide(i + 1);
+              } else {
+                setLocalActiveIndex(i);
+              }
+            }}
           />
         ) : (
           <p className="text-sm text-muted-foreground">{t("hymnal.noLyrics")}</p>
@@ -153,8 +189,14 @@ function HymnDetail() {
         <div className="hidden w-48 shrink-0 border-l border-border lg:block">
           <SlideList
             slides={slides}
-            activeIndex={activeSlideIndex}
-            onSelect={goToSlide}
+            activeIndex={isProjecting ? activeSlideIndex : localActiveIndex}
+            onSelect={(i) => {
+              if (isProjecting) {
+                goToSlide(i);
+              } else {
+                setLocalActiveIndex(i);
+              }
+            }}
           />
         </div>
       )}

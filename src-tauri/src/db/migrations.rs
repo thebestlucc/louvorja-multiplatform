@@ -29,6 +29,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (3)", [])?;
     }
 
+    if current_version < 4 {
+        migrate_v4(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (4)", [])?;
+    }
+
     Ok(())
 }
 
@@ -295,6 +300,17 @@ fn migrate_v3(conn: &Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "DELETE FROM bible_fts;
          INSERT INTO bible_fts(rowid, text, book) SELECT id, text, book FROM bible_verses;",
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v4(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('streaming.port', '7070');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('streaming.autoStart', 'false');
+        ",
     )?;
 
     Ok(())

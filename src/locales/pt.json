@@ -36,7 +36,8 @@
     "projectorOn": "Projetor ligado",
     "returnOn": "Retorno ligado",
     "returnOff": "Retorno desligado",
-    "streamingOff": "Streaming desligado"
+    "streamingOff": "Streaming: DESLIGADO",
+    "streamingOn": "Streaming: LIGADO (porta {{port}}, {{count}})"
   },
   "display": {
     "projector": "Projetor",
@@ -59,7 +60,11 @@
   },
   "commandPalette": {
     "placeholder": "Digite um comando...",
-    "noResults": "Nenhum resultado encontrado"
+    "noResults": "Nenhum resultado encontrado",
+    "navigation": "Navegação",
+    "hymns": "Hinos",
+    "bible": "Versículos Bíblicos",
+    "searching": "Pesquisando..."
   },
   "hymnal": {
     "searchPlaceholder": "Pesquisar hinos por número, título ou letra...",
@@ -187,5 +192,35 @@
     "clearAll": "Limpar Tudo",
     "save": "Salvar",
     "discard": "Descartar"
+  },
+  "settings": {
+    "defaultPort": "Porta padr\u00e3o",
+    "autoStart": "Iniciar streaming automaticamente",
+    "autoStartDesc": "Iniciar automaticamente o servidor de streaming ao abrir o aplicativo"
+  },
+  "streaming": {
+    "title": "Streaming",
+    "server": "Servidor",
+    "runningOn": "Rodando em {{ip}}:{{port}}",
+    "notRunning": "O servidor não está rodando. Inicie para transmitir conteúdo para navegadores e tablets.",
+    "start": "Iniciar",
+    "stop": "Parar",
+    "started": "Servidor de streaming iniciado",
+    "stopped": "Servidor de streaming parado",
+    "startFailed": "Falha ao iniciar o servidor de streaming",
+    "stopFailed": "Falha ao parar o servidor de streaming",
+    "musicLyrics": "Música / Letras",
+    "bible": "Bíblia",
+    "returnMonitor": "Monitor de Retorno",
+    "connections_one": "{{count}} conexão",
+    "connections_other": "{{count}} conexões",
+    "copyUrl": "Copiar URL",
+    "openInBrowser": "Abrir no navegador",
+    "urlCopied": "URL copiada para a área de transferência",
+    "copyFailed": "Não foi possível copiar a URL. Copie manualmente.",
+    "openFailed": "Não foi possível abrir a URL. Abra manualmente no navegador.",
+    "invalidPort": "Porta inválida. Use um valor entre 1024 e 65535.",
+    "broadcastEnabled": "Transmitindo",
+    "broadcastDisabled": "Transmissão Pausada"
   }
 }

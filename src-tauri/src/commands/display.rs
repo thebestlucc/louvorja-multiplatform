@@ -1,7 +1,49 @@
 use crate::db::models::{MonitorConfig, MonitorInfo, OverlayState, SlideContent, SlideContext};
 use crate::error::AppError;
-use crate::state::AppState;
+use crate::state::{AppState, StreamingState};
 use tauri::{AppHandle, Emitter, Manager};
+
+fn streaming_slide_title(slide: &SlideContent) -> String {
+    slide
+        .title
+        .clone()
+        .or_else(|| slide.label.clone())
+        .unwrap_or_default()
+}
+
+fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
+    serde_json::json!({
+        "label": slide.label.as_deref().unwrap_or(""),
+        "text": slide.text.as_deref().unwrap_or(""),
+        "title": slide.title.as_deref().unwrap_or(""),
+    })
+}
+
+fn build_return_stream_payload(
+    current: &SlideContent,
+    context: Option<&SlideContext>,
+) -> serde_json::Value {
+    let current_title = streaming_slide_title(current);
+    if let Some(ctx) = context {
+        if !ctx.title.is_empty() && ctx.title == current_title {
+            return serde_json::json!({
+                "current": streaming_slide_payload(current),
+                "next": ctx.next.as_ref().map(streaming_slide_payload),
+                "index": ctx.index,
+                "total": ctx.total,
+                "title": ctx.title,
+            });
+        }
+    }
+
+    serde_json::json!({
+        "current": streaming_slide_payload(current),
+        "next": null,
+        "index": 0,
+        "total": 1,
+        "title": current_title,
+    })
+}
 
 #[tauri::command]
 pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppError> {
@@ -163,6 +205,7 @@ pub fn set_current_slide(
     slide_data: SlideContent,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     {
         let mut current = state
@@ -173,6 +216,70 @@ pub fn set_current_slide(
     }
     app.emit("slide-changed", &slide_data)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    let current_title = streaming_slide_title(&slide_data);
+    let slide_context = {
+        let mut context = state
+            .slide_context
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        match context.clone() {
+            Some(ctx) if !ctx.title.is_empty() && ctx.title == current_title => ctx,
+            _ => {
+                let fallback = SlideContext {
+                    next: None,
+                    index: 0,
+                    total: 1,
+                    title: current_title,
+                };
+                *context = Some(fallback.clone());
+                fallback
+            }
+        }
+    };
+
+    app.emit("slide-context", &slide_context)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    // Broadcast to SSE streaming
+    if let Ok(server) = streaming_state.server.lock() {
+        if slide_data.slide_type == "bible" {
+            let json = serde_json::json!({
+                "reference": slide_data
+                    .title
+                    .as_deref()
+                    .or(slide_data.label.as_deref())
+                    .unwrap_or(""),
+                "text": slide_data.text.as_deref().unwrap_or(""),
+            });
+            server.broadcast_bible(&json.to_string());
+
+            let clear_music = serde_json::json!({
+                "label": "",
+                "text": "",
+                "title": "",
+            });
+            server.broadcast_music(&clear_music.to_string());
+        } else {
+            let json = serde_json::json!({
+                "label": slide_data.label.as_deref().unwrap_or(""),
+                "text": slide_data.text.as_deref().unwrap_or(""),
+                "title": slide_data.title.as_deref().unwrap_or(""),
+            });
+            server.broadcast_music(&json.to_string());
+
+            let clear_bible = serde_json::json!({
+                "reference": "",
+                "text": "",
+            });
+            server.broadcast_bible(&clear_bible.to_string());
+        }
+
+        let return_payload = build_return_stream_payload(&slide_data, Some(&slide_context));
+        server.broadcast_return(&return_payload.to_string());
+    }
+
     Ok(())
 }
 
@@ -191,6 +298,7 @@ pub fn get_current_slide(
 pub fn clear_current_slide(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     {
         let mut current = state
@@ -207,6 +315,32 @@ pub fn clear_current_slide(
         *ctx = None;
     }
     let _ = app.emit("slide-cleared", ());
+
+    // Broadcast empty state to SSE streaming
+    if let Ok(server) = streaming_state.server.lock() {
+        let music_json = serde_json::json!({
+            "label": "",
+            "text": "",
+            "title": "",
+        });
+        server.broadcast_music(&music_json.to_string());
+
+        let bible_json = serde_json::json!({
+            "reference": "",
+            "text": "",
+        });
+        server.broadcast_bible(&bible_json.to_string());
+
+        let return_json = serde_json::json!({
+            "current": null,
+            "next": null,
+            "index": 0,
+            "total": 0,
+            "title": "",
+        });
+        server.broadcast_return(&return_json.to_string());
+    }
+
     Ok(())
 }
 
@@ -217,6 +351,7 @@ pub fn set_slide_context(
     context_data: SlideContext,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     {
         let mut ctx = state
@@ -227,6 +362,33 @@ pub fn set_slide_context(
     }
     app.emit("slide-context", &context_data)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    // Broadcast to return monitor SSE
+    if let Ok(server) = streaming_state.server.lock() {
+        // Get current slide for the "current" panel
+        let current_slide = state
+            .current_slide
+            .lock()
+            .ok()
+            .and_then(|s| s.clone());
+
+        let json = serde_json::json!({
+            "current": current_slide.map(|s| serde_json::json!({
+                "label": s.label.as_deref().unwrap_or(""),
+                "text": s.text.as_deref().unwrap_or(""),
+                "title": s.title.as_deref().unwrap_or(""),
+            })),
+            "next": context_data.next.map(|s| serde_json::json!({
+                "label": s.label.as_deref().unwrap_or(""),
+                "text": s.text.as_deref().unwrap_or(""),
+            })),
+            "index": context_data.index,
+            "total": context_data.total,
+            "title": context_data.title,
+        });
+        server.broadcast_return(&json.to_string());
+    }
+
     Ok(())
 }
 

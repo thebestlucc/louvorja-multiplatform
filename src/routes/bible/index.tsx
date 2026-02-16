@@ -1,21 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useBible } from "../../hooks/use-bible";
-import { BookSelector, PERIODIC_BOOKS } from "../../components/bible/book-selector";
+import { BookSelector } from "../../components/bible/book-selector";
 import { VerseDisplay } from "../../components/bible/verse-display";
 import { BibleSearch } from "../../components/bible/bible-search";
 import { VersionComparison } from "../../components/bible/version-comparison";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 
+const VERSE_GRID_COLUMNS = 11;
+
 export const Route = createFileRoute("/bible/")({
   component: BibleIndex,
+  validateSearch: (search: Record<string, unknown>) => ({
+    book: (search.book as string) || undefined,
+    chapter: search.chapter ? Number(search.chapter) : undefined,
+    verse: search.verse ? Number(search.verse) : undefined,
+  }),
 });
 
 function BibleIndex() {
   const { t } = useTranslation();
   const bible = useBible();
+  const { book, chapter, verse } = Route.useSearch();
   const [searchQuery, setSearchQuery] = useState("");
+  const deepLinkApplied = useRef(false);
 
   // Auto-select first version when loaded
   useEffect(() => {
@@ -24,12 +33,23 @@ function BibleIndex() {
     }
   }, [bible.versions, bible.currentVersionId, bible.setVersion]);
 
+  // Deep-link from command palette search params
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    if (book && bible.currentVersionId > 0) {
+      deepLinkApplied.current = true;
+      bible.setBook(book);
+      if (chapter) {
+        bible.setChapter(chapter);
+        if (verse) {
+          bible.selectVerse(verse);
+        }
+      }
+    }
+  }, [book, chapter, verse, bible.currentVersionId, bible.setBook, bible.setChapter, bible.selectVerse]);
+
   const currentVersion = bible.versions.find((v) => v.id === bible.currentVersionId);
   const availableBooks = useMemo(() => new Set(bible.books.map((b) => b.name)), [bible.books]);
-  const availableBooksArray = useMemo(
-    () => PERIODIC_BOOKS.filter((b) => availableBooks.has(b.name)).map((b) => b.name),
-    [availableBooks],
-  );
 
   const handleSearchNavigate = (book: string, chapter: number, verse: number) => {
     setSearchQuery("");
@@ -41,78 +61,67 @@ function BibleIndex() {
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
         return;
       }
 
-      const { currentBook, currentChapter, verses } = bible;
-      const bookIdx = availableBooksArray.indexOf(currentBook);
+      const { currentBook, currentChapter, verses, lastSelectedVerse, selectedVerses } = bible;
+      if (!currentBook || currentChapter <= 0 || verses.length === 0) return;
+
+      const verseCount = verses.length;
+      const selectedTail = selectedVerses[selectedVerses.length - 1];
+      const clampedLast = lastSelectedVerse && lastSelectedVerse > 0
+        ? Math.min(lastSelectedVerse, verseCount)
+        : null;
+      const activeVerse = clampedLast && selectedVerses.includes(clampedLast)
+        ? clampedLast
+        : selectedTail
+          ? Math.min(selectedTail, verseCount)
+          : null;
+
+      const moveToVerse = (verse: number) => {
+        const clamped = Math.max(1, Math.min(verse, verseCount));
+        bible.selectSingleVerse(clamped);
+      };
 
       switch (e.key) {
         case "ArrowRight":
+          if (activeVerse === null) return;
           e.preventDefault();
-          if (currentBook && currentChapter > 0) {
-            // Next chapter
-            const book = bible.books.find((b) => b.name === currentBook);
-            if (book && currentChapter < book.chapterCount) {
-              bible.setChapter(currentChapter + 1);
-            } else if (bookIdx >= 0 && bookIdx < availableBooksArray.length - 1) {
-              // Next book, chapter 1
-              bible.setBook(availableBooksArray[bookIdx + 1]);
-              bible.setChapter(1);
-            }
-          } else if (currentBook && currentChapter === 0) {
-            bible.setChapter(1);
-          } else if (!currentBook && availableBooksArray.length > 0) {
-            bible.setBook(availableBooksArray[0]);
-          }
+          moveToVerse(activeVerse + 1);
           break;
         case "ArrowLeft":
+          if (activeVerse === null) return;
           e.preventDefault();
-          if (currentBook && currentChapter > 1) {
-            bible.setChapter(currentChapter - 1);
-          } else if (currentBook && currentChapter <= 1 && bookIdx > 0) {
-            const prevBook = availableBooksArray[bookIdx - 1];
-            bible.setBook(prevBook);
-            const prev = bible.books.find((b) => b.name === prevBook);
-            if (prev) bible.setChapter(prev.chapterCount);
-          }
+          moveToVerse(activeVerse - 1);
           break;
         case "ArrowDown":
+          if (activeVerse === null) return;
           e.preventDefault();
-          if (currentBook && currentChapter > 0 && verses.length > 0) {
-            // Select next verse
-            const selected = bible.selectedVerses;
-            const last = selected.length > 0 ? Math.max(...selected) : 0;
-            if (last < verses.length) {
-              bible.selectVerse(last + 1);
-            }
-          } else if (bookIdx >= 0 && bookIdx + 11 < availableBooksArray.length) {
-            bible.setBook(availableBooksArray[bookIdx + 11]);
-          }
+          moveToVerse(activeVerse + VERSE_GRID_COLUMNS);
           break;
         case "ArrowUp":
+          if (activeVerse === null) return;
           e.preventDefault();
-          if (currentBook && currentChapter > 0 && bible.selectedVerses.length > 0) {
-            // Deselect last selected verse
-            const last = Math.max(...bible.selectedVerses);
-            bible.selectVerse(last);
-          } else if (bookIdx >= 11) {
-            bible.setBook(availableBooksArray[bookIdx - 11]);
-          }
+          moveToVerse(activeVerse - VERSE_GRID_COLUMNS);
           break;
         case "Enter":
+        case " ":
+        case "Spacebar":
           e.preventDefault();
-          if (bible.selectedVerses.length > 0) {
-            bible.projectSelectedVerses();
+          if (activeVerse !== null) {
+            void bible.projectVerse(activeVerse);
           }
           break;
       }
     },
-    [bible, availableBooksArray],
+    [bible],
   );
 
   useEffect(() => {

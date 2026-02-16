@@ -1,7 +1,39 @@
-use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, Verse};
+use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, SlideContext, Verse};
 use crate::error::AppError;
-use crate::state::AppState;
+use crate::state::{AppState, StreamingState};
 use tauri::{AppHandle, Emitter};
+
+fn broadcast_bible_stream_payloads(
+    server: &crate::streaming::StreamingServer,
+    slide_data: &SlideContent,
+    reference: &str,
+) {
+    let music_json = serde_json::json!({
+        "label": "",
+        "text": "",
+        "title": "",
+    });
+    server.broadcast_music(&music_json.to_string());
+
+    let bible_json = serde_json::json!({
+        "reference": reference,
+        "text": slide_data.text.as_deref().unwrap_or(""),
+    });
+    server.broadcast_bible(&bible_json.to_string());
+
+    let return_json = serde_json::json!({
+        "current": {
+            "label": slide_data.label.as_deref().unwrap_or(""),
+            "text": slide_data.text.as_deref().unwrap_or(""),
+            "title": slide_data.title.as_deref().unwrap_or(""),
+        },
+        "next": null,
+        "index": 0,
+        "total": 1,
+        "title": reference,
+    });
+    server.broadcast_return(&return_json.to_string());
+}
 
 #[tauri::command]
 pub fn get_bible_versions(
@@ -78,6 +110,7 @@ pub fn project_bible_verse(
     end: i64,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     let conn = state
         .db
@@ -102,10 +135,12 @@ pub fn project_bible_verse(
     let slide_data = SlideContent {
         slide_type: "bible".to_string(),
         text: Some(text),
-        title: Some(reference),
+        title: Some(reference.clone()),
         subtitle: None,
         label: None,
     };
+
+    drop(conn);
 
     // Update current slide state
     {
@@ -116,9 +151,29 @@ pub fn project_bible_verse(
         *current = Some(slide_data.clone());
     }
 
+    let slide_context = SlideContext {
+        next: None,
+        index: 0,
+        total: 1,
+        title: reference.clone(),
+    };
+    {
+        let mut context = state
+            .slide_context
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *context = Some(slide_context.clone());
+    }
+
     // Emit to projector window
     app.emit("slide-changed", &slide_data)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+    app.emit("slide-context", &slide_context)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    if let Ok(server) = streaming_state.server.lock() {
+        broadcast_bible_stream_payloads(&server, &slide_data, &reference);
+    }
 
     Ok(())
 }
@@ -132,6 +187,7 @@ pub fn navigate_bible_verse(
     direction: String, // "next" or "prev"
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     // Read current slide
     let current_slide = {
@@ -255,10 +311,12 @@ pub fn navigate_bible_verse(
     let slide_data = SlideContent {
         slide_type: "bible".to_string(),
         text: Some(text),
-        title: Some(new_reference),
+        title: Some(new_reference.clone()),
         subtitle: None,
         label: None,
     };
+
+    drop(conn);
 
     // Update current slide state
     {
@@ -269,8 +327,28 @@ pub fn navigate_bible_verse(
         *current = Some(slide_data.clone());
     }
 
+    let slide_context = SlideContext {
+        next: None,
+        index: 0,
+        total: 1,
+        title: new_reference.clone(),
+    };
+    {
+        let mut context = state
+            .slide_context
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *context = Some(slide_context.clone());
+    }
+
     app.emit("slide-changed", &slide_data)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+    app.emit("slide-context", &slide_context)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    if let Ok(server) = streaming_state.server.lock() {
+        broadcast_bible_stream_payloads(&server, &slide_data, &new_reference);
+    }
 
     Ok(())
 }
