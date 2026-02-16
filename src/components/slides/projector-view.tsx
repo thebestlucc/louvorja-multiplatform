@@ -12,26 +12,18 @@ export function ProjectorView() {
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
 
-  // Fetch current slide on mount
-  useEffect(() => {
-    getCurrentSlide().then((data) => {
-      if (data) setSlide(flatToSlideContent(data));
-    });
-  }, []);
-
-  // Fetch overlay state on mount
-  useEffect(() => {
-    getOverlayState().then((state) => {
-      setBlackScreen(state.blackScreen);
-      setLogoScreen(state.logoScreen);
-    });
-  }, []);
-
   // Listen to slide changes
   useEffect(() => {
     const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
       setSlide(flatToSlideContent(event.payload));
     });
+
+    void getCurrentSlide()
+      .then((data) => {
+        setSlide(data ? flatToSlideContent(data) : null);
+      })
+      .catch(() => {});
+
     return () => {
       unlisten.then((fn) => fn());
     };
@@ -43,6 +35,14 @@ export function ProjectorView() {
       setBlackScreen(event.payload.blackScreen);
       setLogoScreen(event.payload.logoScreen);
     });
+
+    void getOverlayState()
+      .then((state) => {
+        setBlackScreen(state.blackScreen);
+        setLogoScreen(state.logoScreen);
+      })
+      .catch(() => {});
+
     return () => {
       unlisten.then((fn) => fn());
     };

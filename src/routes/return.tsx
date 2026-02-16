@@ -32,30 +32,18 @@ function ReturnPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch current state on mount
-  useEffect(() => {
-    getCurrentSlide().then((data) => {
-      if (data) setCurrentSlide(flatToSlideContent(data));
-    });
-    getSlideContext().then((ctx) => {
-      if (ctx) {
-        setNextSlide(ctx.next ? flatToSlideContent(ctx.next) : null);
-        setSlideIndex(ctx.index);
-        setSlideTotal(ctx.total);
-        setSlideTitle(ctx.title);
-      }
-    });
-    getOverlayState().then((state) => {
-      setBlackScreen(state.blackScreen);
-      setLogoScreen(state.logoScreen);
-    });
-  }, []);
-
   // Listen to slide changes
   useEffect(() => {
     const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
       setCurrentSlide(flatToSlideContent(event.payload));
     });
+
+    void getCurrentSlide()
+      .then((data) => {
+        setCurrentSlide(data ? flatToSlideContent(data) : null);
+      })
+      .catch(() => {});
+
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
@@ -68,6 +56,23 @@ function ReturnPage() {
       setSlideTotal(ctx.total);
       setSlideTitle(ctx.title);
     });
+
+    void getSlideContext()
+      .then((ctx) => {
+        if (ctx) {
+          setNextSlide(ctx.next ? flatToSlideContent(ctx.next) : null);
+          setSlideIndex(ctx.index);
+          setSlideTotal(ctx.total);
+          setSlideTitle(ctx.title);
+          return;
+        }
+        setNextSlide(null);
+        setSlideIndex(0);
+        setSlideTotal(0);
+        setSlideTitle("");
+      })
+      .catch(() => {});
+
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
@@ -77,6 +82,14 @@ function ReturnPage() {
       setBlackScreen(event.payload.blackScreen);
       setLogoScreen(event.payload.logoScreen);
     });
+
+    void getOverlayState()
+      .then((state) => {
+        setBlackScreen(state.blackScreen);
+        setLogoScreen(state.logoScreen);
+      })
+      .catch(() => {});
+
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 

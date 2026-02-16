@@ -2,16 +2,49 @@ use crate::db::models::{MonitorConfig, Setting};
 use crate::error::AppError;
 use rusqlite::Connection;
 
-pub fn get_setting(_conn: &Connection, _key: &str) -> Result<Setting, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn get_setting(conn: &Connection, key: &str) -> Result<Setting, AppError> {
+    conn.query_row(
+        "SELECT key, value FROM settings WHERE key = ?1",
+        rusqlite::params![key],
+        |row| {
+            Ok(Setting {
+                key: row.get(0)?,
+                value: row.get(1)?,
+            })
+        },
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            AppError::NotFound(format!("Setting '{}' not found", key))
+        }
+        other => AppError::Database(other),
+    })
 }
 
-pub fn set_setting(_conn: &Connection, _key: &str, _value: &str) -> Result<(), AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    )
+    .map_err(AppError::Database)?;
+    Ok(())
 }
 
-pub fn get_all_settings(_conn: &Connection) -> Result<Vec<Setting>, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn get_all_settings(conn: &Connection) -> Result<Vec<Setting>, AppError> {
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings")
+        .map_err(AppError::Database)?;
+    let settings = stmt
+        .query_map([], |row| {
+            Ok(Setting {
+                key: row.get(0)?,
+                value: row.get(1)?,
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+    Ok(settings)
 }
 
 pub fn get_monitor_configs(conn: &Connection) -> Result<Vec<MonitorConfig>, AppError> {

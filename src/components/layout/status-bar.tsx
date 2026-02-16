@@ -1,9 +1,17 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Wifi } from "lucide-react";
 import { ProjectorControls } from "../display/projector-controls";
+import { StreamingControls } from "../streaming/streaming-controls";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { useStreamingStatus } from "../../lib/queries";
+import { cn } from "../../lib/utils";
 
 export function StatusBar() {
   const { t } = useTranslation();
+  const [streamingOpen, setStreamingOpen] = useState(false);
+  const { data: status } = useStreamingStatus();
+  const isRunning = status?.isRunning ?? false;
 
   return (
     <footer className="flex h-8 items-center justify-between border-t border-border bg-surface px-3 text-[11px] text-muted-foreground">
@@ -11,11 +19,28 @@ export function StatusBar() {
 
       <div className="flex items-center gap-3">
         <ProjectorControls />
-        <span className="flex items-center gap-1">
-          <Wifi className="h-3 w-3" />
-          {t("status.streamingOff")}
-        </span>
+        <button
+          onClick={() => setStreamingOpen(true)}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10"
+        >
+          <Wifi className={cn("h-3 w-3", isRunning && "text-green-500")} />
+          {isRunning
+            ? t("status.streamingOn", {
+              port: status?.port ?? 7070,
+              count: status?.connections ?? 0,
+            })
+            : t("status.streamingOff")}
+        </button>
       </div>
+
+      <Dialog open={streamingOpen} onOpenChange={setStreamingOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{t("streaming.title")}</DialogTitle>
+          </DialogHeader>
+          <StreamingControls />
+        </DialogContent>
+      </Dialog>
     </footer>
   );
 }

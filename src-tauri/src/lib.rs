@@ -7,7 +7,7 @@ mod error;
 mod state;
 mod streaming;
 
-use state::{AppState, AudioState};
+use state::{AppState, AudioState, StreamingState};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -44,6 +44,30 @@ pub fn run() {
 
             let audio_state = AudioState::new().expect("Failed to initialize audio state");
             app.manage(audio_state);
+
+            app.manage(StreamingState::new(7070));
+
+            // Auto-start streaming server if configured
+            {
+                let db_state = app.state::<AppState>();
+                let conn = db_state.db.lock().map_err(|e| e.to_string())?;
+                let auto_start = crate::db::queries::settings::get_setting(&conn, "streaming.autoStart")
+                    .ok()
+                    .map(|s| s.value == "true")
+                    .unwrap_or(false);
+                if auto_start {
+                    let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
+                        .ok()
+                        .and_then(|s| s.value.parse::<u16>().ok())
+                        .unwrap_or(7070);
+                    drop(conn); // release db lock before locking streaming state
+                    let streaming = app.state::<StreamingState>();
+                    let server_result = streaming.server.lock();
+                    if let Ok(mut server) = server_result {
+                        let _ = server.start(Some(port));
+                    }
+                }
+            }
 
             Ok(())
         })
@@ -121,6 +145,7 @@ pub fn run() {
             commands::streaming::start_streaming_server,
             commands::streaming::stop_streaming_server,
             commands::streaming::get_streaming_status,
+            commands::streaming::set_streaming_broadcast,
             // Settings
             commands::settings::get_setting,
             commands::settings::set_setting,

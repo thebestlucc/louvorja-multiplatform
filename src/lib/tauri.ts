@@ -7,6 +7,8 @@ import type { MonitorConfig } from "../types/settings";
 import type { AudioStatusPayload, SyncPoint } from "../types/audio";
 import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bible";
 import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
+import type { Settings } from "../types/settings";
+import type { StreamingInfo } from "../types/streaming";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -261,4 +263,34 @@ export async function duplicateService(id: number): Promise<Service> {
 
 export async function updateServiceItem(id: number, title: string, notes: string | null): Promise<void> {
   return tauriInvoke<void>("update_service_item", { id, title, notes });
+}
+
+// Settings
+export async function getSetting(key: string): Promise<Settings> {
+  return tauriInvoke<Settings>("get_setting", { key });
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  return tauriInvoke<void>("set_setting", { key, value });
+}
+
+export async function getAllSettings(): Promise<Settings[]> {
+  return tauriInvoke<Settings[]>("get_all_settings");
+}
+
+// Streaming
+export async function startStreamingServer(port?: number): Promise<StreamingInfo> {
+  return tauriInvoke<StreamingInfo>("start_streaming_server", { port: port ?? null });
+}
+
+export async function stopStreamingServer(): Promise<void> {
+  return tauriInvoke<void>("stop_streaming_server");
+}
+
+export async function getStreamingStatus(): Promise<StreamingInfo> {
+  return tauriInvoke<StreamingInfo>("get_streaming_status");
+}
+
+export async function setStreamingBroadcast(enabled: boolean): Promise<void> {
+  return tauriInvoke<void>("set_streaming_broadcast", { enabled });
 }

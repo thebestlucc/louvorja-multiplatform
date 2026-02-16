@@ -1,6 +1,7 @@
 use crate::audio::{AudioPlayer, SyncTimeline};
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
+use crate::streaming::StreamingServer;
 use rusqlite::Connection;
 use std::sync::Mutex;
 
@@ -17,6 +18,18 @@ pub struct AppState {
 pub struct AudioState {
     pub player: Mutex<AudioPlayer>,
     pub sync_timeline: Mutex<Option<SyncTimeline>>,
+}
+
+pub struct StreamingState {
+    pub server: Mutex<StreamingServer>,
+}
+
+impl StreamingState {
+    pub fn new(port: u16) -> Self {
+        Self {
+            server: Mutex::new(StreamingServer::new(port)),
+        }
+    }
 }
 
 impl AudioState {

@@ -1,7 +1,7 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
+This file provides guidance to Codex when working with code in this repository.
+CODEX_MAX_OUTPUT_TOKENS=20000
 
 ## LouvorJA Multiplatform
 
@@ -10,7 +10,7 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 10-phase roadmap in `.specs/` directory (01–11). PRD at `PRD.md`.
 
-**Phases 0–7 are COMPLETE.** Phase 8 is Pending.
+**Phases 0–6 are COMPLETE.** Phase 7+ is pending.
 
 ## Tech Stack
 
@@ -90,7 +90,7 @@ src-tauri/src/                # Backend (Rust)
 ├── archive/                  # .slja read/write + .pptx import
 │   ├── mod.rs, manifest.rs, pptx.rs
 ├── audio/                    # rodio player, sync timeline
-└── display/, streaming/      # Multi-monitor display + SSE streaming server
+└── display/, streaming/      # Stubs for future phases
 ```
 
 ## Architecture Patterns
@@ -214,20 +214,20 @@ src-tauri/src/                # Backend (Rust)
 | 4 | Bible (05) | COMPLETE |
 | 5 | Liturgy/Services (06) | COMPLETE |
 | 6 | Multi-Monitor (07) | COMPLETE |
-| 7 | Streaming (08) | COMPLETE |
+| 7 | Streaming (08) | IN PROGRESS |
 | 8 | Video/Multimedia (09) | Pending |
 | 9 | Utilities & Polish (10) | Pending |
 | 10 | Migration & Deploy (11) | Pending |
 
 ## Self-Improvement Protocol
 
-After completing any task (feature, bugfix, refactor), Claude MUST:
+After completing any task (feature, bugfix, refactor), Codex MUST:
 
 1. **Update phase status** in the table above if a phase was completed or progressed.
 2. **Update project structure** if new directories, components, or route groups were added.
 3. **Record new patterns** in the "General" section above if a reusable pattern was established (e.g., cross-module integration, new UI pattern, new data flow).
 4. **Record new errors to avoid** if a non-obvious bug was encountered and solved during implementation.
-5. **Update memory files** (`~/.claude/projects/.../memory/MEMORY.md`) with session-specific learnings that don't belong in CLAUDE.md.
-6. **Keep CLAUDE.md concise** — don't duplicate information, remove outdated notes, prefer terse bullet points over verbose explanations.
+5. **Update memory files** (`~/.codex/projects/.../memory/MEMORY.md`) with session-specific learnings that don't belong in AGENTS.md.
+6. **Keep AGENTS.md concise** — don't duplicate information, remove outdated notes, prefer terse bullet points over verbose explanations.
 
 The goal: every session should leave the project in a better-documented state than it started, so future sessions (even with a fresh context) can onboard instantly.
