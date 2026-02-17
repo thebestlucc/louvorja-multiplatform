@@ -5,6 +5,7 @@
   "nav": {
     "home": "Inicio",
     "hymnal": "Himnario",
+    "collections": "Colecciones",
     "bible": "Biblia",
     "presentations": "Presentaciones",
     "services": "Cultos",
@@ -61,7 +62,14 @@
   },
   "dashboard": {
     "welcome": "Bienvenido a LouvorJA",
-    "subtitle": "Seleccione una opción del menú lateral para comenzar"
+    "subtitle": "Seleccione una opción del menú lateral para comenzar",
+    "quickAccess": {
+      "hymnal": "Busque y explore himnos",
+      "collections": "Gestione colecciones de canciones fuera del himnario",
+      "bible": "Lea y proyecte versículos bíblicos",
+      "presentations": "Cree y edite diapositivas",
+      "services": "Planifique el flujo del culto"
+    }
   },
   "commandPalette": {
     "placeholder": "Escriba un comando...",
@@ -212,6 +220,20 @@
     }
   },
   "hymnal": {
+    "create": "Crear himno",
+    "createPlaceholder": "Título del himno",
+    "numberPlaceholder": "Número",
+    "editTitle": "Editar himno",
+    "authorPlaceholder": "Autor",
+    "albumPlaceholder": "Álbum",
+    "categoryPlaceholder": "Categoría",
+    "audioPathPlaceholder": "Ruta de audio",
+    "chordsPlaceholder": "Acordes",
+    "notesPlaceholder": "Notas",
+    "lyricsPlaceholder": "Letra",
+    "createFailed": "No se pudo crear el himno: {{error}}",
+    "saveFailed": "No se pudo guardar el himno: {{error}}",
+    "deleteFailed": "No se pudo eliminar el himno: {{error}}",
     "searchPlaceholder": "Buscar himnos por número, título o letra...",
     "albums": "Álbumes",
     "loading": "Cargando...",
@@ -223,6 +245,52 @@
     "project": "Proyectar",
     "stopProjection": "Detener proyección",
     "slides": "Diapositivas"
+  },
+  "collections": {
+    "subtitle": "Construya bibliotecas de canciones separadas de presentaciones.",
+    "createTitle": "Crear colección",
+    "namePlaceholder": "Nombre de la colección",
+    "descriptionPlaceholder": "Descripción (opcional)",
+    "create": "Crear",
+    "searchPlaceholder": "Buscar colecciones...",
+    "empty": "Aún no hay colecciones.",
+    "noDescription": "Sin descripción",
+    "notFound": "Colección no encontrada.",
+    "detailTitle": "Detalles de la colección",
+    "coverHint": "La portada personalizada reemplaza la portada automática de respaldo.",
+    "selectCover": "Seleccionar portada",
+    "clearCover": "Quitar portada",
+    "coverUpdated": "Portada actualizada.",
+    "coverUpdateFailed": "No se pudo actualizar la portada: {{error}}",
+    "importSong": "Importar canción",
+    "songs": "Canciones",
+    "emptySongs": "Aún no hay canciones importadas.",
+    "on": "ACTIVADO",
+    "off": "DESACTIVADO",
+    "autoCheckSetting": "Verificación automática al abrir: {{value}}",
+    "autoCheckDisabledHint": "La verificación automática está desactivada. Actívela en Configuración para validar la sincronización de origen automáticamente.",
+    "openPresentation": "Abrir presentación en caché",
+    "resync": "Resincronizar origen",
+    "moveUp": "Mover arriba",
+    "moveDown": "Mover abajo",
+    "removeSong": "Eliminar canción",
+    "importFailed": "No se pudo importar la canción: {{error}}",
+    "saveFailed": "No se pudo guardar la colección: {{error}}",
+    "deleteFailed": "No se pudo eliminar la colección: {{error}}",
+    "resyncFailed": "No se pudo resincronizar la canción: {{error}}",
+    "syncCheckFailed": "No se pudo verificar el estado de sincronización: {{error}}",
+    "removeFailed": "No se pudo eliminar la canción: {{error}}",
+    "reorderFailed": "No se pudieron reordenar las canciones: {{error}}",
+    "syncPromptTitle": "Fuente de canción fuera de sincronía",
+    "syncPromptMessage": "El archivo de origen cambió. ¿Resincronizar ahora?",
+    "syncPromptConfirm": "Resincronizar ahora",
+    "syncPromptCancel": "Más tarde",
+    "sync": {
+      "in_sync": "Sincronizado",
+      "stale": "Desactualizado",
+      "missing_source": "Origen faltante",
+      "error": "Error"
+    }
   },
   "presentations": {
     "new": "Nueva Presentación",
@@ -377,7 +445,10 @@
     "ffprobeEnabledDesc": "Usar ffprobe solo cuando falle el parser nativo de metadatos.",
     "ffprobePath": "Ruta personalizada de ffprobe",
     "ffprobePathDesc": "Ruta absoluta opcional al binario ffprobe. Déjelo vacío para usar PATH.",
-    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
+    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe",
+    "collections": "Colecciones",
+    "collectionsAutoCheck": "Verificar origen al abrir",
+    "collectionsAutoCheckDesc": "Valida automáticamente el hash y fecha de modificación del archivo de origen al abrir una colección."
   },
   "onboarding": {
     "title": "Bienvenido a LouvorJA",

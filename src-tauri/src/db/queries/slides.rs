@@ -4,8 +4,10 @@ use rusqlite::{params, Connection};
 
 pub fn get_presentations(conn: &Connection) -> Result<Vec<Presentation>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, author, aspect_ratio, file_path, created_at, updated_at
-         FROM presentations ORDER BY updated_at DESC",
+        "SELECT id, title, author, aspect_ratio, library_kind, file_path, created_at, updated_at
+         FROM presentations
+         WHERE COALESCE(library_kind, 'presentation') = 'presentation'
+         ORDER BY updated_at DESC",
     )?;
     let presentations = stmt
         .query_map([], |row| {
@@ -14,6 +16,7 @@ pub fn get_presentations(conn: &Connection) -> Result<Vec<Presentation>, AppErro
                 title: row.get("title")?,
                 author: row.get("author")?,
                 aspect_ratio: row.get("aspect_ratio")?,
+                library_kind: row.get("library_kind")?,
                 file_path: row.get("file_path")?,
                 created_at: row.get("created_at")?,
                 updated_at: row.get("updated_at")?,
@@ -25,7 +28,7 @@ pub fn get_presentations(conn: &Connection) -> Result<Vec<Presentation>, AppErro
 
 pub fn get_presentation_by_id(conn: &Connection, id: i64) -> Result<Presentation, AppError> {
     conn.query_row(
-        "SELECT id, title, author, aspect_ratio, file_path, created_at, updated_at
+        "SELECT id, title, author, aspect_ratio, library_kind, file_path, created_at, updated_at
          FROM presentations WHERE id = ?1",
         params![id],
         |row| {
@@ -34,6 +37,7 @@ pub fn get_presentation_by_id(conn: &Connection, id: i64) -> Result<Presentation
                 title: row.get("title")?,
                 author: row.get("author")?,
                 aspect_ratio: row.get("aspect_ratio")?,
+                library_kind: row.get("library_kind")?,
                 file_path: row.get("file_path")?,
                 created_at: row.get("created_at")?,
                 updated_at: row.get("updated_at")?,
@@ -53,9 +57,18 @@ pub fn insert_presentation(
     title: &str,
     aspect_ratio: &str,
 ) -> Result<i64, AppError> {
+    insert_presentation_with_kind(conn, title, aspect_ratio, "presentation")
+}
+
+pub fn insert_presentation_with_kind(
+    conn: &Connection,
+    title: &str,
+    aspect_ratio: &str,
+    library_kind: &str,
+) -> Result<i64, AppError> {
     conn.execute(
-        "INSERT INTO presentations (title, aspect_ratio) VALUES (?1, ?2)",
-        params![title, aspect_ratio],
+        "INSERT INTO presentations (title, aspect_ratio, library_kind) VALUES (?1, ?2, ?3)",
+        params![title, aspect_ratio, library_kind],
     )?;
     Ok(conn.last_insert_rowid())
 }

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   Home,
   Music,
+  FolderOpen,
   BookOpen,
   Presentation,
   ListChecks,
@@ -30,6 +31,7 @@ import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-pane
 import { clearCurrentSlide, searchHymns, searchBible } from "../../lib/tauri";
 import type { Hymn } from "../../types/hymn";
 import type { BibleSearchResult } from "../../types/bible";
+import { CoverImage } from "../media/cover-image";
 
 type PaletteRouteCommand = {
   id: string;
@@ -131,6 +133,14 @@ export function CommandPalette() {
       label: t("nav.hymnal"),
       value: `${t("nav.hymnal")} music lyrics`,
       to: "/hymnal",
+      group: "navigation",
+    },
+    {
+      id: "route-collections",
+      icon: FolderOpen,
+      label: t("nav.collections"),
+      value: `${t("nav.collections")} ${t("collections.subtitle")}`,
+      to: "/collections",
       group: "navigation",
     },
     {
@@ -412,7 +422,11 @@ export function CommandPalette() {
                 }}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
               >
-                <Music className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <CoverImage
+                  path={hymn.cover_path}
+                  title={hymn.title}
+                  className="h-5 w-5 rounded"
+                />
                 <span className="truncate">
                   {hymn.number != null ? `#${hymn.number} - ` : ""}
                   {hymn.title}

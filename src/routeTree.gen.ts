@@ -18,6 +18,7 @@ import { Route as PresentationsRouteRouteImport } from './routes/presentations/r
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as HymnalRouteRouteImport } from './routes/hymnal/route'
 import { Route as HelpRouteRouteImport } from './routes/help/route'
+import { Route as CollectionsRouteRouteImport } from './routes/collections/route'
 import { Route as BibleRouteRouteImport } from './routes/bible/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UtilitiesIndexRouteImport } from './routes/utilities/index'
@@ -26,6 +27,7 @@ import { Route as ServicesIndexRouteImport } from './routes/services/index'
 import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as HymnalIndexRouteImport } from './routes/hymnal/index'
+import { Route as CollectionsIndexRouteImport } from './routes/collections/index'
 import { Route as BibleIndexRouteImport } from './routes/bible/index'
 import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
 import { Route as UtilitiesTextRouteImport } from './routes/utilities/text'
@@ -38,6 +40,7 @@ import { Route as OnboardingMonitorsRouteImport } from './routes/onboarding/moni
 import { Route as OnboardingImportRouteImport } from './routes/onboarding/import'
 import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
+import { Route as CollectionsCollectionIdRouteImport } from './routes/collections/$collectionId'
 
 const ReturnRoute = ReturnRouteImport.update({
   id: '/return',
@@ -84,6 +87,11 @@ const HelpRouteRoute = HelpRouteRouteImport.update({
   path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollectionsRouteRoute = CollectionsRouteRouteImport.update({
+  id: '/collections',
+  path: '/collections',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BibleRouteRoute = BibleRouteRouteImport.update({
   id: '/bible',
   path: '/bible',
@@ -123,6 +131,11 @@ const HymnalIndexRoute = HymnalIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => HymnalRouteRoute,
+} as any)
+const CollectionsIndexRoute = CollectionsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CollectionsRouteRoute,
 } as any)
 const BibleIndexRoute = BibleIndexRouteImport.update({
   id: '/',
@@ -185,10 +198,16 @@ const HymnalHymnIdRoute = HymnalHymnIdRouteImport.update({
   path: '/$hymnId',
   getParentRoute: () => HymnalRouteRoute,
 } as any)
+const CollectionsCollectionIdRoute = CollectionsCollectionIdRouteImport.update({
+  id: '/$collectionId',
+  path: '/$collectionId',
+  getParentRoute: () => CollectionsRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bible': typeof BibleRouteRouteWithChildren
+  '/collections': typeof CollectionsRouteRouteWithChildren
   '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRouteWithChildren
@@ -198,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/utilities': typeof UtilitiesRouteRouteWithChildren
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
+  '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
   '/onboarding/import': typeof OnboardingImportRoute
@@ -210,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
+  '/collections/': typeof CollectionsIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
@@ -222,6 +243,7 @@ export interface FileRoutesByTo {
   '/help': typeof HelpRouteRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
+  '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
   '/onboarding/import': typeof OnboardingImportRoute
@@ -234,6 +256,7 @@ export interface FileRoutesByTo {
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible': typeof BibleIndexRoute
+  '/collections': typeof CollectionsIndexRoute
   '/hymnal': typeof HymnalIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/presentations': typeof PresentationsIndexRoute
@@ -245,6 +268,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/bible': typeof BibleRouteRouteWithChildren
+  '/collections': typeof CollectionsRouteRouteWithChildren
   '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRouteWithChildren
@@ -254,6 +278,7 @@ export interface FileRoutesById {
   '/utilities': typeof UtilitiesRouteRouteWithChildren
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
+  '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
   '/onboarding/import': typeof OnboardingImportRoute
@@ -266,6 +291,7 @@ export interface FileRoutesById {
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
+  '/collections/': typeof CollectionsIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
@@ -278,6 +304,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/bible'
+    | '/collections'
     | '/help'
     | '/hymnal'
     | '/onboarding'
@@ -287,6 +314,7 @@ export interface FileRouteTypes {
     | '/utilities'
     | '/projector'
     | '/return'
+    | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
     | '/onboarding/import'
@@ -299,6 +327,7 @@ export interface FileRouteTypes {
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible/'
+    | '/collections/'
     | '/hymnal/'
     | '/onboarding/'
     | '/presentations/'
@@ -311,6 +340,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/projector'
     | '/return'
+    | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
     | '/onboarding/import'
@@ -323,6 +353,7 @@ export interface FileRouteTypes {
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible'
+    | '/collections'
     | '/hymnal'
     | '/onboarding'
     | '/presentations'
@@ -333,6 +364,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/bible'
+    | '/collections'
     | '/help'
     | '/hymnal'
     | '/onboarding'
@@ -342,6 +374,7 @@ export interface FileRouteTypes {
     | '/utilities'
     | '/projector'
     | '/return'
+    | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
     | '/onboarding/import'
@@ -354,6 +387,7 @@ export interface FileRouteTypes {
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible/'
+    | '/collections/'
     | '/hymnal/'
     | '/onboarding/'
     | '/presentations/'
@@ -365,6 +399,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibleRouteRoute: typeof BibleRouteRouteWithChildren
+  CollectionsRouteRoute: typeof CollectionsRouteRouteWithChildren
   HelpRouteRoute: typeof HelpRouteRoute
   HymnalRouteRoute: typeof HymnalRouteRouteWithChildren
   OnboardingRouteRoute: typeof OnboardingRouteRouteWithChildren
@@ -441,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HelpRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/collections': {
+      id: '/collections'
+      path: '/collections'
+      fullPath: '/collections'
+      preLoaderRoute: typeof CollectionsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bible': {
       id: '/bible'
       path: '/bible'
@@ -496,6 +538,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/hymnal/'
       preLoaderRoute: typeof HymnalIndexRouteImport
       parentRoute: typeof HymnalRouteRoute
+    }
+    '/collections/': {
+      id: '/collections/'
+      path: '/'
+      fullPath: '/collections/'
+      preLoaderRoute: typeof CollectionsIndexRouteImport
+      parentRoute: typeof CollectionsRouteRoute
     }
     '/bible/': {
       id: '/bible/'
@@ -581,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HymnalHymnIdRouteImport
       parentRoute: typeof HymnalRouteRoute
     }
+    '/collections/$collectionId': {
+      id: '/collections/$collectionId'
+      path: '/$collectionId'
+      fullPath: '/collections/$collectionId'
+      preLoaderRoute: typeof CollectionsCollectionIdRouteImport
+      parentRoute: typeof CollectionsRouteRoute
+    }
   }
 }
 
@@ -595,6 +651,19 @@ const BibleRouteRouteChildren: BibleRouteRouteChildren = {
 const BibleRouteRouteWithChildren = BibleRouteRoute._addFileChildren(
   BibleRouteRouteChildren,
 )
+
+interface CollectionsRouteRouteChildren {
+  CollectionsCollectionIdRoute: typeof CollectionsCollectionIdRoute
+  CollectionsIndexRoute: typeof CollectionsIndexRoute
+}
+
+const CollectionsRouteRouteChildren: CollectionsRouteRouteChildren = {
+  CollectionsCollectionIdRoute: CollectionsCollectionIdRoute,
+  CollectionsIndexRoute: CollectionsIndexRoute,
+}
+
+const CollectionsRouteRouteWithChildren =
+  CollectionsRouteRoute._addFileChildren(CollectionsRouteRouteChildren)
 
 interface HymnalRouteRouteChildren {
   HymnalHymnIdRoute: typeof HymnalHymnIdRoute
@@ -692,6 +761,7 @@ const UtilitiesRouteRouteWithChildren = UtilitiesRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibleRouteRoute: BibleRouteRouteWithChildren,
+  CollectionsRouteRoute: CollectionsRouteRouteWithChildren,
   HelpRouteRoute: HelpRouteRoute,
   HymnalRouteRoute: HymnalRouteRouteWithChildren,
   OnboardingRouteRoute: OnboardingRouteRouteWithChildren,

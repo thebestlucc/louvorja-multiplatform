@@ -8,9 +8,9 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 ## Project Overview
 
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
-10-phase roadmap in `.specs/` directory (01–11). PRD at `PRD.md`.
+Roadmap and feature decisions are tracked in `docs/phase-*` folders (`PRD.md`, `SPECS.md`, `TASKS.md`, `HANDOFF.md`).
 
-**Phases 0–8 are COMPLETE.** Phase 9 is pending.
+**Phases 0–10 are COMPLETE.** Phase 11 is in progress.
 
 ## Tech Stack
 

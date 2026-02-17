@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Hymn, Album } from "../types/hymn";
+import type { Hymn, Album, HymnWriteInput } from "../types/hymn";
 import type { MonitorInfo } from "../types/settings";
 import type { Presentation, SlideContentFlat, SlideContextFlat, OverlayState } from "../types/presentation";
 import type { SlideRow } from "../types/presentation";
@@ -7,6 +7,12 @@ import type { MonitorConfig } from "../types/settings";
 import type { AudioStatusPayload, SyncPoint } from "../types/audio";
 import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bible";
 import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
+import type {
+  Collection,
+  CollectionSong,
+  CollectionSongSyncStatus,
+  CollectionWithSongs,
+} from "../types/collection";
 import type { Settings } from "../types/settings";
 import type { StreamingInfo } from "../types/streaming";
 import type { TimerMode, TimerStateData, TextFormat } from "../types/utilities";
@@ -45,6 +51,86 @@ export async function getAlbums(): Promise<Album[]> {
 
 export async function getHymnsByAlbum(album: string): Promise<Hymn[]> {
   return tauriInvoke<Hymn[]>("get_hymns_by_album", { album });
+}
+
+export async function createHymn(input: HymnWriteInput): Promise<Hymn> {
+  return tauriInvoke<Hymn>("create_hymn", { input });
+}
+
+export async function updateHymn(id: number, input: HymnWriteInput): Promise<Hymn> {
+  return tauriInvoke<Hymn>("update_hymn", { id, input });
+}
+
+export async function deleteHymn(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_hymn", { id });
+}
+
+// Collections
+export async function getCollections(): Promise<Collection[]> {
+  return tauriInvoke<Collection[]>("get_collections");
+}
+
+export async function getCollection(id: number): Promise<CollectionWithSongs> {
+  return tauriInvoke<CollectionWithSongs>("get_collection", { id });
+}
+
+export async function createCollection(
+  name: string,
+  description: string | null,
+  coverPath: string | null,
+): Promise<Collection> {
+  return tauriInvoke<Collection>("create_collection", {
+    name,
+    description,
+    coverPath,
+  });
+}
+
+export async function updateCollection(
+  id: number,
+  name: string,
+  description: string | null,
+  coverPath: string | null,
+): Promise<Collection> {
+  return tauriInvoke<Collection>("update_collection", {
+    id,
+    name,
+    description,
+    coverPath,
+  });
+}
+
+export async function deleteCollection(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_collection", { id });
+}
+
+export async function importCollectionSong(
+  collectionId: number,
+  path: string,
+): Promise<CollectionSong> {
+  return tauriInvoke<CollectionSong>("import_collection_song", {
+    collectionId,
+    path,
+  });
+}
+
+export async function checkCollectionSongSync(songId: number): Promise<CollectionSongSyncStatus> {
+  return tauriInvoke<CollectionSongSyncStatus>("check_collection_song_sync", { songId });
+}
+
+export async function resyncCollectionSong(songId: number): Promise<CollectionSong> {
+  return tauriInvoke<CollectionSong>("resync_collection_song", { songId });
+}
+
+export async function removeCollectionSong(songId: number): Promise<void> {
+  return tauriInvoke<void>("remove_collection_song", { songId });
+}
+
+export async function reorderCollectionSongs(
+  collectionId: number,
+  songIds: number[],
+): Promise<void> {
+  return tauriInvoke<void>("reorder_collection_songs", { collectionId, songIds });
 }
 
 // Display
@@ -424,6 +510,10 @@ export async function setStreamingBroadcast(enabled: boolean): Promise<void> {
 // Video
 export async function copyVideoToMedia(videoPath: string, presentationId: number): Promise<string> {
   return tauriInvoke<string>("copy_video_to_media", { videoPath, presentationId });
+}
+
+export async function copyImageToMedia(imagePath: string): Promise<string> {
+  return tauriInvoke<string>("copy_image_to_media", { imagePath });
 }
 
 export async function getVideoMetadata(path: string): Promise<VideoMetadata> {

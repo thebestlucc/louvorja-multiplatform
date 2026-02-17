@@ -9,6 +9,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
+const MAX_COVER_SIZE_BYTES: u64 = 8 * 1024 * 1024;
+
 #[tauri::command]
 pub fn run_lottery(names: Vec<String>) -> Result<String, AppError> {
     let sanitized = sanitize_lottery_names(names);
@@ -111,6 +113,66 @@ pub fn copy_video_to_media(
     }
 
     Ok(format!("media/videos/{}", filename))
+}
+
+#[tauri::command]
+pub fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<String, AppError> {
+    let source = PathBuf::from(image_path);
+    if !source.exists() {
+        return Err(AppError::NotFound(format!(
+            "Image file '{}' does not exist",
+            source.display()
+        )));
+    }
+
+    let canonical_source = source
+        .canonicalize()
+        .map_err(|e| AppError::Internal(format!("Failed to resolve source image path: {}", e)))?;
+    let extension = ensure_supported_cover_image(&canonical_source)?;
+
+    let file_size = std::fs::metadata(&canonical_source)?.len();
+    if file_size > MAX_COVER_SIZE_BYTES {
+        return Err(AppError::Internal(format!(
+            "Cover image is too large ({} bytes). Maximum size is {} bytes.",
+            file_size, MAX_COVER_SIZE_BYTES
+        )));
+    }
+
+    let mut hasher = blake3::Hasher::new();
+    let mut input = File::open(&canonical_source)?;
+    let mut buf = [0u8; 8192];
+    loop {
+        let read = input.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buf[..read]);
+    }
+    let digest = hasher.finalize().to_hex().to_string();
+    let filename = format!("{}.{}", &digest[..24], extension);
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let media_dir = app_data_dir.join("media").join("covers");
+    std::fs::create_dir_all(&media_dir)?;
+
+    let destination = media_dir.join(filename);
+    if destination != canonical_source && !destination.exists() {
+        std::fs::copy(&canonical_source, &destination).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to copy image to managed media directory: {}",
+                e
+            ))
+        })?;
+    }
+
+    Ok(format!(
+        "media/covers/{}.{}",
+        &digest[..24],
+        extension
+    ))
 }
 
 #[tauri::command]
@@ -263,4 +325,22 @@ fn load_ffprobe_settings(state: &tauri::State<'_, AppState>) -> Result<(bool, Op
         .filter(|v| !v.trim().is_empty());
 
     Ok((enabled, path))
+}
+
+fn ensure_supported_cover_image(path: &Path) -> Result<&'static str, AppError> {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    match extension.as_str() {
+        "png" => Ok("png"),
+        "jpg" => Ok("jpg"),
+        "jpeg" => Ok("jpeg"),
+        "webp" => Ok("webp"),
+        _ => Err(AppError::Internal(
+            "Unsupported image format. Allowed formats: png, jpg, jpeg, webp.".into(),
+        )),
+    }
 }

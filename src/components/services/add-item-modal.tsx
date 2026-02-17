@@ -17,6 +17,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { ServiceItemType } from "../../types/service";
+import { CoverImage } from "../media/cover-image";
 
 interface AddItemModalProps {
   open: boolean;
@@ -129,6 +130,11 @@ function HymnForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
               className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
               onClick={() => onAdd("hymn", hymn.title, hymn.id, null)}
             >
+              <CoverImage
+                path={hymn.cover_path}
+                title={hymn.title}
+                className="h-6 w-6 rounded"
+              />
               {hymn.number != null && (
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-500/10 text-[11px] font-semibold tabular-nums text-blue-600">
                   {hymn.number}

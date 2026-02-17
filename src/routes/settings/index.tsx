@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Wifi, Palette, Languages, Film } from "lucide-react";
+import { Wifi, Palette, Languages, Film, FolderOpen } from "lucide-react";
 import { useSetting, useSetSetting } from "../../lib/queries";
 import { StreamingControls } from "../../components/streaming/streaming-controls";
 import { Input } from "../../components/ui/input";
@@ -24,12 +24,14 @@ function SettingsIndex() {
   const { data: autoStartSetting } = useSetting("streaming.autoStart");
   const { data: ffprobeEnabledSetting } = useSetting("video.ffprobeEnabled");
   const { data: ffprobePathSetting } = useSetting("video.ffprobePath");
+  const { data: autoCheckCollectionSetting } = useSetting("collections.autoCheckSourceOnOpen");
   const setSettingMutation = useSetSetting();
 
   const [port, setPort] = useState("7070");
   const [autoStart, setAutoStart] = useState(false);
   const [ffprobeEnabled, setFfprobeEnabled] = useState(false);
   const [ffprobePath, setFfprobePath] = useState("");
+  const [autoCheckCollectionSource, setAutoCheckCollectionSource] = useState(true);
 
   useEffect(() => {
     if (portSetting) setPort(portSetting.value);
@@ -46,6 +48,12 @@ function SettingsIndex() {
   useEffect(() => {
     if (ffprobePathSetting) setFfprobePath(ffprobePathSetting.value);
   }, [ffprobePathSetting]);
+
+  useEffect(() => {
+    if (autoCheckCollectionSetting) {
+      setAutoCheckCollectionSource(autoCheckCollectionSetting.value !== "false");
+    }
+  }, [autoCheckCollectionSetting]);
 
   useEffect(() => {
     if (themeSetting && isTheme(themeSetting.value)) {
@@ -90,6 +98,14 @@ function SettingsIndex() {
 
   const handleFfprobePathBlur = () => {
     setSettingMutation.mutate({ key: "video.ffprobePath", value: ffprobePath.trim() });
+  };
+
+  const handleAutoCheckCollectionSourceChange = (checked: boolean) => {
+    setAutoCheckCollectionSource(checked);
+    setSettingMutation.mutate({
+      key: "collections.autoCheckSourceOnOpen",
+      value: String(checked),
+    });
   };
 
   return (
@@ -173,7 +189,11 @@ function SettingsIndex() {
               <label className="text-sm font-medium">{t("settings.autoStart")}</label>
               <p className="text-xs text-muted-foreground">{t("settings.autoStartDesc")}</p>
             </div>
-            <ToggleButton checked={autoStart} onClick={() => handleAutoStartChange(!autoStart)} />
+            <ToggleButton
+              checked={autoStart}
+              onClick={() => handleAutoStartChange(!autoStart)}
+              ariaLabel={t("settings.autoStart")}
+            />
           </div>
 
           {/* Divider */}
@@ -198,7 +218,11 @@ function SettingsIndex() {
               <label className="text-sm font-medium">{t("settings.ffprobeEnabled")}</label>
               <p className="text-xs text-muted-foreground">{t("settings.ffprobeEnabledDesc")}</p>
             </div>
-            <ToggleButton checked={ffprobeEnabled} onClick={() => handleFfprobeEnabledChange(!ffprobeEnabled)} />
+            <ToggleButton
+              checked={ffprobeEnabled}
+              onClick={() => handleFfprobeEnabledChange(!ffprobeEnabled)}
+              ariaLabel={t("settings.ffprobeEnabled")}
+            />
           </div>
 
           {/* ffprobe path */}
@@ -217,15 +241,47 @@ function SettingsIndex() {
           </div>
         </div>
       </section>
+
+      {/* Collections Section */}
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.collections")}</h2>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <label className="text-sm font-medium">{t("settings.collectionsAutoCheck")}</label>
+            <p className="text-xs text-muted-foreground">
+              {t("settings.collectionsAutoCheckDesc")}
+            </p>
+          </div>
+          <ToggleButton
+            checked={autoCheckCollectionSource}
+            onClick={() => handleAutoCheckCollectionSourceChange(!autoCheckCollectionSource)}
+            ariaLabel={t("settings.collectionsAutoCheck")}
+          />
+        </div>
+      </section>
     </div>
   );
 }
 
-function ToggleButton({ checked, onClick }: { checked: boolean; onClick: () => void }) {
+function ToggleButton({
+  checked,
+  onClick,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onClick: () => void;
+  ariaLabel: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={checked}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
         checked ? "bg-primary" : "bg-muted",

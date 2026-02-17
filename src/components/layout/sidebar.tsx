@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Home,
   Music,
+  FolderOpen,
   BookOpen,
   Presentation,
   ListChecks,
@@ -22,6 +23,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 const navItems = [
   { to: "/", icon: Home, labelKey: "nav.home" },
   { to: "/hymnal", icon: Music, labelKey: "nav.hymnal" },
+  { to: "/collections", icon: FolderOpen, labelKey: "nav.collections" },
   { to: "/bible", icon: BookOpen, labelKey: "nav.bible" },
   { to: "/presentations", icon: Presentation, labelKey: "nav.presentations" },
   { to: "/services", icon: ListChecks, labelKey: "nav.services" },
