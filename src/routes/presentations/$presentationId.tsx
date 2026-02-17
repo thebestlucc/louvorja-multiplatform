@@ -150,7 +150,7 @@ function PresentationEditor() {
       {/* Three-panel layout */}
       <div className="flex flex-1 gap-3 overflow-hidden">
         {/* Left panel — Slide list */}
-        <div className="w-52 shrink-0 overflow-hidden rounded-lg border border-border">
+        <div className="w-56 shrink-0 overflow-hidden rounded-lg border border-border p-2">
           <SlideList
             slides={slideContents}
             activeIndex={activeSlideIndex}
@@ -173,6 +173,7 @@ function PresentationEditor() {
           {activeSlide ? (
             <SlideEditor
               slide={activeSlide.content}
+              presentationId={id}
               onChange={handleSlideContentChange}
             />
           ) : (

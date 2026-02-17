@@ -24,6 +24,19 @@ pub fn audio_play(file_path: String, state: tauri::State<'_, AudioState>) -> Res
 }
 
 #[tauri::command]
+pub fn audio_play_alert(
+    file_path: Option<String>,
+    volume: Option<f32>,
+    state: tauri::State<'_, AudioState>,
+) -> Result<(), AppError> {
+    let player = state
+        .player
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    player.play_alert(file_path.as_deref(), volume)
+}
+
+#[tauri::command]
 pub fn audio_pause(state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let player = state
         .player

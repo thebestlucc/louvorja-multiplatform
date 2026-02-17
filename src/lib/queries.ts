@@ -7,11 +7,14 @@ import {
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   getMonitorConfigs, setMonitorConfig,
+  startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings,
+  copyVideoToMedia, getVideoMetadata, resolveMediaPath,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
+import type { TimerMode, TextFormat } from "../types/utilities";
 
 export const queryKeys = {
   hymns: {
@@ -52,10 +55,21 @@ export const queryKeys = {
   syncPoints: {
     byHymn: (hymnId: number) => ["syncPoints", hymnId] as const,
   },
+  utilities: {
+    timerState: ["utilities", "timerState"] as const,
+  },
   streaming: {
     status: ["streaming", "status"] as const,
   },
+  video: {
+    metadata: (path: string) => ["video", "metadata", path] as const,
+    resolvedPath: (path: string) => ["video", "resolvedPath", path] as const,
+  },
 } as const;
+
+function invalidateTimerState(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.utilities.timerState });
+}
 
 export function useHymns(query: string) {
   return useQuery({
@@ -390,10 +404,11 @@ export function useSetting(key: string) {
   });
 }
 
-export function useAllSettings() {
+export function useAllSettings(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.settings.all,
     queryFn: () => getAllSettings(),
+    enabled: options?.enabled,
   });
 }
 
@@ -406,6 +421,115 @@ export function useSetSetting() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.detail(vars.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
     },
+  });
+}
+
+// Utilities
+export function useTimerState(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.utilities.timerState,
+    queryFn: () => getTimerState(),
+    refetchInterval: (query) => (query.state.data?.isRunning ? 250 : 2000),
+    refetchIntervalInBackground: true,
+    enabled: options?.enabled,
+  });
+}
+
+export function useStartTimer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { mode: TimerMode; durationMs?: number | null }) =>
+      startTimer(vars.mode, vars.durationMs),
+    onSuccess: () => {
+      invalidateTimerState(queryClient);
+    },
+  });
+}
+
+export function usePauseTimer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => pauseTimer(),
+    onSuccess: () => {
+      invalidateTimerState(queryClient);
+    },
+  });
+}
+
+export function useResumeTimer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => resumeTimer(),
+    onSuccess: () => {
+      invalidateTimerState(queryClient);
+    },
+  });
+}
+
+export function useResetTimer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => resetTimer(),
+    onSuccess: () => {
+      invalidateTimerState(queryClient);
+    },
+  });
+}
+
+export function useAdjustCountdownTimer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { deltaMs: number }) => adjustCountdownTimer(vars.deltaMs),
+    onSuccess: () => {
+      invalidateTimerState(queryClient);
+    },
+  });
+}
+
+export function useAddLap() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => addLap(),
+    onSuccess: () => {
+      invalidateTimerState(queryClient);
+    },
+  });
+}
+
+export function useRunLottery() {
+  return useMutation({
+    mutationFn: (names: string[]) => runLottery(names),
+  });
+}
+
+export function useFormatText() {
+  return useMutation({
+    mutationFn: (vars: { text: string; format: TextFormat }) =>
+      formatText(vars.text, vars.format),
+  });
+}
+
+// Video
+export function useGetVideoMetadata(path: string | null) {
+  return useQuery({
+    queryKey: queryKeys.video.metadata(path ?? ""),
+    queryFn: () => getVideoMetadata(path ?? ""),
+    enabled: Boolean(path && path.trim().length > 0),
+  });
+}
+
+export function useResolveMediaPath(path: string | null) {
+  return useQuery({
+    queryKey: queryKeys.video.resolvedPath(path ?? ""),
+    queryFn: () => resolveMediaPath(path ?? ""),
+    enabled: Boolean(path && path.trim().length > 0),
+  });
+}
+
+export function useCopyVideoToMedia() {
+  return useMutation({
+    mutationFn: (vars: { videoPath: string; presentationId: number }) =>
+      copyVideoToMedia(vars.videoPath, vars.presentationId),
   });
 }
 

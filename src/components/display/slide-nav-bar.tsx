@@ -62,6 +62,7 @@ export function SlideNavBar() {
           >
             <SlideRenderer
               slide={slide}
+              renderMode="thumbnail"
               className="h-full w-full scale-100 text-[3px] [&_h1]:!text-[5px] [&_p]:!text-[3px]"
             />
           </button>

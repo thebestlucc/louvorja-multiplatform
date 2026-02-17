@@ -24,26 +24,323 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </div>
 <script>
 let es = null;
+let utilityEs = null;
+let uiEs = null;
 let reconnectTimer = null;
-let statusPoll = null;
+let utilityReconnectTimer = null;
+let uiReconnectTimer = null;
+let uiLanguage = 'pt';
+let lastPayload = null;
+let lastStatusKey = 'waitingContent';
+let lastStatusClass = 'waiting';
+let lastUtilityEvent = null;
+let activeUtilitySessionId = null;
 
-function setStatus(msg, cls) {
+const I18N = {
+  pt: {
+    pageTitle: 'LouvorJA - Musica',
+    waitingContent: 'Aguardando conteudo...',
+    disconnectedWaiting: 'Desconectado. Aguardando servidor...',
+    disconnectedReconnecting: 'Desconectado. Reconectando...',
+    timerLabel: 'Timer',
+    countdownTitle: 'Contagem regressiva',
+    stopwatchTitle: 'Cronometro',
+    clockTitle: 'Relogio',
+  },
+  en: {
+    pageTitle: 'LouvorJA - Music',
+    waitingContent: 'Waiting for content...',
+    disconnectedWaiting: 'Disconnected. Waiting for server...',
+    disconnectedReconnecting: 'Disconnected. Reconnecting...',
+    timerLabel: 'Timer',
+    countdownTitle: 'Countdown',
+    stopwatchTitle: 'Stopwatch',
+    clockTitle: 'Clock',
+  },
+  es: {
+    pageTitle: 'LouvorJA - Musica',
+    waitingContent: 'Esperando contenido...',
+    disconnectedWaiting: 'Desconectado. Esperando al servidor...',
+    disconnectedReconnecting: 'Desconectado. Reconectando...',
+    timerLabel: 'Temporizador',
+    countdownTitle: 'Cuenta regresiva',
+    stopwatchTitle: 'Cronometro',
+    clockTitle: 'Reloj',
+  },
+};
+
+function normalizeLanguage(value) {
+  if (value === 'en' || value === 'es') {
+    return value;
+  }
+  return 'pt';
+}
+
+function tr(key) {
+  const table = I18N[uiLanguage] || I18N.pt;
+  return table[key] || I18N.pt[key] || key;
+}
+
+function localeFromLanguage(language) {
+  if (language === 'en') return 'en-US';
+  if (language === 'es') return 'es-ES';
+  return 'pt-BR';
+}
+
+function applyStaticText() {
+  document.title = tr('pageTitle');
+}
+
+function safeText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function applyLanguage(language) {
+  const normalized = normalizeLanguage(language);
+  if (normalized === uiLanguage) {
+    return;
+  }
+  uiLanguage = normalized;
+  applyStaticText();
+  if (lastPayload) {
+    applyPayload(lastPayload);
+  } else if (lastStatusKey) {
+    setStatus(lastStatusKey, lastStatusClass);
+  }
+
+  if (lastUtilityEvent) {
+    applyUtilityEvent(lastUtilityEvent);
+  }
+}
+
+async function refreshUiLanguage() {
+  try {
+    const response = await fetch('/state/ui', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyLanguage(data.language);
+  } catch (_) {}
+}
+
+function setStatus(statusKey, cls) {
+  lastStatusKey = statusKey;
+  lastStatusClass = cls;
+  lastPayload = null;
   const el = document.getElementById('text');
   el.textContent = '';
   const span = document.createElement('span');
   span.className = cls;
-  span.textContent = msg;
+  span.textContent = tr(statusKey);
   el.appendChild(span);
+  document.getElementById('label').textContent = '';
+  document.getElementById('title').textContent = '';
 }
 
 function applyPayload(d) {
-  document.getElementById('label').textContent = d.label || '';
-  if (d.text) {
-    document.getElementById('text').textContent = d.text;
+  lastPayload = d;
+  lastStatusKey = null;
+
+  const label = safeText(d.label);
+  const text = safeText(d.text);
+  const title = safeText(d.title);
+  const subtitle = safeText(d.subtitle);
+
+  document.getElementById('label').textContent = label;
+  const mainText = text || title;
+  if (mainText) {
+    document.getElementById('text').textContent = mainText;
   } else {
-    setStatus('Waiting for content...', 'waiting');
+    setStatus('waitingContent', 'waiting');
+    return;
   }
-  document.getElementById('title').textContent = d.title || '';
+
+  // For cover-style payloads (timer/clock), use subtitle as secondary line.
+  document.getElementById('title').textContent = text ? title : subtitle;
+
+  if (lastUtilityEvent) {
+    applyUtilityEvent(lastUtilityEvent);
+  }
+}
+
+function handleMusicStreamMessage(data) {
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  if (data.utilityProjection && typeof data.utilityProjection === 'object') {
+    applyUtilityEvent(data.utilityProjection);
+    return;
+  }
+
+  applyPayload(data);
+}
+
+function formatTimerValue(kind, valueMs) {
+  const safeMs = Math.max(0, Math.floor(valueMs));
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (kind === 'stopwatch') {
+    const millis = safeMs % 1000;
+    if (hours > 0) {
+      return String(hours).padStart(2, '0') + ':'
+        + String(minutes).padStart(2, '0') + ':'
+        + String(seconds).padStart(2, '0') + '.'
+        + String(millis).padStart(3, '0');
+    }
+    return String(minutes).padStart(2, '0') + ':'
+      + String(seconds).padStart(2, '0') + '.'
+      + String(millis).padStart(3, '0');
+  }
+
+  if (hours > 0) {
+    return String(hours).padStart(2, '0') + ':'
+      + String(minutes).padStart(2, '0') + ':'
+      + String(seconds).padStart(2, '0');
+  }
+  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+}
+
+function formatClockTime(valueMs, use24Hour) {
+  return new Date(Math.max(0, Math.floor(valueMs))).toLocaleTimeString(
+    localeFromLanguage(uiLanguage),
+    {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: !use24Hour,
+    },
+  );
+}
+
+function formatClockDate(valueMs) {
+  return new Date(Math.max(0, Math.floor(valueMs))).toLocaleDateString(
+    localeFromLanguage(uiLanguage),
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+  );
+}
+
+function payloadSupportsUtility(payload, kind) {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const currentLabel = safeText(payload.label).toLowerCase();
+  if (kind === 'countdown' || kind === 'stopwatch') {
+    return currentLabel === 'timer';
+  }
+  if (kind === 'clock') {
+    return currentLabel === 'clock';
+  }
+  return false;
+}
+
+function applyUtilityEvent(eventPayload) {
+  if (!eventPayload || typeof eventPayload !== 'object') {
+    return;
+  }
+
+  const phase = safeText(eventPayload.phase).toLowerCase();
+  const sessionId = safeText(eventPayload.sessionId);
+  const kind = safeText(eventPayload.kind).toLowerCase();
+  const valueMs = Number.isFinite(Number(eventPayload.valueMs)) ? Number(eventPayload.valueMs) : 0;
+  const use24Hour = Boolean(eventPayload.use24Hour);
+  const showDate = Boolean(eventPayload.showDate);
+
+  if (phase !== 'start' && phase !== 'tick' && phase !== 'stop') {
+    return;
+  }
+
+  if (phase === 'stop') {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
+      return;
+    }
+    activeUtilitySessionId = null;
+    lastUtilityEvent = null;
+    return;
+  }
+
+  if (kind !== 'countdown' && kind !== 'stopwatch' && kind !== 'clock') {
+    return;
+  }
+
+  if (phase === 'start') {
+    activeUtilitySessionId = sessionId || activeUtilitySessionId;
+  } else if (phase === 'tick') {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
+      return;
+    }
+    if (!activeUtilitySessionId && sessionId) {
+      activeUtilitySessionId = sessionId;
+    }
+  }
+
+  lastUtilityEvent = {
+    phase,
+    sessionId,
+    kind,
+    valueMs,
+    use24Hour,
+    showDate,
+  };
+
+  const currentLabel = kind === 'clock' ? 'clock' : 'timer';
+
+  let valueText = '';
+  let subtitleText = '';
+  let labelText = currentLabel;
+
+  if (kind === 'countdown') {
+    valueText = formatTimerValue('countdown', valueMs);
+    subtitleText = tr('countdownTitle');
+    labelText = tr('timerLabel');
+  } else if (kind === 'stopwatch') {
+    valueText = formatTimerValue('stopwatch', valueMs);
+    subtitleText = tr('stopwatchTitle');
+    labelText = tr('timerLabel');
+  } else if (kind === 'clock') {
+    valueText = formatClockTime(valueMs, use24Hour);
+    subtitleText = showDate
+      ? formatClockDate(valueMs)
+      : tr('clockTitle');
+    labelText = tr('clockTitle');
+  } else {
+    return;
+  }
+
+  document.getElementById('label').textContent = labelText;
+  document.getElementById('text').textContent = valueText;
+  document.getElementById('title').textContent = subtitleText;
+
+  const canReusePayload = payloadSupportsUtility(lastPayload, kind);
+  const basePayload = canReusePayload && lastPayload
+    ? lastPayload
+    : { label: currentLabel, text: '', title: '', subtitle: '' };
+
+  lastPayload = {
+    ...basePayload,
+    label: currentLabel,
+    text: '',
+    title: valueText,
+    subtitle: subtitleText,
+  };
+  lastStatusKey = null;
+}
+
+async function fetchUtilitySnapshot() {
+  try {
+    const response = await fetch('/state/utility', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyUtilityEvent(data);
+  } catch (_) {}
 }
 
 async function fetchSnapshot() {
@@ -72,17 +369,38 @@ function scheduleReconnect() {
   }, 1500);
 }
 
+function scheduleUtilityReconnect() {
+  if (utilityReconnectTimer) return;
+  utilityReconnectTimer = setTimeout(() => {
+    utilityReconnectTimer = null;
+    connectUtility();
+  }, 1500);
+}
+
+function scheduleUiReconnect() {
+  if (uiReconnectTimer) return;
+  uiReconnectTimer = setTimeout(() => {
+    uiReconnectTimer = null;
+    connectUi();
+  }, 1500);
+}
+
 async function connectIfAvailable() {
+  await refreshUiLanguage();
   if (es) return;
   const ok = await isServerAvailable();
   if (!ok) {
-    setStatus('Disconnected. Waiting for server...', 'disconnected');
+    setStatus('disconnectedWaiting', 'disconnected');
+    scheduleReconnect();
     return;
   }
   connect();
+  connectUtility();
+  connectUi();
 }
 
 function connect() {
+  if (es) return;
   es = new EventSource('/sse/music');
 
   es.onopen = function () {
@@ -91,7 +409,7 @@ function connect() {
 
   es.onmessage = function (e) {
     try {
-      applyPayload(JSON.parse(e.data));
+      handleMusicStreamMessage(JSON.parse(e.data));
     } catch (_) {}
   };
 
@@ -100,22 +418,60 @@ function connect() {
       es.close();
       es = null;
     }
-    setStatus('Disconnected. Reconnecting...', 'disconnected');
+    setStatus('disconnectedReconnecting', 'disconnected');
     scheduleReconnect();
   };
 }
 
+function connectUtility() {
+  if (utilityEs) return;
+  utilityEs = new EventSource('/sse/utility');
+  utilityEs.onopen = function () {
+    void fetchUtilitySnapshot();
+  };
+  utilityEs.onmessage = function (e) {
+    try {
+      applyUtilityEvent(JSON.parse(e.data));
+    } catch (_) {}
+  };
+  utilityEs.onerror = function () {
+    if (utilityEs) {
+      utilityEs.close();
+      utilityEs = null;
+    }
+    scheduleUtilityReconnect();
+  };
+}
+
+function connectUi() {
+  if (uiEs) return;
+  uiEs = new EventSource('/sse/ui');
+  uiEs.onmessage = function (e) {
+    try {
+      const payload = JSON.parse(e.data);
+      applyLanguage(payload.language);
+    } catch (_) {}
+  };
+  uiEs.onerror = function () {
+    if (uiEs) {
+      uiEs.close();
+      uiEs = null;
+    }
+    scheduleUiReconnect();
+  };
+}
+
+applyStaticText();
+setStatus('waitingContent', 'waiting');
 void connectIfAvailable();
-statusPoll = setInterval(() => {
-  if (!es) {
-    void connectIfAvailable();
-  }
-}, 2000);
 
 window.addEventListener('beforeunload', () => {
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (statusPoll) clearInterval(statusPoll);
+  if (utilityReconnectTimer) clearTimeout(utilityReconnectTimer);
+  if (uiReconnectTimer) clearTimeout(uiReconnectTimer);
   if (es) es.close();
+  if (utilityEs) utilityEs.close();
+  if (uiEs) uiEs.close();
 });
 </script>
 </body>

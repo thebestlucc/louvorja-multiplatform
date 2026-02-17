@@ -10,7 +10,7 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 10-phase roadmap in `.specs/` directory (01–11). PRD at `PRD.md`.
 
-**Phases 0–7 are COMPLETE.** Phase 8 is Pending.
+**Phases 0–8 are COMPLETE.** Phase 9 is pending.
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust*
 ## Commands
 
 ```bash
-# Package manager — ALWAYS use pnpm, NEVER npm
+# Package manager/tooling — ALWAYS use pnpm, NEVER npm or deno
 pnpm install              # install deps
 pnpm add <pkg>            # add frontend dep
 pnpm tauri add <plugin>   # add Tauri plugin (auto-registers in Cargo + permissions + init)
@@ -41,6 +41,7 @@ npx tsc --noEmit          # TypeScript check only
 cargo build --manifest-path src-tauri/Cargo.toml  # Rust build only
 pnpm tauri dev             # full dev mode (frontend + Rust)
 
+# IMPORTANT: Do not run `deno` commands in this repository.
 # IMPORTANT: After adding new TanStack Router routes, run `pnpm vite build`
 # BEFORE `npx tsc --noEmit` — the Vite plugin generates routeTree.gen.ts
 # and tsc will fail on stale route types otherwise.
@@ -83,14 +84,15 @@ src-tauri/src/                # Backend (Rust)
 ├── commands/                 # Tauri command handlers (one module per domain)
 │   ├── music.rs, display.rs, slides.rs, audio.rs, bible.rs, liturgy.rs, ...
 ├── db/
-│   ├── migrations.rs         # Schema versioning (schema_version table, migrate_v1/v2/v3)
+│   ├── migrations.rs         # Schema versioning (schema_version table, migrate_v1...v5)
 │   ├── models.rs             # All data structs (Hymn, Album, Presentation, Slide, SlideContent, etc.)
 │   └── queries/              # DB query functions (one module per domain)
 │       ├── music.rs, slides.rs, bible.rs, liturgy.rs, settings.rs
 ├── archive/                  # .slja read/write + .pptx import
 │   ├── mod.rs, manifest.rs, pptx.rs
 ├── audio/                    # rodio player, sync timeline
-└── display/, streaming/      # Multi-monitor display + SSE streaming server
+├── display/, streaming/      # Multi-monitor display + SSE streaming server
+└── video/                    # Video path + metadata parsing helpers
 ```
 
 ## Architecture Patterns
@@ -173,7 +175,7 @@ src-tauri/src/                # Backend (Rust)
 
 7. **Optimistic local state pattern:** For responsive typing in editors, don't bind inputs directly to TanStack Query data. Use a local `Record<id, EditedValue>` state merged with server data, with per-item debounced saves. See `use-presentation.ts` for the reference implementation.
 
-8. **Package manager:** This project uses **pnpm**. Running `npm install` will fail or create conflicts.
+8. **Package manager/tooling:** This project uses **pnpm** for frontend commands. Do not use `npm` or `deno` in this repo.
 
 9. **Conditional hooks in root layout:** Never call hooks after an early `return` in a component. For bare routes (e.g., `/projector`, `/return`), pass `{ enabled: false }` to hooks instead:
    ```ts
@@ -185,6 +187,9 @@ src-tauri/src/                # Backend (Rust)
 ### General
 
 - **i18n:** Always add keys to ALL THREE locale files (`en.json`, `pt.json`, `es.json`). Missing keys render as raw key strings.
+- **UI design skill:** For UI/UX design tasks, use the `ui-ux-pro-max` skill before proposing or implementing interface changes.
+- **Ring skill selection:** Automatically select and apply the correct Ring skill(s) based on the task context, using the minimal set required for the job.
+- **Multi-agent orchestration:** When beneficial, automatically orchestrate multiple agents and use the appropriate Ring orchestration skills (for example `ring:using-ring` and `ring:dispatching-parallel-agents`).
 - **New Tauri commands checklist:** (1) Add query in `db/queries/*.rs`, (2) Add command in `commands/*.rs`, (3) Register in `lib.rs` handler, (4) Add wrapper in `lib/tauri.ts`, (5) Add hook in `lib/queries.ts`.
 - **Projector event flow:** `setCurrentSlide` (Rust) → `app.emit("slide-changed", &slide_data)` → `ProjectorView` listens via `listen<SlideContentFlat>("slide-changed")` → converts with `flatToSlideContent`.
 - **Link navigation:** Always use TanStack Router `<Link to="/path">` for internal navigation, never `<a href>` or `window.location`.
@@ -202,6 +207,7 @@ src-tauri/src/                # Backend (Rust)
 - **Global search in command palette:** The `CommandPalette` uses `shouldFilter={!hasQuery}` on `Command.Dialog` to disable cmdk's built-in filter when the user types a search query. Dynamic results from `searchHymns()` and `searchBible()` are fetched with 300ms debounce, shown in `Command.Group` sections. No TanStack Query caching — transient UI uses direct `await` calls.
 - **Streaming SSE pattern:** Use raw `std::net::TcpListener` with `TcpStream::write_all()` + `flush()` for SSE — never use buffered HTTP libraries (like tiny_http) for SSE as they buffer small writes. Set `TCP_NODELAY` on connections.
 - **Streaming clear pattern:** When clearing slides, all 3 SSE channels (music/bible/return) must receive empty payloads. HTML templates must handle `null`/empty values explicitly (show "Waiting for content" state).
+- **Video media path contract:** Persist only managed relative paths (`media/videos/...`) in slide content. Resolve to absolute paths in Rust commands and convert to asset URLs in frontend (`convertFileSrc`) for projector/return rendering.
 
 ## Phase Status
 
@@ -215,7 +221,7 @@ src-tauri/src/                # Backend (Rust)
 | 5 | Liturgy/Services (06) | COMPLETE |
 | 6 | Multi-Monitor (07) | COMPLETE |
 | 7 | Streaming (08) | COMPLETE |
-| 8 | Video/Multimedia (09) | Pending |
+| 8 | Video/Multimedia (09) | COMPLETE |
 | 9 | Utilities & Polish (10) | Pending |
 | 10 | Migration & Deploy (11) | Pending |
 

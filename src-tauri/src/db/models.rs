@@ -185,6 +185,20 @@ pub struct SlideContent {
     pub title: Option<String>,
     pub subtitle: Option<String>,
     pub label: Option<String>,
+    #[serde(default, alias = "videoPath")]
+    pub video_path: Option<String>,
+    #[serde(default, alias = "autoPlay")]
+    pub auto_play: Option<bool>,
+    #[serde(default, alias = "loop")]
+    pub r#loop: Option<bool>,
+    #[serde(default)]
+    pub muted: Option<bool>,
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default, alias = "textColor")]
+    pub text_color: Option<String>,
+    #[serde(default, alias = "textSize")]
+    pub text_size: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,4 +215,14 @@ pub struct SlideContext {
     pub index: i32,
     pub total: i32,
     pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoMetadata {
+    pub duration_ms: i64,
+    pub width: i32,
+    pub height: i32,
+    pub file_size: i64,
+    pub format: String,
 }

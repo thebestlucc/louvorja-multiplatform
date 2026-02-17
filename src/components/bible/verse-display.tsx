@@ -6,6 +6,7 @@ import type { Verse } from "../../types/bible";
 import { Plus } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
+import { getLocalizedBookName } from "./book-catalog";
 
 interface VerseDisplayProps {
   verses: Verse[];
@@ -30,10 +31,11 @@ export function VerseDisplay({
   onDoubleClickVerse,
   isLoading,
 }: VerseDisplayProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
   const addItemMutation = useAddServiceItem();
   const verseRefs = useRef<Map<number, HTMLParagraphElement>>(new Map());
+  const displayBook = getLocalizedBookName(book, i18n.resolvedLanguage ?? i18n.language);
 
   const setVerseRef = useCallback((verse: number, el: HTMLParagraphElement | null) => {
     if (el) {
@@ -82,7 +84,7 @@ export function VerseDisplay({
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface pb-2">
         <div>
           <h3 className="text-lg font-semibold">
-            {book} {chapter}
+            {displayBook} {chapter}
           </h3>
           {versionAbbr && (
             <span className="text-[11px] uppercase tracking-wider text-muted-foreground">

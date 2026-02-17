@@ -24,48 +24,180 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </head>
 <body>
 <div class="panel current">
-  <div class="panel-label">Current</div>
+  <div id="panel-current" class="panel-label">Current</div>
   <div id="cur-label" class="slide-label"></div>
   <div id="cur-text" class="slide-text"><span class="waiting">Waiting for content...</span></div>
   <div id="cur-title" class="slide-title"></div>
   <div id="counter" class="slide-counter"></div>
 </div>
 <div class="panel next">
-  <div class="panel-label">Next</div>
+  <div id="panel-next" class="panel-label">Next</div>
   <div id="next-label" class="slide-label"></div>
   <div id="next-text" class="slide-text"></div>
+  <div id="next-title" class="slide-title"></div>
 </div>
 <script>
 let es = null;
+let utilityEs = null;
+let uiEs = null;
 let reconnectTimer = null;
-let statusPoll = null;
+let utilityReconnectTimer = null;
+let uiReconnectTimer = null;
+let uiLanguage = 'pt';
+let lastStatusKey = 'waitingContent';
+let lastStatusClass = 'waiting';
+let lastPayload = null;
+let lastUtilityEvent = null;
+let activeUtilitySessionId = null;
 
-function setStatus(msg, cls) {
+const I18N = {
+  pt: {
+    pageTitle: 'LouvorJA - Monitor de Retorno',
+    panelCurrent: 'Atual',
+    panelNext: 'Proximo',
+    waitingContent: 'Aguardando conteudo...',
+    disconnectedWaiting: 'Desconectado. Aguardando servidor...',
+    disconnectedReconnecting: 'Desconectado. Reconectando...',
+    timerLabel: 'Timer',
+    countdownTitle: 'Contagem regressiva',
+    stopwatchTitle: 'Cronometro',
+    clockTitle: 'Relogio',
+  },
+  en: {
+    pageTitle: 'LouvorJA - Return Monitor',
+    panelCurrent: 'Current',
+    panelNext: 'Next',
+    waitingContent: 'Waiting for content...',
+    disconnectedWaiting: 'Disconnected. Waiting for server...',
+    disconnectedReconnecting: 'Disconnected. Reconnecting...',
+    timerLabel: 'Timer',
+    countdownTitle: 'Countdown',
+    stopwatchTitle: 'Stopwatch',
+    clockTitle: 'Clock',
+  },
+  es: {
+    pageTitle: 'LouvorJA - Monitor de Retorno',
+    panelCurrent: 'Actual',
+    panelNext: 'Siguiente',
+    waitingContent: 'Esperando contenido...',
+    disconnectedWaiting: 'Desconectado. Esperando al servidor...',
+    disconnectedReconnecting: 'Desconectado. Reconectando...',
+    timerLabel: 'Temporizador',
+    countdownTitle: 'Cuenta regresiva',
+    stopwatchTitle: 'Cronometro',
+    clockTitle: 'Reloj',
+  },
+};
+
+function normalizeLanguage(value) {
+  if (value === 'en' || value === 'es') {
+    return value;
+  }
+  return 'pt';
+}
+
+function tr(key) {
+  const table = I18N[uiLanguage] || I18N.pt;
+  return table[key] || I18N.pt[key] || key;
+}
+
+function localeFromLanguage(language) {
+  if (language === 'en') return 'en-US';
+  if (language === 'es') return 'es-ES';
+  return 'pt-BR';
+}
+
+function safeText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function applyStaticText() {
+  document.title = tr('pageTitle');
+  document.getElementById('panel-current').textContent = tr('panelCurrent');
+  document.getElementById('panel-next').textContent = tr('panelNext');
+}
+
+function applyLanguage(language) {
+  const normalized = normalizeLanguage(language);
+  if (normalized === uiLanguage) {
+    return;
+  }
+  uiLanguage = normalized;
+  applyStaticText();
+  if (lastPayload) {
+    applyPayload(lastPayload);
+  } else if (lastStatusKey) {
+    setStatus(lastStatusKey, lastStatusClass);
+  }
+
+  if (lastUtilityEvent) {
+    applyUtilityEvent(lastUtilityEvent);
+  }
+}
+
+async function refreshUiLanguage() {
+  try {
+    const response = await fetch('/state/ui', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyLanguage(data.language);
+  } catch (_) {}
+}
+
+function setStatus(statusKey, cls) {
+  lastStatusKey = statusKey;
+  lastStatusClass = cls;
+  lastPayload = null;
   const el = document.getElementById('cur-text');
   el.textContent = '';
   const span = document.createElement('span');
   span.className = cls;
-  span.textContent = msg;
+  span.textContent = tr(statusKey);
   el.appendChild(span);
+  document.getElementById('cur-label').textContent = '';
+  document.getElementById('cur-title').textContent = '';
+  document.getElementById('next-label').textContent = '';
+  document.getElementById('next-text').textContent = '';
+  document.getElementById('next-title').textContent = '';
+  document.getElementById('counter').textContent = '';
 }
 
 function applyPayload(d) {
+  lastPayload = d;
+  lastStatusKey = null;
+
   if (d.current) {
-    document.getElementById('cur-label').textContent = d.current.label || '';
-    document.getElementById('cur-text').textContent = d.current.text || '';
-    document.getElementById('cur-title').textContent = d.current.title || '';
+    const currentLabel = safeText(d.current.label);
+    const currentText = safeText(d.current.text);
+    const currentTitle = safeText(d.current.title);
+    const currentSubtitle = safeText(d.current.subtitle);
+    const mainCurrentText = currentText || currentTitle;
+    document.getElementById('cur-label').textContent = currentLabel;
+    if (mainCurrentText) {
+      document.getElementById('cur-text').textContent = mainCurrentText;
+    } else {
+      setStatus('waitingContent', 'waiting');
+      return;
+    }
+    document.getElementById('cur-title').textContent = currentText ? currentTitle : currentSubtitle;
   } else {
     document.getElementById('cur-label').textContent = '';
-    setStatus('Waiting for content...', 'waiting');
+    setStatus('waitingContent', 'waiting');
     document.getElementById('cur-title').textContent = '';
   }
 
   if (d.next) {
-    document.getElementById('next-label').textContent = d.next.label || '';
-    document.getElementById('next-text').textContent = d.next.text || '';
+    const nextLabel = safeText(d.next.label);
+    const nextText = safeText(d.next.text);
+    const nextTitle = safeText(d.next.title);
+    const nextSubtitle = safeText(d.next.subtitle);
+    document.getElementById('next-label').textContent = nextLabel;
+    document.getElementById('next-text').textContent = nextText || nextTitle;
+    document.getElementById('next-title').textContent = nextText ? nextTitle : nextSubtitle;
   } else {
     document.getElementById('next-label').textContent = '';
     document.getElementById('next-text').textContent = '';
+    document.getElementById('next-title').textContent = '';
   }
 
   if (d.total && d.total > 0) {
@@ -73,6 +205,201 @@ function applyPayload(d) {
   } else {
     document.getElementById('counter').textContent = '';
   }
+
+  if (lastUtilityEvent) {
+    applyUtilityEvent(lastUtilityEvent);
+  }
+}
+
+function handleReturnStreamMessage(data) {
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  if (data.utilityProjection && typeof data.utilityProjection === 'object') {
+    applyUtilityEvent(data.utilityProjection);
+    return;
+  }
+
+  applyPayload(data);
+}
+
+function formatTimerValue(kind, valueMs) {
+  const safeMs = Math.max(0, Math.floor(valueMs));
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (kind === 'stopwatch') {
+    const millis = safeMs % 1000;
+    if (hours > 0) {
+      return String(hours).padStart(2, '0') + ':'
+        + String(minutes).padStart(2, '0') + ':'
+        + String(seconds).padStart(2, '0') + '.'
+        + String(millis).padStart(3, '0');
+    }
+    return String(minutes).padStart(2, '0') + ':'
+      + String(seconds).padStart(2, '0') + '.'
+      + String(millis).padStart(3, '0');
+  }
+
+  if (hours > 0) {
+    return String(hours).padStart(2, '0') + ':'
+      + String(minutes).padStart(2, '0') + ':'
+      + String(seconds).padStart(2, '0');
+  }
+  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+}
+
+function formatClockTime(valueMs, use24Hour) {
+  return new Date(Math.max(0, Math.floor(valueMs))).toLocaleTimeString(
+    localeFromLanguage(uiLanguage),
+    {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: !use24Hour,
+    },
+  );
+}
+
+function formatClockDate(valueMs) {
+  return new Date(Math.max(0, Math.floor(valueMs))).toLocaleDateString(
+    localeFromLanguage(uiLanguage),
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+  );
+}
+
+function payloadSupportsUtility(payload, kind) {
+  if (!payload || typeof payload !== 'object' || !payload.current || typeof payload.current !== 'object') {
+    return false;
+  }
+
+  const currentLabel = safeText(payload.current.label).toLowerCase();
+  if (kind === 'countdown' || kind === 'stopwatch') {
+    return currentLabel === 'timer';
+  }
+  if (kind === 'clock') {
+    return currentLabel === 'clock';
+  }
+  return false;
+}
+
+function applyUtilityEvent(eventPayload) {
+  if (!eventPayload || typeof eventPayload !== 'object') {
+    return;
+  }
+
+  const phase = safeText(eventPayload.phase).toLowerCase();
+  const sessionId = safeText(eventPayload.sessionId);
+  const kind = safeText(eventPayload.kind).toLowerCase();
+  const valueMs = Number.isFinite(Number(eventPayload.valueMs)) ? Number(eventPayload.valueMs) : 0;
+  const use24Hour = Boolean(eventPayload.use24Hour);
+  const showDate = Boolean(eventPayload.showDate);
+
+  if (phase !== 'start' && phase !== 'tick' && phase !== 'stop') {
+    return;
+  }
+
+  if (phase === 'stop') {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
+      return;
+    }
+    activeUtilitySessionId = null;
+    lastUtilityEvent = null;
+    return;
+  }
+
+  if (kind !== 'countdown' && kind !== 'stopwatch' && kind !== 'clock') {
+    return;
+  }
+
+  if (phase === 'start') {
+    activeUtilitySessionId = sessionId || activeUtilitySessionId;
+  } else if (phase === 'tick') {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
+      return;
+    }
+    if (!activeUtilitySessionId && sessionId) {
+      activeUtilitySessionId = sessionId;
+    }
+  }
+
+  lastUtilityEvent = {
+    phase,
+    sessionId,
+    kind,
+    valueMs,
+    use24Hour,
+    showDate,
+  };
+
+  let valueText = '';
+  let utilityTitle = '';
+  let subtitleText = '';
+  let labelText = '';
+  const currentLabel = kind === 'clock' ? 'clock' : 'timer';
+
+  if (kind === 'countdown') {
+    valueText = formatTimerValue('countdown', valueMs);
+    utilityTitle = tr('countdownTitle');
+    subtitleText = utilityTitle;
+    labelText = tr('timerLabel');
+  } else if (kind === 'stopwatch') {
+    valueText = formatTimerValue('stopwatch', valueMs);
+    utilityTitle = tr('stopwatchTitle');
+    subtitleText = utilityTitle;
+    labelText = tr('timerLabel');
+  } else if (kind === 'clock') {
+    valueText = formatClockTime(valueMs, use24Hour);
+    utilityTitle = tr('clockTitle');
+    subtitleText = showDate
+      ? utilityTitle + ' - ' + formatClockDate(valueMs)
+      : utilityTitle;
+    labelText = utilityTitle;
+  } else {
+    return;
+  }
+
+  document.getElementById('cur-label').textContent = labelText;
+  document.getElementById('cur-text').textContent = valueText;
+  document.getElementById('cur-title').textContent = subtitleText;
+
+  const canReusePayload = payloadSupportsUtility(lastPayload, kind);
+  const basePayload = lastPayload && typeof lastPayload === 'object'
+    ? lastPayload
+    : { current: null, next: null, index: 0, total: 1, title: utilityTitle };
+  const currentBase = canReusePayload && basePayload.current && typeof basePayload.current === 'object'
+    ? basePayload.current
+    : { label: currentLabel, text: '', title: '', subtitle: '' };
+
+  lastPayload = {
+    ...basePayload,
+    title: utilityTitle,
+    current: {
+      ...currentBase,
+      label: currentLabel,
+      text: '',
+      title: valueText,
+      subtitle: subtitleText,
+    },
+  };
+  lastStatusKey = null;
+}
+
+async function fetchUtilitySnapshot() {
+  try {
+    const response = await fetch('/state/utility', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyUtilityEvent(data);
+  } catch (_) {}
 }
 
 async function fetchSnapshot() {
@@ -101,17 +428,38 @@ function scheduleReconnect() {
   }, 1500);
 }
 
+function scheduleUtilityReconnect() {
+  if (utilityReconnectTimer) return;
+  utilityReconnectTimer = setTimeout(() => {
+    utilityReconnectTimer = null;
+    connectUtility();
+  }, 1500);
+}
+
+function scheduleUiReconnect() {
+  if (uiReconnectTimer) return;
+  uiReconnectTimer = setTimeout(() => {
+    uiReconnectTimer = null;
+    connectUi();
+  }, 1500);
+}
+
 async function connectIfAvailable() {
+  await refreshUiLanguage();
   if (es) return;
   const ok = await isServerAvailable();
   if (!ok) {
-    setStatus('Disconnected. Waiting for server...', 'disconnected');
+    setStatus('disconnectedWaiting', 'disconnected');
+    scheduleReconnect();
     return;
   }
   connect();
+  connectUtility();
+  connectUi();
 }
 
 function connect() {
+  if (es) return;
   es = new EventSource('/sse/return');
 
   es.onopen = function () {
@@ -120,7 +468,7 @@ function connect() {
 
   es.onmessage = function (e) {
     try {
-      applyPayload(JSON.parse(e.data));
+      handleReturnStreamMessage(JSON.parse(e.data));
     } catch (_) {}
   };
 
@@ -129,22 +477,60 @@ function connect() {
       es.close();
       es = null;
     }
-    setStatus('Disconnected. Reconnecting...', 'disconnected');
+    setStatus('disconnectedReconnecting', 'disconnected');
     scheduleReconnect();
   };
 }
 
+function connectUtility() {
+  if (utilityEs) return;
+  utilityEs = new EventSource('/sse/utility');
+  utilityEs.onopen = function () {
+    void fetchUtilitySnapshot();
+  };
+  utilityEs.onmessage = function (e) {
+    try {
+      applyUtilityEvent(JSON.parse(e.data));
+    } catch (_) {}
+  };
+  utilityEs.onerror = function () {
+    if (utilityEs) {
+      utilityEs.close();
+      utilityEs = null;
+    }
+    scheduleUtilityReconnect();
+  };
+}
+
+function connectUi() {
+  if (uiEs) return;
+  uiEs = new EventSource('/sse/ui');
+  uiEs.onmessage = function (e) {
+    try {
+      const payload = JSON.parse(e.data);
+      applyLanguage(payload.language);
+    } catch (_) {}
+  };
+  uiEs.onerror = function () {
+    if (uiEs) {
+      uiEs.close();
+      uiEs = null;
+    }
+    scheduleUiReconnect();
+  };
+}
+
+applyStaticText();
+setStatus('waitingContent', 'waiting');
 void connectIfAvailable();
-statusPoll = setInterval(() => {
-  if (!es) {
-    void connectIfAvailable();
-  }
-}, 2000);
 
 window.addEventListener('beforeunload', () => {
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (statusPoll) clearInterval(statusPoll);
+  if (utilityReconnectTimer) clearTimeout(utilityReconnectTimer);
+  if (uiReconnectTimer) clearTimeout(uiReconnectTimer);
   if (es) es.close();
+  if (utilityEs) utilityEs.close();
+  if (uiEs) uiEs.close();
 });
 </script>
 </body>

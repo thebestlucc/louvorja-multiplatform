@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
+import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { clearCurrentSlide } from "../lib/tauri";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
@@ -25,6 +26,13 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       }
 
       switch (e.key) {
+        case "/":
+        case "?":
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            openKeyboardShortcutsPanel();
+          }
+          break;
         case "ArrowRight":
         case " ":
         case "PageDown":

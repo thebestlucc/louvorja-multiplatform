@@ -56,6 +56,13 @@ impl SseBroadcaster {
         }
     }
 
+    pub fn broadcast_transient(&self, data: &str) {
+        let msg = format!("data: {}\n\n", data);
+        if let Ok(mut senders) = self.senders.lock() {
+            senders.retain(|_, tx| tx.send(msg.clone()).is_ok());
+        }
+    }
+
     pub fn connection_count(&self) -> usize {
         if let Ok(senders) = self.senders.lock() {
             senders.len()
@@ -88,6 +95,9 @@ pub struct StreamingServer {
     pub music_broadcaster: Arc<SseBroadcaster>,
     pub bible_broadcaster: Arc<SseBroadcaster>,
     pub return_broadcaster: Arc<SseBroadcaster>,
+    pub utility_broadcaster: Arc<SseBroadcaster>,
+    pub ui_broadcaster: Arc<SseBroadcaster>,
+    ui_language: Arc<Mutex<String>>,
     listener: Option<Arc<TcpListener>>,
     is_running: Arc<AtomicBool>,
     broadcast_enabled: Arc<AtomicBool>,
@@ -116,16 +126,21 @@ pub struct StreamingUrls {
 
 impl StreamingServer {
     pub fn new(port: u16) -> Self {
-        Self {
+        let server = Self {
             music_broadcaster: Arc::new(SseBroadcaster::new()),
             bible_broadcaster: Arc::new(SseBroadcaster::new()),
             return_broadcaster: Arc::new(SseBroadcaster::new()),
+            utility_broadcaster: Arc::new(SseBroadcaster::new()),
+            ui_broadcaster: Arc::new(SseBroadcaster::new()),
+            ui_language: Arc::new(Mutex::new("pt".to_string())),
             listener: None,
             is_running: Arc::new(AtomicBool::new(false)),
             broadcast_enabled: Arc::new(AtomicBool::new(true)),
             thread_handle: None,
             port,
-        }
+        };
+        server.set_ui_language("pt");
+        server
     }
 
     pub fn set_broadcast_enabled(&self, enabled: bool) {
@@ -134,6 +149,17 @@ impl StreamingServer {
 
     pub fn is_broadcast_enabled(&self) -> bool {
         self.broadcast_enabled.load(Ordering::SeqCst)
+    }
+
+    pub fn set_ui_language(&self, language: &str) {
+        let normalized = normalize_language(language).to_string();
+        if let Ok(mut current) = self.ui_language.lock() {
+            *current = normalized;
+        }
+        let payload = serde_json::json!({
+            "language": normalize_language(language),
+        });
+        self.ui_broadcaster.broadcast(&payload.to_string());
     }
 
     pub fn start(&mut self, port: Option<u16>) -> Result<StreamingInfo, String> {
@@ -160,6 +186,9 @@ impl StreamingServer {
         let music_bc = Arc::clone(&self.music_broadcaster);
         let bible_bc = Arc::clone(&self.bible_broadcaster);
         let return_bc = Arc::clone(&self.return_broadcaster);
+        let utility_bc = Arc::clone(&self.utility_broadcaster);
+        let ui_bc = Arc::clone(&self.ui_broadcaster);
+        let ui_language = Arc::clone(&self.ui_language);
 
         self.thread_handle = Some(thread::spawn(move || {
             while is_running.load(Ordering::SeqCst) {
@@ -172,10 +201,22 @@ impl StreamingServer {
                         let music = Arc::clone(&music_bc);
                         let bible = Arc::clone(&bible_bc);
                         let ret = Arc::clone(&return_bc);
+                        let utility = Arc::clone(&utility_bc);
+                        let ui = Arc::clone(&ui_bc);
                         let running = Arc::clone(&is_running);
+                        let language = Arc::clone(&ui_language);
 
                         thread::spawn(move || {
-                            handle_connection(stream, &music, &bible, &ret, &running);
+                            handle_connection(
+                                stream,
+                                &music,
+                                &bible,
+                                &ret,
+                                &utility,
+                                &ui,
+                                &language,
+                                &running,
+                            );
                         });
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -197,6 +238,8 @@ impl StreamingServer {
         self.music_broadcaster.disconnect_all();
         self.bible_broadcaster.disconnect_all();
         self.return_broadcaster.disconnect_all();
+        self.utility_broadcaster.disconnect_all();
+        self.ui_broadcaster.disconnect_all();
         self.listener = None;
 
         if let Some(handle) = self.thread_handle.take() {
@@ -215,7 +258,9 @@ impl StreamingServer {
         let connections = if running {
             (self.music_broadcaster.connection_count()
                 + self.bible_broadcaster.connection_count()
-                + self.return_broadcaster.connection_count()) as u32
+                + self.return_broadcaster.connection_count()
+                + self.utility_broadcaster.connection_count()
+                + self.ui_broadcaster.connection_count()) as u32
         } else {
             0
         };
@@ -236,6 +281,12 @@ impl StreamingServer {
         }
     }
 
+    pub fn broadcast_music_transient(&self, data: &str) {
+        if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
+            self.music_broadcaster.broadcast_transient(data);
+        }
+    }
+
     pub fn broadcast_bible(&self, data: &str) {
         if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
             self.bible_broadcaster.broadcast(data);
@@ -247,6 +298,18 @@ impl StreamingServer {
             self.return_broadcaster.broadcast(data);
         }
     }
+
+    pub fn broadcast_return_transient(&self, data: &str) {
+        if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
+            self.return_broadcaster.broadcast_transient(data);
+        }
+    }
+
+    pub fn broadcast_utility(&self, data: &str) {
+        if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
+            self.utility_broadcaster.broadcast(data);
+        }
+    }
 }
 
 // --- Connection handler ---
@@ -256,6 +319,9 @@ fn handle_connection(
     music_bc: &Arc<SseBroadcaster>,
     bible_bc: &Arc<SseBroadcaster>,
     return_bc: &Arc<SseBroadcaster>,
+    utility_bc: &Arc<SseBroadcaster>,
+    ui_bc: &Arc<SseBroadcaster>,
+    ui_language: &Arc<Mutex<String>>,
     is_running: &Arc<AtomicBool>,
 ) {
     // Read HTTP request
@@ -273,7 +339,7 @@ fn handle_connection(
         "/state/music" => {
             let body = music_bc
                 .latest_payload()
-                .unwrap_or_else(|| r#"{"label":"","text":"","title":""}"#.to_string());
+                .unwrap_or_else(|| r#"{"label":"","text":"","title":"","subtitle":""}"#.to_string());
             serve_json(&mut stream, &body);
         }
         "/state/bible" => {
@@ -288,9 +354,28 @@ fn handle_connection(
             });
             serve_json(&mut stream, &body);
         }
+        "/state/utility" => {
+            let body = utility_bc.latest_payload().unwrap_or_else(|| {
+                r#"{"phase":"stop","sessionId":"","kind":"","valueMs":0,"use24Hour":true,"showDate":false}"#
+                    .to_string()
+            });
+            serve_json(&mut stream, &body);
+        }
+        "/state/ui" => {
+            let body = ui_bc.latest_payload().unwrap_or_else(|| {
+                let language = ui_language
+                    .lock()
+                    .map(|value| normalize_language(&value).to_string())
+                    .unwrap_or_else(|_| "pt".to_string());
+                serde_json::json!({ "language": language }).to_string()
+            });
+            serve_json(&mut stream, &body);
+        }
         "/sse/music" => serve_sse(stream, music_bc, is_running),
         "/sse/bible" => serve_sse(stream, bible_bc, is_running),
         "/sse/return" => serve_sse(stream, return_bc, is_running),
+        "/sse/utility" => serve_sse(stream, utility_bc, is_running),
+        "/sse/ui" => serve_sse(stream, ui_bc, is_running),
         _ => serve_not_found(&mut stream),
     }
 }
@@ -311,7 +396,7 @@ fn parse_request_path(stream: &TcpStream) -> Option<String> {
 
 fn serve_html(stream: &mut TcpStream, html: &str) {
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         html.len(),
         html
     );
@@ -455,4 +540,12 @@ pub fn get_local_ip() -> Option<String> {
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("8.8.8.8:80").ok()?;
     socket.local_addr().ok().map(|a| a.ip().to_string())
+}
+
+fn normalize_language(value: &str) -> &'static str {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "en" => "en",
+        "es" => "es",
+        _ => "pt",
+    }
 }

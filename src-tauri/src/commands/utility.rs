@@ -1,11 +1,266 @@
+use crate::db::models::VideoMetadata;
 use crate::error::AppError;
+use crate::state::AppState;
+use crate::video;
+use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use tauri::{AppHandle, Manager};
 
 #[tauri::command]
-pub fn run_lottery(_min: i64, _max: i64) -> Result<i64, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn run_lottery(names: Vec<String>) -> Result<String, AppError> {
+    let sanitized = sanitize_lottery_names(names);
+    if sanitized.is_empty() {
+        return Err(AppError::Internal(
+            "Lottery requires at least one non-empty name.".into(),
+        ));
+    }
+
+    let mut rng = OsRng;
+    let winner = sanitized
+        .choose(&mut rng)
+        .ok_or_else(|| AppError::Internal("Failed to select lottery winner.".into()))?;
+
+    Ok(winner.clone())
 }
 
 #[tauri::command]
-pub fn format_text(_text: String, _format: String) -> Result<String, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
+pub fn format_text(text: String, format: String) -> Result<String, AppError> {
+    let normalized = format.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "uppercase" => Ok(text.to_uppercase()),
+        "lowercase" => Ok(text.to_lowercase()),
+        "title_case" => Ok(to_title_case(&text)),
+        "sentence_case" => Ok(to_sentence_case(&text)),
+        _ => Err(AppError::Internal(format!(
+            "Unsupported text format '{}'. Use uppercase, lowercase, title_case, or sentence_case.",
+            format
+        ))),
+    }
+}
+
+#[tauri::command]
+pub fn copy_video_to_media(
+    video_path: String,
+    presentation_id: i64,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, AppError> {
+    {
+        let conn = state
+            .db
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM presentations WHERE id = ?1",
+            rusqlite::params![presentation_id],
+            |row| row.get(0),
+        )?;
+        if exists == 0 {
+            return Err(AppError::NotFound(format!(
+                "Presentation with id {} not found",
+                presentation_id
+            )));
+        }
+    }
+
+    let source = PathBuf::from(video_path);
+    if !source.exists() {
+        return Err(AppError::NotFound(format!(
+            "Video file '{}' does not exist",
+            source.display()
+        )));
+    }
+
+    let canonical_source = source
+        .canonicalize()
+        .map_err(|e| AppError::Internal(format!("Failed to resolve source video path: {}", e)))?;
+    let format = video::ensure_supported_video(&canonical_source)?;
+
+    let mut hasher = blake3::Hasher::new();
+    let mut input = File::open(&canonical_source)?;
+    let mut buf = [0u8; 8192];
+    loop {
+        let read = input.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buf[..read]);
+    }
+
+    let digest = hasher.finalize().to_hex().to_string();
+    let filename = format!("{}.{}", &digest[..24], format);
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let media_dir = app_data_dir.join("media").join("videos");
+    std::fs::create_dir_all(&media_dir)?;
+
+    let destination = media_dir.join(&filename);
+    if destination != canonical_source && !destination.exists() {
+        std::fs::copy(&canonical_source, &destination).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to copy video to managed media directory: {}",
+                e
+            ))
+        })?;
+    }
+
+    Ok(format!("media/videos/{}", filename))
+}
+
+#[tauri::command]
+pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+
+    let resolved = if Path::new(&path).is_absolute() {
+        PathBuf::from(&path)
+            .canonicalize()
+            .map_err(|e| AppError::Internal(format!("Failed to resolve absolute media path: {}", e)))?
+    } else {
+        video::resolve_video_path(&app_data_dir, &path)?
+    };
+
+    video::ensure_supported_video(&resolved)?;
+
+    Ok(resolved.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn get_video_metadata(
+    path: String,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<VideoMetadata, AppError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+
+    let resolved_path = if Path::new(&path).is_absolute() {
+        PathBuf::from(&path)
+            .canonicalize()
+            .map_err(|e| AppError::Internal(format!("Failed to resolve absolute video path: {}", e)))?
+    } else {
+        video::resolve_video_path(&app_data_dir, &path)?
+    };
+
+    if !resolved_path.exists() {
+        return Err(AppError::NotFound(format!(
+            "Video file '{}' not found",
+            resolved_path.display()
+        )));
+    }
+
+    let format = video::ensure_supported_video(&resolved_path)?;
+    let file_size = std::fs::metadata(&resolved_path)?.len() as i64;
+
+    let parsed = match video::parse_video_metadata(&resolved_path) {
+        Ok(parsed) => parsed,
+        Err(primary_error) => {
+            let (ffprobe_enabled, ffprobe_path) = load_ffprobe_settings(&state)?;
+            if !ffprobe_enabled {
+                return Err(primary_error);
+            }
+
+            video::parse_video_metadata_with_ffprobe(&resolved_path, ffprobe_path.as_deref(), 4000)
+                .map_err(|fallback_error| {
+                    AppError::Internal(format!(
+                        "Video metadata parsing failed (native parser error: {}; ffprobe fallback error: {})",
+                        primary_error,
+                        fallback_error
+                    ))
+                })?
+        }
+    };
+
+    Ok(VideoMetadata {
+        duration_ms: parsed.duration_ms,
+        width: parsed.width,
+        height: parsed.height,
+        file_size,
+        format: if parsed.format.is_empty() {
+            format
+        } else {
+            parsed.format
+        },
+    })
+}
+
+fn sanitize_lottery_names(names: Vec<String>) -> Vec<String> {
+    names
+        .into_iter()
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+fn to_title_case(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut is_word_start = true;
+
+    for ch in text.chars() {
+        if ch.is_alphabetic() {
+            if is_word_start {
+                output.extend(ch.to_uppercase());
+                is_word_start = false;
+            } else {
+                output.extend(ch.to_lowercase());
+            }
+        } else {
+            output.push(ch);
+            is_word_start = ch.is_whitespace() || matches!(ch, '-' | '_' | '/' | '\\');
+        }
+    }
+
+    output
+}
+
+fn to_sentence_case(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut capitalize_next = true;
+
+    for ch in text.chars() {
+        if ch.is_alphabetic() {
+            if capitalize_next {
+                output.extend(ch.to_uppercase());
+                capitalize_next = false;
+            } else {
+                output.extend(ch.to_lowercase());
+            }
+        } else {
+            output.push(ch);
+            if matches!(ch, '.' | '!' | '?') {
+                capitalize_next = true;
+            }
+        }
+    }
+
+    output
+}
+
+fn load_ffprobe_settings(state: &tauri::State<'_, AppState>) -> Result<(bool, Option<String>), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let enabled = crate::db::queries::settings::get_setting(&conn, "video.ffprobeEnabled")
+        .ok()
+        .map(|s| s.value == "true")
+        .unwrap_or(false);
+
+    let path = crate::db::queries::settings::get_setting(&conn, "video.ffprobePath")
+        .ok()
+        .map(|s| s.value)
+        .filter(|v| !v.trim().is_empty());
+
+    Ok((enabled, path))
 }

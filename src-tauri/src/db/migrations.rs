@@ -34,6 +34,21 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (4)", [])?;
     }
 
+    if current_version < 5 {
+        migrate_v5(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (5)", [])?;
+    }
+
+    if current_version < 6 {
+        migrate_v6(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (6)", [])?;
+    }
+
+    if current_version < 7 {
+        migrate_v7(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (7)", [])?;
+    }
+
     Ok(())
 }
 
@@ -310,6 +325,38 @@ fn migrate_v4(conn: &Connection) -> Result<(), AppError> {
         "
         INSERT OR IGNORE INTO settings (key, value) VALUES ('streaming.port', '7070');
         INSERT OR IGNORE INTO settings (key, value) VALUES ('streaming.autoStart', 'false');
+        ",
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v5(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('video.ffprobeEnabled', 'false');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('video.ffprobePath', '');
+        ",
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v6(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('app.theme', 'azure');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('app.language', 'pt');
+        ",
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v7(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('timer.alertVolume', '1');
         ",
     )?;
 

@@ -17,11 +17,11 @@
 | 5 | 06 | Worship Service / Liturgy Manager | COMPLETE |
 | 6 | 07 | Multi-Monitor Display System | COMPLETE |
 | 7 | 08 | HTTP Streaming Server | COMPLETE |
-| 8 | 09 | Video & Multimedia | Pending |
-| 9 | 10 | Utilities & Polish | Pending |
+| 8 | 09 | Video & Multimedia | COMPLETE |
+| 9 | 10 | Utilities & Polish | COMPLETE |
 | 10 | 11 | Migration Tools & Deployment | Pending |
 
-**Progress: 8 / 11 phases complete (Phase 8 pending)**
+**Progress: 10 / 11 phases complete (Phase 10 pending)**
 
 ---
 
@@ -239,17 +239,51 @@ Embedded Rust HTTP server (`std::net::TcpListener`) with Server-Sent Events (SSE
 
 ## Phase 8 — Video & Multimedia (SPEC 09)
 
-**Status:** Pending
+**Status:** COMPLETE
 
-HTML5 video player, video slide support, video file validation, and format guidance.
+Delivered:
+- Video slide model expanded (`videoPath`, autoplay/loop/muted, fullscreen/background mode, overlay text options)
+- New backend video commands: `copy_video_to_media`, `get_video_metadata`, `resolve_media_path`
+- Native metadata parsing for MP4/WebM with optional ffprobe fallback (Settings-controlled)
+- Editor integration with `video-player`, `video-slide`, and `video-picker` components
+- Projector/return rendering paths updated with video-aware render modes and non-autoplay next preview
+- `.slja` import/export updated to include and remap media assets for video slides
+- i18n keys added for EN/PT/ES video and ffprobe settings UI
+
+Verification:
+- `pnpm -C /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform exec tsc --noEmit` passed
+- `cargo check --manifest-path /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/Cargo.toml` passed
+- `pnpm -C /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform exec vite build` passed
+- MP4 metadata parsing hardened to avoid blocking import when duration atoms are missing/atypical
 
 ---
 
 ## Phase 9 — Utilities & Polish (SPEC 10)
 
-**Status:** Pending
+**Status:** COMPLETE
 
-Timer/chronometer utility, lottery/randomizer, clock display, command palette completion, 5 theme variants polish.
+Delivered:
+- Utilities module completed with functional timer, clock, lottery, and text formatter routes under `src/routes/utilities/`.
+- Projection lifecycle for utilities implemented with explicit project/clear behavior and previous slide/context restoration:
+  - `src/hooks/use-utility-projection.ts`
+  - utility projection payload contracts in `src/types/utilities.ts`
+- New reusable utility components delivered:
+  - `src/components/utilities/timer-display.tsx`
+  - `src/components/utilities/clock-display.tsx`
+  - `src/components/utilities/lottery-animation.tsx`
+  - `src/components/utilities/keyboard-shortcuts-panel.tsx`
+- Command palette expanded with utility routes and global actions (projector/return/overlay/projection clearing/shortcuts).
+- Keyboard shortcuts help panel wired to `Cmd+/` / `Ctrl+/`.
+- Status bar now includes compact timer status indicator and direct timer utility access.
+- Localization expanded (EN/PT/ES) for utility projection controls, command palette actions, and shortcut panel content.
+
+Verification:
+- `pnpm -C /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform exec tsc --noEmit` passed
+- `cargo check --manifest-path /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/Cargo.toml` passed
+- `pnpm -C /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform exec vite build` passed
+
+Notes:
+- Runtime smoke matrix is documented in `docs/phase-09-utilities-polish/SPECS.md` and should be executed on a local interactive run as final service-flow confirmation.
 
 ---
 

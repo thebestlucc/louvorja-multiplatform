@@ -9,29 +9,29 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UtilitiesRouteImport } from './routes/utilities'
 import { Route as ReturnRouteImport } from './routes/return'
 import { Route as ProjectorRouteImport } from './routes/projector'
+import { Route as UtilitiesRouteRouteImport } from './routes/utilities/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as ServicesRouteRouteImport } from './routes/services/route'
 import { Route as PresentationsRouteRouteImport } from './routes/presentations/route'
 import { Route as HymnalRouteRouteImport } from './routes/hymnal/route'
 import { Route as BibleRouteRouteImport } from './routes/bible/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UtilitiesIndexRouteImport } from './routes/utilities/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
 import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
 import { Route as HymnalIndexRouteImport } from './routes/hymnal/index'
 import { Route as BibleIndexRouteImport } from './routes/bible/index'
+import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
+import { Route as UtilitiesTextRouteImport } from './routes/utilities/text'
+import { Route as UtilitiesLotteryRouteImport } from './routes/utilities/lottery'
+import { Route as UtilitiesClockRouteImport } from './routes/utilities/clock'
 import { Route as ServicesServiceIdRouteImport } from './routes/services/$serviceId'
 import { Route as PresentationsPresentationIdRouteImport } from './routes/presentations/$presentationId'
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
 
-const UtilitiesRoute = UtilitiesRouteImport.update({
-  id: '/utilities',
-  path: '/utilities',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReturnRoute = ReturnRouteImport.update({
   id: '/return',
   path: '/return',
@@ -40,6 +40,11 @@ const ReturnRoute = ReturnRouteImport.update({
 const ProjectorRoute = ProjectorRouteImport.update({
   id: '/projector',
   path: '/projector',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UtilitiesRouteRoute = UtilitiesRouteRouteImport.update({
+  id: '/utilities',
+  path: '/utilities',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRouteRoute = SettingsRouteRouteImport.update({
@@ -72,6 +77,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UtilitiesIndexRoute = UtilitiesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -97,6 +107,26 @@ const BibleIndexRoute = BibleIndexRouteImport.update({
   path: '/',
   getParentRoute: () => BibleRouteRoute,
 } as any)
+const UtilitiesTimerRoute = UtilitiesTimerRouteImport.update({
+  id: '/timer',
+  path: '/timer',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
+const UtilitiesTextRoute = UtilitiesTextRouteImport.update({
+  id: '/text',
+  path: '/text',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
+const UtilitiesLotteryRoute = UtilitiesLotteryRouteImport.update({
+  id: '/lottery',
+  path: '/lottery',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
+const UtilitiesClockRoute = UtilitiesClockRouteImport.update({
+  id: '/clock',
+  path: '/clock',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
 const ServicesServiceIdRoute = ServicesServiceIdRouteImport.update({
   id: '/$serviceId',
   path: '/$serviceId',
@@ -121,31 +151,40 @@ export interface FileRoutesByFullPath {
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
+  '/utilities': typeof UtilitiesRouteRouteWithChildren
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
-  '/utilities': typeof UtilitiesRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
+  '/utilities/clock': typeof UtilitiesClockRoute
+  '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/text': typeof UtilitiesTextRoute
+  '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/utilities/': typeof UtilitiesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
-  '/utilities': typeof UtilitiesRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
+  '/utilities/clock': typeof UtilitiesClockRoute
+  '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/text': typeof UtilitiesTextRoute
+  '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible': typeof BibleIndexRoute
   '/hymnal': typeof HymnalIndexRoute
   '/presentations': typeof PresentationsIndexRoute
   '/services': typeof ServicesIndexRoute
   '/settings': typeof SettingsIndexRoute
+  '/utilities': typeof UtilitiesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -155,17 +194,22 @@ export interface FileRoutesById {
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
+  '/utilities': typeof UtilitiesRouteRouteWithChildren
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
-  '/utilities': typeof UtilitiesRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
+  '/utilities/clock': typeof UtilitiesClockRoute
+  '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/text': typeof UtilitiesTextRoute
+  '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/utilities/': typeof UtilitiesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -176,31 +220,40 @@ export interface FileRouteTypes {
     | '/presentations'
     | '/services'
     | '/settings'
+    | '/utilities'
     | '/projector'
     | '/return'
-    | '/utilities'
     | '/hymnal/$hymnId'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
+    | '/utilities/clock'
+    | '/utilities/lottery'
+    | '/utilities/text'
+    | '/utilities/timer'
     | '/bible/'
     | '/hymnal/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
+    | '/utilities/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/projector'
     | '/return'
-    | '/utilities'
     | '/hymnal/$hymnId'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
+    | '/utilities/clock'
+    | '/utilities/lottery'
+    | '/utilities/text'
+    | '/utilities/timer'
     | '/bible'
     | '/hymnal'
     | '/presentations'
     | '/services'
     | '/settings'
+    | '/utilities'
   id:
     | '__root__'
     | '/'
@@ -209,17 +262,22 @@ export interface FileRouteTypes {
     | '/presentations'
     | '/services'
     | '/settings'
+    | '/utilities'
     | '/projector'
     | '/return'
-    | '/utilities'
     | '/hymnal/$hymnId'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
+    | '/utilities/clock'
+    | '/utilities/lottery'
+    | '/utilities/text'
+    | '/utilities/timer'
     | '/bible/'
     | '/hymnal/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
+    | '/utilities/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -229,20 +287,13 @@ export interface RootRouteChildren {
   PresentationsRouteRoute: typeof PresentationsRouteRouteWithChildren
   ServicesRouteRoute: typeof ServicesRouteRouteWithChildren
   SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
+  UtilitiesRouteRoute: typeof UtilitiesRouteRouteWithChildren
   ProjectorRoute: typeof ProjectorRoute
   ReturnRoute: typeof ReturnRoute
-  UtilitiesRoute: typeof UtilitiesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/utilities': {
-      id: '/utilities'
-      path: '/utilities'
-      fullPath: '/utilities'
-      preLoaderRoute: typeof UtilitiesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/return': {
       id: '/return'
       path: '/return'
@@ -255,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/projector'
       fullPath: '/projector'
       preLoaderRoute: typeof ProjectorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/utilities': {
+      id: '/utilities'
+      path: '/utilities'
+      fullPath: '/utilities'
+      preLoaderRoute: typeof UtilitiesRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -299,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/utilities/': {
+      id: '/utilities/'
+      path: '/'
+      fullPath: '/utilities/'
+      preLoaderRoute: typeof UtilitiesIndexRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -333,6 +398,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/bible/'
       preLoaderRoute: typeof BibleIndexRouteImport
       parentRoute: typeof BibleRouteRoute
+    }
+    '/utilities/timer': {
+      id: '/utilities/timer'
+      path: '/timer'
+      fullPath: '/utilities/timer'
+      preLoaderRoute: typeof UtilitiesTimerRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
+    '/utilities/text': {
+      id: '/utilities/text'
+      path: '/text'
+      fullPath: '/utilities/text'
+      preLoaderRoute: typeof UtilitiesTextRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
+    '/utilities/lottery': {
+      id: '/utilities/lottery'
+      path: '/lottery'
+      fullPath: '/utilities/lottery'
+      preLoaderRoute: typeof UtilitiesLotteryRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
+    '/utilities/clock': {
+      id: '/utilities/clock'
+      path: '/clock'
+      fullPath: '/utilities/clock'
+      preLoaderRoute: typeof UtilitiesClockRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
     }
     '/services/$serviceId': {
       id: '/services/$serviceId'
@@ -423,6 +516,26 @@ const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
   SettingsRouteRouteChildren,
 )
 
+interface UtilitiesRouteRouteChildren {
+  UtilitiesClockRoute: typeof UtilitiesClockRoute
+  UtilitiesLotteryRoute: typeof UtilitiesLotteryRoute
+  UtilitiesTextRoute: typeof UtilitiesTextRoute
+  UtilitiesTimerRoute: typeof UtilitiesTimerRoute
+  UtilitiesIndexRoute: typeof UtilitiesIndexRoute
+}
+
+const UtilitiesRouteRouteChildren: UtilitiesRouteRouteChildren = {
+  UtilitiesClockRoute: UtilitiesClockRoute,
+  UtilitiesLotteryRoute: UtilitiesLotteryRoute,
+  UtilitiesTextRoute: UtilitiesTextRoute,
+  UtilitiesTimerRoute: UtilitiesTimerRoute,
+  UtilitiesIndexRoute: UtilitiesIndexRoute,
+}
+
+const UtilitiesRouteRouteWithChildren = UtilitiesRouteRoute._addFileChildren(
+  UtilitiesRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibleRouteRoute: BibleRouteRouteWithChildren,
@@ -430,9 +543,9 @@ const rootRouteChildren: RootRouteChildren = {
   PresentationsRouteRoute: PresentationsRouteRouteWithChildren,
   ServicesRouteRoute: ServicesRouteRouteWithChildren,
   SettingsRouteRoute: SettingsRouteRouteWithChildren,
+  UtilitiesRouteRoute: UtilitiesRouteRouteWithChildren,
   ProjectorRoute: ProjectorRoute,
   ReturnRoute: ReturnRoute,
-  UtilitiesRoute: UtilitiesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

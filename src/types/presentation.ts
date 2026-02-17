@@ -27,6 +27,20 @@ export interface Slide {
   transition: string | null;
 }
 
+export type VideoSlideMode = "fullscreen" | "background";
+
+export interface VideoSlideContent {
+  type: "video";
+  videoPath: string;
+  autoPlay: boolean;
+  loop: boolean;
+  muted: boolean;
+  mode: VideoSlideMode;
+  text?: string;
+  textColor?: string;
+  textSize?: number;
+}
+
 export type SlideContent =
   | { type: "cover"; title: string; subtitle?: string }
   | { type: "lyrics"; text: string; label?: string }
@@ -34,7 +48,7 @@ export type SlideContent =
   | { type: "text"; text: string; fontSize?: number }
   | { type: "image"; src: string; alt?: string }
   | { type: "bible"; book: string; chapter: number; verseStart: number; verseEnd: number; text: string }
-  | { type: "video"; src: string };
+  | VideoSlideContent;
 
 /** Raw slide row from DB — content is a JSON string */
 export interface SlideRow {
@@ -51,7 +65,8 @@ export interface SlideRow {
 export function parseSlideRow(row: SlideRow): Slide {
   let content: SlideContent;
   try {
-    content = JSON.parse(row.content) as SlideContent;
+    const parsed = JSON.parse(row.content) as SlideContent | { type: "video"; src: string };
+    content = normalizeSlideContent(parsed);
   } catch {
     content = { type: "text", text: row.content };
   }
@@ -60,6 +75,26 @@ export function parseSlideRow(row: SlideRow): Slide {
     slide_type: content.type as SlideType,
     content,
   };
+}
+
+function normalizeSlideContent(content: SlideContent | { type: "video"; src: string }): SlideContent {
+  if (content.type === "video") {
+    const legacy = content as { type: "video"; src?: string };
+    const normalized = content as Partial<VideoSlideContent>;
+    return {
+      type: "video",
+      videoPath: normalized.videoPath ?? legacy.src ?? "",
+      autoPlay: normalized.autoPlay ?? true,
+      loop: normalized.loop ?? false,
+      muted: normalized.muted ?? false,
+      mode: normalized.mode === "background" ? "background" : "fullscreen",
+      text: normalized.text,
+      textColor: normalized.textColor,
+      textSize: normalized.textSize,
+    };
+  }
+
+  return content;
 }
 
 /** Context for return monitor: next slide, position, title */
@@ -83,6 +118,13 @@ export interface SlideContentFlat {
   title?: string | null;
   subtitle?: string | null;
   label?: string | null;
+  video_path?: string | null;
+  auto_play?: boolean | null;
+  loop?: boolean | null;
+  muted?: boolean | null;
+  mode?: string | null;
+  text_color?: string | null;
+  text_size?: number | null;
 }
 
 /** Convert discriminated union SlideContent to flat struct for Tauri */
@@ -102,7 +144,17 @@ export function slideContentToFlat(slide: SlideContent): SlideContentFlat {
     case "bible":
       return { ...base, text: slide.text, title: `${slide.book} ${slide.chapter}:${slide.verseStart}-${slide.verseEnd}` };
     case "video":
-      return { ...base, text: slide.src };
+      return {
+        ...base,
+        text: slide.text ?? null,
+        video_path: slide.videoPath,
+        auto_play: slide.autoPlay,
+        loop: slide.loop,
+        muted: slide.muted,
+        mode: slide.mode,
+        text_color: slide.textColor ?? null,
+        text_size: slide.textSize ?? null,
+      };
   }
 }
 
@@ -117,6 +169,8 @@ export function flatToSlideContent(flat: SlideContentFlat): SlideContent {
       return { type: "pause" };
     case "text":
       return { type: "text", text: flat.text ?? "" };
+    case "image":
+      return { type: "image", src: flat.text ?? "", alt: flat.title ?? undefined };
     case "bible": {
       // title is formatted as "Book Chapter:Start-End" by the backend
       const ref = flat.title ?? "";
@@ -129,6 +183,20 @@ export function flatToSlideContent(flat: SlideContentFlat): SlideContent {
         return { type: "bible", book, chapter, verseStart, verseEnd, text: flat.text ?? "" };
       }
       return { type: "bible", book: "", chapter: 0, verseStart: 0, verseEnd: 0, text: flat.text ?? "" };
+    }
+    case "video": {
+      const hasDedicatedPath = Boolean(flat.video_path && flat.video_path.length > 0);
+      return {
+        type: "video",
+        videoPath: flat.video_path ?? flat.text ?? "",
+        autoPlay: flat.auto_play ?? true,
+        loop: flat.loop ?? false,
+        muted: flat.muted ?? false,
+        mode: flat.mode === "background" ? "background" : "fullscreen",
+        text: hasDedicatedPath ? flat.text ?? undefined : undefined,
+        textColor: flat.text_color ?? undefined,
+        textSize: flat.text_size ?? undefined,
+      };
     }
     default:
       return { type: "text", text: flat.text ?? "" };

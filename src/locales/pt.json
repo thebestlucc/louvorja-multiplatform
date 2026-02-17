@@ -36,6 +36,9 @@
     "projectorOn": "Projetor ligado",
     "returnOn": "Retorno ligado",
     "returnOff": "Retorno desligado",
+    "timerOpen": "Abrir utilidade de timer",
+    "timerIdle": "Timer inativo",
+    "timerCompact": "Timer {{value}}",
     "streamingOff": "Streaming: DESLIGADO",
     "streamingOn": "Streaming: LIGADO (porta {{port}}, {{count}})"
   },
@@ -52,6 +55,7 @@
     "toggleLogo": "Alternar Tela de Logo (L)",
     "slideOf": "{{current}} / {{total}}",
     "nextSlide": "Próximo",
+    "noNextSlide": "Sem próximo slide",
     "slideNav": "Navegação de Slides"
   },
   "dashboard": {
@@ -62,9 +66,149 @@
     "placeholder": "Digite um comando...",
     "noResults": "Nenhum resultado encontrado",
     "navigation": "Navegação",
+    "utilities": "Utilidades",
+    "globalActions": "Ações globais",
+    "actions": {
+      "toggleProjector": "Alternar janela do projetor",
+      "toggleReturn": "Alternar janela de retorno",
+      "toggleBlack": "Alternar tela preta",
+      "toggleLogo": "Alternar tela de logo",
+      "clearProjection": "Limpar projeção atual",
+      "openShortcuts": "Abrir atalhos de teclado"
+    },
     "hymns": "Hinos",
     "bible": "Versículos Bíblicos",
     "searching": "Pesquisando..."
+  },
+  "shortcuts": {
+    "title": "Atalhos de Teclado",
+    "searchPlaceholder": "Pesquisar atalhos...",
+    "noResults": "Nenhum atalho encontrado.",
+    "categories": {
+      "app": "Aplicativo",
+      "slides": "Slides",
+      "display": "Controle de exibição",
+      "utilities": "Utilidades"
+    },
+    "items": {
+      "openCommandPalette": "Abrir paleta de comandos",
+      "openShortcutsHelp": "Abrir painel de atalhos",
+      "nextSlide": "Próximo slide",
+      "previousSlide": "Slide anterior",
+      "clearProjection": "Limpar conteúdo projetado",
+      "toggleProjector": "Alternar janela do projetor",
+      "toggleReturn": "Alternar janela de retorno",
+      "toggleBlack": "Alternar tela preta",
+      "toggleLogo": "Alternar tela de logo",
+      "projectTimer": "Projetar timer nas utilidades",
+      "projectClock": "Projetar relógio nas utilidades",
+      "projectLottery": "Projetar resultado do sorteio"
+    }
+  },
+  "utilities": {
+    "title": "Utilidades",
+    "subtitle": "Ferramentas rápidas para operação ao vivo.",
+    "nav": {
+      "overview": "Visão geral",
+      "timer": "Timer",
+      "clock": "Relógio",
+      "lottery": "Sorteio",
+      "text": "Texto"
+    },
+    "overview": {
+      "title": "Escolha uma ferramenta",
+      "description": "Abra uma utilidade para usar no fluxo do culto."
+    },
+    "projection": {
+      "project": "Projetar na tela",
+      "clear": "Limpar projeção",
+      "context": {
+        "timer": "Timer de utilidade",
+        "countdown": "Contagem regressiva de utilidade",
+        "stopwatch": "Cronômetro de utilidade",
+        "clock": "Relógio de utilidade",
+        "lottery": "Sorteio de utilidade"
+      }
+    },
+    "timer": {
+      "title": "Timer",
+      "description": "Execute contagens regressivas e cronômetro.",
+      "mode": "Modo",
+      "countdown": "Contagem regressiva",
+      "stopwatch": "Cronômetro",
+      "minutes": "Minutos",
+      "seconds": "Segundos",
+      "start": "Iniciar",
+      "pause": "Pausar",
+      "resume": "Continuar",
+      "reset": "Reiniciar",
+      "lap": "Volta",
+      "laps": "Voltas",
+      "noLaps": "Nenhuma volta registrada ainda.",
+      "durationRequired": "Defina uma duração maior que zero.",
+      "alertsTitle": "Alertas da contagem regressiva",
+      "alertsDescription": "Os alertas padrão são em 5 e 1 minuto restante. Adicione minutos personalizados e escolha um áudio para cada um.",
+      "alertVolume": "Volume do alerta",
+      "alertVolumeDescription": "Controla apenas os alertas do timer (independente do volume dos hinos).",
+      "alertAtMinute": "{{minute}} minuto(s) restantes",
+      "browseAudio": "Selecionar áudio",
+      "testAudio": "Testar",
+      "clearAudio": "Limpar áudio",
+      "defaultBeep": "Beep padrão",
+      "addAlertMinute": "Minuto para alerta de áudio",
+      "addAlert": "Adicionar alerta",
+      "removeAlert": "Remover",
+      "invalidAlertMinute": "Defina um minuto válido maior que zero.",
+      "duplicateAlertMinute": "Esse minuto já existe.",
+      "alertPlaybackFailed": "Não foi possível tocar o alerta de {{minute}} minuto(s): {{error}}",
+      "adjustTitle": "Ajustar contagem",
+      "adjustDescription": "Adicione ou remova minutos da contagem regressiva atual."
+    },
+    "clock": {
+      "title": "Relógio",
+      "description": "Visualização de relógio em tempo real para o operador.",
+      "hour24": "24 horas",
+      "hour12": "12 horas",
+      "showDate": "Mostrar data",
+      "hideDate": "Ocultar data"
+    },
+    "lottery": {
+      "title": "Sorteio",
+      "description": "Cole um nome por linha e sorteie um vencedor aleatório.",
+      "mode": "Modo",
+      "modeNames": "Nomes",
+      "modeNumbers": "Números",
+      "names": "Nomes",
+      "maxNumber": "Número máximo (N)",
+      "placeholder": "Digite um nome por linha...",
+      "draw": "Sortear vencedor",
+      "resetPicks": "Reiniciar sorteados",
+      "clear": "Limpar",
+      "drawing": "Sorteando...",
+      "winner": "Vencedor",
+      "noWinner": "Nenhum vencedor ainda.",
+      "history": "Histórico",
+      "emptyHistory": "Nenhum item sorteado ainda.",
+      "remaining": "{{remaining}} restantes de {{total}}",
+      "invalidNames": "Adicione pelo menos um nome válido.",
+      "invalidMax": "Defina N como um número positivo.",
+      "allPicked": "Todos os itens disponíveis já foram sorteados."
+    },
+    "text": {
+      "title": "Formatador de texto",
+      "description": "Converta caixa de texto rapidamente para slides.",
+      "input": "Entrada",
+      "output": "Saída",
+      "format": "Formato",
+      "apply": "Aplicar formato",
+      "copy": "Copiar saída",
+      "copied": "Texto formatado copiado.",
+      "emptyInput": "Digite algum texto antes de formatar.",
+      "uppercase": "MAIÚSCULAS",
+      "lowercase": "minúsculas",
+      "titleCase": "Título",
+      "sentenceCase": "Sentença"
+    }
   },
   "hymnal": {
     "searchPlaceholder": "Pesquisar hinos por número, título ou letra...",
@@ -100,6 +244,27 @@
     "labelPlaceholder": "ex: Verso 1",
     "imagePathPlaceholder": "Caminho do arquivo de imagem",
     "imageAltPlaceholder": "Descrição da imagem",
+    "videoPathPlaceholder": "Selecione um arquivo .mp4 ou .webm",
+    "videoBrowse": "Procurar",
+    "videoLoading": "Carregando...",
+    "videoDuration": "Duração",
+    "videoResolution": "Resolução",
+    "videoFileSize": "Tamanho do arquivo",
+    "videoFormat": "Formato",
+    "videoImported": "Vídeo importado com sucesso",
+    "videoImportFailed": "Não foi possível importar o vídeo: {{error}}",
+    "videoUnsupported": "Formato não suportado. Converta para {{recommendation}} antes de importar.",
+    "videoAutoPlay": "Auto-reprodução",
+    "videoLoop": "Loop",
+    "videoMuted": "Mudo",
+    "videoMode": "Modo",
+    "videoModeFullscreen": "Tela cheia",
+    "videoModeBackground": "Plano de fundo",
+    "videoOverlayPlaceholder": "Texto sobre o vídeo de fundo...",
+    "videoTextColor": "Cor do texto",
+    "videoTextSize": "Tamanho do texto",
+    "videoNoSource": "Nenhum vídeo selecionado",
+    "videoPreparing": "Preparando vídeo...",
     "noSlides": "Sem slides. Clique em \"Adicionar Slide\" para começar.",
     "aspectRatio": "Proporção",
     "transition": "Transição",
@@ -121,7 +286,8 @@
       "lyrics": "Letra",
       "pause": "Pausa",
       "text": "Texto",
-      "image": "Imagem"
+      "image": "Imagem",
+      "video": "Vídeo"
     }
   },
   "bible": {
@@ -194,9 +360,23 @@
     "discard": "Descartar"
   },
   "settings": {
+    "appearance": "Aparência",
+    "theme": "Tema",
+    "themeDesc": "Escolha o estilo visual do aplicativo.",
+    "language": "Idioma",
+    "languageDesc": "Escolha o idioma do aplicativo.",
+    "languagePt": "Português (PT-BR)",
+    "languageEn": "Inglês",
+    "languageEs": "Espanhol",
     "defaultPort": "Porta padr\u00e3o",
     "autoStart": "Iniciar streaming automaticamente",
-    "autoStartDesc": "Iniciar automaticamente o servidor de streaming ao abrir o aplicativo"
+    "autoStartDesc": "Iniciar automaticamente o servidor de streaming ao abrir o aplicativo",
+    "video": "Vídeo",
+    "ffprobeEnabled": "Ativar fallback com ffprobe",
+    "ffprobeEnabledDesc": "Usa ffprobe apenas quando o parser nativo de metadados falhar.",
+    "ffprobePath": "Caminho personalizado do ffprobe",
+    "ffprobePathDesc": "Caminho absoluto opcional do binário ffprobe. Deixe vazio para usar o PATH.",
+    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
   },
   "streaming": {
     "title": "Streaming",

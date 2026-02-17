@@ -1,5 +1,6 @@
 use crate::db::models::{MonitorConfig, MonitorInfo, OverlayState, SlideContent, SlideContext};
 use crate::error::AppError;
+use crate::projection::stop_live_utility_projection;
 use crate::state::{AppState, StreamingState};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -11,11 +12,17 @@ fn streaming_slide_title(slide: &SlideContent) -> String {
         .unwrap_or_default()
 }
 
+fn is_live_utility_slide(slide: &SlideContent) -> bool {
+    slide.slide_type == "cover"
+        && matches!(slide.label.as_deref(), Some("timer" | "clock"))
+}
+
 fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
     serde_json::json!({
         "label": slide.label.as_deref().unwrap_or(""),
         "text": slide.text.as_deref().unwrap_or(""),
         "title": slide.title.as_deref().unwrap_or(""),
+        "subtitle": slide.subtitle.as_deref().unwrap_or(""),
     })
 }
 
@@ -207,6 +214,10 @@ pub fn set_current_slide(
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
+    if !is_live_utility_slide(&slide_data) {
+        stop_live_utility_projection(&state)?;
+    }
+
     {
         let mut current = state
             .current_slide
@@ -259,6 +270,7 @@ pub fn set_current_slide(
                 "label": "",
                 "text": "",
                 "title": "",
+                "subtitle": "",
             });
             server.broadcast_music(&clear_music.to_string());
         } else {
@@ -266,6 +278,7 @@ pub fn set_current_slide(
                 "label": slide_data.label.as_deref().unwrap_or(""),
                 "text": slide_data.text.as_deref().unwrap_or(""),
                 "title": slide_data.title.as_deref().unwrap_or(""),
+                "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
             });
             server.broadcast_music(&json.to_string());
 
@@ -300,6 +313,8 @@ pub fn clear_current_slide(
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
+    stop_live_utility_projection(&state)?;
+
     {
         let mut current = state
             .current_slide
@@ -322,6 +337,7 @@ pub fn clear_current_slide(
             "label": "",
             "text": "",
             "title": "",
+            "subtitle": "",
         });
         server.broadcast_music(&music_json.to_string());
 
@@ -377,10 +393,13 @@ pub fn set_slide_context(
                 "label": s.label.as_deref().unwrap_or(""),
                 "text": s.text.as_deref().unwrap_or(""),
                 "title": s.title.as_deref().unwrap_or(""),
+                "subtitle": s.subtitle.as_deref().unwrap_or(""),
             })),
             "next": context_data.next.map(|s| serde_json::json!({
                 "label": s.label.as_deref().unwrap_or(""),
                 "text": s.text.as_deref().unwrap_or(""),
+                "title": s.title.as_deref().unwrap_or(""),
+                "subtitle": s.subtitle.as_deref().unwrap_or(""),
             })),
             "index": context_data.index,
             "total": context_data.total,

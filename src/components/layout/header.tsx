@@ -1,26 +1,63 @@
 import { useTranslation } from "react-i18next";
-import { Search, Settings } from "lucide-react";
+import { Check, Keyboard, Languages, Palette, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { useThemeStore } from "../../stores/theme-store";
+import {
+  type Language,
+  LANGUAGES,
+  type Theme,
+  THEMES,
+} from "../../lib/constants";
+import { useSetSetting } from "../../lib/queries";
+import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
+
+const LOCALE_BY_LANGUAGE: Record<Language, string> = {
+  pt: "pt-BR",
+  en: "en-US",
+  es: "es-ES",
+};
 
 export function Header() {
   const { t } = useTranslation();
-  const [clock, setClock] = useState("");
+  const { theme, language, setTheme, setLanguage } = useThemeStore();
+  const setSettingMutation = useSetSetting();
+  const [now, setNow] = useState(() => new Date());
+  const locale = LOCALE_BY_LANGUAGE[language];
+
+  const languageLabels: Record<Language, string> = {
+    pt: t("settings.languagePt"),
+    en: t("settings.languageEn"),
+    es: t("settings.languageEs"),
+  };
 
   useEffect(() => {
     function tick() {
-      setClock(
-        new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      );
+      setNow(new Date());
     }
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  function handleThemeChange(nextTheme: Theme) {
+    if (nextTheme === theme) return;
+    setTheme(nextTheme);
+    setSettingMutation.mutate({ key: "app.theme", value: nextTheme });
+  }
+
+  function handleLanguageChange(nextLanguage: Language) {
+    if (nextLanguage === language) return;
+    setLanguage(nextLanguage);
+    setSettingMutation.mutate({ key: "app.language", value: nextLanguage });
+  }
 
   function openCommandPalette() {
     document.dispatchEvent(
@@ -28,9 +65,23 @@ export function Header() {
     );
   }
 
+  const dateLabel = now.toLocaleDateString(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const timeLabel = now.toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const shortcutsHelpLabel = t("commandPalette.actions.openShortcuts");
+
   return (
     <header className="flex h-12 items-center justify-between border-b border-border bg-surface px-4">
       <button
+        type="button"
         onClick={openCommandPalette}
         className={cn(
           "flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 text-sm text-muted-foreground",
@@ -46,11 +97,81 @@ export function Header() {
 
       <div className="flex items-center gap-3">
         <span className="text-sm tabular-nums text-muted-foreground">
-          {clock}
+          {dateLabel} {timeLabel}
         </span>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Settings className="h-4 w-4" />
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={shortcutsHelpLabel}
+          title={`${shortcutsHelpLabel} (Cmd/Ctrl + /)`}
+          onClick={openKeyboardShortcutsPanel}
+        >
+          <Keyboard className="h-4 w-4" />
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label={t("settings.language")}
+              title={t("settings.language")}
+            >
+              <Languages className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {LANGUAGES.map((option) => (
+              <DropdownMenuItem
+                key={option}
+                onSelect={() => handleLanguageChange(option)}
+                className="flex items-center justify-between gap-2"
+              >
+                <span>{languageLabels[option]}</span>
+                <Check
+                  className={cn(
+                    "h-4 w-4",
+                    option === language ? "opacity-100" : "opacity-0",
+                  )}
+                />
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label={t("settings.theme")}
+              title={t("settings.theme")}
+            >
+              <Palette className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {THEMES.map((option) => (
+              <DropdownMenuItem
+                key={option}
+                onSelect={() => handleThemeChange(option)}
+                className="flex items-center justify-between gap-2"
+              >
+                <span>{t(`themes.${option}`)}</span>
+                <Check
+                  className={cn(
+                    "h-4 w-4",
+                    option === theme ? "opacity-100" : "opacity-0",
+                  )}
+                />
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

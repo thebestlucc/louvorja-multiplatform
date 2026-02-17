@@ -36,6 +36,9 @@
     "projectorOn": "Projector on",
     "returnOn": "Return on",
     "returnOff": "Return off",
+    "timerOpen": "Open timer utility",
+    "timerIdle": "Timer idle",
+    "timerCompact": "Timer {{value}}",
     "streamingOff": "Streaming: OFF",
     "streamingOn": "Streaming: ON (port {{port}}, {{count}})"
   },
@@ -52,6 +55,7 @@
     "toggleLogo": "Toggle Logo Screen (L)",
     "slideOf": "{{current}} / {{total}}",
     "nextSlide": "Next",
+    "noNextSlide": "No next slide",
     "slideNav": "Slide Navigation"
   },
   "dashboard": {
@@ -62,9 +66,149 @@
     "placeholder": "Type a command...",
     "noResults": "No results found",
     "navigation": "Navigation",
+    "utilities": "Utilities",
+    "globalActions": "Global Actions",
+    "actions": {
+      "toggleProjector": "Toggle projector window",
+      "toggleReturn": "Toggle return window",
+      "toggleBlack": "Toggle black screen",
+      "toggleLogo": "Toggle logo screen",
+      "clearProjection": "Clear current projection",
+      "openShortcuts": "Open keyboard shortcuts"
+    },
     "hymns": "Hymns",
     "bible": "Bible Verses",
     "searching": "Searching..."
+  },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "searchPlaceholder": "Search shortcuts...",
+    "noResults": "No shortcuts found.",
+    "categories": {
+      "app": "App",
+      "slides": "Slides",
+      "display": "Display Control",
+      "utilities": "Utilities"
+    },
+    "items": {
+      "openCommandPalette": "Open command palette",
+      "openShortcutsHelp": "Open shortcuts panel",
+      "nextSlide": "Next slide",
+      "previousSlide": "Previous slide",
+      "clearProjection": "Clear projected content",
+      "toggleProjector": "Toggle projector window",
+      "toggleReturn": "Toggle return window",
+      "toggleBlack": "Toggle black screen",
+      "toggleLogo": "Toggle logo screen",
+      "projectTimer": "Project timer from utilities",
+      "projectClock": "Project clock from utilities",
+      "projectLottery": "Project lottery result"
+    }
+  },
+  "utilities": {
+    "title": "Utilities",
+    "subtitle": "Quick tools for live operation.",
+    "nav": {
+      "overview": "Overview",
+      "timer": "Timer",
+      "clock": "Clock",
+      "lottery": "Lottery",
+      "text": "Text"
+    },
+    "overview": {
+      "title": "Choose a tool",
+      "description": "Open a utility to run it in your service flow."
+    },
+    "projection": {
+      "project": "Project to screen",
+      "clear": "Clear projection",
+      "context": {
+        "timer": "Utility Timer",
+        "countdown": "Utility Countdown",
+        "stopwatch": "Utility Stopwatch",
+        "clock": "Utility Clock",
+        "lottery": "Utility Lottery"
+      }
+    },
+    "timer": {
+      "title": "Timer",
+      "description": "Run countdowns and stopwatch timing.",
+      "mode": "Mode",
+      "countdown": "Countdown",
+      "stopwatch": "Stopwatch",
+      "minutes": "Minutes",
+      "seconds": "Seconds",
+      "start": "Start",
+      "pause": "Pause",
+      "resume": "Resume",
+      "reset": "Reset",
+      "lap": "Lap",
+      "laps": "Laps",
+      "noLaps": "No laps recorded yet.",
+      "durationRequired": "Set a duration greater than zero.",
+      "alertsTitle": "Countdown alerts",
+      "alertsDescription": "Default alerts are 5 and 1 minute remaining. Add custom minute marks and choose audio for each one.",
+      "alertVolume": "Alert volume",
+      "alertVolumeDescription": "Controls timer alerts only (independent from hymn audio volume).",
+      "alertAtMinute": "{{minute}} minute(s) remaining",
+      "browseAudio": "Browse audio",
+      "testAudio": "Test",
+      "clearAudio": "Clear audio",
+      "defaultBeep": "Default beep",
+      "addAlertMinute": "Minute for audio alert",
+      "addAlert": "Add alert",
+      "removeAlert": "Remove",
+      "invalidAlertMinute": "Set a valid minute greater than zero.",
+      "duplicateAlertMinute": "This minute mark already exists.",
+      "alertPlaybackFailed": "Could not play alert for {{minute}} minute(s): {{error}}",
+      "adjustTitle": "Adjust countdown",
+      "adjustDescription": "Add or subtract minutes from the current countdown."
+    },
+    "clock": {
+      "title": "Clock",
+      "description": "Live clock view for operator timing.",
+      "hour24": "24-hour",
+      "hour12": "12-hour",
+      "showDate": "Show date",
+      "hideDate": "Hide date"
+    },
+    "lottery": {
+      "title": "Lottery",
+      "description": "Paste one name per line and draw a random winner.",
+      "mode": "Mode",
+      "modeNames": "Names",
+      "modeNumbers": "Numbers",
+      "names": "Names",
+      "maxNumber": "Maximum number (N)",
+      "placeholder": "Type one name per line...",
+      "draw": "Draw winner",
+      "resetPicks": "Reset picks",
+      "clear": "Clear",
+      "drawing": "Drawing...",
+      "winner": "Winner",
+      "noWinner": "No winner yet.",
+      "history": "History",
+      "emptyHistory": "No picks recorded yet.",
+      "remaining": "{{remaining}} remaining of {{total}}",
+      "invalidNames": "Add at least one valid name.",
+      "invalidMax": "Set N as a positive number.",
+      "allPicked": "All available items were already picked."
+    },
+    "text": {
+      "title": "Text formatter",
+      "description": "Convert text casing quickly for slides.",
+      "input": "Input",
+      "output": "Output",
+      "format": "Format",
+      "apply": "Apply format",
+      "copy": "Copy output",
+      "copied": "Formatted text copied.",
+      "emptyInput": "Type some text before formatting.",
+      "uppercase": "UPPERCASE",
+      "lowercase": "lowercase",
+      "titleCase": "Title Case",
+      "sentenceCase": "Sentence case"
+    }
   },
   "hymnal": {
     "searchPlaceholder": "Search hymns by number, title or lyrics...",
@@ -100,6 +244,27 @@
     "labelPlaceholder": "e.g. Verse 1",
     "imagePathPlaceholder": "Path to image file",
     "imageAltPlaceholder": "Image description",
+    "videoPathPlaceholder": "Select a .mp4 or .webm file",
+    "videoBrowse": "Browse",
+    "videoLoading": "Loading...",
+    "videoDuration": "Duration",
+    "videoResolution": "Resolution",
+    "videoFileSize": "File size",
+    "videoFormat": "Format",
+    "videoImported": "Video imported successfully",
+    "videoImportFailed": "Could not import video: {{error}}",
+    "videoUnsupported": "Unsupported format. Convert to {{recommendation}} before importing.",
+    "videoAutoPlay": "Auto-play",
+    "videoLoop": "Loop",
+    "videoMuted": "Muted",
+    "videoMode": "Mode",
+    "videoModeFullscreen": "Fullscreen",
+    "videoModeBackground": "Background",
+    "videoOverlayPlaceholder": "Overlay text over video background...",
+    "videoTextColor": "Text color",
+    "videoTextSize": "Text size",
+    "videoNoSource": "No video selected",
+    "videoPreparing": "Preparing video...",
     "noSlides": "No slides. Click \"Add Slide\" to get started.",
     "aspectRatio": "Aspect ratio",
     "transition": "Transition",
@@ -121,7 +286,8 @@
       "lyrics": "Lyrics",
       "pause": "Pause",
       "text": "Text",
-      "image": "Image"
+      "image": "Image",
+      "video": "Video"
     }
   },
   "bible": {
@@ -194,9 +360,23 @@
     "discard": "Discard"
   },
   "settings": {
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeDesc": "Choose the visual style of the app.",
+    "language": "Language",
+    "languageDesc": "Choose the app language.",
+    "languagePt": "Portuguese (PT-BR)",
+    "languageEn": "English",
+    "languageEs": "Spanish",
     "defaultPort": "Default port",
     "autoStart": "Auto-start streaming",
-    "autoStartDesc": "Automatically start the streaming server when the app opens"
+    "autoStartDesc": "Automatically start the streaming server when the app opens",
+    "video": "Video",
+    "ffprobeEnabled": "Enable ffprobe fallback",
+    "ffprobeEnabledDesc": "Use ffprobe only when native metadata parsing fails.",
+    "ffprobePath": "Custom ffprobe path",
+    "ffprobePathDesc": "Optional absolute path to ffprobe binary. Leave blank to use PATH.",
+    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
   },
   "streaming": {
     "title": "Streaming",
