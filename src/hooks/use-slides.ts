@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { usePresentationStore } from "../stores/presentation-store";
-import { setCurrentSlide, setSlideContext } from "../lib/tauri";
+import { clearCurrentSlide, setCurrentSlide, setSlideContext } from "../lib/tauri";
 import type { SlideContent } from "../types/presentation";
 import { slideContentToFlat } from "../types/presentation";
 
@@ -51,8 +51,16 @@ export function useSlides() {
   );
 
   const nextSlide = useCallback(async () => {
-    const { activeSlideIndex: idx } = usePresentationStore.getState();
-    await goToSlide(idx + 1);
+    const { activeSlideIndex: idx, slides: currentSlides } = usePresentationStore.getState();
+
+    if (currentSlides.length === 0) return;
+
+    if (idx < currentSlides.length - 1) {
+      await goToSlide(idx + 1);
+      return;
+    }
+
+    await clearCurrentSlide();
   }, [goToSlide]);
 
   const prevSlide = useCallback(async () => {

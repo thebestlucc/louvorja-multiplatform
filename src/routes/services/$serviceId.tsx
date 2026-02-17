@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { setCurrentSlide, setSlideContext } from "../../lib/tauri";
+import { clearCurrentSlide, setCurrentSlide, setSlideContext } from "../../lib/tauri";
 import { ServiceItemList } from "../../components/services/service-item-list";
 import { ServiceTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
@@ -181,7 +181,12 @@ function ServiceEditor() {
   const handleNextItem = () => {
     if (activeServiceItemIndex < items.length - 1) {
       setActiveServiceItemIndex(activeServiceItemIndex + 1);
+      return;
     }
+
+    // End of service timeline: stop playback and clear projection.
+    setPlayingService(false);
+    void clearCurrentSlide().catch((err) => toast.error(String(err)));
   };
 
   const handlePrevItem = () => {
@@ -244,7 +249,7 @@ function ServiceEditor() {
                 size="sm"
                 variant="outline"
                 onClick={handleNextItem}
-                disabled={activeServiceItemIndex >= items.length - 1}
+                disabled={items.length === 0}
               >
                 <SkipForward className="h-4 w-4" />
               </Button>

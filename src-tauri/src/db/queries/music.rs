@@ -117,18 +117,6 @@ pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, A
     Ok(hymns)
 }
 
-pub fn insert_hymn(_conn: &Connection, _hymn: &Hymn) -> Result<i64, AppError> {
-    Err(AppError::Internal("Not implemented".into()))
-}
-
-pub fn update_hymn(_conn: &Connection, _hymn: &Hymn) -> Result<(), AppError> {
-    Err(AppError::Internal("Not implemented".into()))
-}
-
-pub fn delete_hymn(_conn: &Connection, _id: i64) -> Result<(), AppError> {
-    Err(AppError::Internal("Not implemented".into()))
-}
-
 pub fn get_sync_points(
     conn: &Connection,
     hymn_id: i64,

@@ -71,9 +71,8 @@ export function SlideNavBar() {
 
       {/* Next button */}
       <button
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-muted disabled:opacity-30"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-muted"
         onClick={() => nextSlide()}
-        disabled={activeSlideIndex >= slides.length - 1}
       >
         <ChevronRight className="h-4 w-4" />
       </button>

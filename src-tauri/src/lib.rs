@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod display;
 mod error;
+mod migration;
 mod projection;
 mod state;
 mod streaming;
@@ -26,6 +27,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -37,6 +39,7 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(conn),
                 timer: Mutex::new(TimerRuntimeState::default()),
+                migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),
@@ -173,6 +176,14 @@ pub fn run() {
             commands::timer::start_stopwatch_projection,
             commands::timer::stop_utility_projection,
             commands::clock::start_clock_projection,
+            // Migration
+            commands::migration::start_migration,
+            commands::migration::get_migration_progress,
+            commands::migration::cancel_migration,
+            commands::migration::get_migration_report,
+            // Updater
+            commands::updater::check_for_updates,
+            commands::updater::install_update,
             // Utility
             commands::utility::run_lottery,
             commands::utility::format_text,

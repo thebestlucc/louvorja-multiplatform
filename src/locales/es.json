@@ -9,7 +9,8 @@
     "presentations": "Presentaciones",
     "services": "Cultos",
     "utilities": "Utilidades",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "help": "Ayuda"
   },
   "actions": {
     "save": "Guardar",
@@ -377,6 +378,127 @@
     "ffprobePath": "Ruta personalizada de ffprobe",
     "ffprobePathDesc": "Ruta absoluta opcional al binario ffprobe. Déjelo vacío para usar PATH.",
     "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
+  },
+  "onboarding": {
+    "title": "Bienvenido a LouvorJA",
+    "subtitle": "Complete la configuración inicial antes de usarlo en vivo.",
+    "steps": {
+      "welcome": "Bienvenida",
+      "import": "Importación",
+      "monitors": "Monitores",
+      "complete": "Finalizar"
+    },
+    "welcome": {
+      "title": "Configure su primer uso",
+      "description": "Elija el idioma y decida si desea importar datos legados o comenzar desde cero.",
+      "language": "Idioma de la aplicación",
+      "importTitle": "Importar base de datos legada",
+      "importDescription": "Importe himnos, Biblia, favoritos, cultos y configuraciones de la aplicación anterior.",
+      "importAction": "Importar datos legados",
+      "freshTitle": "Comenzar con configuración limpia",
+      "freshDescription": "Omita la migración y configure las pantallas ahora.",
+      "freshAction": "Comenzar desde cero"
+    },
+    "import": {
+      "freshSelected": "Eligió comenzar desde cero. Continúe con la configuración de monitores.",
+      "continueToMonitors": "Continuar con monitores"
+    },
+    "monitors": {
+      "title": "Configuración de monitores",
+      "description": "Asigne las pantallas de proyector y retorno para la operación.",
+      "noneFound": "No se detectaron monitores. Puede omitir este paso y configurar luego en Configuración.",
+      "projector": "Pantalla del proyector",
+      "return": "Pantalla de retorno",
+      "primary": "Principal",
+      "testProjector": "Probar proyector",
+      "testReturn": "Probar retorno",
+      "saveAndContinue": "Guardar y continuar",
+      "skip": "Omitir por ahora"
+    },
+    "complete": {
+      "title": "Configuración finalizada",
+      "description": "Sus datos iniciales ya están listos.",
+      "importSummary": "La migración y la configuración de monitores se completaron. Puede ajustar valores luego en Configuración.",
+      "freshSummary": "La configuración limpia se completó. Puede importar datos después desde onboarding.",
+      "reportStatus": "Estado de migración: {{status}}",
+      "reportDomains": "Dominios procesados: {{count}}",
+      "reportErrors": "Errores encontrados: {{count}}",
+      "finish": "Ir al panel",
+      "openHelp": "Abrir ayuda"
+    }
+  },
+  "migration": {
+    "wizard": {
+      "title": "Importación de datos legados",
+      "description": "Seleccione el archivo de base antigua y los dominios a migrar.",
+      "sourcePath": "Archivo SQLite legado",
+      "browse": "Buscar",
+      "startImport": "Iniciar importación",
+      "startFresh": "Comenzar desde cero",
+      "includeHymns": "Himnos",
+      "includeBible": "Biblia",
+      "includeFavorites": "Favoritos",
+      "includeServices": "Cultos",
+      "includeSettings": "Configuración",
+      "replaceExisting": "Reemplazar datos existentes en los dominios seleccionados",
+      "domainTitle": "Dominios",
+      "domainsSelected": "{{count}} dominios seleccionados",
+      "domainsNoneSelected": "Seleccione al menos un dominio."
+    },
+    "progress": {
+      "title": "Progreso de migración",
+      "waiting": "Esperando estado de migración...",
+      "cancel": "Cancelar migración",
+      "continue": "Continuar",
+      "retry": "Reintentar",
+      "statusRunning": "Migración en progreso",
+      "statusCompleted": "Migración completada",
+      "statusFailed": "Migración finalizada con errores",
+      "statusCancelled": "Migración cancelada",
+      "summaryTitle": "Resumen de migración",
+      "summaryErrors": "Errores",
+      "summaryNoErrors": "No se reportaron errores."
+    }
+  },
+  "updater": {
+    "title": "Actualización disponible",
+    "description": "La versión {{version}} está lista para instalarse.",
+    "installing": "Instalando actualización. La aplicación puede reiniciarse.",
+    "updateNow": "Actualizar ahora",
+    "remindLater": "Recordar después",
+    "skipVersion": "Omitir esta versión"
+  },
+  "help": {
+    "title": "Centro de ayuda",
+    "description": "Ayuda rápida para atajos, proyección y streaming.",
+    "openShortcuts": "Abrir atajos de teclado",
+    "openDocs": "Abrir documentación",
+    "documentationTitle": "Archivos de documentación",
+    "tour": {
+      "title": "Recorrido guiado",
+      "restart": "Reiniciar recorrido guiado",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "finish": "Finalizar",
+      "steps": {
+        "library": {
+          "title": "Navegación de biblioteca",
+          "description": "Use la barra lateral para navegar por himnario, Biblia, presentaciones, cultos y utilidades."
+        },
+        "projection": {
+          "title": "Controles de proyección",
+          "description": "Use la barra de estado y atajos para controlar proyectores y pantalla de retorno."
+        },
+        "utilities": {
+          "title": "Herramientas utilitarias",
+          "description": "Temporizador, reloj y sorteo pueden proyectarse y sincronizarse con las pantallas del operador."
+        },
+        "streaming": {
+          "title": "Streaming",
+          "description": "Inicie el servidor de streaming en Configuración y comparta las URLs con los dispositivos."
+        }
+      }
+    }
   },
   "streaming": {
     "title": "Streaming",

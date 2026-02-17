@@ -9,7 +9,8 @@
     "presentations": "Presentations",
     "services": "Services",
     "utilities": "Utilities",
-    "settings": "Settings"
+    "settings": "Settings",
+    "help": "Help"
   },
   "actions": {
     "save": "Save",
@@ -377,6 +378,127 @@
     "ffprobePath": "Custom ffprobe path",
     "ffprobePathDesc": "Optional absolute path to ffprobe binary. Leave blank to use PATH.",
     "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
+  },
+  "onboarding": {
+    "title": "Welcome to LouvorJA",
+    "subtitle": "Complete initial setup before going live.",
+    "steps": {
+      "welcome": "Welcome",
+      "import": "Import",
+      "monitors": "Monitors",
+      "complete": "Complete"
+    },
+    "welcome": {
+      "title": "Let's configure your first run",
+      "description": "Choose your language and decide whether to import legacy data or start fresh.",
+      "language": "App language",
+      "importTitle": "Import from legacy database",
+      "importDescription": "Bring hymns, Bible data, favorites, services, and settings from your previous app.",
+      "importAction": "Import legacy data",
+      "freshTitle": "Start with a clean setup",
+      "freshDescription": "Skip migration and configure screens right away.",
+      "freshAction": "Start fresh"
+    },
+    "import": {
+      "freshSelected": "You selected the fresh start path. Continue to monitor setup.",
+      "continueToMonitors": "Continue to monitor setup"
+    },
+    "monitors": {
+      "title": "Monitor setup",
+      "description": "Assign projector and return screens for live operation.",
+      "noneFound": "No monitors were detected. You can skip this step and configure later in Settings.",
+      "projector": "Projector screen",
+      "return": "Return screen",
+      "primary": "Primary",
+      "testProjector": "Test projector",
+      "testReturn": "Test return",
+      "saveAndContinue": "Save and continue",
+      "skip": "Skip for now"
+    },
+    "complete": {
+      "title": "Setup complete",
+      "description": "Your onboarding data is ready.",
+      "importSummary": "Migration and monitor setup are completed. You can adjust any value later in Settings.",
+      "freshSummary": "Fresh setup is complete. You can import data later from onboarding.",
+      "reportStatus": "Migration status: {{status}}",
+      "reportDomains": "Domains processed: {{count}}",
+      "reportErrors": "Errors found: {{count}}",
+      "finish": "Go to dashboard",
+      "openHelp": "Open help"
+    }
+  },
+  "migration": {
+    "wizard": {
+      "title": "Legacy data import",
+      "description": "Select your old database file and the domains to migrate.",
+      "sourcePath": "Legacy SQLite file",
+      "browse": "Browse",
+      "startImport": "Start import",
+      "startFresh": "Start fresh instead",
+      "includeHymns": "Hymns",
+      "includeBible": "Bible",
+      "includeFavorites": "Favorites",
+      "includeServices": "Services",
+      "includeSettings": "Settings",
+      "replaceExisting": "Replace existing data for selected domains",
+      "domainTitle": "Domains",
+      "domainsSelected": "{{count}} domains selected",
+      "domainsNoneSelected": "Select at least one domain."
+    },
+    "progress": {
+      "title": "Migration progress",
+      "waiting": "Waiting for migration status...",
+      "cancel": "Cancel migration",
+      "continue": "Continue",
+      "retry": "Retry",
+      "statusRunning": "Migration in progress",
+      "statusCompleted": "Migration completed",
+      "statusFailed": "Migration finished with errors",
+      "statusCancelled": "Migration cancelled",
+      "summaryTitle": "Migration summary",
+      "summaryErrors": "Errors",
+      "summaryNoErrors": "No errors were reported."
+    }
+  },
+  "updater": {
+    "title": "Update available",
+    "description": "Version {{version}} is ready to install.",
+    "installing": "Installing update. The app may restart.",
+    "updateNow": "Update now",
+    "remindLater": "Remind later",
+    "skipVersion": "Skip this version"
+  },
+  "help": {
+    "title": "Help center",
+    "description": "Quick help for keyboard usage, projection flow, and streaming.",
+    "openShortcuts": "Open keyboard shortcuts",
+    "openDocs": "Open documentation",
+    "documentationTitle": "Documentation files",
+    "tour": {
+      "title": "Guided tour",
+      "restart": "Restart guided tour",
+      "previous": "Previous",
+      "next": "Next",
+      "finish": "Finish",
+      "steps": {
+        "library": {
+          "title": "Library navigation",
+          "description": "Use the sidebar to move through hymnal, Bible, presentations, services, and utilities."
+        },
+        "projection": {
+          "title": "Projection controls",
+          "description": "Use status bar and keyboard shortcuts to control projector and return windows."
+        },
+        "utilities": {
+          "title": "Utility tools",
+          "description": "Timers, clock, and lottery can be projected and synchronized with operator screens."
+        },
+        "streaming": {
+          "title": "Streaming",
+          "description": "Start streaming server in Settings and share generated URLs with devices."
+        }
+      }
+    }
   },
   "streaming": {
     "title": "Streaming",

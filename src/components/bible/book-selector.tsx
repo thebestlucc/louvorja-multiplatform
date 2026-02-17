@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import type { Book } from "../../types/bible";
@@ -60,6 +60,8 @@ export function BookSelector({
 }: BookSelectorProps) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
+  const chapterRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const verseRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   const availableBooks = useMemo(() => {
     const map = new Map<number, { sourceName: string; chapterCount: number }>();
@@ -77,6 +79,37 @@ export function BookSelector({
   const localizedCurrentBook = selectedBookIndex !== null
     ? getLocalizedBookNameByIndex(selectedBookIndex, language)
     : currentBook;
+  const selectedVerseTail = selectedVerses[selectedVerses.length - 1] ?? null;
+
+  const setChapterRef = useCallback((chapter: number, el: HTMLButtonElement | null) => {
+    if (el) {
+      chapterRefs.current.set(chapter, el);
+      return;
+    }
+    chapterRefs.current.delete(chapter);
+  }, []);
+
+  const setVerseRef = useCallback((verse: number, el: HTMLButtonElement | null) => {
+    if (el) {
+      verseRefs.current.set(verse, el);
+      return;
+    }
+    verseRefs.current.delete(verse);
+  }, []);
+
+  useEffect(() => {
+    if (!currentBook || chapterCount <= 0) return;
+    const targetChapter = currentChapter > 0 ? Math.min(currentChapter, chapterCount) : 1;
+    chapterRefs.current.get(targetChapter)?.focus();
+  }, [currentBook, currentChapter, chapterCount]);
+
+  useEffect(() => {
+    if (!currentBook || currentChapter <= 0 || verseCount <= 0) return;
+    const targetVerse = selectedVerseTail !== null
+      ? Math.min(selectedVerseTail, verseCount)
+      : 1;
+    verseRefs.current.get(targetVerse)?.focus();
+  }, [currentBook, currentChapter, verseCount, selectedVerseTail]);
 
   return (
     <div className="space-y-3">
@@ -92,6 +125,9 @@ export function BookSelector({
             return (
               <button
                 key={book.abbr}
+                data-bible-grid="book"
+                data-book-index={index}
+                data-selected={selected ? "true" : undefined}
                 disabled={!available}
                 onClick={() => {
                   if (availableEntry) {
@@ -126,6 +162,10 @@ export function BookSelector({
               return (
                 <button
                   key={ch}
+                  data-bible-grid="chapter"
+                  data-chapter={ch}
+                  data-selected={isSelected ? "true" : undefined}
+                  ref={(el) => setChapterRef(ch, el)}
                   onClick={() => onSelectChapter(ch)}
                   className={cn(
                     "flex h-9 items-center justify-center rounded-sm text-sm font-semibold transition-colors",
@@ -154,6 +194,10 @@ export function BookSelector({
               return (
                 <button
                   key={v}
+                  data-bible-grid="verse"
+                  data-verse={v}
+                  data-selected={isSelected ? "true" : undefined}
+                  ref={(el) => setVerseRef(v, el)}
                   onClick={() => onSelectVerse(v)}
                   onDoubleClick={() => onDoubleClickVerse(v)}
                   className={cn(

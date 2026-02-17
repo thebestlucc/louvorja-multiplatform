@@ -1,4 +1,4 @@
-import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { createRootRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { listen } from "@tauri-apps/api/event";
@@ -8,12 +8,24 @@ import { StatusBar } from "../components/layout/status-bar";
 import { SlideNavBar } from "../components/display/slide-nav-bar";
 import { CommandPalette } from "../components/ui/command-palette";
 import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
+import { UpdateNotification } from "../components/update-notification";
 import { useKeyboard } from "../hooks/use-keyboard";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { useThemeStore } from "../stores/theme-store";
 import { LANGUAGES, type Language } from "../lib/constants";
+import { isOnboardingRequired } from "../lib/onboarding";
 
 export const Route = createRootRoute({
+  beforeLoad: async ({ location }) => {
+    if (isOnboardingExemptRoute(location.pathname)) {
+      return;
+    }
+
+    const needsOnboarding = await isOnboardingRequired();
+    if (needsOnboarding) {
+      throw redirect({ to: "/onboarding/welcome" });
+    }
+  },
   component: RootLayout,
 });
 
@@ -21,7 +33,7 @@ const BARE_ROUTES = ["/projector", "/return"];
 
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isBareRoute = BARE_ROUTES.includes(pathname);
+  const isBareRoute = usesBareLayout(pathname);
   const setLanguage = useThemeStore((state) => state.setLanguage);
   useThemeStore((state) => state.theme);
   useTimerAlerts({ enabled: !isBareRoute });
@@ -78,6 +90,7 @@ function RootLayout() {
       </div>
       <CommandPalette />
       <KeyboardShortcutsPanel />
+      <UpdateNotification />
       <Toaster
         position="bottom-right"
         toastOptions={{
@@ -98,4 +111,18 @@ function isLanguage(candidate: string | null | undefined): candidate is Language
     return false;
   }
   return LANGUAGES.includes(candidate as Language);
+}
+
+function usesBareLayout(pathname: string): boolean {
+  if (BARE_ROUTES.includes(pathname)) {
+    return true;
+  }
+  return pathname.startsWith("/onboarding");
+}
+
+function isOnboardingExemptRoute(pathname: string): boolean {
+  if (BARE_ROUTES.includes(pathname)) {
+    return true;
+  }
+  return pathname.startsWith("/onboarding");
 }
