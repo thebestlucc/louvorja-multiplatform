@@ -1,7 +1,9 @@
 use crate::db::models::{Presentation, Slide};
 use crate::error::AppError;
 use crate::state::AppState;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use tauri::{AppHandle, Manager};
 
 #[tauri::command]
 pub fn get_presentations(state: tauri::State<'_, AppState>) -> Result<Vec<Presentation>, AppError> {
@@ -136,10 +138,23 @@ pub fn reorder_slides(
 #[tauri::command]
 pub fn import_slja(
     path: String,
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<Presentation, AppError> {
     let file_path = Path::new(&path);
     let archive = crate::archive::import_presentation(file_path)?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let media_root = app_data_dir.join("media");
+    std::fs::create_dir_all(&media_root)?;
+
+    let mut media_map: HashMap<String, String> = HashMap::new();
+    for media in &archive.media {
+        let mapped_relative = write_archive_media_file(&media_root, media)?;
+        media_map.insert(media.filename.clone(), mapped_relative);
+    }
 
     let conn = state
         .db
@@ -152,7 +167,8 @@ pub fn import_slja(
     )?;
 
     for (i, slide) in archive.slides.iter().enumerate() {
-        crate::db::queries::slides::insert_slide(&conn, pres_id, &slide.content, i as i32)?;
+        let remapped_content = remap_video_paths_in_content(&slide.content, &media_map)?;
+        crate::db::queries::slides::insert_slide(&conn, pres_id, &remapped_content, i as i32)?;
     }
 
     crate::db::queries::slides::get_presentation_by_id(&conn, pres_id)
@@ -162,6 +178,7 @@ pub fn import_slja(
 pub fn export_slja(
     presentation_id: i64,
     path: String,
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
     let conn = state
@@ -170,6 +187,11 @@ pub fn export_slja(
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let presentation = crate::db::queries::slides::get_presentation_by_id(&conn, presentation_id)?;
     let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let media = collect_video_media_files(&slides, &app_data_dir)?;
 
     let archive = crate::archive::PresentationArchive {
         manifest: crate::archive::manifest::Manifest {
@@ -189,8 +211,166 @@ pub fn export_slja(
                 transition: s.transition,
             })
             .collect(),
-        media: vec![],
+        media,
     };
 
     crate::archive::write_slja(Path::new(&path), &archive)
+}
+
+fn collect_video_media_files(
+    slides: &[Slide],
+    app_data_dir: &Path,
+) -> Result<Vec<crate::archive::MediaFile>, AppError> {
+    let mut seen = HashSet::new();
+    let mut files = Vec::new();
+
+    for slide in slides {
+        let Some(video_path) = extract_video_path_from_content(&slide.content) else {
+            continue;
+        };
+
+        let archive_filename = if let Some(path) = video_path.strip_prefix("media/") {
+            path.to_string()
+        } else {
+            continue;
+        };
+
+        if !seen.insert(archive_filename.clone()) {
+            continue;
+        }
+
+        let absolute = app_data_dir.join("media").join(&archive_filename);
+        if !absolute.exists() {
+            continue;
+        }
+
+        let data = std::fs::read(&absolute)?;
+        files.push(crate::archive::MediaFile {
+            filename: archive_filename,
+            data,
+        });
+    }
+
+    Ok(files)
+}
+
+fn extract_video_path_from_content(content_json: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(content_json).ok()?;
+    let slide_type = value.get("type")?.as_str()?;
+    if slide_type != "video" {
+        return None;
+    }
+
+    value
+        .get("videoPath")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| value.get("src").and_then(|v| v.as_str()).map(|s| s.to_string()))
+}
+
+fn remap_video_paths_in_content(
+    content_json: &str,
+    media_map: &HashMap<String, String>,
+) -> Result<String, AppError> {
+    let mut value: serde_json::Value = match serde_json::from_str(content_json) {
+        Ok(value) => value,
+        Err(_) => return Ok(content_json.to_string()),
+    };
+    if value
+        .get("type")
+        .and_then(|v| v.as_str())
+        .map(|v| v != "video")
+        .unwrap_or(true)
+    {
+        return Ok(content_json.to_string());
+    }
+
+    let current = value
+        .get("videoPath")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| value.get("src").and_then(|v| v.as_str()).map(|s| s.to_string()));
+
+    if let Some(current_path) = current {
+        let key = current_path
+            .strip_prefix("media/")
+            .unwrap_or(&current_path)
+            .to_string();
+
+        if let Some(remapped) = media_map.get(&key) {
+            value["videoPath"] = serde_json::Value::String(format!("media/{}", remapped));
+        }
+    }
+
+    if value.get("videoPath").is_none() {
+        value["videoPath"] = serde_json::Value::String(String::new());
+    }
+
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("src");
+    }
+
+    serde_json::to_string(&value).map_err(AppError::from)
+}
+
+fn write_archive_media_file(
+    media_root: &Path,
+    media_file: &crate::archive::MediaFile,
+) -> Result<String, AppError> {
+    let sanitized = crate::video::sanitize_archive_media_path(&media_file.filename);
+    if sanitized.as_os_str().is_empty() {
+        return Err(AppError::Internal(
+            "Archive media file had an invalid path".into(),
+        ));
+    }
+
+    let mut relative_target = sanitized.clone();
+    let mut absolute_target = media_root.join(&relative_target);
+    if let Some(parent) = absolute_target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    if absolute_target.exists() {
+        let existing = std::fs::read(&absolute_target)?;
+        if existing != media_file.data {
+            relative_target = uniquify_relative_path(media_root, &sanitized);
+            absolute_target = media_root.join(&relative_target);
+            if let Some(parent) = absolute_target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+    }
+
+    if !absolute_target.exists() {
+        std::fs::write(&absolute_target, &media_file.data)?;
+    }
+
+    Ok(relative_target.to_string_lossy().replace('\\', "/"))
+}
+
+fn uniquify_relative_path(media_root: &Path, original: &Path) -> std::path::PathBuf {
+    let parent = original.parent().map(std::path::PathBuf::from).unwrap_or_default();
+    let stem = original
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("media");
+    let ext = original.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+    for idx in 1..=10_000 {
+        let filename = if ext.is_empty() {
+            format!("{}-{}", stem, idx)
+        } else {
+            format!("{}-{}.{}", stem, idx, ext)
+        };
+
+        let mut candidate = parent.clone();
+        candidate.push(filename);
+        if !media_root.join(&candidate).exists() {
+            return candidate;
+        }
+    }
+
+    let mut fallback = parent;
+    fallback.push(format!("{}-fallback", stem));
+    fallback
 }

@@ -92,7 +92,7 @@ export function SlideList({
   const ids = itemIds ?? slides.map((_, i) => i);
 
   const content = (
-    <div ref={containerRef} className="flex flex-col gap-1.5 p-2">
+    <div ref={containerRef} className="flex flex-col gap-1.5 py-0 pr-3">
       {slides.map((slide, i) => (
         sortableEnabled ? (
           <SortableSlideItem
@@ -181,24 +181,20 @@ function SortableSlideItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="group relative">
-      <div className="flex items-start gap-1">
-        <button
-          className="mt-3 cursor-grab p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-3 w-3" />
-        </button>
-        <div className="flex-1">
-          <SlideThumbnail
-            slide={slide}
-            index={index}
-            isActive={isActive}
-            onClick={onClick}
-          />
-        </div>
-      </div>
+    <div ref={setNodeRef} style={style} className="group relative w-full min-w-0">
+      <SlideThumbnail
+        slide={slide}
+        index={index}
+        isActive={isActive}
+        onClick={onClick}
+      />
+      <button
+        className="pointer-events-none absolute left-1 top-1 z-10 cursor-grab rounded bg-black/45 p-1 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:pointer-events-auto group-hover:opacity-100"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-3 w-3" />
+      </button>
 
       {(onDuplicate || onDelete) && (
         <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">

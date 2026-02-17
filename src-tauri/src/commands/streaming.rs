@@ -16,6 +16,7 @@ fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
         "label": slide.label.as_deref().unwrap_or(""),
         "text": slide.text.as_deref().unwrap_or(""),
         "title": slide.title.as_deref().unwrap_or(""),
+        "subtitle": slide.subtitle.as_deref().unwrap_or(""),
     })
 }
 
@@ -56,6 +57,7 @@ fn sync_streaming_projection_state(
                 "label": "",
                 "text": "",
                 "title": "",
+                "subtitle": "",
             });
             server.broadcast_music(&music_json.to_string());
 
@@ -73,6 +75,7 @@ fn sync_streaming_projection_state(
                 "label": slide_data.label.as_deref().unwrap_or(""),
                 "text": slide_data.text.as_deref().unwrap_or(""),
                 "title": slide_data.title.as_deref().unwrap_or(""),
+                "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
             });
             server.broadcast_music(&music_json.to_string());
 
@@ -92,6 +95,7 @@ fn sync_streaming_projection_state(
         "label": "",
         "text": "",
         "title": "",
+        "subtitle": "",
     });
     server.broadcast_music(&music_json.to_string());
 

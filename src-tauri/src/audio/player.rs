@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use rodio::source::SineWave;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
@@ -60,6 +61,43 @@ impl AudioPlayer {
         self.sink = Some(sink);
         self.current_file = Some(path_buf);
 
+        Ok(())
+    }
+
+    pub fn play_alert(&self, path: Option<&str>, volume: Option<f32>) -> Result<(), AppError> {
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| AppError::Internal(format!("Failed to create alert sink: {}", e)))?;
+
+        let mut alert_volume = volume.unwrap_or(self.volume);
+        if !alert_volume.is_finite() {
+            alert_volume = self.volume;
+        }
+        sink.set_volume(alert_volume.clamp(0.0, 1.0));
+
+        match path.map(str::trim).filter(|value| !value.is_empty()) {
+            Some(file_path) => {
+                let source =
+                    Decoder::new(BufReader::new(File::open(file_path).map_err(|e| {
+                        AppError::Internal(format!("Failed to open alert audio file: {}", e))
+                    })?))
+                    .map_err(|e| AppError::Internal(format!("Failed to decode alert audio: {}", e)))?;
+                sink.append(source);
+            }
+            None => {
+                let first_tone = SineWave::new(880.0)
+                    .take_duration(Duration::from_millis(260))
+                    .amplify(0.12);
+                let second_tone = SineWave::new(660.0)
+                    .take_duration(Duration::from_millis(260))
+                    .amplify(0.12)
+                    .delay(Duration::from_millis(60));
+                sink.append(first_tone);
+                sink.append(second_tone);
+            }
+        }
+
+        // Detach so alert playback continues independently of command lifetime.
+        sink.detach();
         Ok(())
     }
 

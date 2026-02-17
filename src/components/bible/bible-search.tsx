@@ -3,12 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useBibleSearch } from "../../lib/queries";
 import { Input } from "../ui/input";
 import { Search, X, BookOpen, ArrowRight } from "lucide-react";
-import { PERIODIC_BOOKS } from "./book-selector";
 import type { BibleSearchResult } from "../../types/bible";
-
-function stripAccents(str: string): string {
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
+import {
+  findBookIndexByQuery,
+  getLocalizedBookAbbrByIndex,
+  getLocalizedBookNameByIndex,
+  matchesBookQuery,
+  resolveBookIndex,
+} from "./book-catalog";
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -21,33 +23,43 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 
 interface ParsedReference {
   bookName: string;
+  displayBookName: string;
   chapter?: number;
   verse?: number;
 }
 
-function parseReference(query: string): ParsedReference | null {
+interface BookMatch {
+  index: number;
+  sourceBookName: string;
+  displayName: string;
+  displayAbbr: string;
+}
+
+function parseReference(query: string, language: string, availableBooksByIndex: Map<number, string>): ParsedReference | null {
   const trimmed = query.trim();
   if (!trimmed) return null;
 
-  // Match patterns like "Gn 1:3", "Genesis 1", "1 Sm 3:5", "1Sm 3"
+  // Match patterns like "Gn 1:3", "Genesis 1", "1 Sm 3:5", "Song of Solomon 2:1"
   const match = trimmed.match(
-    /^(\d?\s*[a-zA-Z\u00C0-\u017F]+)\s+(\d+)(?::(\d+))?$/,
+    /^(\d?\s*[a-zA-Z\u00C0-\u017F]+(?:\s+[a-zA-Z\u00C0-\u017F]+)*)\s+(\d+)(?::(\d+))?$/,
   );
   if (!match) return null;
 
-  const bookQuery = stripAccents(match[1].replace(/\s+/g, " ").trim());
+  const bookQuery = match[1].replace(/\s+/g, " ").trim();
   const chapter = parseInt(match[2], 10);
   const verse = match[3] ? parseInt(match[3], 10) : undefined;
+  const bookIndex = findBookIndexByQuery(bookQuery, language);
+  if (bookIndex === null) return null;
 
-  // Find matching book by abbreviation or name prefix
-  const found = PERIODIC_BOOKS.find(
-    (b) =>
-      stripAccents(b.abbr) === bookQuery ||
-      stripAccents(b.name).startsWith(bookQuery),
-  );
+  const sourceBookName = availableBooksByIndex.get(bookIndex);
+  if (!sourceBookName) return null;
 
-  if (!found) return null;
-  return { bookName: found.name, chapter, verse };
+  return {
+    bookName: sourceBookName,
+    displayBookName: getLocalizedBookNameByIndex(bookIndex, language),
+    chapter,
+    verse,
+  };
 }
 
 interface BibleSearchProps {
@@ -65,7 +77,18 @@ export function BibleSearch({
   onNavigate,
   availableBooks,
 }: BibleSearchProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage ?? i18n.language;
+
+  const availableBooksByIndex = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const name of availableBooks) {
+      const index = resolveBookIndex(name);
+      if (index === null || map.has(index)) continue;
+      map.set(index, name);
+    }
+    return map;
+  }, [availableBooks]);
 
   // Debounce the text query for backend search (300ms)
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -75,34 +98,51 @@ export function BibleSearch({
   const bookMatches = useMemo(() => {
     const q = query.trim();
     if (q.length < 1) return [];
-    const normalized = stripAccents(q);
-    return PERIODIC_BOOKS.filter(
-      (b) =>
-        availableBooks.has(b.name) &&
-        (stripAccents(b.abbr).startsWith(normalized) ||
-          stripAccents(b.name).startsWith(normalized)),
-    ).slice(0, 5);
-  }, [query, availableBooks]);
+
+    const matches: BookMatch[] = [];
+    for (const [index, sourceBookName] of availableBooksByIndex.entries()) {
+      if (!matchesBookQuery(index, q, language, sourceBookName)) continue;
+      matches.push({
+        index,
+        sourceBookName,
+        displayName: getLocalizedBookNameByIndex(index, language),
+        displayAbbr: getLocalizedBookAbbrByIndex(index),
+      });
+    }
+
+    return matches.sort((a, b) => a.index - b.index).slice(0, 5);
+  }, [query, availableBooksByIndex, language]);
 
   // Local: instant reference parsing (e.g. "Gn 1:3")
-  const parsedRef = useMemo(() => {
-    const ref = parseReference(query);
-    if (ref && availableBooks.has(ref.bookName)) return ref;
-    return null;
-  }, [query, availableBooks]);
+  const parsedRef = useMemo(
+    () => parseReference(query, language, availableBooksByIndex),
+    [query, language, availableBooksByIndex],
+  );
 
   // Group text search results by book + chapter
   const grouped = useMemo(() => {
-    if (!textResults) return new Map<string, BibleSearchResult[]>();
-    const map = new Map<string, BibleSearchResult[]>();
-    for (const r of textResults) {
-      const key = `${r.verse.book} ${r.verse.chapter}`;
-      const group = map.get(key) ?? [];
-      group.push(r);
-      map.set(key, group);
+    if (!textResults) return [] as Array<{ key: string; label: string; items: BibleSearchResult[] }>;
+
+    const groups = new Map<string, { key: string; label: string; items: BibleSearchResult[] }>();
+    for (const result of textResults) {
+      const key = `${result.verse.book}::${result.verse.chapter}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.items.push(result);
+        continue;
+      }
+
+      const bookIndex = resolveBookIndex(result.verse.book);
+      const displayBook = bookIndex === null ? result.verse.book : getLocalizedBookNameByIndex(bookIndex, language);
+      groups.set(key, {
+        key,
+        label: `${displayBook} ${result.verse.chapter}`,
+        items: [result],
+      });
     }
-    return map;
-  }, [textResults]);
+
+    return Array.from(groups.values());
+  }, [textResults, language]);
 
   const showDropdown =
     query.trim().length >= 1 &&
@@ -147,7 +187,7 @@ export function BibleSearch({
             >
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="font-medium">
-                {parsedRef.bookName} {parsedRef.chapter}
+                {parsedRef.displayBookName} {parsedRef.chapter}
                 {parsedRef.verse ? `:${parsedRef.verse}` : ""}
               </span>
             </button>
@@ -156,16 +196,16 @@ export function BibleSearch({
           {/* Book name matches */}
           {bookMatches.length > 0 && !parsedRef && (
             <div className="border-b border-border p-1">
-              {bookMatches.map((b) => (
+              {bookMatches.map((book) => (
                 <button
-                  key={b.abbr}
+                  key={`${book.index}-${book.sourceBookName}`}
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  onClick={() => onNavigate(b.name, 1, 1)}
+                  onClick={() => onNavigate(book.sourceBookName, 1, 1)}
                 >
                   <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span>
-                    <span className="font-medium">{b.abbr}</span>
-                    <span className="ml-1.5 text-muted-foreground">{b.name}</span>
+                    <span className="font-medium">{book.displayAbbr}</span>
+                    <span className="ml-1.5 text-muted-foreground">{book.displayName}</span>
                   </span>
                 </button>
               ))}
@@ -178,25 +218,25 @@ export function BibleSearch({
           )}
 
           {/* Text search results */}
-          {grouped.size > 0 && (
+          {grouped.length > 0 && (
             <div className="p-1">
-              {Array.from(grouped.entries()).map(([key, items]) => (
-                <div key={key}>
+              {grouped.map((group) => (
+                <div key={group.key}>
                   <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {key}
+                    {group.label}
                   </p>
-                  {items.map((r) => (
+                  {group.items.map((result) => (
                     <button
-                      key={r.verse.id}
+                      key={result.verse.id}
                       className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
                       onClick={() =>
-                        onNavigate(r.verse.book, r.verse.chapter, r.verse.verse)
+                        onNavigate(result.verse.book, result.verse.chapter, result.verse.verse)
                       }
                     >
-                      <span className="font-medium">v.{r.verse.verse}</span>{" "}
+                      <span className="font-medium">v.{result.verse.verse}</span>{" "}
                       <span
                         className="text-muted-foreground"
-                        dangerouslySetInnerHTML={{ __html: r.snippet }}
+                        dangerouslySetInnerHTML={{ __html: result.snippet }}
                       />
                     </button>
                   ))}

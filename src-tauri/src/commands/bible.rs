@@ -12,6 +12,7 @@ fn broadcast_bible_stream_payloads(
         "label": "",
         "text": "",
         "title": "",
+        "subtitle": "",
     });
     server.broadcast_music(&music_json.to_string());
 
@@ -26,6 +27,7 @@ fn broadcast_bible_stream_payloads(
             "label": slide_data.label.as_deref().unwrap_or(""),
             "text": slide_data.text.as_deref().unwrap_or(""),
             "title": slide_data.title.as_deref().unwrap_or(""),
+            "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
         },
         "next": null,
         "index": 0,
@@ -138,6 +140,13 @@ pub fn project_bible_verse(
         title: Some(reference.clone()),
         subtitle: None,
         label: None,
+        video_path: None,
+        auto_play: None,
+        r#loop: None,
+        muted: None,
+        mode: None,
+        text_color: None,
+        text_size: None,
     };
 
     drop(conn);
@@ -314,6 +323,13 @@ pub fn navigate_bible_verse(
         title: Some(new_reference.clone()),
         subtitle: None,
         label: None,
+        video_path: None,
+        auto_play: None,
+        r#loop: None,
+        muted: None,
+        mode: None,
+        text_color: None,
+        text_size: None,
     };
 
     drop(conn);

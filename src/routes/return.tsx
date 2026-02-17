@@ -1,10 +1,17 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 import type { SlideContentFlat, SlideContent, SlideContextFlat, OverlayState } from "../types/presentation";
 import { flatToSlideContent } from "../types/presentation";
 import { getCurrentSlide, getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
 import { SlideRenderer } from "../components/slides/slide-renderer";
+import {
+  formatUtilityProjectionDate,
+  formatUtilityProjectionValue,
+  localeFromLanguage,
+  type UtilityProjectionEventPayload,
+} from "../types/utilities";
 import { cn } from "../lib/utils";
 
 export const Route = createFileRoute("/return")({
@@ -12,25 +19,28 @@ export const Route = createFileRoute("/return")({
 });
 
 function ReturnPage() {
+  const { t, i18n } = useTranslation();
   const [currentSlide, setCurrentSlide] = useState<SlideContent | null>(null);
   const [nextSlide, setNextSlide] = useState<SlideContent | null>(null);
   const [slideTitle, setSlideTitle] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
   const [slideTotal, setSlideTotal] = useState(0);
   const [clock, setClock] = useState("");
+  const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
+  const clockLocale = localeFromLanguage(i18n.language);
 
   // Live clock
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
-      setClock(now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setClock(now.toLocaleTimeString(clockLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     };
     updateClock();
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [clockLocale]);
 
   // Listen to slide changes
   useEffect(() => {
@@ -98,9 +108,22 @@ function ReturnPage() {
     const unlisten = listen("slide-cleared", () => {
       setCurrentSlide(null);
       setNextSlide(null);
+      setUtilityProjection(null);
       setSlideTitle("");
       setSlideIndex(0);
       setSlideTotal(0);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Listen to utility live projection ticks
+  useEffect(() => {
+    const unlisten = listen<UtilityProjectionEventPayload>("utility-projection", (event) => {
+      if (event.payload.phase === "stop") {
+        setUtilityProjection(null);
+        return;
+      }
+      setUtilityProjection(event.payload);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -117,8 +140,36 @@ function ReturnPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const currentSlideToRender = useMemo(() => {
+    if (!utilityProjection) {
+      return currentSlide;
+    }
+
+    const subtitle = utilityProjection.kind === "countdown"
+      ? t("utilities.timer.countdown")
+      : utilityProjection.kind === "stopwatch"
+        ? t("utilities.timer.stopwatch")
+        : utilityProjection.showDate
+          ? formatUtilityProjectionDate(utilityProjection, i18n.language)
+          : t("utilities.clock.title");
+
+    return {
+      type: "cover",
+      title: formatUtilityProjectionValue(utilityProjection, i18n.language),
+      subtitle,
+    } satisfies SlideContent;
+  }, [currentSlide, i18n.language, t, utilityProjection]);
+
+  const effectiveSlideTitle = utilityProjection
+    ? utilityProjection.kind === "countdown"
+      ? t("utilities.projection.context.countdown")
+      : utilityProjection.kind === "stopwatch"
+        ? t("utilities.projection.context.stopwatch")
+        : t("utilities.projection.context.clock")
+    : slideTitle;
+
   const hasOverlay = blackScreen || logoScreen;
-  const noContent = !currentSlide && !hasOverlay;
+  const noContent = !currentSlideToRender && !hasOverlay;
 
   if (noContent) {
     return (
@@ -134,14 +185,15 @@ function ReturnPage() {
       {/* Current slide — top 70% */}
       <div className="relative flex-[7] overflow-hidden rounded-lg border border-white/10">
         <SlideRenderer
-          slide={currentSlide}
+          slide={currentSlideToRender}
+          renderMode="return-current"
           className="h-full w-full"
         />
         {/* Overlay indicator */}
         {hasOverlay && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70">
             <span className="rounded bg-red-600 px-4 py-2 text-lg font-bold uppercase tracking-wider">
-              {blackScreen ? "BLACK SCREEN" : "LOGO SCREEN"}
+              {blackScreen ? t("display.blackScreen") : t("display.logoScreen")}
             </span>
           </div>
         )}
@@ -149,7 +201,7 @@ function ReturnPage() {
 
       {/* Metadata bar */}
       <div className="flex items-center justify-between px-2 py-2 text-sm">
-        <span className="truncate font-medium text-white/90">{slideTitle}</span>
+        <span className="truncate font-medium text-white/90">{effectiveSlideTitle}</span>
         <div className="flex items-center gap-4">
           {slideTotal > 0 && (
             <span className="text-white/60">
@@ -167,16 +219,17 @@ function ReturnPage() {
         {nextSlide ? (
           <div className="relative h-full w-full">
             <div className="absolute left-2 top-1 z-10 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/50">
-              Next
+              {t("display.nextSlide")}
             </div>
             <SlideRenderer
               slide={nextSlide}
+              renderMode="return-next"
               className="h-full w-full opacity-70"
             />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-white/30">
-            No next slide
+            {t("display.noNextSlide")}
           </div>
         )}
       </div>

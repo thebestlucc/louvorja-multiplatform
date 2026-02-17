@@ -9,6 +9,8 @@ import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bibl
 import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
 import type { Settings } from "../types/settings";
 import type { StreamingInfo } from "../types/streaming";
+import type { TimerMode, TimerStateData, TextFormat } from "../types/utilities";
+import type { VideoMetadata } from "../types/video";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -102,6 +104,13 @@ export async function getMonitorConfigs(): Promise<MonitorConfig[]> {
 // Audio
 export async function audioPlay(filePath: string): Promise<void> {
   return tauriInvoke<void>("audio_play", { filePath });
+}
+
+export async function audioPlayAlert(filePath?: string | null, volume?: number | null): Promise<void> {
+  return tauriInvoke<void>("audio_play_alert", {
+    filePath: filePath ?? null,
+    volume: volume ?? null,
+  });
 }
 
 export async function audioPause(): Promise<void> {
@@ -278,6 +287,85 @@ export async function getAllSettings(): Promise<Settings[]> {
   return tauriInvoke<Settings[]>("get_all_settings");
 }
 
+// Utilities
+export async function startTimer(mode: TimerMode, durationMs?: number | null): Promise<void> {
+  return tauriInvoke<void>("start_timer", { mode, durationMs: durationMs ?? null });
+}
+
+export async function pauseTimer(): Promise<void> {
+  return tauriInvoke<void>("pause_timer");
+}
+
+export async function resumeTimer(): Promise<void> {
+  return tauriInvoke<void>("resume_timer");
+}
+
+export async function resetTimer(): Promise<void> {
+  return tauriInvoke<void>("reset_timer");
+}
+
+export async function adjustCountdownTimer(deltaMs: number): Promise<void> {
+  return tauriInvoke<void>("adjust_countdown_timer", { deltaMs });
+}
+
+export async function getTimerState(): Promise<TimerStateData> {
+  return tauriInvoke<TimerStateData>("get_timer_state");
+}
+
+export async function addLap(): Promise<number> {
+  return tauriInvoke<number>("add_lap");
+}
+
+export async function startCountdownProjection(
+  contextTitle: string,
+  countdownTitle: string,
+  initialTimeMs: number,
+): Promise<void> {
+  return tauriInvoke<void>("start_countdown_projection", {
+    contextTitle,
+    countdownTitle,
+    initialTimeMs,
+  });
+}
+
+export async function startStopwatchProjection(
+  contextTitle: string,
+  stopwatchTitle: string,
+  initialTimeMs: number,
+): Promise<void> {
+  return tauriInvoke<void>("start_stopwatch_projection", {
+    contextTitle,
+    stopwatchTitle,
+    initialTimeMs,
+  });
+}
+
+export async function startClockProjection(
+  contextTitle: string,
+  clockTitle: string,
+  use24Hour: boolean,
+  showDate: boolean,
+): Promise<void> {
+  return tauriInvoke<void>("start_clock_projection", {
+    contextTitle,
+    clockTitle,
+    use24Hour,
+    showDate,
+  });
+}
+
+export async function stopUtilityProjection(): Promise<void> {
+  return tauriInvoke<void>("stop_utility_projection");
+}
+
+export async function runLottery(names: string[]): Promise<string> {
+  return tauriInvoke<string>("run_lottery", { names });
+}
+
+export async function formatText(text: string, format: TextFormat): Promise<string> {
+  return tauriInvoke<string>("format_text", { text, format });
+}
+
 // Streaming
 export async function startStreamingServer(port?: number): Promise<StreamingInfo> {
   return tauriInvoke<StreamingInfo>("start_streaming_server", { port: port ?? null });
@@ -293,4 +381,17 @@ export async function getStreamingStatus(): Promise<StreamingInfo> {
 
 export async function setStreamingBroadcast(enabled: boolean): Promise<void> {
   return tauriInvoke<void>("set_streaming_broadcast", { enabled });
+}
+
+// Video
+export async function copyVideoToMedia(videoPath: string, presentationId: number): Promise<string> {
+  return tauriInvoke<string>("copy_video_to_media", { videoPath, presentationId });
+}
+
+export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
+  return tauriInvoke<VideoMetadata>("get_video_metadata", { path });
+}
+
+export async function resolveMediaPath(path: string): Promise<string> {
+  return tauriInvoke<string>("resolve_media_path", { path });
 }

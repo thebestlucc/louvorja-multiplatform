@@ -22,24 +22,105 @@ body{font-family:Georgia,'Times New Roman',serif;background:linear-gradient(135d
 </div>
 <script>
 let es = null;
+let uiEs = null;
 let reconnectTimer = null;
-let statusPoll = null;
+let uiReconnectTimer = null;
+let uiLanguage = 'pt';
+let lastStatusKey = 'waitingContent';
+let lastStatusClass = 'waiting';
+let lastPayload = null;
 
-function setStatus(msg, cls) {
+const I18N = {
+  pt: {
+    pageTitle: 'LouvorJA - Biblia',
+    waitingContent: 'Aguardando conteudo...',
+    disconnectedWaiting: 'Desconectado. Aguardando servidor...',
+    disconnectedReconnecting: 'Desconectado. Reconectando...',
+  },
+  en: {
+    pageTitle: 'LouvorJA - Bible',
+    waitingContent: 'Waiting for content...',
+    disconnectedWaiting: 'Disconnected. Waiting for server...',
+    disconnectedReconnecting: 'Disconnected. Reconnecting...',
+  },
+  es: {
+    pageTitle: 'LouvorJA - Biblia',
+    waitingContent: 'Esperando contenido...',
+    disconnectedWaiting: 'Desconectado. Esperando al servidor...',
+    disconnectedReconnecting: 'Desconectado. Reconectando...',
+  },
+};
+
+function normalizeLanguage(value) {
+  if (value === 'en' || value === 'es') {
+    return value;
+  }
+  return 'pt';
+}
+
+function tr(key) {
+  const table = I18N[uiLanguage] || I18N.pt;
+  return table[key] || I18N.pt[key] || key;
+}
+
+function applyStaticText() {
+  document.title = tr('pageTitle');
+}
+
+function safeText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function applyLanguage(language) {
+  const normalized = normalizeLanguage(language);
+  if (normalized === uiLanguage) {
+    return;
+  }
+  uiLanguage = normalized;
+  applyStaticText();
+  if (lastPayload) {
+    applyPayload(lastPayload);
+    return;
+  }
+  if (lastStatusKey) {
+    setStatus(lastStatusKey, lastStatusClass);
+  }
+}
+
+async function refreshUiLanguage() {
+  try {
+    const response = await fetch('/state/ui', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyLanguage(data.language);
+  } catch (_) {}
+}
+
+function setStatus(statusKey, cls) {
+  lastStatusKey = statusKey;
+  lastStatusClass = cls;
+  lastPayload = null;
   const el = document.getElementById('text');
   el.textContent = '';
   const span = document.createElement('span');
   span.className = cls;
-  span.textContent = msg;
+  span.textContent = tr(statusKey);
   el.appendChild(span);
+  document.getElementById('reference').textContent = '';
 }
 
 function applyPayload(d) {
-  document.getElementById('reference').textContent = d.reference || '';
-  if (d.text) {
-    document.getElementById('text').textContent = d.text;
+  lastPayload = d;
+  lastStatusKey = null;
+
+  const reference = safeText(d.reference);
+  const text = safeText(d.text);
+
+  document.getElementById('reference').textContent = reference;
+  if (text) {
+    document.getElementById('text').textContent = text;
   } else {
-    setStatus('Waiting for content...', 'waiting');
+    setStatus('waitingContent', 'waiting');
   }
 }
 
@@ -69,17 +150,29 @@ function scheduleReconnect() {
   }, 1500);
 }
 
+function scheduleUiReconnect() {
+  if (uiReconnectTimer) return;
+  uiReconnectTimer = setTimeout(() => {
+    uiReconnectTimer = null;
+    connectUi();
+  }, 1500);
+}
+
 async function connectIfAvailable() {
+  await refreshUiLanguage();
   if (es) return;
   const ok = await isServerAvailable();
   if (!ok) {
-    setStatus('Disconnected. Waiting for server...', 'disconnected');
+    setStatus('disconnectedWaiting', 'disconnected');
+    scheduleReconnect();
     return;
   }
   connect();
+  connectUi();
 }
 
 function connect() {
+  if (es) return;
   es = new EventSource('/sse/bible');
 
   es.onopen = function () {
@@ -97,22 +190,38 @@ function connect() {
       es.close();
       es = null;
     }
-    setStatus('Disconnected. Reconnecting...', 'disconnected');
+    setStatus('disconnectedReconnecting', 'disconnected');
     scheduleReconnect();
   };
 }
 
+function connectUi() {
+  if (uiEs) return;
+  uiEs = new EventSource('/sse/ui');
+  uiEs.onmessage = function (e) {
+    try {
+      const payload = JSON.parse(e.data);
+      applyLanguage(payload.language);
+    } catch (_) {}
+  };
+  uiEs.onerror = function () {
+    if (uiEs) {
+      uiEs.close();
+      uiEs = null;
+    }
+    scheduleUiReconnect();
+  };
+}
+
+applyStaticText();
+setStatus('waitingContent', 'waiting');
 void connectIfAvailable();
-statusPoll = setInterval(() => {
-  if (!es) {
-    void connectIfAvailable();
-  }
-}, 2000);
 
 window.addEventListener('beforeunload', () => {
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (statusPoll) clearInterval(statusPoll);
+  if (uiReconnectTimer) clearTimeout(uiReconnectTimer);
   if (es) es.close();
+  if (uiEs) uiEs.close();
 });
 </script>
 </body>

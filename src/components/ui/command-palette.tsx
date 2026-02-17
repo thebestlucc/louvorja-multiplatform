@@ -11,21 +11,41 @@ import {
   Wrench,
   Settings,
   Loader2,
+  Timer,
+  Clock3,
+  Shuffle,
+  CaseSensitive,
+  Monitor,
+  MonitorSmartphone,
+  MonitorOff,
+  Image,
+  Eraser,
+  Keyboard,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "../../lib/utils";
-import { searchHymns, searchBible } from "../../lib/tauri";
+import { useMonitorsControl } from "../../hooks/use-monitors";
+import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
+import { clearCurrentSlide, searchHymns, searchBible } from "../../lib/tauri";
 import type { Hymn } from "../../types/hymn";
 import type { BibleSearchResult } from "../../types/bible";
 
-const routes = [
-  { path: "/", icon: Home, key: "nav.home" },
-  { path: "/hymnal", icon: Music, key: "nav.hymnal" },
-  { path: "/bible", icon: BookOpen, key: "nav.bible" },
-  { path: "/presentations", icon: Presentation, key: "nav.presentations" },
-  { path: "/services", icon: ListChecks, key: "nav.services" },
-  { path: "/utilities", icon: Wrench, key: "nav.utilities" },
-  { path: "/settings", icon: Settings, key: "nav.settings" },
-] as const;
+type PaletteRouteCommand = {
+  id: string;
+  icon: typeof Home;
+  label: string;
+  value: string;
+  to: string;
+  group: "navigation" | "utilities";
+};
+
+type PaletteActionCommand = {
+  id: string;
+  icon: typeof Home;
+  label: string;
+  value: string;
+  onSelect: () => void | Promise<void>;
+};
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -35,6 +55,12 @@ export function CommandPalette() {
   const [searching, setSearching] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const {
+    toggleProjector,
+    toggleReturn,
+    toggleBlackScreen,
+    toggleLogoScreen,
+  } = useMonitorsControl();
 
   // Keyboard shortcut to open/close
   useEffect(() => {
@@ -89,16 +115,172 @@ export function CommandPalette() {
   const hasQuery = query.trim().length > 0;
   const hasResults = hymns.length > 0 || bibleResults.length > 0;
 
+  const routes: PaletteRouteCommand[] = [
+    {
+      id: "route-home",
+      icon: Home,
+      label: t("nav.home"),
+      value: `${t("nav.home")} dashboard`,
+      to: "/",
+      group: "navigation",
+    },
+    {
+      id: "route-hymnal",
+      icon: Music,
+      label: t("nav.hymnal"),
+      value: `${t("nav.hymnal")} music lyrics`,
+      to: "/hymnal",
+      group: "navigation",
+    },
+    {
+      id: "route-bible",
+      icon: BookOpen,
+      label: t("nav.bible"),
+      value: `${t("nav.bible")} verses`,
+      to: "/bible",
+      group: "navigation",
+    },
+    {
+      id: "route-presentations",
+      icon: Presentation,
+      label: t("nav.presentations"),
+      value: `${t("nav.presentations")} slides`,
+      to: "/presentations",
+      group: "navigation",
+    },
+    {
+      id: "route-services",
+      icon: ListChecks,
+      label: t("nav.services"),
+      value: `${t("nav.services")} liturgy`,
+      to: "/services",
+      group: "navigation",
+    },
+    {
+      id: "route-utilities",
+      icon: Wrench,
+      label: t("nav.utilities"),
+      value: `${t("nav.utilities")} tools`,
+      to: "/utilities",
+      group: "navigation",
+    },
+    {
+      id: "route-settings",
+      icon: Settings,
+      label: t("nav.settings"),
+      value: `${t("nav.settings")} preferences`,
+      to: "/settings",
+      group: "navigation",
+    },
+    {
+      id: "route-utilities-timer",
+      icon: Timer,
+      label: t("utilities.nav.timer"),
+      value: `${t("utilities.nav.timer")} ${t("nav.utilities")} countdown stopwatch`,
+      to: "/utilities/timer",
+      group: "utilities",
+    },
+    {
+      id: "route-utilities-clock",
+      icon: Clock3,
+      label: t("utilities.nav.clock"),
+      value: `${t("utilities.nav.clock")} ${t("nav.utilities")} time`,
+      to: "/utilities/clock",
+      group: "utilities",
+    },
+    {
+      id: "route-utilities-lottery",
+      icon: Shuffle,
+      label: t("utilities.nav.lottery"),
+      value: `${t("utilities.nav.lottery")} ${t("nav.utilities")} random`,
+      to: "/utilities/lottery",
+      group: "utilities",
+    },
+    {
+      id: "route-utilities-text",
+      icon: CaseSensitive,
+      label: t("utilities.nav.text"),
+      value: `${t("utilities.nav.text")} ${t("nav.utilities")} format`,
+      to: "/utilities/text",
+      group: "utilities",
+    },
+  ];
+
+  const actionCommands: PaletteActionCommand[] = [
+    {
+      id: "action-toggle-projector",
+      icon: Monitor,
+      label: t("commandPalette.actions.toggleProjector"),
+      value: `${t("commandPalette.actions.toggleProjector")} f5`,
+      onSelect: async () => {
+        await toggleProjector();
+      },
+    },
+    {
+      id: "action-toggle-return",
+      icon: MonitorSmartphone,
+      label: t("commandPalette.actions.toggleReturn"),
+      value: `${t("commandPalette.actions.toggleReturn")} shift f5`,
+      onSelect: async () => {
+        await toggleReturn();
+      },
+    },
+    {
+      id: "action-toggle-black",
+      icon: MonitorOff,
+      label: t("commandPalette.actions.toggleBlack"),
+      value: `${t("commandPalette.actions.toggleBlack")} b`,
+      onSelect: async () => {
+        await toggleBlackScreen();
+      },
+    },
+    {
+      id: "action-toggle-logo",
+      icon: Image,
+      label: t("commandPalette.actions.toggleLogo"),
+      value: `${t("commandPalette.actions.toggleLogo")} l`,
+      onSelect: async () => {
+        await toggleLogoScreen();
+      },
+    },
+    {
+      id: "action-clear-projection",
+      icon: Eraser,
+      label: t("commandPalette.actions.clearProjection"),
+      value: `${t("commandPalette.actions.clearProjection")} escape`,
+      onSelect: async () => {
+        await clearCurrentSlide();
+      },
+    },
+    {
+      id: "action-open-shortcuts",
+      icon: Keyboard,
+      label: t("commandPalette.actions.openShortcuts"),
+      value: `${t("commandPalette.actions.openShortcuts")} cmd ctrl /`,
+      onSelect: () => {
+        openKeyboardShortcutsPanel();
+      },
+    },
+  ];
+
   const filteredRoutes = routes.filter((route) => {
     if (!hasQuery) return true;
-    return t(route.key).toLowerCase().includes(query.toLowerCase());
+    return route.value.toLowerCase().includes(query.toLowerCase());
+  });
+  const filteredNavigationRoutes = filteredRoutes.filter((route) => route.group === "navigation");
+  const filteredUtilityRoutes = filteredRoutes.filter((route) => route.group === "utilities");
+  const filteredActions = actionCommands.filter((entry) => {
+    if (!hasQuery) {
+      return true;
+    }
+    return entry.value.toLowerCase().includes(query.toLowerCase());
   });
 
   return (
     <Command.Dialog
       open={open}
       onOpenChange={setOpen}
-      shouldFilter={!hasQuery}
+      shouldFilter={false}
       label={t("commandPalette.placeholder")}
       className={cn(
         "fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
@@ -132,23 +314,74 @@ export function CommandPalette() {
         )}
 
         {/* Navigation group */}
-        {filteredRoutes.length > 0 && (
+        {filteredNavigationRoutes.length > 0 && (
           <Command.Group
             heading={t("commandPalette.navigation")}
             className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
           >
-            {filteredRoutes.map((route) => (
+            {filteredNavigationRoutes.map((route) => (
               <Command.Item
-                key={route.path}
-                value={t(route.key)}
+                key={route.id}
+                value={route.value}
                 onSelect={() => {
-                  navigate({ to: route.path });
+                  navigate({ to: route.to });
                   setOpen(false);
                 }}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
               >
                 <route.icon className="h-4 w-4 text-muted-foreground" />
-                {t(route.key)}
+                {route.label}
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+
+        {/* Utilities routes */}
+        {filteredUtilityRoutes.length > 0 && (
+          <Command.Group
+            heading={t("commandPalette.utilities")}
+            className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+          >
+            {filteredUtilityRoutes.map((route) => (
+              <Command.Item
+                key={route.id}
+                value={route.value}
+                onSelect={() => {
+                  navigate({ to: route.to });
+                  setOpen(false);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
+              >
+                <route.icon className="h-4 w-4 text-muted-foreground" />
+                {route.label}
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+
+        {/* Global actions */}
+        {filteredActions.length > 0 && (
+          <Command.Group
+            heading={t("commandPalette.globalActions")}
+            className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+          >
+            {filteredActions.map((action) => (
+              <Command.Item
+                key={action.id}
+                value={action.value}
+                onSelect={() => {
+                  Promise.resolve(action.onSelect())
+                    .catch((error) => {
+                      toast.error(String(error));
+                    })
+                    .finally(() => {
+                      setOpen(false);
+                    });
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
+              >
+                <action.icon className="h-4 w-4 text-muted-foreground" />
+                {action.label}
               </Command.Item>
             ))}
           </Command.Group>

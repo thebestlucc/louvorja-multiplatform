@@ -141,7 +141,7 @@ function BibleIndex() {
               value={String(bible.currentVersionId)}
               onValueChange={(val) => bible.setVersion(Number(val))}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-52 sm:w-72">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

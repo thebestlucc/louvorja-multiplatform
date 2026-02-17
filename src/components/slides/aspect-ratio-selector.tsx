@@ -20,12 +20,12 @@ export function AspectRatioSelector({ value, onChange }: AspectRatioSelectorProp
       <label className="text-xs font-medium text-muted-foreground">
         {t("presentations.aspectRatio")}
       </label>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-1 gap-2">
         {RATIOS.map((ratio) => (
           <button
             key={ratio.value}
             className={cn(
-              "flex flex-col items-center gap-1 rounded-md border-2 p-2 transition-colors",
+              "flex w-full flex-col items-center gap-1 rounded-md border-2 p-2 transition-colors",
               value === ratio.value
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-muted-foreground",

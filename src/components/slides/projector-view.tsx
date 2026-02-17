@@ -1,14 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 import { getCurrentSlide, clearCurrentSlide, getOverlayState } from "../../lib/tauri";
 import type { SlideContentFlat, OverlayState } from "../../types/presentation";
 import { flatToSlideContent } from "../../types/presentation";
 import { SlideRenderer } from "./slide-renderer";
 import type { SlideContent } from "../../types/presentation";
+import {
+  formatUtilityProjectionDate,
+  formatUtilityProjectionValue,
+  type UtilityProjectionEventPayload,
+} from "../../types/utilities";
 import { cn } from "../../lib/utils";
 
 export function ProjectorView() {
+  const { t, i18n } = useTranslation();
   const [slide, setSlide] = useState<SlideContent | null>(null);
+  const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
 
@@ -52,6 +60,22 @@ export function ProjectorView() {
   useEffect(() => {
     const unlisten = listen("slide-cleared", () => {
       setSlide(null);
+      setUtilityProjection(null);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Listen to utility live projection ticks
+  useEffect(() => {
+    const unlisten = listen<UtilityProjectionEventPayload>("utility-projection", (event) => {
+      if (event.payload.phase === "stop") {
+        setUtilityProjection(null);
+        return;
+      }
+
+      setUtilityProjection(event.payload);
     });
     return () => {
       unlisten.then((fn) => fn());
@@ -70,12 +94,33 @@ export function ProjectorView() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const showLogo = !slide || logoScreen;
+  const renderedSlide = useMemo(() => {
+    if (!utilityProjection) {
+      return slide;
+    }
+
+    const subtitle = utilityProjection.kind === "countdown"
+      ? t("utilities.timer.countdown")
+      : utilityProjection.kind === "stopwatch"
+        ? t("utilities.timer.stopwatch")
+        : utilityProjection.showDate
+          ? formatUtilityProjectionDate(utilityProjection, i18n.language)
+          : t("utilities.clock.title");
+
+    return {
+      type: "cover",
+      title: formatUtilityProjectionValue(utilityProjection, i18n.language),
+      subtitle,
+    } satisfies SlideContent;
+  }, [i18n.language, slide, t, utilityProjection]);
+
+  const showLogo = !renderedSlide || logoScreen;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       <SlideRenderer
-        slide={slide}
+        slide={renderedSlide}
+        renderMode="projector"
         className="h-full w-full transition-opacity duration-300"
       />
       {/* Black screen overlay */}

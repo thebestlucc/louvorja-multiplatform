@@ -4,10 +4,12 @@ mod commands;
 mod db;
 mod display;
 mod error;
+mod projection;
 mod state;
 mod streaming;
+mod video;
 
-use state::{AppState, AudioState, StreamingState};
+use state::{AppState, AudioState, StreamingState, TimerRuntimeState};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -34,6 +36,8 @@ pub fn run() {
 
             app.manage(AppState {
                 db: Mutex::new(conn),
+                timer: Mutex::new(TimerRuntimeState::default()),
+                utility_projection_stop: Mutex::new(None),
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),
                 is_black_screen: Mutex::new(false),
@@ -55,15 +59,21 @@ pub fn run() {
                     .ok()
                     .map(|s| s.value == "true")
                     .unwrap_or(false);
-                if auto_start {
-                    let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
-                        .ok()
-                        .and_then(|s| s.value.parse::<u16>().ok())
-                        .unwrap_or(7070);
-                    drop(conn); // release db lock before locking streaming state
-                    let streaming = app.state::<StreamingState>();
-                    let server_result = streaming.server.lock();
-                    if let Ok(mut server) = server_result {
+                let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
+                    .ok()
+                    .and_then(|s| s.value.parse::<u16>().ok())
+                    .unwrap_or(7070);
+                let language = crate::db::queries::settings::get_setting(&conn, "app.language")
+                    .ok()
+                    .map(|s| s.value)
+                    .unwrap_or_else(|| "pt".to_string());
+                drop(conn); // release db lock before locking streaming state
+
+                let streaming = app.state::<StreamingState>();
+                let server_result = streaming.server.lock();
+                if let Ok(mut server) = server_result {
+                    server.set_ui_language(&language);
+                    if auto_start {
                         let _ = server.start(Some(port));
                     }
                 }
@@ -116,6 +126,7 @@ pub fn run() {
             commands::liturgy::update_service_item,
             // Audio
             commands::audio::audio_play,
+            commands::audio::audio_play_alert,
             commands::audio::audio_pause,
             commands::audio::audio_resume,
             commands::audio::audio_stop,
@@ -152,12 +163,22 @@ pub fn run() {
             commands::settings::get_all_settings,
             // Timer
             commands::timer::start_timer,
-            commands::timer::stop_timer,
+            commands::timer::pause_timer,
+            commands::timer::resume_timer,
             commands::timer::reset_timer,
+            commands::timer::adjust_countdown_timer,
             commands::timer::get_timer_state,
+            commands::timer::add_lap,
+            commands::timer::start_countdown_projection,
+            commands::timer::start_stopwatch_projection,
+            commands::timer::stop_utility_projection,
+            commands::clock::start_clock_projection,
             // Utility
             commands::utility::run_lottery,
             commands::utility::format_text,
+            commands::utility::copy_video_to_media,
+            commands::utility::get_video_metadata,
+            commands::utility::resolve_media_path,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
