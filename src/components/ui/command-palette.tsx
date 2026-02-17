@@ -21,6 +21,7 @@ import {
   Image,
   Eraser,
   Keyboard,
+  CircleHelp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../lib/utils";
@@ -170,6 +171,14 @@ export function CommandPalette() {
       label: t("nav.settings"),
       value: `${t("nav.settings")} preferences`,
       to: "/settings",
+      group: "navigation",
+    },
+    {
+      id: "route-help",
+      icon: CircleHelp,
+      label: t("nav.help"),
+      value: `${t("nav.help")} support docs tour`,
+      to: "/help",
       group: "navigation",
     },
     {

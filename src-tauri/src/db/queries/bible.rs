@@ -204,19 +204,6 @@ pub fn search_bible_text(
     }
 }
 
-pub fn get_chapter_count(
-    conn: &Connection,
-    version_id: i64,
-    book: &str,
-) -> Result<i64, AppError> {
-    let count: i64 = conn.query_row(
-        "SELECT COALESCE(MAX(chapter), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2",
-        params![version_id, book],
-        |row| row.get(0),
-    )?;
-    Ok(count)
-}
-
 pub fn import_bible_version(
     conn: &Connection,
     name: &str,

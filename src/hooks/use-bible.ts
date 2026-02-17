@@ -10,6 +10,7 @@ export function useBible() {
   const [currentChapter, setCurrentChapter] = useState(0);
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const [lastSelectedVerse, setLastSelectedVerse] = useState<number | null>(null);
+  const [projectedVerse, setProjectedVerse] = useState<number | null>(null);
 
   const versionsQuery = useBibleVersions();
   const booksQuery = useBooks(currentVersionId);
@@ -21,6 +22,7 @@ export function useBible() {
     setCurrentChapter(0);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
+    setProjectedVerse(null);
   }, []);
 
   const setBook = useCallback((book: string) => {
@@ -28,12 +30,14 @@ export function useBible() {
     setCurrentChapter(0);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
+    setProjectedVerse(null);
   }, []);
 
   const setChapter = useCallback((chapter: number) => {
     setCurrentChapter(chapter);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
+    setProjectedVerse(null);
   }, []);
 
   const selectVerse = useCallback((verse: number) => {
@@ -63,6 +67,7 @@ export function useBible() {
   const clearSelection = useCallback(() => {
     setSelectedVerses([]);
     setLastSelectedVerse(null);
+    setProjectedVerse(null);
   }, []);
 
   const projectVerse = useCallback(async (verseNum: number) => {
@@ -80,8 +85,7 @@ export function useBible() {
     try {
       await setCurrentSlide(slideData);
       await setSlideContext({ next: null, index: 0, total: 1, title: reference });
-      setSelectedVerses([]);
-      setLastSelectedVerse(null);
+      setProjectedVerse(verseNum);
     } catch (err) {
       toast.error(String(err));
     }
@@ -112,8 +116,7 @@ export function useBible() {
     try {
       await setCurrentSlide(slideData);
       await setSlideContext({ next: null, index: 0, total: 1, title: reference });
-      setSelectedVerses([]);
-      setLastSelectedVerse(null);
+      setProjectedVerse(null);
     } catch (err) {
       toast.error(String(err));
     }
@@ -125,6 +128,7 @@ export function useBible() {
     currentChapter,
     selectedVerses,
     lastSelectedVerse,
+    projectedVerse,
     versions: versionsQuery.data ?? [],
     books: booksQuery.data ?? [],
     verses: versesQuery.data ?? [],

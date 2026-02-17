@@ -25,6 +25,14 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         return;
       }
 
+      const isBibleRoute = window.location.pathname.startsWith("/bible");
+      if (
+        isBibleRoute &&
+        (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "PageDown" || e.key === "PageUp" || e.key === " ")
+      ) {
+        return;
+      }
+
       switch (e.key) {
         case "/":
         case "?":

@@ -147,10 +147,6 @@ impl StreamingServer {
         self.broadcast_enabled.store(enabled, Ordering::SeqCst);
     }
 
-    pub fn is_broadcast_enabled(&self) -> bool {
-        self.broadcast_enabled.load(Ordering::SeqCst)
-    }
-
     pub fn set_ui_language(&self, language: &str) {
         let normalized = normalize_language(language).to_string();
         if let Ok(mut current) = self.ui_language.lock() {

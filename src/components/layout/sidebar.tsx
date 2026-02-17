@@ -8,6 +8,7 @@ import {
   ListChecks,
   Wrench,
   Settings,
+  CircleHelp,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const navItems = [
   { to: "/services", icon: ListChecks, labelKey: "nav.services" },
   { to: "/utilities", icon: Wrench, labelKey: "nav.utilities" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
+  { to: "/help", icon: CircleHelp, labelKey: "nav.help" },
 ] as const;
 
 export function Sidebar() {

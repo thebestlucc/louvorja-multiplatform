@@ -19,9 +19,9 @@
 | 7 | 08 | HTTP Streaming Server | COMPLETE |
 | 8 | 09 | Video & Multimedia | COMPLETE |
 | 9 | 10 | Utilities & Polish | COMPLETE |
-| 10 | 11 | Migration Tools & Deployment | Pending |
+| 10 | 11 | Migration Tools & Deployment | IN PROGRESS |
 
-**Progress: 10 / 11 phases complete (Phase 10 pending)**
+**Progress: 10 / 11 phases complete (Phase 10 in progress)**
 
 ---
 
@@ -289,6 +289,26 @@ Notes:
 
 ## Phase 10 — Migration Tools & Deployment (SPEC 11)
 
-**Status:** Pending
+**Status:** IN PROGRESS
 
-First-run onboarding wizard, data migration from Delphi version (.ljd files), auto-updater integration, deployment configuration.
+First-run onboarding wizard, data migration from legacy SQLite, updater contract, and deployment/release baseline.
+
+Planning docs created:
+- `docs/phase-10-migration-tools-deployment/PRD.md`
+- `docs/phase-10-migration-tools-deployment/SPECS.md`
+- `docs/phase-10-migration-tools-deployment/TASKS.md`
+
+Implementation baseline delivered:
+- Backend migration module and commands: `start_migration`, `get_migration_progress`, `cancel_migration`, `get_migration_report`
+- Migration run state tracking with run-id, progress events (`migration-progress`), cancellation flag, and final report persistence keys
+- Frontend migration contracts and wrappers in `src/types/migration.ts` and `src/lib/tauri.ts`
+- First-run onboarding route tree under `src/routes/onboarding/*` with welcome/import/monitors/complete steps
+- Root first-run gate redirecting non-onboarded users to `/onboarding/welcome`
+- Help route and guided tour baseline (`src/routes/help/route.tsx`, `src/components/help/guided-tour.tsx`)
+- Updater command contract + frontend notification component baseline
+- Release baseline assets: `.github/workflows/release.yml`, `CHANGELOG.md`, `CONTRIBUTING.md`, `docs/MIGRATION_GUIDE.md`, `docs/USER_GUIDE.md`
+
+Validation status:
+- Static checks green (`tsc`, `cargo check`, `vite build`)
+- Runtime smoke evidence logged in `docs/phase-10-migration-tools-deployment/SMOKE-2026-02-17.md`
+- Phase remains `IN PROGRESS` until GUI-dependent smoke matrix items are completed

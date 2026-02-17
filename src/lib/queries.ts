@@ -10,11 +10,14 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings,
+  startMigration, getMigrationProgress, cancelMigration, getMigrationReport,
+  checkForUpdates, installUpdate,
   copyVideoToMedia, getVideoMetadata, resolveMediaPath,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
 import type { TimerMode, TextFormat } from "../types/utilities";
+import type { MigrationOptions, UpdateInfo } from "../types/migration";
 
 export const queryKeys = {
   hymns: {
@@ -47,6 +50,13 @@ export const queryKeys = {
   settings: {
     all: ["settings"] as const,
     detail: (key: string) => ["settings", key] as const,
+  },
+  migration: {
+    progress: (runId: string) => ["migration", "progress", runId] as const,
+    report: (runId: string) => ["migration", "report", runId] as const,
+  },
+  updater: {
+    info: ["updater", "info"] as const,
   },
   monitors: {
     all: ["monitors"] as const,
@@ -420,6 +430,78 @@ export function useSetSetting() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.detail(vars.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
+    },
+  });
+}
+
+// Migration
+export function useStartMigration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { oldDbPath: string; options: MigrationOptions }) =>
+      startMigration(vars.oldDbPath, vars.options),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.migration.progress(data.runId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.migration.report(data.runId) });
+    },
+  });
+}
+
+export function useMigrationProgress(runId: string | null, options?: { enabled?: boolean }) {
+  const enabled = Boolean(runId && (options?.enabled ?? true));
+  return useQuery({
+    queryKey: queryKeys.migration.progress(runId ?? ""),
+    queryFn: () => getMigrationProgress(runId ?? ""),
+    enabled,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "running" || status === "cancelling") {
+        return 500;
+      }
+      return false;
+    },
+    refetchIntervalInBackground: true,
+  });
+}
+
+export function useMigrationReport(runId: string | null, options?: { enabled?: boolean }) {
+  const enabled = Boolean(runId && (options?.enabled ?? true));
+  return useQuery({
+    queryKey: queryKeys.migration.report(runId ?? ""),
+    queryFn: () => getMigrationReport(runId ?? ""),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useCancelMigration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => cancelMigration(runId),
+    onSuccess: (_, runId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.migration.progress(runId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.migration.report(runId) });
+    },
+  });
+}
+
+// Updater
+export function useCheckForUpdates(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.updater.info,
+    queryFn: () => checkForUpdates(),
+    enabled: options?.enabled,
+    retry: false,
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+export function useInstallUpdate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => installUpdate(),
+    onSuccess: () => {
+      queryClient.setQueryData(queryKeys.updater.info, null as UpdateInfo | null);
     },
   });
 }

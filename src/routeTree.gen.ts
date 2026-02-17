@@ -15,13 +15,16 @@ import { Route as UtilitiesRouteRouteImport } from './routes/utilities/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as ServicesRouteRouteImport } from './routes/services/route'
 import { Route as PresentationsRouteRouteImport } from './routes/presentations/route'
+import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as HymnalRouteRouteImport } from './routes/hymnal/route'
+import { Route as HelpRouteRouteImport } from './routes/help/route'
 import { Route as BibleRouteRouteImport } from './routes/bible/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UtilitiesIndexRouteImport } from './routes/utilities/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
 import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
+import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as HymnalIndexRouteImport } from './routes/hymnal/index'
 import { Route as BibleIndexRouteImport } from './routes/bible/index'
 import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
@@ -30,6 +33,10 @@ import { Route as UtilitiesLotteryRouteImport } from './routes/utilities/lottery
 import { Route as UtilitiesClockRouteImport } from './routes/utilities/clock'
 import { Route as ServicesServiceIdRouteImport } from './routes/services/$serviceId'
 import { Route as PresentationsPresentationIdRouteImport } from './routes/presentations/$presentationId'
+import { Route as OnboardingWelcomeRouteImport } from './routes/onboarding/welcome'
+import { Route as OnboardingMonitorsRouteImport } from './routes/onboarding/monitors'
+import { Route as OnboardingImportRouteImport } from './routes/onboarding/import'
+import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
 
 const ReturnRoute = ReturnRouteImport.update({
@@ -62,9 +69,19 @@ const PresentationsRouteRoute = PresentationsRouteRouteImport.update({
   path: '/presentations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HymnalRouteRoute = HymnalRouteRouteImport.update({
   id: '/hymnal',
   path: '/hymnal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRouteRoute = HelpRouteRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BibleRouteRoute = BibleRouteRouteImport.update({
@@ -96,6 +113,11 @@ const PresentationsIndexRoute = PresentationsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PresentationsRouteRoute,
+} as any)
+const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OnboardingRouteRoute,
 } as any)
 const HymnalIndexRoute = HymnalIndexRouteImport.update({
   id: '/',
@@ -138,6 +160,26 @@ const PresentationsPresentationIdRoute =
     path: '/$presentationId',
     getParentRoute: () => PresentationsRouteRoute,
   } as any)
+const OnboardingWelcomeRoute = OnboardingWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
+const OnboardingMonitorsRoute = OnboardingMonitorsRouteImport.update({
+  id: '/monitors',
+  path: '/monitors',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
+const OnboardingImportRoute = OnboardingImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
+const OnboardingCompleteRoute = OnboardingCompleteRouteImport.update({
+  id: '/complete',
+  path: '/complete',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
 const HymnalHymnIdRoute = HymnalHymnIdRouteImport.update({
   id: '/$hymnId',
   path: '/$hymnId',
@@ -147,7 +189,9 @@ const HymnalHymnIdRoute = HymnalHymnIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bible': typeof BibleRouteRouteWithChildren
+  '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
+  '/onboarding': typeof OnboardingRouteRouteWithChildren
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
@@ -155,6 +199,10 @@ export interface FileRoutesByFullPath {
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
+  '/onboarding/complete': typeof OnboardingCompleteRoute
+  '/onboarding/import': typeof OnboardingImportRoute
+  '/onboarding/monitors': typeof OnboardingMonitorsRoute
+  '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
@@ -163,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
+  '/onboarding/': typeof OnboardingIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -170,9 +219,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/help': typeof HelpRouteRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
+  '/onboarding/complete': typeof OnboardingCompleteRoute
+  '/onboarding/import': typeof OnboardingImportRoute
+  '/onboarding/monitors': typeof OnboardingMonitorsRoute
+  '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
@@ -181,6 +235,7 @@ export interface FileRoutesByTo {
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible': typeof BibleIndexRoute
   '/hymnal': typeof HymnalIndexRoute
+  '/onboarding': typeof OnboardingIndexRoute
   '/presentations': typeof PresentationsIndexRoute
   '/services': typeof ServicesIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -190,7 +245,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/bible': typeof BibleRouteRouteWithChildren
+  '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
+  '/onboarding': typeof OnboardingRouteRouteWithChildren
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
@@ -198,6 +255,10 @@ export interface FileRoutesById {
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
+  '/onboarding/complete': typeof OnboardingCompleteRoute
+  '/onboarding/import': typeof OnboardingImportRoute
+  '/onboarding/monitors': typeof OnboardingMonitorsRoute
+  '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
@@ -206,6 +267,7 @@ export interface FileRoutesById {
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
+  '/onboarding/': typeof OnboardingIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -216,7 +278,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/bible'
+    | '/help'
     | '/hymnal'
+    | '/onboarding'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -224,6 +288,10 @@ export interface FileRouteTypes {
     | '/projector'
     | '/return'
     | '/hymnal/$hymnId'
+    | '/onboarding/complete'
+    | '/onboarding/import'
+    | '/onboarding/monitors'
+    | '/onboarding/welcome'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
     | '/utilities/clock'
@@ -232,6 +300,7 @@ export interface FileRouteTypes {
     | '/utilities/timer'
     | '/bible/'
     | '/hymnal/'
+    | '/onboarding/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
@@ -239,9 +308,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/help'
     | '/projector'
     | '/return'
     | '/hymnal/$hymnId'
+    | '/onboarding/complete'
+    | '/onboarding/import'
+    | '/onboarding/monitors'
+    | '/onboarding/welcome'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
     | '/utilities/clock'
@@ -250,6 +324,7 @@ export interface FileRouteTypes {
     | '/utilities/timer'
     | '/bible'
     | '/hymnal'
+    | '/onboarding'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -258,7 +333,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/bible'
+    | '/help'
     | '/hymnal'
+    | '/onboarding'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -266,6 +343,10 @@ export interface FileRouteTypes {
     | '/projector'
     | '/return'
     | '/hymnal/$hymnId'
+    | '/onboarding/complete'
+    | '/onboarding/import'
+    | '/onboarding/monitors'
+    | '/onboarding/welcome'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
     | '/utilities/clock'
@@ -274,6 +355,7 @@ export interface FileRouteTypes {
     | '/utilities/timer'
     | '/bible/'
     | '/hymnal/'
+    | '/onboarding/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
@@ -283,7 +365,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibleRouteRoute: typeof BibleRouteRouteWithChildren
+  HelpRouteRoute: typeof HelpRouteRoute
   HymnalRouteRoute: typeof HymnalRouteRouteWithChildren
+  OnboardingRouteRoute: typeof OnboardingRouteRouteWithChildren
   PresentationsRouteRoute: typeof PresentationsRouteRouteWithChildren
   ServicesRouteRoute: typeof ServicesRouteRouteWithChildren
   SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
@@ -336,11 +420,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PresentationsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hymnal': {
       id: '/hymnal'
       path: '/hymnal'
       fullPath: '/hymnal'
       preLoaderRoute: typeof HymnalRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bible': {
@@ -384,6 +482,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/presentations/'
       preLoaderRoute: typeof PresentationsIndexRouteImport
       parentRoute: typeof PresentationsRouteRoute
+    }
+    '/onboarding/': {
+      id: '/onboarding/'
+      path: '/'
+      fullPath: '/onboarding/'
+      preLoaderRoute: typeof OnboardingIndexRouteImport
+      parentRoute: typeof OnboardingRouteRoute
     }
     '/hymnal/': {
       id: '/hymnal/'
@@ -441,6 +546,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PresentationsPresentationIdRouteImport
       parentRoute: typeof PresentationsRouteRoute
     }
+    '/onboarding/welcome': {
+      id: '/onboarding/welcome'
+      path: '/welcome'
+      fullPath: '/onboarding/welcome'
+      preLoaderRoute: typeof OnboardingWelcomeRouteImport
+      parentRoute: typeof OnboardingRouteRoute
+    }
+    '/onboarding/monitors': {
+      id: '/onboarding/monitors'
+      path: '/monitors'
+      fullPath: '/onboarding/monitors'
+      preLoaderRoute: typeof OnboardingMonitorsRouteImport
+      parentRoute: typeof OnboardingRouteRoute
+    }
+    '/onboarding/import': {
+      id: '/onboarding/import'
+      path: '/import'
+      fullPath: '/onboarding/import'
+      preLoaderRoute: typeof OnboardingImportRouteImport
+      parentRoute: typeof OnboardingRouteRoute
+    }
+    '/onboarding/complete': {
+      id: '/onboarding/complete'
+      path: '/complete'
+      fullPath: '/onboarding/complete'
+      preLoaderRoute: typeof OnboardingCompleteRouteImport
+      parentRoute: typeof OnboardingRouteRoute
+    }
     '/hymnal/$hymnId': {
       id: '/hymnal/$hymnId'
       path: '/$hymnId'
@@ -475,6 +608,26 @@ const HymnalRouteRouteChildren: HymnalRouteRouteChildren = {
 
 const HymnalRouteRouteWithChildren = HymnalRouteRoute._addFileChildren(
   HymnalRouteRouteChildren,
+)
+
+interface OnboardingRouteRouteChildren {
+  OnboardingCompleteRoute: typeof OnboardingCompleteRoute
+  OnboardingImportRoute: typeof OnboardingImportRoute
+  OnboardingMonitorsRoute: typeof OnboardingMonitorsRoute
+  OnboardingWelcomeRoute: typeof OnboardingWelcomeRoute
+  OnboardingIndexRoute: typeof OnboardingIndexRoute
+}
+
+const OnboardingRouteRouteChildren: OnboardingRouteRouteChildren = {
+  OnboardingCompleteRoute: OnboardingCompleteRoute,
+  OnboardingImportRoute: OnboardingImportRoute,
+  OnboardingMonitorsRoute: OnboardingMonitorsRoute,
+  OnboardingWelcomeRoute: OnboardingWelcomeRoute,
+  OnboardingIndexRoute: OnboardingIndexRoute,
+}
+
+const OnboardingRouteRouteWithChildren = OnboardingRouteRoute._addFileChildren(
+  OnboardingRouteRouteChildren,
 )
 
 interface PresentationsRouteRouteChildren {
@@ -539,7 +692,9 @@ const UtilitiesRouteRouteWithChildren = UtilitiesRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibleRouteRoute: BibleRouteRouteWithChildren,
+  HelpRouteRoute: HelpRouteRoute,
   HymnalRouteRoute: HymnalRouteRouteWithChildren,
+  OnboardingRouteRoute: OnboardingRouteRouteWithChildren,
   PresentationsRouteRoute: PresentationsRouteRouteWithChildren,
   ServicesRouteRoute: ServicesRouteRouteWithChildren,
   SettingsRouteRoute: SettingsRouteRouteWithChildren,

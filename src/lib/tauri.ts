@@ -11,6 +11,13 @@ import type { Settings } from "../types/settings";
 import type { StreamingInfo } from "../types/streaming";
 import type { TimerMode, TimerStateData, TextFormat } from "../types/utilities";
 import type { VideoMetadata } from "../types/video";
+import type {
+  MigrationOptions,
+  MigrationProgress,
+  MigrationReport,
+  MigrationRunInfo,
+  UpdateInfo,
+} from "../types/migration";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -285,6 +292,37 @@ export async function setSetting(key: string, value: string): Promise<void> {
 
 export async function getAllSettings(): Promise<Settings[]> {
   return tauriInvoke<Settings[]>("get_all_settings");
+}
+
+// Migration
+export async function startMigration(
+  oldDbPath: string,
+  options: MigrationOptions,
+): Promise<MigrationRunInfo> {
+  return tauriInvoke<MigrationRunInfo>("start_migration", {
+    oldDbPath,
+    options,
+  });
+}
+
+export async function getMigrationProgress(runId: string): Promise<MigrationProgress> {
+  return tauriInvoke<MigrationProgress>("get_migration_progress", { runId });
+}
+
+export async function cancelMigration(runId: string): Promise<void> {
+  return tauriInvoke<void>("cancel_migration", { runId });
+}
+
+export async function getMigrationReport(runId: string): Promise<MigrationReport> {
+  return tauriInvoke<MigrationReport>("get_migration_report", { runId });
+}
+
+export async function checkForUpdates(): Promise<UpdateInfo | null> {
+  return tauriInvoke<UpdateInfo | null>("check_for_updates");
+}
+
+export async function installUpdate(): Promise<void> {
+  return tauriInvoke<void>("install_update");
 }
 
 // Utilities
