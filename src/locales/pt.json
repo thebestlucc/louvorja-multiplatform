@@ -5,6 +5,7 @@
   "nav": {
     "home": "Início",
     "hymnal": "Hinário",
+    "collections": "Coleções",
     "bible": "Bíblia",
     "presentations": "Apresentações",
     "services": "Cultos",
@@ -61,7 +62,14 @@
   },
   "dashboard": {
     "welcome": "Bem-vindo ao LouvorJA",
-    "subtitle": "Selecione uma opção no menu lateral para começar"
+    "subtitle": "Selecione uma opção no menu lateral para começar",
+    "quickAccess": {
+      "hymnal": "Pesquise e navegue pelos hinos",
+      "collections": "Gerencie coleções de músicas fora do hinário",
+      "bible": "Leia e projete versículos bíblicos",
+      "presentations": "Crie e edite slides",
+      "services": "Planeje a ordem do culto"
+    }
   },
   "commandPalette": {
     "placeholder": "Digite um comando...",
@@ -212,6 +220,20 @@
     }
   },
   "hymnal": {
+    "create": "Criar hino",
+    "createPlaceholder": "Título do hino",
+    "numberPlaceholder": "Número",
+    "editTitle": "Editar hino",
+    "authorPlaceholder": "Autor",
+    "albumPlaceholder": "Álbum",
+    "categoryPlaceholder": "Categoria",
+    "audioPathPlaceholder": "Caminho do áudio",
+    "chordsPlaceholder": "Cifras",
+    "notesPlaceholder": "Notas",
+    "lyricsPlaceholder": "Letra",
+    "createFailed": "Não foi possível criar o hino: {{error}}",
+    "saveFailed": "Não foi possível salvar o hino: {{error}}",
+    "deleteFailed": "Não foi possível excluir o hino: {{error}}",
     "searchPlaceholder": "Pesquisar hinos por número, título ou letra...",
     "albums": "Álbuns",
     "loading": "Carregando...",
@@ -223,6 +245,52 @@
     "project": "Projetar",
     "stopProjection": "Parar projeção",
     "slides": "Slides"
+  },
+  "collections": {
+    "subtitle": "Monte bibliotecas de músicas separadas das apresentações.",
+    "createTitle": "Criar coleção",
+    "namePlaceholder": "Nome da coleção",
+    "descriptionPlaceholder": "Descrição (opcional)",
+    "create": "Criar",
+    "searchPlaceholder": "Pesquisar coleções...",
+    "empty": "Nenhuma coleção ainda.",
+    "noDescription": "Sem descrição",
+    "notFound": "Coleção não encontrada.",
+    "detailTitle": "Detalhes da coleção",
+    "coverHint": "A capa personalizada substitui a capa automática de fallback.",
+    "selectCover": "Selecionar capa",
+    "clearCover": "Remover capa",
+    "coverUpdated": "Capa atualizada.",
+    "coverUpdateFailed": "Não foi possível atualizar a capa: {{error}}",
+    "importSong": "Importar música",
+    "songs": "Músicas",
+    "emptySongs": "Nenhuma música importada ainda.",
+    "on": "ATIVADO",
+    "off": "DESATIVADO",
+    "autoCheckSetting": "Verificação automática ao abrir: {{value}}",
+    "autoCheckDisabledHint": "A verificação automática está desativada. Ative em Configurações para validar sincronização da fonte automaticamente.",
+    "openPresentation": "Abrir apresentação em cache",
+    "resync": "Ressincronizar fonte",
+    "moveUp": "Mover para cima",
+    "moveDown": "Mover para baixo",
+    "removeSong": "Remover música",
+    "importFailed": "Não foi possível importar a música: {{error}}",
+    "saveFailed": "Não foi possível salvar a coleção: {{error}}",
+    "deleteFailed": "Não foi possível excluir a coleção: {{error}}",
+    "resyncFailed": "Não foi possível ressincronizar a música: {{error}}",
+    "syncCheckFailed": "Não foi possível verificar o status de sincronização: {{error}}",
+    "removeFailed": "Não foi possível remover a música: {{error}}",
+    "reorderFailed": "Não foi possível reordenar as músicas: {{error}}",
+    "syncPromptTitle": "Fonte da música fora de sincronia",
+    "syncPromptMessage": "O arquivo de origem foi alterado. Ressincronizar agora?",
+    "syncPromptConfirm": "Ressincronizar agora",
+    "syncPromptCancel": "Depois",
+    "sync": {
+      "in_sync": "Sincronizado",
+      "stale": "Desatualizado",
+      "missing_source": "Fonte ausente",
+      "error": "Erro"
+    }
   },
   "presentations": {
     "new": "Nova Apresentação",
@@ -377,7 +445,10 @@
     "ffprobeEnabledDesc": "Usa ffprobe apenas quando o parser nativo de metadados falhar.",
     "ffprobePath": "Caminho personalizado do ffprobe",
     "ffprobePathDesc": "Caminho absoluto opcional do binário ffprobe. Deixe vazio para usar o PATH.",
-    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
+    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe",
+    "collections": "Coleções",
+    "collectionsAutoCheck": "Verificar fonte ao abrir",
+    "collectionsAutoCheckDesc": "Valida automaticamente hash e data de modificação dos arquivos de origem ao abrir uma coleção."
   },
   "onboarding": {
     "title": "Bem-vindo ao LouvorJA",

@@ -1,5 +1,7 @@
 # Specification Files Creation - Summary
 
+> Status: legacy archive. Active phase decisions now live in `docs/phase-*` folders.
+
 ## ✅ Task Completed Successfully
 
 All specification files have been created based on the PRD.md document. The `.specs` folder now contains comprehensive implementation guides for the entire LouvorJA Multiplatform project.

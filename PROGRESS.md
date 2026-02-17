@@ -1,7 +1,7 @@
 # LouvorJA Multiplatform — Implementation Progress
 
 > Tracking the migration from Delphi to Tauri 2 + React 19 + Rust.
-> Total estimated effort: 25–27 weeks across 11 phases.
+> Total estimated effort: 27–30 weeks across 12 phases.
 
 ---
 
@@ -19,9 +19,21 @@
 | 7 | 08 | HTTP Streaming Server | COMPLETE |
 | 8 | 09 | Video & Multimedia | COMPLETE |
 | 9 | 10 | Utilities & Polish | COMPLETE |
-| 10 | 11 | Migration Tools & Deployment | IN PROGRESS |
+| 10 | 11 | Migration Tools & Deployment | COMPLETE |
+| 11 | 12 | Hymn CRUD + Collections + Hybrid Cache Covers | IN PROGRESS |
 
-**Progress: 10 / 11 phases complete (Phase 10 in progress)**
+**Progress: 11 / 12 phases complete (Phase 11 in progress)**
+
+### Documentation Source of Truth
+
+Feature decisions and implementation tracking must live under `docs/phase-*` with this structure:
+- `PRD.md`
+- `SPECS.md`
+- `TASKS.md`
+- `HANDOFF.md` (completed when implementation closes)
+
+Reference index:
+- `docs/README.md`
 
 ---
 
@@ -289,7 +301,7 @@ Notes:
 
 ## Phase 10 — Migration Tools & Deployment (SPEC 11)
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE
 
 First-run onboarding wizard, data migration from legacy SQLite, updater contract, and deployment/release baseline.
 
@@ -311,4 +323,25 @@ Implementation baseline delivered:
 Validation status:
 - Static checks green (`tsc`, `cargo check`, `vite build`)
 - Runtime smoke evidence logged in `docs/phase-10-migration-tools-deployment/SMOKE-2026-02-17.md`
-- Phase remains `IN PROGRESS` until GUI-dependent smoke matrix items are completed
+- Phase closure details recorded in `docs/phase-10-migration-tools-deployment/HANDOFF.md`
+
+---
+
+## Phase 11 — Hymn CRUD + Collections + Hybrid Cache Covers (SPEC 12)
+
+**Status:** IN PROGRESS
+
+Planning docs created:
+- `docs/phase-11-hymn-crud-collections/PRD.md`
+- `docs/phase-11-hymn-crud-collections/SPECS.md`
+- `docs/phase-11-hymn-crud-collections/TASKS.md`
+
+Current implementation focus:
+- real hymn CRUD persistence with validation.
+- collections domain (`Hybrid cache`) with source metadata and resync.
+- cover upload + fallback rendering for hymns and collections.
+- settings toggle for `collections.autoCheckSourceOnOpen`.
+- docs normalization task to keep phase decisions in `docs/phase-*`.
+
+Handoff path:
+- `docs/phase-11-hymn-crud-collections/HANDOFF.md`

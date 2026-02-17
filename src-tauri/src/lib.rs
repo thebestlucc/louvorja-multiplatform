@@ -94,6 +94,17 @@ pub fn run() {
             commands::music::create_hymn,
             commands::music::update_hymn,
             commands::music::delete_hymn,
+            // Collections
+            commands::collections::get_collections,
+            commands::collections::get_collection,
+            commands::collections::create_collection,
+            commands::collections::update_collection,
+            commands::collections::delete_collection,
+            commands::collections::import_collection_song,
+            commands::collections::check_collection_song_sync,
+            commands::collections::resync_collection_song,
+            commands::collections::remove_collection_song,
+            commands::collections::reorder_collection_songs,
             // Bible
             commands::bible::get_bible_versions,
             commands::bible::get_books,
@@ -188,6 +199,7 @@ pub fn run() {
             commands::utility::run_lottery,
             commands::utility::format_text,
             commands::utility::copy_video_to_media,
+            commands::utility::copy_image_to_media,
             commands::utility::get_video_metadata,
             commands::utility::resolve_media_path,
         ])

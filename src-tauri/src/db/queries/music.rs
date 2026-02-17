@@ -14,6 +14,7 @@ fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
         audio_path: row.get("audio_path")?,
         category: row.get("category")?,
         notes: row.get("notes")?,
+        cover_path: row.get("cover_path")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -34,7 +35,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
 
     if trimmed.is_empty() {
         let mut stmt = conn.prepare(
-            "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path, created_at, updated_at
              FROM hymns ORDER BY number, title"
         )?;
         let hymns = stmt
@@ -46,7 +47,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     // If numeric, search by number
     if let Ok(num) = trimmed.parse::<i64>() {
         let mut stmt = conn.prepare(
-            "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path, created_at, updated_at
              FROM hymns WHERE number = ?1 ORDER BY title"
         )?;
         let hymns = stmt
@@ -63,7 +64,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
 
     let fts_query = format!("{}*", sanitized);
     let mut stmt = conn.prepare(
-        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.category, h.notes, h.created_at, h.updated_at
+        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.category, h.notes, h.cover_path, h.created_at, h.updated_at
          FROM hymns h
          JOIN hymns_fts ON hymns_fts.rowid = h.id
          WHERE hymns_fts MATCH ?1
@@ -77,7 +78,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
 
 pub fn get_hymn_by_id(conn: &Connection, id: i64) -> Result<Hymn, AppError> {
     conn.query_row(
-        "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+        "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path, created_at, updated_at
          FROM hymns WHERE id = ?1",
         params![id],
         |row| map_hymn_row(row),
@@ -108,13 +109,108 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<Album>, AppError> {
 
 pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at
+        "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path, created_at, updated_at
          FROM hymns WHERE album = ?1 ORDER BY number, title"
     )?;
     let hymns = stmt
         .query_map(params![album], |row| map_hymn_row(row))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
+}
+
+pub fn insert_hymn(conn: &Connection, hymn: &crate::db::models::HymnWriteInput) -> Result<i64, AppError> {
+    conn.execute(
+        "INSERT INTO hymns (
+            number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            hymn.number,
+            hymn.title.trim(),
+            hymn.author.as_deref().map(str::trim),
+            hymn.album.as_deref().map(str::trim),
+            hymn.lyrics.as_deref(),
+            hymn.chords.as_deref(),
+            hymn.audio_path.as_deref().map(str::trim),
+            hymn.category.as_deref().map(str::trim),
+            hymn.notes.as_deref(),
+            hymn.cover_path.as_deref().map(str::trim),
+        ],
+    )?;
+    let hymn_id = conn.last_insert_rowid();
+
+    conn.execute(
+        "INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+         SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
+         FROM hymns WHERE id = ?1",
+        params![hymn_id],
+    )?;
+
+    Ok(hymn_id)
+}
+
+pub fn update_hymn(
+    conn: &Connection,
+    id: i64,
+    hymn: &crate::db::models::HymnWriteInput,
+) -> Result<(), AppError> {
+    let rows = conn.execute(
+        "UPDATE hymns
+         SET number = ?1,
+             title = ?2,
+             author = ?3,
+             album = ?4,
+             lyrics = ?5,
+             chords = ?6,
+             audio_path = ?7,
+             category = ?8,
+             notes = ?9,
+             cover_path = ?10,
+             updated_at = datetime('now')
+         WHERE id = ?11",
+        params![
+            hymn.number,
+            hymn.title.trim(),
+            hymn.author.as_deref().map(str::trim),
+            hymn.album.as_deref().map(str::trim),
+            hymn.lyrics.as_deref(),
+            hymn.chords.as_deref(),
+            hymn.audio_path.as_deref().map(str::trim),
+            hymn.category.as_deref().map(str::trim),
+            hymn.notes.as_deref(),
+            hymn.cover_path.as_deref().map(str::trim),
+            id,
+        ],
+    )?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!("Hymn with id {} not found", id)));
+    }
+
+    conn.execute(
+        "INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+         VALUES('delete', ?1, '', '', '', '')",
+        params![id],
+    )?;
+    conn.execute(
+        "INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+         SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
+         FROM hymns WHERE id = ?1",
+        params![id],
+    )?;
+
+    Ok(())
+}
+
+pub fn delete_hymn(conn: &Connection, id: i64) -> Result<(), AppError> {
+    let rows = conn.execute("DELETE FROM hymns WHERE id = ?1", params![id])?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!("Hymn with id {} not found", id)));
+    }
+    conn.execute(
+        "INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+         VALUES('delete', ?1, '', '', '', '')",
+        params![id],
+    )?;
+    Ok(())
 }
 
 pub fn get_sync_points(

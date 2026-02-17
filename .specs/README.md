@@ -1,6 +1,9 @@
-# LouvorJA Multiplatform — Specification Files
+# LouvorJA Multiplatform — Legacy Specification Files
 
-This directory contains detailed technical specifications for implementing the LouvorJA Multiplatform application, organized by feature and phase.
+> Status: archived reference only.
+> Canonical source of truth for feature decisions is `docs/phase-*` (see `docs/README.md`).
+
+This directory contains historical specifications used during early project phases.
 
 ## Overview
 

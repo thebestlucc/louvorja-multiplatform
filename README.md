@@ -116,7 +116,7 @@ src-tauri/src/                  # Rust backend
 ├── archive/                    # .slja and .pptx file handling
 └── audio/                      # Audio player, sync timeline
 
-.specs/                         # Implementation specifications (phases 0-10)
+docs/                           # Phase documentation source of truth (phase-*/PRD,SPECS,TASKS,HANDOFF)
 PRD.md                          # Product Requirements Document
 CLAUDE.md                       # AI assistant context and patterns
 ```
@@ -129,19 +129,20 @@ CLAUDE.md                       # AI assistant context and patterns
 | 1 | Music & Lyrics (hymnal, search, projection) | Done |
 | 2 | Audio Playback (rodio, sync points) | Done |
 | 3 | Presentation Editor (.slja, .pptx, drag-and-drop) | Done |
-| 4 | Bible (versions, search, projection) | Planned |
-| 5 | Liturgy (service scheduling, timeline) | Planned |
-| 6 | Multi-Monitor (projector, return monitor) | Planned |
-| 7 | Streaming (HTTP server, SSE) | Planned |
-| 8 | Video & Multimedia | Planned |
-| 9 | Utilities & Polish (timer, themes, command palette) | Planned |
-| 10 | Migration & Deployment (onboarding, auto-update) | Planned |
+| 4 | Bible (versions, search, projection) | Done |
+| 5 | Liturgy (service scheduling, timeline) | Done |
+| 6 | Multi-Monitor (projector, return monitor) | Done |
+| 7 | Streaming (HTTP server, SSE) | Done |
+| 8 | Video & Multimedia | Done |
+| 9 | Utilities & Polish (timer, themes, command palette) | Done |
+| 10 | Migration & Deployment (onboarding, auto-update) | Done |
+| 11 | Hymn CRUD + Collections + Hybrid Cache Covers | In progress |
 
-See `.specs/` directory for detailed implementation specifications per phase.
+See `docs/README.md` and `docs/phase-*` directories for phase decisions and delivery tracking.
 
 ## Contributing
 
-1. Read the relevant spec file in `.specs/` before starting work on a phase
+1. Read the relevant phase package in `docs/phase-*` before starting work on a phase
 2. Follow existing code patterns (see `CLAUDE.md` for documented conventions)
 3. Use `pnpm` as the package manager
 4. Ensure `pnpm build` and `cargo build` pass before submitting PRs

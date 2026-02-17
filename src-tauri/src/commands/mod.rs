@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod bible;
 pub mod clock;
+pub mod collections;
 pub mod display;
 pub mod liturgy;
 pub mod migration;

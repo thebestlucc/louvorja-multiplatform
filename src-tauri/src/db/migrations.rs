@@ -49,6 +49,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (7)", [])?;
     }
 
+    if current_version < 8 {
+        migrate_v8(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (8)", [])?;
+    }
+
     Ok(())
 }
 
@@ -361,4 +366,76 @@ fn migrate_v7(conn: &Connection) -> Result<(), AppError> {
     )?;
 
     Ok(())
+}
+
+fn migrate_v8(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(conn, "hymns", "cover_path", "TEXT")?;
+    add_column_if_missing(
+        conn,
+        "presentations",
+        "library_kind",
+        "TEXT NOT NULL DEFAULT 'presentation'",
+    )?;
+
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS collections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            cover_path TEXT,
+            auto_cover_path TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS collection_songs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+            source_path TEXT NOT NULL,
+            source_format TEXT NOT NULL,
+            source_hash TEXT,
+            source_mtime_ms INTEGER,
+            cache_presentation_id INTEGER REFERENCES presentations(id) ON DELETE SET NULL,
+            sync_status TEXT NOT NULL DEFAULT 'in_sync',
+            last_sync_at TEXT,
+            item_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_collections_name ON collections(name);
+        CREATE INDEX IF NOT EXISTS idx_collection_songs_collection_order ON collection_songs(collection_id, item_order);
+
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('collections.autoCheckSourceOnOpen', 'true');
+        UPDATE presentations SET library_kind = 'presentation' WHERE library_kind IS NULL OR library_kind = '';
+        ",
+    )?;
+
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), AppError> {
+    if !column_exists(conn, table, column)? {
+        let sql = format!(
+            "ALTER TABLE {} ADD COLUMN {} {}",
+            table, column, definition
+        );
+        conn.execute(&sql, [])?;
+    }
+    Ok(())
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, AppError> {
+    let pragma = format!("PRAGMA table_info({})", table);
+    let mut stmt = conn.prepare(&pragma)?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>("name"))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(columns.iter().any(|name| name == column))
 }

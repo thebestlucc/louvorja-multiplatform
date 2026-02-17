@@ -6,6 +6,7 @@ import { Card, CardHeader } from "../ui/card";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
 import type { Hymn } from "../../types/hymn";
+import { CoverImage } from "../media/cover-image";
 
 interface HymnCardProps {
   hymn: Hymn;
@@ -35,6 +36,11 @@ export function HymnCard({ hymn }: HymnCardProps) {
       <Card className="cursor-pointer transition-colors hover:bg-surface-hover">
         <CardHeader className="p-4">
           <div className="flex items-center gap-3">
+            <CoverImage
+              path={hymn.cover_path}
+              title={hymn.title}
+              className="h-10 w-10"
+            />
             {hymn.number != null && (
               <Badge variant="secondary" className="shrink-0 tabular-nums">
                 {hymn.number}

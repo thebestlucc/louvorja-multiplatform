@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Music, BookOpen, Presentation, ListChecks } from "lucide-react";
+import { Music, FolderOpen, BookOpen, Presentation, ListChecks } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
 export const Route = createFileRoute("/")({
@@ -11,10 +11,11 @@ function Dashboard() {
   const { t } = useTranslation();
 
   const quickAccess = [
-    { to: "/hymnal", icon: Music, label: t("nav.hymnal"), description: "Browse and search hymns" },
-    { to: "/bible", icon: BookOpen, label: t("nav.bible"), description: "Read and project Bible verses" },
-    { to: "/presentations", icon: Presentation, label: t("nav.presentations"), description: "Create and edit slides" },
-    { to: "/services", icon: ListChecks, label: t("nav.services"), description: "Plan worship services" },
+    { to: "/hymnal", icon: Music, label: t("nav.hymnal"), description: t("dashboard.quickAccess.hymnal") },
+    { to: "/collections", icon: FolderOpen, label: t("nav.collections"), description: t("dashboard.quickAccess.collections") },
+    { to: "/bible", icon: BookOpen, label: t("nav.bible"), description: t("dashboard.quickAccess.bible") },
+    { to: "/presentations", icon: Presentation, label: t("nav.presentations"), description: t("dashboard.quickAccess.presentations") },
+    { to: "/services", icon: ListChecks, label: t("nav.services"), description: t("dashboard.quickAccess.services") },
   ] as const;
 
   return (

@@ -12,8 +12,23 @@ pub struct Hymn {
     pub audio_path: Option<String>,
     pub category: Option<String>,
     pub notes: Option<String>,
+    pub cover_path: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HymnWriteInput {
+    pub number: Option<i64>,
+    pub title: String,
+    pub author: Option<String>,
+    pub album: Option<String>,
+    pub lyrics: Option<String>,
+    pub chords: Option<String>,
+    pub audio_path: Option<String>,
+    pub category: Option<String>,
+    pub notes: Option<String>,
+    pub cover_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +79,7 @@ pub struct Presentation {
     pub title: String,
     pub author: Option<String>,
     pub aspect_ratio: String,
+    pub library_kind: Option<String>,
     pub file_path: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -183,4 +199,68 @@ pub struct VideoMetadata {
     pub height: i32,
     pub file_size: i64,
     pub format: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Collection {
+    pub id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub cover_path: Option<String>,
+    pub auto_cover_path: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CollectionSongSyncStatus {
+    InSync,
+    Stale,
+    MissingSource,
+    Error,
+}
+
+impl CollectionSongSyncStatus {
+    pub fn as_db_str(&self) -> &'static str {
+        match self {
+            Self::InSync => "in_sync",
+            Self::Stale => "stale",
+            Self::MissingSource => "missing_source",
+            Self::Error => "error",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Self {
+        match value {
+            "in_sync" => Self::InSync,
+            "stale" => Self::Stale,
+            "missing_source" => Self::MissingSource,
+            "error" => Self::Error,
+            _ => Self::Error,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionSong {
+    pub id: i64,
+    pub collection_id: i64,
+    pub source_path: String,
+    pub source_format: String,
+    pub source_hash: Option<String>,
+    pub source_mtime_ms: Option<i64>,
+    pub cache_presentation_id: Option<i64>,
+    pub sync_status: CollectionSongSyncStatus,
+    pub last_sync_at: Option<String>,
+    pub item_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub cache_presentation_title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionWithSongs {
+    pub collection: Collection,
+    pub songs: Vec<CollectionSong>,
 }

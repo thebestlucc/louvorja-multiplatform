@@ -5,6 +5,7 @@
   "nav": {
     "home": "Home",
     "hymnal": "Hymnal",
+    "collections": "Collections",
     "bible": "Bible",
     "presentations": "Presentations",
     "services": "Services",
@@ -61,7 +62,14 @@
   },
   "dashboard": {
     "welcome": "Welcome to LouvorJA",
-    "subtitle": "Select an option from the sidebar to get started"
+    "subtitle": "Select an option from the sidebar to get started",
+    "quickAccess": {
+      "hymnal": "Browse and search hymns",
+      "collections": "Manage non-hymnal songs collections",
+      "bible": "Read and project Bible verses",
+      "presentations": "Create and edit slides",
+      "services": "Plan worship services"
+    }
   },
   "commandPalette": {
     "placeholder": "Type a command...",
@@ -212,6 +220,20 @@
     }
   },
   "hymnal": {
+    "create": "Create hymn",
+    "createPlaceholder": "Hymn title",
+    "numberPlaceholder": "Number",
+    "editTitle": "Edit hymn",
+    "authorPlaceholder": "Author",
+    "albumPlaceholder": "Album",
+    "categoryPlaceholder": "Category",
+    "audioPathPlaceholder": "Audio path",
+    "chordsPlaceholder": "Chords",
+    "notesPlaceholder": "Notes",
+    "lyricsPlaceholder": "Lyrics",
+    "createFailed": "Could not create hymn: {{error}}",
+    "saveFailed": "Could not save hymn: {{error}}",
+    "deleteFailed": "Could not delete hymn: {{error}}",
     "searchPlaceholder": "Search hymns by number, title or lyrics...",
     "albums": "Albums",
     "loading": "Loading...",
@@ -223,6 +245,52 @@
     "project": "Project",
     "stopProjection": "Stop projection",
     "slides": "Slides"
+  },
+  "collections": {
+    "subtitle": "Build song libraries separate from presentations.",
+    "createTitle": "Create collection",
+    "namePlaceholder": "Collection name",
+    "descriptionPlaceholder": "Description (optional)",
+    "create": "Create",
+    "searchPlaceholder": "Search collections...",
+    "empty": "No collections yet.",
+    "noDescription": "No description",
+    "notFound": "Collection not found.",
+    "detailTitle": "Collection details",
+    "coverHint": "Custom cover overrides automatic fallback cover.",
+    "selectCover": "Select cover",
+    "clearCover": "Clear cover",
+    "coverUpdated": "Cover updated.",
+    "coverUpdateFailed": "Could not update cover: {{error}}",
+    "importSong": "Import song",
+    "songs": "Songs",
+    "emptySongs": "No songs imported yet.",
+    "on": "ON",
+    "off": "OFF",
+    "autoCheckSetting": "Auto-check source on open: {{value}}",
+    "autoCheckDisabledHint": "Auto-check is disabled. Enable it in Settings to validate source sync automatically.",
+    "openPresentation": "Open cached presentation",
+    "resync": "Resync source",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeSong": "Remove song",
+    "importFailed": "Could not import song: {{error}}",
+    "saveFailed": "Could not save collection: {{error}}",
+    "deleteFailed": "Could not delete collection: {{error}}",
+    "resyncFailed": "Could not resync song: {{error}}",
+    "syncCheckFailed": "Could not check sync status: {{error}}",
+    "removeFailed": "Could not remove song: {{error}}",
+    "reorderFailed": "Could not reorder songs: {{error}}",
+    "syncPromptTitle": "Song source out of sync",
+    "syncPromptMessage": "The source file changed. Resync now?",
+    "syncPromptConfirm": "Resync now",
+    "syncPromptCancel": "Later",
+    "sync": {
+      "in_sync": "In sync",
+      "stale": "Stale",
+      "missing_source": "Missing source",
+      "error": "Error"
+    }
   },
   "presentations": {
     "new": "New Presentation",
@@ -377,7 +445,10 @@
     "ffprobeEnabledDesc": "Use ffprobe only when native metadata parsing fails.",
     "ffprobePath": "Custom ffprobe path",
     "ffprobePathDesc": "Optional absolute path to ffprobe binary. Leave blank to use PATH.",
-    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe"
+    "ffprobePathPlaceholder": "/usr/local/bin/ffprobe",
+    "collections": "Collections",
+    "collectionsAutoCheck": "Auto-check source on open",
+    "collectionsAutoCheckDesc": "Automatically validate song source hash and modified timestamp when opening a collection."
   },
   "onboarding": {
     "title": "Welcome to LouvorJA",
