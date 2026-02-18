@@ -3,6 +3,7 @@
 ## Status
 
 - Phase status: `COMPLETE`
+- Canonical status tracker: `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`
 
 ## Implemented
 

@@ -2,6 +2,14 @@
 
 `docs/phase-*` is the canonical location for feature decisions and implementation records.
 
+## Status Tracking
+
+Delivery/phase status is centralized in:
+
+- `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`
+
+`docs/phase-*/HANDOFF.md` keeps phase-specific implementation evidence and closure details, but must stay aligned with `PROGRESS.md`.
+
 ## Folder Pattern
 
 Each phase folder must use:

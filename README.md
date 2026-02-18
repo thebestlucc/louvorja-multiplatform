@@ -121,24 +121,39 @@ PRD.md                          # Product Requirements Document
 CLAUDE.md                       # AI assistant context and patterns
 ```
 
+## Documentation Map
+
+- Live delivery tracker:
+  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`
+- Documentation index and conventions:
+  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/README.md`
+- Phase packages (PRD, SPECS, TASKS, HANDOFF):
+  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-*`
+- Latest completed handoffs:
+  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-11-hymn-crud-collections/HANDOFF.md`
+  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-12-monitor-screen-assignment/HANDOFF.md`
+
 ## Roadmap
 
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 0 | Foundation (routing, state, DB, error handling) | Done |
-| 1 | Music & Lyrics (hymnal, search, projection) | Done |
-| 2 | Audio Playback (rodio, sync points) | Done |
-| 3 | Presentation Editor (.slja, .pptx, drag-and-drop) | Done |
-| 4 | Bible (versions, search, projection) | Done |
-| 5 | Liturgy (service scheduling, timeline) | Done |
-| 6 | Multi-Monitor (projector, return monitor) | Done |
-| 7 | Streaming (HTTP server, SSE) | Done |
-| 8 | Video & Multimedia | Done |
-| 9 | Utilities & Polish (timer, themes, command palette) | Done |
-| 10 | Migration & Deployment (onboarding, auto-update) | Done |
-| 11 | Hymn CRUD + Collections + Hybrid Cache Covers | In progress |
+| Phase | Feature |
+|-------|---------|
+| 0 | Foundation (routing, state, DB, error handling) |
+| 1 | Music & Lyrics (hymnal, search, projection) |
+| 2 | Audio Playback (rodio, sync points) |
+| 3 | Presentation Editor (.slja, .pptx, drag-and-drop) |
+| 4 | Bible (versions, search, projection) |
+| 5 | Liturgy (service scheduling, timeline) |
+| 6 | Multi-Monitor (projector, return monitor) |
+| 7 | Streaming (HTTP server, SSE) |
+| 8 | Video & Multimedia |
+| 9 | Utilities & Polish (timer, themes, command palette) |
+| 10 | Migration & Deployment (onboarding, auto-update) |
+| 11 | Hymn CRUD + Collections + Hybrid Cache Covers |
+| 12 | Monitor Assignment in Settings |
 
-See `docs/README.md` and `docs/phase-*` directories for phase decisions and delivery tracking.
+Current delivery status is maintained in `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`.
+
+See `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/README.md` and `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-*` for phase decisions and implementation records.
 
 ## Contributing
 
