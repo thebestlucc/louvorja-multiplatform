@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
@@ -11,6 +12,9 @@ import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcu
 import { UpdateNotification } from "../components/update-notification";
 import { useKeyboard } from "../hooks/use-keyboard";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
+import { queryKeys, useMonitorConfigs, useMonitors } from "../lib/queries";
+import { setMonitorConfig } from "../lib/tauri";
+import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
@@ -34,7 +38,13 @@ const BARE_ROUTES = ["/projector", "/return"];
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isBareRoute = usesBareLayout(pathname);
+  const queryClient = useQueryClient();
   const setLanguage = useThemeStore((state) => state.setLanguage);
+  const { data: monitors = [], isSuccess: monitorsLoaded } = useMonitors();
+  const { data: monitorConfigs = [], isSuccess: monitorConfigsLoaded } = useMonitorConfigs();
+  const previousMonitorIdsRef = useRef<string[] | null>(null);
+  const previousPrimaryMonitorIdRef = useRef<string | null>(null);
+  const syncingMonitorAssignmentsRef = useRef(false);
   useThemeStore((state) => state.theme);
   useTimerAlerts({ enabled: !isBareRoute });
 
@@ -70,6 +80,59 @@ function RootLayout() {
       unlistenPromise.then((unlisten) => unlisten());
     };
   }, [setLanguage]);
+
+  useEffect(() => {
+    const unlistenPromise = listen("monitors-changed", () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.monitors.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
+    }).catch(() => () => {});
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (isBareRoute) {
+      return;
+    }
+    if (!monitorsLoaded || !monitorConfigsLoaded) {
+      return;
+    }
+
+    const currentMonitorIds = monitors.map((monitor) => monitor.id);
+    const currentPrimaryMonitorId = monitors.find((monitor) => monitor.is_primary)?.id ?? null;
+    const previousMonitorIds = previousMonitorIdsRef.current;
+    const previousPrimaryMonitorId = previousPrimaryMonitorIdRef.current;
+
+    previousMonitorIdsRef.current = currentMonitorIds;
+    previousPrimaryMonitorIdRef.current = currentPrimaryMonitorId;
+
+    if (!previousMonitorIds || syncingMonitorAssignmentsRef.current) {
+      return;
+    }
+
+    const assignments = resolveAutomaticProjectionAssignments(
+      monitors,
+      monitorConfigs,
+      previousMonitorIds,
+      previousPrimaryMonitorId,
+    );
+    if (!assignments) {
+      return;
+    }
+
+    syncingMonitorAssignmentsRef.current = true;
+    void (async () => {
+      try {
+        await setMonitorConfig(assignments.projectorMonitorId, "projector");
+        await setMonitorConfig(assignments.returnMonitorId, "return");
+        await queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
+      } finally {
+        syncingMonitorAssignmentsRef.current = false;
+      }
+    })();
+  }, [isBareRoute, monitorConfigs, monitorConfigsLoaded, monitors, monitorsLoaded, queryClient]);
 
   useKeyboard({ enabled: !isBareRoute });
 

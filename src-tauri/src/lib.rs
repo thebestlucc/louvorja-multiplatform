@@ -53,6 +53,7 @@ pub fn run() {
             app.manage(audio_state);
 
             app.manage(StreamingState::new(7070));
+            commands::display::start_monitor_hotplug_watcher(app.handle().clone());
 
             // Auto-start streaming server if configured
             {

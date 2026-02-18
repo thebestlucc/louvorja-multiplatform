@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { useMonitors } from "../lib/queries";
+import { useMonitorConfigs, useMonitors } from "../lib/queries";
 import {
   openProjectorWindow,
   closeProjectorWindow,
@@ -11,9 +11,11 @@ import {
 } from "../lib/tauri";
 import { useDisplayStore } from "../stores/display-store";
 import type { OverlayState } from "../types/presentation";
+import { resolveProjectionMonitorIndexes } from "../lib/monitor-resolution";
 
 export function useMonitorsControl() {
   const { data: monitors } = useMonitors();
+  const { data: monitorConfigs } = useMonitorConfigs();
   const {
     projectorWindowOpen,
     setProjectorWindowOpen,
@@ -58,8 +60,8 @@ export function useMonitorsControl() {
 
   // Projector
   const openProjector = useCallback(
-    async (index: number) => {
-      await openProjectorWindow(index);
+    async (monitorId: string) => {
+      await openProjectorWindow(monitorId);
     },
     [],
   );
@@ -71,17 +73,24 @@ export function useMonitorsControl() {
   const toggleProjector = useCallback(async () => {
     if (projectorWindowOpen) {
       await closeProjector();
-    } else if (monitors && monitors.length > 1) {
-      await openProjector(1);
-    } else if (monitors && monitors.length === 1) {
-      await openProjector(0);
+      return;
     }
-  }, [projectorWindowOpen, monitors, openProjector, closeProjector]);
+
+    const resolvedIndexes = resolveProjectionMonitorIndexes(monitors ?? [], monitorConfigs ?? []);
+    if (!resolvedIndexes) {
+      return;
+    }
+    const targetMonitor = monitors?.[resolvedIndexes.projectorIndex];
+    if (!targetMonitor) {
+      return;
+    }
+    await openProjector(targetMonitor.id);
+  }, [projectorWindowOpen, monitors, monitorConfigs, openProjector, closeProjector]);
 
   // Return window
   const openReturn = useCallback(
-    async (index: number) => {
-      await openReturnWindow(index);
+    async (monitorId: string) => {
+      await openReturnWindow(monitorId);
     },
     [],
   );
@@ -93,14 +102,19 @@ export function useMonitorsControl() {
   const toggleReturn = useCallback(async () => {
     if (returnWindowOpen) {
       await closeReturn();
-    } else if (monitors && monitors.length > 2) {
-      // Use third monitor
-      await openReturn(2);
-    } else if (monitors) {
-      // Fallback to primary
-      await openReturn(0);
+      return;
     }
-  }, [returnWindowOpen, monitors, openReturn, closeReturn]);
+
+    const resolvedIndexes = resolveProjectionMonitorIndexes(monitors ?? [], monitorConfigs ?? []);
+    if (!resolvedIndexes) {
+      return;
+    }
+    const targetMonitor = monitors?.[resolvedIndexes.returnIndex];
+    if (!targetMonitor) {
+      return;
+    }
+    await openReturn(targetMonitor.id);
+  }, [returnWindowOpen, monitors, monitorConfigs, openReturn, closeReturn]);
 
   // Overlays
   const toggleBlackScreen = useCallback(async () => {

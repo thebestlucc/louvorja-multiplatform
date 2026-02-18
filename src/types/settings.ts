@@ -15,6 +15,10 @@ export interface MonitorConfig {
 export interface MonitorInfo {
   id: string;
   name: string;
+  friendly_name?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  connection_type?: "integrated" | "external" | "unknown" | null;
   width: number;
   height: number;
   is_primary: boolean;

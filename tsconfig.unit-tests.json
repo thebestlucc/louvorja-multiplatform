@@ -11,9 +11,11 @@
   },
   "include": [
     "tests/media-path.test.ts",
+    "tests/monitor-resolution.test.ts",
     "tests/presentations/editor-state.test.ts",
     "tests/presentations/editor-state-view.test.ts",
     "src/lib/media-path.ts",
+    "src/lib/monitor-resolution.ts",
     "src/routes/presentations/-editor-state.ts",
     "src/routes/presentations/-editor-state-view.tsx",
     "src/components/ui/button.tsx",

@@ -150,8 +150,8 @@ export async function getAvailableMonitors(): Promise<MonitorInfo[]> {
   return tauriInvoke<MonitorInfo[]>("get_available_monitors");
 }
 
-export async function openProjectorWindow(monitorIndex: number): Promise<void> {
-  return tauriInvoke<void>("open_projector_window", { monitorIndex });
+export async function openProjectorWindow(monitorId: string): Promise<void> {
+  return tauriInvoke<void>("open_projector_window", { monitorId });
 }
 
 export async function closeProjectorWindow(): Promise<void> {
@@ -170,8 +170,8 @@ export async function clearCurrentSlide(): Promise<void> {
   return tauriInvoke<void>("clear_current_slide");
 }
 
-export async function openReturnWindow(monitorIndex: number): Promise<void> {
-  return tauriInvoke<void>("open_return_window", { monitorIndex });
+export async function openReturnWindow(monitorId: string): Promise<void> {
+  return tauriInvoke<void>("open_return_window", { monitorId });
 }
 
 export async function closeReturnWindow(): Promise<void> {
