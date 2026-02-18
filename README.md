@@ -124,14 +124,14 @@ CLAUDE.md                       # AI assistant context and patterns
 ## Documentation Map
 
 - Live delivery tracker:
-  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`
+  - [PROGRESS.md](./PROGRESS.md)
 - Documentation index and conventions:
-  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/README.md`
+  - [docs/README.md](./docs/README.md)
 - Phase packages (PRD, SPECS, TASKS, HANDOFF):
-  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-*`
+  - [docs/](./docs/) (see `phase-*` directories)
 - Latest completed handoffs:
-  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-11-hymn-crud-collections/HANDOFF.md`
-  - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-12-monitor-screen-assignment/HANDOFF.md`
+  - [docs/phase-11-hymn-crud-collections/HANDOFF.md](./docs/phase-11-hymn-crud-collections/HANDOFF.md)
+  - [docs/phase-12-monitor-screen-assignment/HANDOFF.md](./docs/phase-12-monitor-screen-assignment/HANDOFF.md)
 
 ## Roadmap
 
@@ -151,9 +151,9 @@ CLAUDE.md                       # AI assistant context and patterns
 | 11 | Hymn CRUD + Collections + Hybrid Cache Covers |
 | 12 | Monitor Assignment in Settings |
 
-Current delivery status is maintained in `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`.
+Current delivery status is maintained in [PROGRESS.md](./PROGRESS.md).
 
-See `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/README.md` and `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-*` for phase decisions and implementation records.
+See [docs/README.md](./docs/README.md) and `docs/phase-*` for phase decisions and implementation records.
 
 ## Contributing
 
