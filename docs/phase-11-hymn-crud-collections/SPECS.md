@@ -115,9 +115,11 @@ Add settings key contract:
 
 1. Validate extension and max size for cover upload.
 2. Canonicalize and verify source paths for collection import.
-3. Keep sync checks scoped to collection open flow (toggleable), avoid global polling loops.
-4. Return user-safe errors for invalid files or inaccessible paths.
-5. Avoid loading entire app surfaces on sync updates; update only targeted collection state.
+3. Realtime synchronization for playback/projection/streaming must be event-driven (pub/sub), not polling-based.
+4. Keep sync checks scoped to collection open flow (toggleable), avoid global background loops.
+5. Return user-safe errors for invalid files or inaccessible paths.
+6. Avoid loading entire app surfaces on sync updates; update only targeted state from event payloads.
+7. Separate editor/detail state from active playback queue state to prevent cross-flow interference.
 
 ## 7. Accessibility / UX Requirements
 
@@ -136,7 +138,8 @@ Add settings key contract:
 6. Cover upload rejects invalid type/oversized files safely.
 7. Covers render on intended hymn/collection surfaces with fallback.
 8. Docs governance pattern is declared and linked from tracking/agent files.
-9. Static checks pass.
+9. Realtime playback stays synchronized on projector, return, and streaming without polling loops.
+10. Static checks pass.
 
 ## 9. Verification Commands
 

@@ -153,7 +153,15 @@ pub fn import_slja(
     let mut media_map: HashMap<String, String> = HashMap::new();
     for media in &archive.media {
         let mapped_relative = write_archive_media_file(&media_root, media)?;
-        media_map.insert(media.filename.clone(), mapped_relative);
+        media_map.insert(media.filename.clone(), mapped_relative.clone());
+        if let Some(file_name) = std::path::Path::new(&media.filename)
+            .file_name()
+            .and_then(|value| value.to_str())
+        {
+            media_map
+                .entry(file_name.to_string())
+                .or_insert(mapped_relative);
+        }
     }
 
     let conn = state
@@ -168,7 +176,14 @@ pub fn import_slja(
 
     for (i, slide) in archive.slides.iter().enumerate() {
         let remapped_content = remap_video_paths_in_content(&slide.content, &media_map)?;
-        crate::db::queries::slides::insert_slide(&conn, pres_id, &remapped_content, i as i32)?;
+        crate::db::queries::slides::insert_slide_with_metadata(
+            &conn,
+            pres_id,
+            &remapped_content,
+            i as i32,
+            slide.notes.as_deref(),
+            slide.transition.as_deref(),
+        )?;
     }
 
     crate::db::queries::slides::get_presentation_by_id(&conn, pres_id)
@@ -265,7 +280,12 @@ fn extract_video_path_from_content(content_json: &str) -> Option<String> {
         .get("videoPath")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-        .or_else(|| value.get("src").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .or_else(|| {
+            value
+                .get("src")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
 }
 
 fn remap_video_paths_in_content(
@@ -276,28 +296,65 @@ fn remap_video_paths_in_content(
         Ok(value) => value,
         Err(_) => return Ok(content_json.to_string()),
     };
-    if value
+
+    let slide_type = value
         .get("type")
         .and_then(|v| v.as_str())
-        .map(|v| v != "video")
-        .unwrap_or(true)
-    {
-        return Ok(content_json.to_string());
+        .unwrap_or_default()
+        .to_string();
+
+    let remap_media_path = |path: &str| -> Option<String> {
+        let normalized = path.replace('\\', "/");
+        let key = normalized
+            .strip_prefix("media/")
+            .unwrap_or(&normalized)
+            .to_string();
+        media_map.get(&key).cloned().or_else(|| {
+            std::path::Path::new(&key)
+                .file_name()
+                .and_then(|value| value.to_str())
+                .and_then(|file_name| media_map.get(file_name).cloned())
+        })
+    };
+
+    if let Some(background_image) = value.get("backgroundImage").and_then(|v| v.as_str()) {
+        if let Some(remapped) = remap_media_path(background_image) {
+            value["backgroundImage"] = serde_json::Value::String(format!("media/{}", remapped));
+        }
+    }
+
+    if let Some(audio_path) = value.get("audioPath").and_then(|v| v.as_str()) {
+        if let Some(remapped) = remap_media_path(audio_path) {
+            value["audioPath"] = serde_json::Value::String(format!("media/{}", remapped));
+        }
+    }
+
+    if slide_type == "image" {
+        if let Some(current_src) = value.get("src").and_then(|v| v.as_str()) {
+            if let Some(remapped) = remap_media_path(current_src) {
+                value["src"] = serde_json::Value::String(format!("media/{}", remapped));
+            }
+        }
+        return serde_json::to_string(&value).map_err(AppError::from);
+    }
+
+    if slide_type != "video" {
+        return serde_json::to_string(&value).map_err(AppError::from);
     }
 
     let current = value
         .get("videoPath")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .or_else(|| value.get("src").and_then(|v| v.as_str()).map(|s| s.to_string()));
+        .map(str::to_string)
+        .or_else(|| {
+            value
+                .get("src")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        });
 
     if let Some(current_path) = current {
-        let key = current_path
-            .strip_prefix("media/")
-            .unwrap_or(&current_path)
-            .to_string();
-
-        if let Some(remapped) = media_map.get(&key) {
+        if let Some(remapped) = remap_media_path(&current_path) {
             value["videoPath"] = serde_json::Value::String(format!("media/{}", remapped));
         }
     }
@@ -349,7 +406,10 @@ fn write_archive_media_file(
 }
 
 fn uniquify_relative_path(media_root: &Path, original: &Path) -> std::path::PathBuf {
-    let parent = original.parent().map(std::path::PathBuf::from).unwrap_or_default();
+    let parent = original
+        .parent()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default();
     let stem = original
         .file_stem()
         .and_then(|s| s.to_str())

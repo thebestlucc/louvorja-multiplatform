@@ -39,7 +39,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
              FROM hymns ORDER BY number, title"
         )?;
         let hymns = stmt
-            .query_map([], |row| map_hymn_row(row))?
+            .query_map([], map_hymn_row)?
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(hymns);
     }
@@ -51,7 +51,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
              FROM hymns WHERE number = ?1 ORDER BY title"
         )?;
         let hymns = stmt
-            .query_map(params![num], |row| map_hymn_row(row))?
+            .query_map(params![num], map_hymn_row)?
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(hymns);
     }
@@ -71,7 +71,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
          ORDER BY rank"
     )?;
     let hymns = stmt
-        .query_map(params![fts_query], |row| map_hymn_row(row))?
+        .query_map(params![fts_query], map_hymn_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
 }
@@ -81,7 +81,7 @@ pub fn get_hymn_by_id(conn: &Connection, id: i64) -> Result<Hymn, AppError> {
         "SELECT id, number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path, created_at, updated_at
          FROM hymns WHERE id = ?1",
         params![id],
-        |row| map_hymn_row(row),
+        map_hymn_row,
     ).map_err(|e| match e {
         rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("Hymn with id {} not found", id)),
         other => AppError::Database(other),
@@ -113,12 +113,15 @@ pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, A
          FROM hymns WHERE album = ?1 ORDER BY number, title"
     )?;
     let hymns = stmt
-        .query_map(params![album], |row| map_hymn_row(row))?
+        .query_map(params![album], map_hymn_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
 }
 
-pub fn insert_hymn(conn: &Connection, hymn: &crate::db::models::HymnWriteInput) -> Result<i64, AppError> {
+pub fn insert_hymn(
+    conn: &Connection,
+    hymn: &crate::db::models::HymnWriteInput,
+) -> Result<i64, AppError> {
     conn.execute(
         "INSERT INTO hymns (
             number, title, author, album, lyrics, chords, audio_path, category, notes, cover_path

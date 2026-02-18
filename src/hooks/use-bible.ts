@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setCurrentSlide, setSlideContext } from "../lib/tauri";
 import type { SlideContentFlat } from "../types/presentation";
+import { ensureProjectionScreensStarted } from "../lib/projection-playback";
 
 export function useBible() {
   const [currentVersionId, setCurrentVersionId] = useState<number>(0);
@@ -83,6 +84,7 @@ export function useBible() {
     };
 
     try {
+      await ensureProjectionScreensStarted();
       await setCurrentSlide(slideData);
       await setSlideContext({ next: null, index: 0, total: 1, title: reference });
       setProjectedVerse(verseNum);
@@ -114,6 +116,7 @@ export function useBible() {
     };
 
     try {
+      await ensureProjectionScreensStarted();
       await setCurrentSlide(slideData);
       await setSlideContext({ next: null, index: 0, total: 1, title: reference });
       setProjectedVerse(null);

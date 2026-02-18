@@ -14,6 +14,7 @@ Each phase folder must use:
 Notes:
 - `HANDOFF.md` is completed when implementation is finished.
 - `PRD.md`, `SPECS.md`, and `TASKS.md` are mandatory from planning start.
+- `LEARNINGS.md` is strongly recommended when incidents or non-obvious engineering decisions are discovered during implementation.
 
 ## Active Phase Folders
 
@@ -21,6 +22,10 @@ Notes:
 2. `docs/phase-09-utilities-polish`
 3. `docs/phase-10-migration-tools-deployment`
 4. `docs/phase-11-hymn-crud-collections`
+
+## Realtime Engineering Rule
+
+For live synchronization features (audio/timer/clock/projection/streaming), use event-driven pub/sub patterns. Do not use polling as the default mechanism.
 
 ## Legacy Specs
 

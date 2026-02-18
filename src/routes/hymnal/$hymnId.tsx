@@ -1,11 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Monitor, Music, Save, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, Monitor, Music, Pencil, Save, Square, Trash2 } from "lucide-react";
 import { useDeleteHymn, useHymn, useSyncPoints, useUpdateHymn } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useSlides } from "../../hooks/use-slides";
-import { clearCurrentSlide } from "../../lib/tauri";
+import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { LyricsDisplay } from "../../components/music/lyrics-display";
 import { AudioControls } from "../../components/music/audio-controls";
 import { AudioSyncEditor } from "../../components/music/audio-sync-editor";
@@ -14,9 +14,20 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import type { SlideContent } from "../../types/presentation";
-import { useEffect, useMemo, useState } from "react";
+import type { SyncPoint } from "../../types/audio";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoverPicker } from "../../components/media/cover-picker";
+import { ensureProjectionScreensStarted } from "../../lib/projection-playback";
+import { getSyncPoints as fetchSyncPoints } from "../../lib/tauri";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 
 export const Route = createFileRoute("/hymnal/$hymnId")({
   component: HymnDetail,
@@ -55,10 +66,16 @@ function HymnDetail() {
   const navigate = useNavigate();
   const id = Number(hymnId);
   const { data: hymn, isLoading } = useHymn(id);
-  const { setSlides } = usePresentationStore();
-  const { slides, activeSlideIndex, goToSlide } = useSlides();
+  const setPresentationSlides = usePresentationStore((state) => state.setSlides);
+  const setPresentationActiveSlideIndex = usePresentationStore((state) => state.setActiveSlideIndex);
+  const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
+  const activeProjectedIndex = usePresentationStore((state) => state.activeSlideIndex);
+  const { goToSlide } = useSlides();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [isProjecting, setIsProjecting] = useState(false);
+  const [isQueueBoundToHymn, setIsQueueBoundToHymn] = useState(false);
+  const [resolvedSyncPoints, setResolvedSyncPoints] = useState<SyncPoint[] | null>(null);
   const [localActiveIndex, setLocalActiveIndex] = useState(0);
   const [form, setForm] = useState({
     number: "",
@@ -74,7 +91,7 @@ function HymnDetail() {
   });
 
   const { data: syncPointsData } = useSyncPoints(id);
-  const setSyncPoints = useAudioStore((s) => s.setSyncPoints);
+  const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
   const updateMutation = useUpdateHymn();
   const deleteMutation = useDeleteHymn();
 
@@ -84,16 +101,77 @@ function HymnDetail() {
   }, [hymn]);
 
   useEffect(() => {
-    if (generatedSlides.length > 0) {
-      setSlides(generatedSlides);
+    if (syncPointsData !== undefined) {
+      setResolvedSyncPoints(syncPointsData);
     }
-  }, [generatedSlides, setSlides]);
+  }, [syncPointsData]);
+
+  const resolveHymnSyncPoints = useCallback(async (): Promise<SyncPoint[]> => {
+    if (resolvedSyncPoints != null) {
+      return resolvedSyncPoints;
+    }
+    try {
+      const loaded = await fetchSyncPoints(id);
+      setResolvedSyncPoints(loaded);
+      return loaded;
+    } catch (error) {
+      console.warn("Failed to resolve hymn sync points before playback binding:", error);
+      return [];
+    }
+  }, [id, resolvedSyncPoints]);
+
+  const bindHymnToPlaybackQueue = useCallback(async (startIndex: number) => {
+    if (generatedSlides.length === 0) {
+      return;
+    }
+
+    const clampedIndex = Math.max(0, Math.min(startIndex, generatedSlides.length - 1));
+    const points = await resolveHymnSyncPoints();
+    setCurrentPresentation(null);
+    setPresentationSlides(generatedSlides);
+    setPresentationActiveSlideIndex(clampedIndex);
+    setAudioSyncPoints(points);
+    setIsQueueBoundToHymn(true);
+  }, [
+    generatedSlides,
+    resolveHymnSyncPoints,
+    setAudioSyncPoints,
+    setCurrentPresentation,
+    setPresentationActiveSlideIndex,
+    setPresentationSlides,
+  ]);
+
+  const projectHymnSlide = useCallback(async (index: number) => {
+    if (generatedSlides.length === 0) {
+      return;
+    }
+
+    const clampedIndex = Math.max(0, Math.min(index, generatedSlides.length - 1));
+    await bindHymnToPlaybackQueue(clampedIndex);
+    await goToSlide(clampedIndex);
+    setLocalActiveIndex(clampedIndex);
+  }, [bindHymnToPlaybackQueue, generatedSlides.length, goToSlide]);
 
   useEffect(() => {
-    if (syncPointsData) {
-      setSyncPoints(syncPointsData);
+    if (!isProjecting) {
+      return;
     }
-  }, [syncPointsData, setSyncPoints]);
+    setLocalActiveIndex(activeProjectedIndex);
+  }, [activeProjectedIndex, isProjecting]);
+
+  useEffect(() => {
+    if (!isQueueBoundToHymn || syncPointsData === undefined) {
+      return;
+    }
+    setAudioSyncPoints(syncPointsData);
+    setResolvedSyncPoints(syncPointsData);
+  }, [isQueueBoundToHymn, setAudioSyncPoints, syncPointsData]);
+
+  useEffect(() => {
+    setIsQueueBoundToHymn(false);
+    setResolvedSyncPoints(null);
+    setLocalActiveIndex(0);
+  }, [id]);
 
   useEffect(() => {
     if (!hymn) return;
@@ -139,6 +217,7 @@ function HymnDetail() {
           cover_path: form.coverPath,
         },
       });
+      setEditOpen(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(t("hymnal.saveFailed", { error: message }));
@@ -166,14 +245,19 @@ function HymnDetail() {
           {hymn.album && (
             <span className="text-sm text-muted-foreground">{hymn.album}</span>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              {t("actions.edit")}
+            </Button>
             {isProjecting ? (
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={async () => {
-                  await clearCurrentSlide();
+                  await stopProjectionAndSongAudio();
                   setIsProjecting(false);
+                  setIsQueueBoundToHymn(false);
                 }}
               >
                 <Square className="mr-2 h-4 w-4" />
@@ -183,9 +267,10 @@ function HymnDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
+                  await ensureProjectionScreensStarted();
                   setIsProjecting(true);
-                  goToSlide(localActiveIndex);
+                  await projectHymnSlide(localActiveIndex);
                 }}
               >
                 <Monitor className="mr-2 h-4 w-4" />
@@ -201,26 +286,86 @@ function HymnDetail() {
           </p>
         )}
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium">{t("hymnal.editTitle")}</h2>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSave}
-                disabled={!form.title.trim() || updateMutation.isPending}
-              >
-                <Save className="mr-2 h-4 w-4" />
-                {t("actions.save")}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{t("hymnal.editTitle")}</DialogTitle>
+              <DialogDescription>{t("hymnal.editHint")}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input
+                  type="number"
+                  value={form.number}
+                  onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
+                  label={t("hymnal.numberLabel")}
+                  placeholder={t("hymnal.numberPlaceholder")}
+                />
+                <Input
+                  value={form.title}
+                  onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
+                  label={t("hymnal.titleLabel")}
+                  placeholder={t("hymnal.createPlaceholder")}
+                />
+                <Input
+                  value={form.author}
+                  onChange={(event) => setForm((prev) => ({ ...prev, author: event.target.value }))}
+                  placeholder={t("hymnal.authorPlaceholder")}
+                />
+                <Input
+                  value={form.album}
+                  onChange={(event) => setForm((prev) => ({ ...prev, album: event.target.value }))}
+                  placeholder={t("hymnal.albumPlaceholder")}
+                />
+                <Input
+                  value={form.category}
+                  onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
+                  placeholder={t("hymnal.categoryPlaceholder")}
+                />
+                <Input
+                  value={form.audioPath}
+                  onChange={(event) => setForm((prev) => ({ ...prev, audioPath: event.target.value }))}
+                  placeholder={t("hymnal.audioPathPlaceholder")}
+                />
+                <textarea
+                  value={form.chords}
+                  onChange={(event) => setForm((prev) => ({ ...prev, chords: event.target.value }))}
+                  rows={3}
+                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  placeholder={t("hymnal.chordsPlaceholder")}
+                />
+                <textarea
+                  value={form.notes}
+                  onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+                  rows={3}
+                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  placeholder={t("hymnal.notesPlaceholder")}
+                />
+              </div>
+              <CoverPicker
+                value={form.coverPath}
+                onChange={(value) => setForm((prev) => ({ ...prev, coverPath: value }))}
+                title={form.title || hymn.title}
+              />
+              <textarea
+                value={form.lyrics}
+                onChange={(event) => setForm((prev) => ({ ...prev, lyrics: event.target.value }))}
+                rows={6}
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                placeholder={t("hymnal.lyricsPlaceholder")}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setEditOpen(false)}>
+                {t("actions.cancel")}
               </Button>
               <Button
                 variant="ghost"
-                size="sm"
                 className="text-destructive hover:bg-destructive/10"
                 onClick={async () => {
                   try {
                     await deleteMutation.mutateAsync(id);
+                    setEditOpen(false);
                     navigate({ to: "/hymnal" });
                   } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
@@ -231,73 +376,16 @@ function HymnDetail() {
                 <Trash2 className="mr-2 h-4 w-4" />
                 {t("actions.delete")}
               </Button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              type="number"
-              value={form.number}
-              onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
-              placeholder={t("hymnal.numberPlaceholder")}
-            />
-            <Input
-              value={form.title}
-              onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder={t("hymnal.createPlaceholder")}
-            />
-            <Input
-              value={form.author}
-              onChange={(event) => setForm((prev) => ({ ...prev, author: event.target.value }))}
-              placeholder={t("hymnal.authorPlaceholder")}
-            />
-            <Input
-              value={form.album}
-              onChange={(event) => setForm((prev) => ({ ...prev, album: event.target.value }))}
-              placeholder={t("hymnal.albumPlaceholder")}
-            />
-            <Input
-              value={form.category}
-              onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
-              placeholder={t("hymnal.categoryPlaceholder")}
-            />
-            <Input
-              value={form.audioPath}
-              onChange={(event) => setForm((prev) => ({ ...prev, audioPath: event.target.value }))}
-              placeholder={t("hymnal.audioPathPlaceholder")}
-            />
-            <textarea
-              value={form.chords}
-              onChange={(event) => setForm((prev) => ({ ...prev, chords: event.target.value }))}
-              rows={3}
-              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              placeholder={t("hymnal.chordsPlaceholder")}
-            />
-            <textarea
-              value={form.notes}
-              onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-              rows={3}
-              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              placeholder={t("hymnal.notesPlaceholder")}
-            />
-          </div>
-          <div className="mt-3">
-            <CoverPicker
-              value={form.coverPath}
-              onChange={(value) => setForm((prev) => ({ ...prev, coverPath: value }))}
-              title={form.title || hymn.title}
-            />
-          </div>
-          <div className="mt-3">
-            <textarea
-              value={form.lyrics}
-              onChange={(event) => setForm((prev) => ({ ...prev, lyrics: event.target.value }))}
-              rows={6}
-              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              placeholder={t("hymnal.lyricsPlaceholder")}
-            />
-          </div>
-        </div>
+              <Button
+                onClick={handleSave}
+                disabled={!form.title.trim() || updateMutation.isPending}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {t("actions.save")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {hymn.audio_path && (
           <div className="flex items-center gap-2">
@@ -313,14 +401,19 @@ function HymnDetail() {
         )}
 
         {/* Audio controls */}
-        {hymn.audio_path && <AudioControls filePath={hymn.audio_path} />}
+        {hymn.audio_path && (
+          <AudioControls
+            filePath={hymn.audio_path}
+            onBeforePlay={() => bindHymnToPlaybackQueue(localActiveIndex)}
+          />
+        )}
 
         {/* Sync editor */}
         {showSyncEditor && hymn.audio_path && (
           <AudioSyncEditor
             hymnId={id}
             initialPoints={syncPointsData ?? []}
-            totalSlides={slides.length}
+            totalSlides={generatedSlides.length}
             onClose={() => setShowSyncEditor(false)}
           />
         )}
@@ -328,10 +421,10 @@ function HymnDetail() {
         {hymn.lyrics ? (
           <LyricsDisplay
             lyrics={hymn.lyrics}
-            activeStanza={isProjecting ? Math.max(0, activeSlideIndex - 1) : localActiveIndex}
+            activeStanza={isProjecting ? Math.max(0, localActiveIndex - 1) : localActiveIndex}
             onStanzaClick={(i) => {
               if (isProjecting) {
-                goToSlide(i + 1);
+                void projectHymnSlide(i + 1);
               } else {
                 setLocalActiveIndex(i);
               }
@@ -343,14 +436,15 @@ function HymnDetail() {
       </div>
 
       {/* Slide panel */}
-      {slides.length > 0 && (
+      {generatedSlides.length > 0 && (
         <div className="hidden w-48 shrink-0 border-l border-border lg:block">
           <SlideList
-            slides={slides}
-            activeIndex={isProjecting ? activeSlideIndex : localActiveIndex}
+            slides={generatedSlides}
+            activeIndex={localActiveIndex}
+            enableGlobalKeyboardNav={false}
             onSelect={(i) => {
               if (isProjecting) {
-                goToSlide(i);
+                void projectHymnSlide(i);
               } else {
                 setLocalActiveIndex(i);
               }

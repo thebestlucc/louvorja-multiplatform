@@ -2,6 +2,7 @@ use crate::db::models::{MonitorConfig, MonitorInfo, OverlayState, SlideContent, 
 use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
 use crate::state::{AppState, StreamingState};
+use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::{AppHandle, Emitter, Manager};
 
 fn streaming_slide_title(slide: &SlideContent) -> String {
@@ -13,16 +14,67 @@ fn streaming_slide_title(slide: &SlideContent) -> String {
 }
 
 fn is_live_utility_slide(slide: &SlideContent) -> bool {
-    slide.slide_type == "cover"
-        && matches!(slide.label.as_deref(), Some("timer" | "clock"))
+    slide.slide_type == "cover" && matches!(slide.label.as_deref(), Some("timer" | "clock"))
 }
 
 fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
+    let is_image = slide.slide_type == "image";
+    let text_value = slide.text.as_deref().unwrap_or("");
+    let video_path = slide.video_path.as_deref().unwrap_or("");
+    let background_image = slide.background_image.as_deref().unwrap_or("");
+    let background_color = slide.background_color.as_deref().unwrap_or("");
+    let text_color = slide.text_color.as_deref().unwrap_or("");
+    let audio_path = slide.audio_path.as_deref().unwrap_or("");
+    let text_size = slide.text_size.unwrap_or(0);
+
     serde_json::json!({
+        "slideType": slide.slide_type,
+        "slide_type": slide.slide_type,
+        "type": slide.slide_type,
+        "videoPath": video_path,
+        "video_path": video_path,
         "label": slide.label.as_deref().unwrap_or(""),
-        "text": slide.text.as_deref().unwrap_or(""),
+        "text": text_value,
         "title": slide.title.as_deref().unwrap_or(""),
         "subtitle": slide.subtitle.as_deref().unwrap_or(""),
+        "backgroundImage": background_image,
+        "background_image": background_image,
+        "backgroundColor": background_color,
+        "background_color": background_color,
+        "textColor": text_color,
+        "text_color": text_color,
+        "textSize": text_size,
+        "text_size": text_size,
+        "fontSize": text_size,
+        "audioPath": audio_path,
+        "audio_path": audio_path,
+        "src": if is_image { text_value } else { "" },
+    })
+}
+
+fn empty_streaming_music_payload() -> serde_json::Value {
+    serde_json::json!({
+        "slideType": "",
+        "slide_type": "",
+        "type": "",
+        "videoPath": "",
+        "video_path": "",
+        "label": "",
+        "text": "",
+        "title": "",
+        "subtitle": "",
+        "backgroundImage": "",
+        "background_image": "",
+        "backgroundColor": "",
+        "background_color": "",
+        "textColor": "",
+        "text_color": "",
+        "textSize": 0,
+        "text_size": 0,
+        "fontSize": 0,
+        "audioPath": "",
+        "audio_path": "",
+        "src": "",
     })
 }
 
@@ -110,27 +162,43 @@ fn open_fullscreen_window(
         let _ = existing.close();
     }
 
-    let window = tauri::WebviewWindowBuilder::new(
-        app,
-        label,
-        tauri::WebviewUrl::App(url.into()),
-    )
-    .title(title)
-    .visible(false)
-    .decorations(false)
-    .resizable(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .inner_size(logical_width, logical_height)
-    .position(logical_x, logical_y)
-    .build()
-    .map_err(|e| AppError::Tauri(e.to_string()))?;
+    let window = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App(url.into()))
+        .title(title)
+        .visible(false)
+        .background_throttling(BackgroundThrottlingPolicy::Disabled)
+        .fullscreen(true)
+        .decorations(false)
+        .resizable(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .inner_size(logical_width, logical_height)
+        .position(logical_x, logical_y)
+        .build()
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     std::thread::sleep(std::time::Duration::from_millis(150));
     window.show().map_err(|e| AppError::Tauri(e.to_string()))?;
-    window
-        .set_fullscreen(true)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    // Fullscreen transition can be asynchronous on some platforms.
+    // Retry briefly to avoid ending up with a visible but windowed monitor.
+    let mut fullscreen_applied = false;
+    for _ in 0..6 {
+        window
+            .set_fullscreen(true)
+            .map_err(|e| AppError::Tauri(e.to_string()))?;
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let is_fullscreen = window
+            .is_fullscreen()
+            .map_err(|e| AppError::Tauri(e.to_string()))?;
+        if is_fullscreen {
+            fullscreen_applied = true;
+            break;
+        }
+    }
+
+    if !fullscreen_applied {
+        let _ = window.maximize();
+    }
 
     Ok(())
 }
@@ -141,7 +209,13 @@ pub fn open_projector_window(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    open_fullscreen_window("projector", "/projector", "LouvorJA - Projector", monitor_index, &app)?;
+    open_fullscreen_window(
+        "projector",
+        "/projector",
+        "LouvorJA - Projector",
+        monitor_index,
+        &app,
+    )?;
 
     let mut projector_open = state
         .projector_open
@@ -176,7 +250,13 @@ pub fn open_return_window(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    open_fullscreen_window("return", "/return", "LouvorJA - Return Monitor", monitor_index, &app)?;
+    open_fullscreen_window(
+        "return",
+        "/return",
+        "LouvorJA - Return Monitor",
+        monitor_index,
+        &app,
+    )?;
 
     let mut return_open = state
         .return_open
@@ -266,21 +346,9 @@ pub fn set_current_slide(
             });
             server.broadcast_bible(&json.to_string());
 
-            let clear_music = serde_json::json!({
-                "label": "",
-                "text": "",
-                "title": "",
-                "subtitle": "",
-            });
-            server.broadcast_music(&clear_music.to_string());
+            server.broadcast_music(&empty_streaming_music_payload().to_string());
         } else {
-            let json = serde_json::json!({
-                "label": slide_data.label.as_deref().unwrap_or(""),
-                "text": slide_data.text.as_deref().unwrap_or(""),
-                "title": slide_data.title.as_deref().unwrap_or(""),
-                "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
-            });
-            server.broadcast_music(&json.to_string());
+            server.broadcast_music(&streaming_slide_payload(&slide_data).to_string());
 
             let clear_bible = serde_json::json!({
                 "reference": "",
@@ -333,12 +401,7 @@ pub fn clear_current_slide(
 
     // Broadcast empty state to SSE streaming
     if let Ok(server) = streaming_state.server.lock() {
-        let music_json = serde_json::json!({
-            "label": "",
-            "text": "",
-            "title": "",
-            "subtitle": "",
-        });
+        let music_json = empty_streaming_music_payload();
         server.broadcast_music(&music_json.to_string());
 
         let bible_json = serde_json::json!({
@@ -382,25 +445,11 @@ pub fn set_slide_context(
     // Broadcast to return monitor SSE
     if let Ok(server) = streaming_state.server.lock() {
         // Get current slide for the "current" panel
-        let current_slide = state
-            .current_slide
-            .lock()
-            .ok()
-            .and_then(|s| s.clone());
+        let current_slide = state.current_slide.lock().ok().and_then(|s| s.clone());
 
         let json = serde_json::json!({
-            "current": current_slide.map(|s| serde_json::json!({
-                "label": s.label.as_deref().unwrap_or(""),
-                "text": s.text.as_deref().unwrap_or(""),
-                "title": s.title.as_deref().unwrap_or(""),
-                "subtitle": s.subtitle.as_deref().unwrap_or(""),
-            })),
-            "next": context_data.next.map(|s| serde_json::json!({
-                "label": s.label.as_deref().unwrap_or(""),
-                "text": s.text.as_deref().unwrap_or(""),
-                "title": s.title.as_deref().unwrap_or(""),
-                "subtitle": s.subtitle.as_deref().unwrap_or(""),
-            })),
+            "current": current_slide.as_ref().map(streaming_slide_payload),
+            "next": context_data.next.as_ref().map(streaming_slide_payload),
             "index": context_data.index,
             "total": context_data.total,
             "title": context_data.title,
@@ -477,9 +526,7 @@ pub fn toggle_logo_screen(
 }
 
 #[tauri::command]
-pub fn get_overlay_state(
-    state: tauri::State<'_, AppState>,
-) -> Result<OverlayState, AppError> {
+pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
     let black = state
         .is_black_screen
         .lock()

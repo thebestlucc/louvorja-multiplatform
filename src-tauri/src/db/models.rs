@@ -161,6 +161,12 @@ pub struct SlideContent {
     pub label: Option<String>,
     #[serde(default, alias = "videoPath")]
     pub video_path: Option<String>,
+    #[serde(default, alias = "backgroundImage")]
+    pub background_image: Option<String>,
+    #[serde(default, alias = "backgroundColor")]
+    pub background_color: Option<String>,
+    #[serde(default, alias = "audioPath")]
+    pub audio_path: Option<String>,
     #[serde(default, alias = "autoPlay")]
     pub auto_play: Option<bool>,
     #[serde(default, alias = "loop")]
@@ -206,8 +212,10 @@ pub struct Collection {
     pub id: i64,
     pub name: String,
     pub description: Option<String>,
+    pub year: Option<i32>,
     pub cover_path: Option<String>,
     pub auto_cover_path: Option<String>,
+    pub song_count: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -263,4 +271,14 @@ pub struct CollectionSong {
 pub struct CollectionWithSongs {
     pub collection: Collection,
     pub songs: Vec<CollectionSong>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionSearchResult {
+    pub kind: String,
+    pub collection_id: i64,
+    pub song_id: Option<i64>,
+    pub collection_name: String,
+    pub title: String,
+    pub snippet: String,
 }

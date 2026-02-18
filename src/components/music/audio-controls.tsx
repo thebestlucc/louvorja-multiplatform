@@ -16,9 +16,10 @@ const PLAYBACK_MODES: PlaybackMode[] = ["sung", "karaoke", "silent"];
 
 interface AudioControlsProps {
   filePath: string;
+  onBeforePlay?: () => Promise<void> | void;
 }
 
-export function AudioControls({ filePath }: AudioControlsProps) {
+export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
   const { t } = useTranslation();
   const {
     play,
@@ -43,6 +44,7 @@ export function AudioControls({ filePath }: AudioControlsProps) {
     if (isActive) {
       await togglePlayPause();
     } else {
+      await onBeforePlay?.();
       await play(filePath);
     }
   };

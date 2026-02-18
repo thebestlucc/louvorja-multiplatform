@@ -409,9 +409,8 @@ pub fn import_favorites_domain(
 
     let mut imported = 0u32;
     let mut skipped = 0u32;
-    let mut select = source.prepare(
-        "SELECT id, item_type, item_id, created_at FROM favorites ORDER BY id ASC",
-    )?;
+    let mut select = source
+        .prepare("SELECT id, item_type, item_id, created_at FROM favorites ORDER BY id ASC")?;
     let mut rows = select.query([])?;
 
     {

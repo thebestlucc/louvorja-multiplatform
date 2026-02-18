@@ -12,3 +12,4 @@
 3. Record verification evidence (commands + smoke matrix results).
 4. List known limitations/deferrals, if any.
 5. Link commits/PRs and update `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md` phase status.
+6. Link `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-11-hymn-crud-collections/LEARNINGS.md` and confirm guardrails were folded into implementation.

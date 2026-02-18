@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import type { PlaybackStatus, PlaybackMode, SyncPoint } from "../types/audio";
-import { audioGetStatus } from "../lib/tauri";
+import { listen } from "@tauri-apps/api/event";
+import type { AudioStatusPayload, PlaybackStatus, PlaybackMode, SyncPoint } from "../types/audio";
 import { usePresentationStore } from "./presentation-store";
+import { projectSlideIndex } from "../lib/projection-playback";
 
 interface AudioStoreState {
   status: PlaybackStatus;
@@ -11,8 +12,14 @@ interface AudioStoreState {
   volume: number;
   playbackMode: PlaybackMode;
   syncPoints: SyncPoint[];
-  pollingInterval: ReturnType<typeof setInterval> | null;
+  statusSubscription: (() => void) | null;
+  subscriptionToken: number;
   lastSyncSlide: number;
+  manualSyncLock: {
+    slideIndex: number;
+    targetTimestampMs: number;
+    expiresAtMs: number;
+  } | null;
   setStatus: (status: PlaybackStatus) => void;
   setCurrentFile: (file: string | null) => void;
   setPosition: (ms: number) => void;
@@ -20,8 +27,10 @@ interface AudioStoreState {
   setVolume: (volume: number) => void;
   setPlaybackMode: (mode: PlaybackMode) => void;
   setSyncPoints: (points: SyncPoint[]) => void;
-  startPolling: () => void;
-  stopPolling: () => void;
+  setManualSyncLock: (slideIndex: number, targetTimestampMs: number, holdMs?: number) => void;
+  clearManualSyncLock: () => void;
+  startStatusSubscription: () => void;
+  stopStatusSubscription: () => void;
   reset: () => void;
 }
 
@@ -45,8 +54,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   volume: 1,
   playbackMode: "sung",
   syncPoints: [],
-  pollingInterval: null,
+  statusSubscription: null,
+  subscriptionToken: 0,
   lastSyncSlide: -1,
+  manualSyncLock: null,
   setStatus: (status) => set({ status }),
   setCurrentFile: (file) => set({ currentFile: file }),
   setPosition: (ms) => set({ positionMs: ms }),
@@ -55,63 +66,148 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   setPlaybackMode: (mode) => set({ playbackMode: mode }),
   setSyncPoints: (points) => {
     const sorted = [...points].sort((a, b) => a.timestampMs - b.timestampMs);
-    set({ syncPoints: sorted });
+    set({ syncPoints: sorted, lastSyncSlide: -1 });
   },
-  startPolling: () => {
-    const { pollingInterval } = get();
-    if (pollingInterval) return;
+  setManualSyncLock: (slideIndex, targetTimestampMs, holdMs = 1_200) => {
+    set({
+      manualSyncLock: {
+        slideIndex,
+        targetTimestampMs,
+        expiresAtMs: Date.now() + holdMs,
+      },
+      lastSyncSlide: slideIndex,
+    });
+  },
+  clearManualSyncLock: () => set({ manualSyncLock: null }),
+  startStatusSubscription: () => {
+    const state = get();
+    if (state.statusSubscription) {
+      return;
+    }
 
-    const interval = setInterval(async () => {
-      try {
-        const payload = await audioGetStatus();
-        const state = get();
+    const subscriptionToken = state.subscriptionToken + 1;
 
-        const newStatus: PlaybackStatus = payload.isPlaying
-          ? "playing"
-          : payload.isPaused
-            ? "paused"
-            : "idle";
+    let projectedSlideInFlight = false;
+    let queuedSlide: number | null = null;
 
-        set({
-          positionMs: payload.positionMs,
-          durationMs: payload.durationMs ?? 0,
-          volume: payload.volume,
-          currentFile: payload.currentFile,
-          status: newStatus,
-        });
+    const queueSlideProjection = (slideIndex: number) => {
+      const state = get();
+      if (slideIndex < 0 || slideIndex === state.lastSyncSlide) {
+        return;
+      }
 
-        // Auto-advance slides based on sync points
-        if (newStatus === "playing" && state.syncPoints.length > 0) {
-          const targetSlide = findSlideAtPosition(state.syncPoints, payload.positionMs);
-          if (targetSlide >= 0 && targetSlide !== state.lastSyncSlide) {
-            set({ lastSyncSlide: targetSlide });
-            usePresentationStore.getState().setActiveSlideIndex(targetSlide);
+      set({ lastSyncSlide: slideIndex });
+      queuedSlide = slideIndex;
+
+      if (projectedSlideInFlight) {
+        return;
+      }
+
+      projectedSlideInFlight = true;
+      void (async () => {
+        while (queuedSlide != null) {
+          const nextSlide = queuedSlide;
+          queuedSlide = null;
+          usePresentationStore.getState().setActiveSlideIndex(nextSlide);
+          try {
+            await projectSlideIndex(nextSlide);
+          } catch {
+            // Ignore transient projection update errors.
           }
         }
+        projectedSlideInFlight = false;
+      })();
+    };
 
-        // Stop polling if playback has ended
-        if (!payload.isPlaying && !payload.isPaused && state.status === "playing") {
-          get().stopPolling();
-          set({ status: "idle", positionMs: 0 });
-        }
-      } catch {
-        // Ignore polling errors
+    const applyPayload = (payload: AudioStatusPayload) => {
+      if (get().subscriptionToken !== subscriptionToken) {
+        return;
       }
-    }, 100);
 
-    set({ pollingInterval: interval });
+      const currentState = get();
+      const newStatus: PlaybackStatus = payload.isPlaying
+        ? "playing"
+        : payload.isPaused
+          ? "paused"
+          : "idle";
+
+      let manualSyncLock = currentState.manualSyncLock;
+      if (manualSyncLock && Date.now() >= manualSyncLock.expiresAtMs) {
+        manualSyncLock = null;
+        set({ manualSyncLock: null });
+      }
+
+      set({
+        positionMs: payload.positionMs,
+        durationMs: payload.durationMs ?? 0,
+        volume: payload.volume,
+        currentFile: payload.currentFile,
+        status: newStatus,
+      });
+
+      if ((payload.isPlaying || payload.isPaused) && currentState.syncPoints.length > 0) {
+        const targetSlide = findSlideAtPosition(currentState.syncPoints, payload.positionMs);
+        if (targetSlide >= 0) {
+          if (manualSyncLock) {
+            const lockReached =
+              targetSlide === manualSyncLock.slideIndex ||
+              Math.abs(payload.positionMs - manualSyncLock.targetTimestampMs) <= 300;
+
+            if (!lockReached && targetSlide !== manualSyncLock.slideIndex) {
+              return;
+            }
+
+            set({ manualSyncLock: null });
+          }
+          queueSlideProjection(targetSlide);
+        }
+      }
+
+      if (!payload.isPlaying && !payload.isPaused) {
+        get().stopStatusSubscription();
+      }
+    };
+
+    set({ lastSyncSlide: -1, subscriptionToken });
+
+    void listen<AudioStatusPayload>("audio-status", (event) => {
+      applyPayload(event.payload);
+    })
+      .then((unlisten) => {
+        if (get().subscriptionToken !== subscriptionToken) {
+          unlisten();
+          return;
+        }
+        set({ statusSubscription: unlisten });
+      })
+      .catch(() => {
+        // Keep store usable even if event listener fails to initialize.
+      });
   },
-  stopPolling: () => {
-    const { pollingInterval } = get();
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      set({ pollingInterval: null });
+  stopStatusSubscription: () => {
+    const { statusSubscription, subscriptionToken } = get();
+    if (statusSubscription) {
+      try {
+        statusSubscription();
+      } catch {
+        // Ignore unlisten errors during teardown.
+      }
     }
+    set({
+      statusSubscription: null,
+      subscriptionToken: subscriptionToken + 1,
+      lastSyncSlide: -1,
+      manualSyncLock: null,
+    });
   },
   reset: () => {
-    const { pollingInterval } = get();
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
+    const { statusSubscription, subscriptionToken } = get();
+    if (statusSubscription) {
+      try {
+        statusSubscription();
+      } catch {
+        // Ignore unlisten errors during reset.
+      }
     }
     set({
       status: "idle",
@@ -121,8 +217,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       volume: 1,
       playbackMode: "sung",
       syncPoints: [],
-      pollingInterval: null,
+      statusSubscription: null,
+      subscriptionToken: subscriptionToken + 1,
       lastSyncSlide: -1,
+      manualSyncLock: null,
     });
   },
 }));

@@ -41,12 +41,20 @@ export interface VideoSlideContent {
   textSize?: number;
 }
 
+export interface StyledSlideMetadata {
+  backgroundImage?: string;
+  backgroundColor?: string;
+  textColor?: string;
+  fontSize?: number;
+  audioPath?: string;
+}
+
 export type SlideContent =
-  | { type: "cover"; title: string; subtitle?: string }
-  | { type: "lyrics"; text: string; label?: string }
+  | ({ type: "cover"; title: string; subtitle?: string } & StyledSlideMetadata)
+  | ({ type: "lyrics"; text: string; label?: string } & StyledSlideMetadata)
   | { type: "pause" }
-  | { type: "text"; text: string; fontSize?: number }
-  | { type: "image"; src: string; alt?: string }
+  | ({ type: "text"; text: string } & StyledSlideMetadata)
+  | ({ type: "image"; src: string; alt?: string } & Pick<StyledSlideMetadata, "audioPath">)
   | { type: "bible"; book: string; chapter: number; verseStart: number; verseEnd: number; text: string }
   | VideoSlideContent;
 
@@ -119,6 +127,9 @@ export interface SlideContentFlat {
   subtitle?: string | null;
   label?: string | null;
   video_path?: string | null;
+  background_image?: string | null;
+  background_color?: string | null;
+  audio_path?: string | null;
   auto_play?: boolean | null;
   loop?: boolean | null;
   muted?: boolean | null;
@@ -132,15 +143,46 @@ export function slideContentToFlat(slide: SlideContent): SlideContentFlat {
   const base: SlideContentFlat = { slide_type: slide.type };
   switch (slide.type) {
     case "cover":
-      return { ...base, title: slide.title, subtitle: slide.subtitle };
+      return {
+        ...base,
+        title: slide.title,
+        subtitle: slide.subtitle,
+        background_image: slide.backgroundImage ?? null,
+        background_color: slide.backgroundColor ?? null,
+        text_color: slide.textColor ?? null,
+        text_size: slide.fontSize ?? null,
+        audio_path: slide.audioPath ?? null,
+      };
     case "lyrics":
-      return { ...base, text: slide.text, label: slide.label };
+      return {
+        ...base,
+        text: slide.text,
+        label: slide.label,
+        background_image: slide.backgroundImage ?? null,
+        background_color: slide.backgroundColor ?? null,
+        text_color: slide.textColor ?? null,
+        text_size: slide.fontSize ?? null,
+        audio_path: slide.audioPath ?? null,
+      };
     case "pause":
       return base;
     case "text":
-      return { ...base, text: slide.text };
+      return {
+        ...base,
+        text: slide.text,
+        background_image: slide.backgroundImage ?? null,
+        background_color: slide.backgroundColor ?? null,
+        text_color: slide.textColor ?? null,
+        text_size: slide.fontSize ?? null,
+        audio_path: slide.audioPath ?? null,
+      };
     case "image":
-      return { ...base, text: slide.src, title: slide.alt };
+      return {
+        ...base,
+        text: slide.src,
+        title: slide.alt,
+        audio_path: slide.audioPath ?? null,
+      };
     case "bible":
       return { ...base, text: slide.text, title: `${slide.book} ${slide.chapter}:${slide.verseStart}-${slide.verseEnd}` };
     case "video":
@@ -162,15 +204,46 @@ export function slideContentToFlat(slide: SlideContent): SlideContentFlat {
 export function flatToSlideContent(flat: SlideContentFlat): SlideContent {
   switch (flat.slide_type) {
     case "cover":
-      return { type: "cover", title: flat.title ?? "", subtitle: flat.subtitle ?? undefined };
+      return {
+        type: "cover",
+        title: flat.title ?? "",
+        subtitle: flat.subtitle ?? undefined,
+        backgroundImage: flat.background_image ?? undefined,
+        backgroundColor: flat.background_color ?? undefined,
+        textColor: flat.text_color ?? undefined,
+        fontSize: flat.text_size ?? undefined,
+        audioPath: flat.audio_path ?? undefined,
+      };
     case "lyrics":
-      return { type: "lyrics", text: flat.text ?? "", label: flat.label ?? undefined };
+      return {
+        type: "lyrics",
+        text: flat.text ?? "",
+        label: flat.label ?? undefined,
+        backgroundImage: flat.background_image ?? undefined,
+        backgroundColor: flat.background_color ?? undefined,
+        textColor: flat.text_color ?? undefined,
+        fontSize: flat.text_size ?? undefined,
+        audioPath: flat.audio_path ?? undefined,
+      };
     case "pause":
       return { type: "pause" };
     case "text":
-      return { type: "text", text: flat.text ?? "" };
+      return {
+        type: "text",
+        text: flat.text ?? "",
+        backgroundImage: flat.background_image ?? undefined,
+        backgroundColor: flat.background_color ?? undefined,
+        textColor: flat.text_color ?? undefined,
+        fontSize: flat.text_size ?? undefined,
+        audioPath: flat.audio_path ?? undefined,
+      };
     case "image":
-      return { type: "image", src: flat.text ?? "", alt: flat.title ?? undefined };
+      return {
+        type: "image",
+        src: flat.text ?? "",
+        alt: flat.title ?? undefined,
+        audioPath: flat.audio_path ?? undefined,
+      };
     case "bible": {
       // title is formatted as "Book Chapter:Start-End" by the backend
       const ref = flat.title ?? "";

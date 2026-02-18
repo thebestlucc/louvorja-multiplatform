@@ -1,7 +1,7 @@
 use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, SlideContext, Verse};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 fn broadcast_bible_stream_payloads(
     server: &crate::streaming::StreamingServer,
@@ -112,7 +112,6 @@ pub fn project_bible_verse(
     end: i64,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
-    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     let conn = state
         .db
@@ -141,6 +140,9 @@ pub fn project_bible_verse(
         subtitle: None,
         label: None,
         video_path: None,
+        background_image: None,
+        background_color: None,
+        audio_path: None,
         auto_play: None,
         r#loop: None,
         muted: None,
@@ -180,6 +182,7 @@ pub fn project_bible_verse(
     app.emit("slide-context", &slide_context)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
+    let streaming_state = app.state::<StreamingState>();
     if let Ok(server) = streaming_state.server.lock() {
         broadcast_bible_stream_payloads(&server, &slide_data, &reference);
     }
@@ -324,6 +327,9 @@ pub fn navigate_bible_verse(
         subtitle: None,
         label: None,
         video_path: None,
+        background_image: None,
+        background_color: None,
+        audio_path: None,
         auto_play: None,
         r#loop: None,
         muted: None,
@@ -380,7 +386,10 @@ fn parse_bible_reference(reference: &str) -> Result<(String, i64, i64), AppError
         // Everything after colon is verse part (possibly "3" or "3-8")
         let verse_part = &reference[colon_pos + 1..];
         let verse_start: i64 = if let Some(dash_pos) = verse_part.find('-') {
-            verse_part[..dash_pos].trim().parse().map_err(|_| re_err())?
+            verse_part[..dash_pos]
+                .trim()
+                .parse()
+                .map_err(|_| re_err())?
         } else {
             verse_part.trim().parse().map_err(|_| re_err())?
         };
@@ -388,7 +397,10 @@ fn parse_bible_reference(reference: &str) -> Result<(String, i64, i64), AppError
         // Everything before colon: find the chapter number (last space-separated token)
         let before_colon = &reference[..colon_pos];
         if let Some(space_pos) = before_colon.rfind(' ') {
-            let chapter: i64 = before_colon[space_pos + 1..].trim().parse().map_err(|_| re_err())?;
+            let chapter: i64 = before_colon[space_pos + 1..]
+                .trim()
+                .parse()
+                .map_err(|_| re_err())?;
             let book = before_colon[..space_pos].trim().to_string();
             Ok((book, chapter, verse_start))
         } else {

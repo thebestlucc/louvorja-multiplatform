@@ -46,10 +46,7 @@ pub async fn install_update(app: AppHandle) -> Result<(), AppError> {
     };
 
     update
-        .download_and_install(
-            |_chunk_length, _content_length| {},
-            || {},
-        )
+        .download_and_install(|_chunk_length, _content_length| {}, || {})
         .await
         .map_err(|e| AppError::Internal(format!("Install update failed: {}", e)))?;
 

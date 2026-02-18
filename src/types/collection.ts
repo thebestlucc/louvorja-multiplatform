@@ -8,8 +8,10 @@ export interface Collection {
   id: number;
   name: string;
   description: string | null;
+  year: number | null;
   cover_path: string | null;
   auto_cover_path: string | null;
+  song_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -33,4 +35,13 @@ export interface CollectionSong {
 export interface CollectionWithSongs {
   collection: Collection;
   songs: CollectionSong[];
+}
+
+export interface CollectionSearchResult {
+  kind: "collection" | "song";
+  collection_id: number;
+  song_id: number | null;
+  collection_name: string;
+  title: string;
+  snippet: string;
 }

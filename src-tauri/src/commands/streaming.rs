@@ -1,7 +1,8 @@
+use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::streaming::StreamingInfo;
-use crate::db::models::{SlideContent, SlideContext};
+use tauri::{AppHandle, Manager};
 
 fn streaming_slide_title(slide: &SlideContent) -> String {
     slide
@@ -12,11 +13,37 @@ fn streaming_slide_title(slide: &SlideContent) -> String {
 }
 
 fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
+    let is_image = slide.slide_type == "image";
+    let text_value = slide.text.as_deref().unwrap_or("");
+    let video_path = slide.video_path.as_deref().unwrap_or("");
+    let background_image = slide.background_image.as_deref().unwrap_or("");
+    let background_color = slide.background_color.as_deref().unwrap_or("");
+    let text_color = slide.text_color.as_deref().unwrap_or("");
+    let audio_path = slide.audio_path.as_deref().unwrap_or("");
+    let text_size = slide.text_size.unwrap_or(0);
+
     serde_json::json!({
+        "slideType": slide.slide_type,
+        "slide_type": slide.slide_type,
+        "type": slide.slide_type,
+        "videoPath": video_path,
+        "video_path": video_path,
         "label": slide.label.as_deref().unwrap_or(""),
-        "text": slide.text.as_deref().unwrap_or(""),
+        "text": text_value,
         "title": slide.title.as_deref().unwrap_or(""),
         "subtitle": slide.subtitle.as_deref().unwrap_or(""),
+        "backgroundImage": background_image,
+        "background_image": background_image,
+        "backgroundColor": background_color,
+        "background_color": background_color,
+        "textColor": text_color,
+        "text_color": text_color,
+        "textSize": text_size,
+        "text_size": text_size,
+        "fontSize": text_size,
+        "audioPath": audio_path,
+        "audio_path": audio_path,
+        "src": if is_image { text_value } else { "" },
     })
 }
 
@@ -54,10 +81,17 @@ fn sync_streaming_projection_state(
     if let Some(slide_data) = current_slide {
         if slide_data.slide_type == "bible" {
             let music_json = serde_json::json!({
+                "slideType": "",
+                "videoPath": "",
                 "label": "",
                 "text": "",
                 "title": "",
                 "subtitle": "",
+                "backgroundImage": "",
+                "backgroundColor": "",
+                "textColor": "",
+                "textSize": 0,
+                "audioPath": "",
             });
             server.broadcast_music(&music_json.to_string());
 
@@ -72,10 +106,17 @@ fn sync_streaming_projection_state(
             server.broadcast_bible(&bible_json.to_string());
         } else {
             let music_json = serde_json::json!({
+                "slideType": slide_data.slide_type,
+                "videoPath": slide_data.video_path.as_deref().unwrap_or(""),
                 "label": slide_data.label.as_deref().unwrap_or(""),
                 "text": slide_data.text.as_deref().unwrap_or(""),
                 "title": slide_data.title.as_deref().unwrap_or(""),
                 "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
+                "backgroundImage": slide_data.background_image.as_deref().unwrap_or(""),
+                "backgroundColor": slide_data.background_color.as_deref().unwrap_or(""),
+                "textColor": slide_data.text_color.as_deref().unwrap_or(""),
+                "textSize": slide_data.text_size.unwrap_or(0),
+                "audioPath": slide_data.audio_path.as_deref().unwrap_or(""),
             });
             server.broadcast_music(&music_json.to_string());
 
@@ -92,10 +133,17 @@ fn sync_streaming_projection_state(
     }
 
     let music_json = serde_json::json!({
+        "slideType": "",
+        "videoPath": "",
         "label": "",
         "text": "",
         "title": "",
         "subtitle": "",
+        "backgroundImage": "",
+        "backgroundColor": "",
+        "textColor": "",
+        "textSize": 0,
+        "audioPath": "",
     });
     server.broadcast_music(&music_json.to_string());
 
@@ -118,6 +166,7 @@ fn sync_streaming_projection_state(
 #[tauri::command]
 pub fn start_streaming_server(
     port: Option<u16>,
+    app: AppHandle,
     state: tauri::State<'_, StreamingState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<StreamingInfo, AppError> {
@@ -145,18 +194,19 @@ pub fn start_streaming_server(
         .server
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let info = server
-        .start(port)
-        .map_err(|e| AppError::Internal(e))?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to resolve app data directory: {}", e)))?;
+    server.set_media_root(app_data_dir.join("media"));
+    let info = server.start(port).map_err(AppError::Internal)?;
 
     sync_streaming_projection_state(&server, current_slide, slide_context);
     Ok(info)
 }
 
 #[tauri::command]
-pub fn stop_streaming_server(
-    state: tauri::State<'_, StreamingState>,
-) -> Result<(), AppError> {
+pub fn stop_streaming_server(state: tauri::State<'_, StreamingState>) -> Result<(), AppError> {
     let mut server = state
         .server
         .lock()
@@ -173,9 +223,7 @@ pub fn get_streaming_status(
         .server
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    server
-        .get_status()
-        .map_err(|e| AppError::Internal(e))
+    server.get_status().map_err(AppError::Internal)
 }
 
 #[tauri::command]

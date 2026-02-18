@@ -57,7 +57,13 @@ pub fn update_service(
         .db
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::liturgy::update_service(&conn, id, &title, date.as_deref(), notes.as_deref())
+    crate::db::queries::liturgy::update_service(
+        &conn,
+        id,
+        &title,
+        date.as_deref(),
+        notes.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -116,10 +122,7 @@ pub fn reorder_service_items(
 }
 
 #[tauri::command]
-pub fn duplicate_service(
-    id: i64,
-    state: tauri::State<'_, AppState>,
-) -> Result<Service, AppError> {
+pub fn duplicate_service(id: i64, state: tauri::State<'_, AppState>) -> Result<Service, AppError> {
     let conn = state
         .db
         .lock()

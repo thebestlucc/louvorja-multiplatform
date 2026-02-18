@@ -87,10 +87,7 @@ pub fn delete_service(conn: &Connection, id: i64) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn get_service_items(
-    conn: &Connection,
-    service_id: i64,
-) -> Result<Vec<ServiceItem>, AppError> {
+pub fn get_service_items(conn: &Connection, service_id: i64) -> Result<Vec<ServiceItem>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, service_id, item_type, item_id, title, item_order, notes
          FROM service_items
@@ -192,8 +189,7 @@ pub fn reorder_items(
     _service_id: i64,
     item_ids: &[i64],
 ) -> Result<(), AppError> {
-    let mut stmt =
-        conn.prepare("UPDATE service_items SET item_order = ?1 WHERE id = ?2")?;
+    let mut stmt = conn.prepare("UPDATE service_items SET item_order = ?1 WHERE id = ?2")?;
     for (i, id) in item_ids.iter().enumerate() {
         stmt.execute(rusqlite::params![i as i64, id])?;
     }

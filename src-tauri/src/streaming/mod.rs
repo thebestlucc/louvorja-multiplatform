@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
-use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -32,11 +33,7 @@ impl SseBroadcaster {
         if let Ok(mut senders) = self.senders.lock() {
             senders.insert(subscription_id, tx);
         }
-        let latest_message = self
-            .latest_message
-            .lock()
-            .ok()
-            .and_then(|msg| msg.clone());
+        let latest_message = self.latest_message.lock().ok().and_then(|msg| msg.clone());
         (subscription_id, rx, latest_message)
     }
 
@@ -98,6 +95,7 @@ pub struct StreamingServer {
     pub utility_broadcaster: Arc<SseBroadcaster>,
     pub ui_broadcaster: Arc<SseBroadcaster>,
     ui_language: Arc<Mutex<String>>,
+    media_root: Arc<Mutex<Option<PathBuf>>>,
     listener: Option<Arc<TcpListener>>,
     is_running: Arc<AtomicBool>,
     broadcast_enabled: Arc<AtomicBool>,
@@ -133,6 +131,7 @@ impl StreamingServer {
             utility_broadcaster: Arc::new(SseBroadcaster::new()),
             ui_broadcaster: Arc::new(SseBroadcaster::new()),
             ui_language: Arc::new(Mutex::new("pt".to_string())),
+            media_root: Arc::new(Mutex::new(None)),
             listener: None,
             is_running: Arc::new(AtomicBool::new(false)),
             broadcast_enabled: Arc::new(AtomicBool::new(true)),
@@ -158,6 +157,13 @@ impl StreamingServer {
         self.ui_broadcaster.broadcast(&payload.to_string());
     }
 
+    pub fn set_media_root(&self, media_root: PathBuf) {
+        let resolved_root = media_root.canonicalize().unwrap_or(media_root);
+        if let Ok(mut root) = self.media_root.lock() {
+            *root = Some(resolved_root);
+        }
+    }
+
     pub fn start(&mut self, port: Option<u16>) -> Result<StreamingInfo, String> {
         if self.is_running.load(Ordering::SeqCst) {
             return self.get_status();
@@ -167,8 +173,8 @@ impl StreamingServer {
         self.port = port;
 
         let addr = format!("0.0.0.0:{}", port);
-        let listener = TcpListener::bind(&addr)
-            .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+        let listener =
+            TcpListener::bind(&addr).map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
         // Non-blocking so our loop can check is_running
         listener
             .set_nonblocking(true)
@@ -185,6 +191,7 @@ impl StreamingServer {
         let utility_bc = Arc::clone(&self.utility_broadcaster);
         let ui_bc = Arc::clone(&self.ui_broadcaster);
         let ui_language = Arc::clone(&self.ui_language);
+        let media_root = Arc::clone(&self.media_root);
 
         self.thread_handle = Some(thread::spawn(move || {
             while is_running.load(Ordering::SeqCst) {
@@ -201,18 +208,20 @@ impl StreamingServer {
                         let ui = Arc::clone(&ui_bc);
                         let running = Arc::clone(&is_running);
                         let language = Arc::clone(&ui_language);
+                        let media_root_for_connection = Arc::clone(&media_root);
 
                         thread::spawn(move || {
-                            handle_connection(
-                                stream,
-                                &music,
-                                &bible,
-                                &ret,
-                                &utility,
-                                &ui,
-                                &language,
-                                &running,
-                            );
+                            let context = ConnectionContext {
+                                music_bc: &music,
+                                bible_bc: &bible,
+                                return_bc: &ret,
+                                utility_bc: &utility,
+                                ui_bc: &ui,
+                                ui_language: &language,
+                                media_root: &media_root_for_connection,
+                                is_running: &running,
+                            };
+                            handle_connection(stream, &context);
                         });
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -310,16 +319,18 @@ impl StreamingServer {
 
 // --- Connection handler ---
 
-fn handle_connection(
-    mut stream: TcpStream,
-    music_bc: &Arc<SseBroadcaster>,
-    bible_bc: &Arc<SseBroadcaster>,
-    return_bc: &Arc<SseBroadcaster>,
-    utility_bc: &Arc<SseBroadcaster>,
-    ui_bc: &Arc<SseBroadcaster>,
-    ui_language: &Arc<Mutex<String>>,
-    is_running: &Arc<AtomicBool>,
-) {
+struct ConnectionContext<'a> {
+    music_bc: &'a Arc<SseBroadcaster>,
+    bible_bc: &'a Arc<SseBroadcaster>,
+    return_bc: &'a Arc<SseBroadcaster>,
+    utility_bc: &'a Arc<SseBroadcaster>,
+    ui_bc: &'a Arc<SseBroadcaster>,
+    ui_language: &'a Arc<Mutex<String>>,
+    media_root: &'a Arc<Mutex<Option<PathBuf>>>,
+    is_running: &'a Arc<AtomicBool>,
+}
+
+fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
     // Read HTTP request
     let path = match parse_request_path(&stream) {
         Some(p) => p,
@@ -333,33 +344,39 @@ fn handle_connection(
         "/return" => serve_html(&mut stream, include_str!("templates/return.html")),
         "/status" => serve_json(&mut stream, r#"{"ok":true}"#),
         "/state/music" => {
-            let body = music_bc
+            let body = context
+                .music_bc
                 .latest_payload()
-                .unwrap_or_else(|| r#"{"label":"","text":"","title":"","subtitle":""}"#.to_string());
+                .unwrap_or_else(|| {
+                    r#"{"slideType":"","videoPath":"","label":"","text":"","title":"","subtitle":"","backgroundImage":"","backgroundColor":"","textColor":"","textSize":0,"audioPath":""}"#
+                        .to_string()
+                });
             serve_json(&mut stream, &body);
         }
         "/state/bible" => {
-            let body = bible_bc
+            let body = context
+                .bible_bc
                 .latest_payload()
                 .unwrap_or_else(|| r#"{"reference":"","text":""}"#.to_string());
             serve_json(&mut stream, &body);
         }
         "/state/return" => {
-            let body = return_bc.latest_payload().unwrap_or_else(|| {
+            let body = context.return_bc.latest_payload().unwrap_or_else(|| {
                 r#"{"current":null,"next":null,"index":0,"total":0,"title":""}"#.to_string()
             });
             serve_json(&mut stream, &body);
         }
         "/state/utility" => {
-            let body = utility_bc.latest_payload().unwrap_or_else(|| {
+            let body = context.utility_bc.latest_payload().unwrap_or_else(|| {
                 r#"{"phase":"stop","sessionId":"","kind":"","valueMs":0,"use24Hour":true,"showDate":false}"#
                     .to_string()
             });
             serve_json(&mut stream, &body);
         }
         "/state/ui" => {
-            let body = ui_bc.latest_payload().unwrap_or_else(|| {
-                let language = ui_language
+            let body = context.ui_bc.latest_payload().unwrap_or_else(|| {
+                let language = context
+                    .ui_language
                     .lock()
                     .map(|value| normalize_language(&value).to_string())
                     .unwrap_or_else(|_| "pt".to_string());
@@ -367,11 +384,12 @@ fn handle_connection(
             });
             serve_json(&mut stream, &body);
         }
-        "/sse/music" => serve_sse(stream, music_bc, is_running),
-        "/sse/bible" => serve_sse(stream, bible_bc, is_running),
-        "/sse/return" => serve_sse(stream, return_bc, is_running),
-        "/sse/utility" => serve_sse(stream, utility_bc, is_running),
-        "/sse/ui" => serve_sse(stream, ui_bc, is_running),
+        "/sse/music" => serve_sse(stream, context.music_bc, context.is_running),
+        "/sse/bible" => serve_sse(stream, context.bible_bc, context.is_running),
+        "/sse/return" => serve_sse(stream, context.return_bc, context.is_running),
+        "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running),
+        "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running),
+        _ if path.starts_with("/media/") => serve_media(stream, &path, context.media_root),
         _ => serve_not_found(&mut stream),
     }
 }
@@ -511,6 +529,148 @@ fn serve_sse(
 
     // Ensure connection count is decremented immediately on disconnect.
     broadcaster.unsubscribe(subscription_id);
+}
+
+fn serve_media(
+    mut stream: TcpStream,
+    request_path: &str,
+    media_root: &Arc<Mutex<Option<PathBuf>>>,
+) {
+    let root = media_root.lock().ok().and_then(|value| value.clone());
+    let Some(root) = root else {
+        serve_not_found(&mut stream);
+        return;
+    };
+
+    let root = match root.canonicalize() {
+        Ok(path) => path,
+        Err(_) => {
+            serve_not_found(&mut stream);
+            return;
+        }
+    };
+
+    let sanitized_path = request_path
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(request_path);
+    let encoded_relative = sanitized_path.strip_prefix("/media/").unwrap_or("");
+    let Some(decoded_relative) = decode_percent_path(encoded_relative) else {
+        serve_not_found(&mut stream);
+        return;
+    };
+
+    let normalized_relative = decoded_relative.replace('\\', "/");
+    if normalized_relative.is_empty()
+        || normalized_relative.starts_with('/')
+        || normalized_relative.contains("..")
+        || normalized_relative.contains('\0')
+    {
+        serve_not_found(&mut stream);
+        return;
+    }
+
+    let candidate = root.join(Path::new(&normalized_relative));
+    let candidate = match candidate.canonicalize() {
+        Ok(path) => path,
+        Err(_) => {
+            serve_not_found(&mut stream);
+            return;
+        }
+    };
+
+    if !candidate.starts_with(&root) {
+        serve_not_found(&mut stream);
+        return;
+    }
+    if !candidate.is_file() {
+        serve_not_found(&mut stream);
+        return;
+    }
+
+    let data = match std::fs::read(&candidate) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            serve_not_found(&mut stream);
+            return;
+        }
+    };
+    let content_type = media_content_type(&candidate);
+
+    let header = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        content_type,
+        data.len()
+    );
+    let _ = stream.write_all(header.as_bytes());
+    let _ = stream.write_all(&data);
+    let _ = stream.flush();
+}
+
+fn media_content_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("png") => "image/png",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("bmp") => "image/bmp",
+        Some("svg") => "image/svg+xml",
+        Some("mp4") => "video/mp4",
+        Some("webm") => "video/webm",
+        Some("mov") => "video/quicktime",
+        Some("m4v") => "video/x-m4v",
+        Some("avi") => "video/x-msvideo",
+        Some("mkv") => "video/x-matroska",
+        Some("mp3") => "audio/mpeg",
+        Some("wav") => "audio/wav",
+        Some("ogg") => "audio/ogg",
+        Some("flac") => "audio/flac",
+        Some("aac") => "audio/aac",
+        _ => "application/octet-stream",
+    }
+}
+
+fn decode_percent_path(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return None;
+                }
+                let hi = decode_hex_digit(bytes[i + 1])?;
+                let lo = decode_hex_digit(bytes[i + 2])?;
+                decoded.push((hi << 4) | lo);
+                i += 3;
+            }
+            b'+' => {
+                decoded.push(b' ');
+                i += 1;
+            }
+            byte => {
+                decoded.push(byte);
+                i += 1;
+            }
+        }
+    }
+
+    String::from_utf8(decoded).ok()
+}
+
+fn decode_hex_digit(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn serve_not_found(stream: &mut TcpStream) {

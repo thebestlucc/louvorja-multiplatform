@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useDisplayStore } from "../../stores/display-store";
 import { useSlides } from "../../hooks/use-slides";
-import { clearCurrentSlide } from "../../lib/tauri";
+import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { SlideRenderer } from "../slides/slide-renderer";
 import { cn } from "../../lib/utils";
 
@@ -80,7 +80,10 @@ export function SlideNavBar() {
       {/* Clear button */}
       <button
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-        onClick={() => { setSlides([]); clearCurrentSlide(); }}
+        onClick={() => {
+          setSlides([]);
+          void stopProjectionAndSongAudio();
+        }}
       >
         <X className="h-4 w-4" />
       </button>

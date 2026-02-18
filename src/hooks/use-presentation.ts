@@ -8,8 +8,10 @@ interface UsePresentationOptions {
 }
 
 export function usePresentation2({ presentationId }: UsePresentationOptions) {
-  const { data: presentation } = usePresentation(presentationId);
-  const { data: slideRows } = useSlides(presentationId);
+  const presentationQuery = usePresentation(presentationId);
+  const slidesQuery = useSlides(presentationId);
+  const { data: presentation } = presentationQuery;
+  const { data: slideRows } = slidesQuery;
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
 
   // Local optimistic slide content overrides (keyed by slide id)
@@ -48,6 +50,10 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
   }, [slides]);
 
   const activeSlide = slides[activeSlideIndex] ?? null;
+  const isInitialLoading = presentationQuery.isLoading;
+  const isPresentationError = presentationQuery.isError;
+  const presentationError = presentationQuery.error;
+  const refetchPresentation = presentationQuery.refetch;
 
   // Clear local edit for a slide once server data catches up
   useEffect(() => {
@@ -183,6 +189,12 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
 
   return {
     presentation,
+    presentationQuery,
+    slidesQuery,
+    isInitialLoading,
+    isPresentationError,
+    presentationError,
+    refetchPresentation,
     slides,
     slideContents,
     slideIds,

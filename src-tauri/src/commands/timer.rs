@@ -1,8 +1,9 @@
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::projection::{
-    emit_utility_projection_event, new_projection_session_id, register_live_utility_projection_sender,
-    stop_live_utility_projection, UtilityProjectionEventPayload,
+    emit_utility_projection_event, new_projection_session_id,
+    register_live_utility_projection_sender, stop_live_utility_projection,
+    UtilityProjectionEventPayload,
 };
 use crate::state::{AppState, StreamingState, TimerMode, TimerStateData};
 use std::sync::mpsc;
@@ -77,6 +78,9 @@ fn project_utility_cover(
         subtitle: Some(subtitle),
         label: Some(label.to_string()),
         video_path: None,
+        background_image: None,
+        background_color: None,
+        audio_path: None,
         auto_play: None,
         r#loop: None,
         muted: None,
@@ -289,7 +293,9 @@ pub fn start_countdown_projection(
                 }
             };
 
-            if matches!(timer_state.mode, TimerMode::Countdown) && has_live_timer_value(&timer_state) {
+            if matches!(timer_state.mode, TimerMode::Countdown)
+                && has_live_timer_value(&timer_state)
+            {
                 fallback_time_ms = timer_state.current_time_ms;
             }
 
@@ -372,7 +378,9 @@ pub fn start_stopwatch_projection(
                 }
             };
 
-            if matches!(timer_state.mode, TimerMode::Stopwatch) && has_live_timer_value(&timer_state) {
+            if matches!(timer_state.mode, TimerMode::Stopwatch)
+                && has_live_timer_value(&timer_state)
+            {
                 fallback_time_ms = timer_state.current_time_ms;
             }
 
