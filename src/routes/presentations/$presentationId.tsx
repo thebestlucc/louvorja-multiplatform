@@ -4,9 +4,6 @@ import { ArrowLeft, Download } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { usePresentation2 } from "../../hooks/use-presentation";
-import { usePresentationStore } from "../../stores/presentation-store";
-import { useSlides as useSlidesNav } from "../../hooks/use-slides";
-import { useDisplayStore } from "../../stores/display-store";
 import { useExportSlja } from "../../lib/queries";
 import { SlideList } from "../../components/slides/slide-list";
 import { SlideEditor } from "../../components/slides/slide-editor";
@@ -15,6 +12,11 @@ import { TransitionSelector, type TransitionConfig } from "../../components/slid
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import type { SlideContent } from "../../types/presentation";
+import {
+  isInvalidPresentationId,
+  resolvePresentationEditorState,
+} from "./-editor-state";
+import { PresentationEditorState } from "./-editor-state-view";
 
 export const Route = createFileRoute("/presentations/$presentationId")({
   component: PresentationEditor,
@@ -24,9 +26,15 @@ function PresentationEditor() {
   const { presentationId } = Route.useParams();
   const { t } = useTranslation();
   const id = Number(presentationId);
+  const isInvalidId = isInvalidPresentationId(id);
+  const effectivePresentationId = isInvalidId ? 0 : id;
 
   const {
     presentation,
+    isInitialLoading,
+    isPresentationError,
+    presentationError,
+    refetchPresentation,
     slideContents,
     slideIds,
     activeSlideIndex,
@@ -38,11 +46,8 @@ function PresentationEditor() {
     updateSlideContent,
     reorderSlides,
     updateMeta,
-  } = usePresentation2({ presentationId: id });
+  } = usePresentation2({ presentationId: effectivePresentationId });
 
-  const { setSlides } = usePresentationStore();
-  const { goToSlide } = useSlidesNav();
-  const isProjectorOpen = useDisplayStore((s) => s.projectorWindowOpen);
   const exportMutation = useExportSlja();
 
   // Local title state for responsive typing
@@ -69,13 +74,11 @@ function PresentationEditor() {
     [activeSlideIndex, updateSlideContent],
   );
 
-  // Load slides into the store and project the current one
   const handleLoadSlides = useCallback(() => {
-    setSlides(slideContents);
     if (slideContents.length > 0) {
-      goToSlide(0);
+      setActiveSlideIndex(0);
     }
-  }, [slideContents, goToSlide, setSlides]);
+  }, [setActiveSlideIndex, slideContents.length]);
 
   const handleExport = async () => {
     if (!presentation) return;
@@ -112,9 +115,62 @@ function PresentationEditor() {
     updateMeta(presentation.title, aspectRatio);
   };
 
-  if (!presentation) {
-    return <p className="text-sm text-muted-foreground">{t("hymnal.loading")}</p>;
+  const handleRetryPresentation = useCallback(() => {
+    void refetchPresentation();
+  }, [refetchPresentation]);
+
+  const viewState = resolvePresentationEditorState({
+    presentationId: id,
+    isInitialLoading,
+    isPresentationError,
+    presentationError,
+    hasPresentation: Boolean(presentation),
+  });
+
+  if (viewState === "invalid-id") {
+    return (
+      <PresentationEditorState
+        title={t("presentations.editorNotFoundTitle")}
+        description={t("presentations.editorInvalidIdDescription")}
+        backLabel={t("presentations.editorBackToList")}
+      />
+    );
   }
+
+  if (viewState === "loading") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t("presentations.editorLoading")}
+      </p>
+    );
+  }
+
+  if (viewState === "not-found") {
+    return (
+      <PresentationEditorState
+        title={t("presentations.editorNotFoundTitle")}
+        description={t("presentations.editorNotFoundDescription")}
+        retryLabel={t("presentations.editorRetry")}
+        backLabel={t("presentations.editorBackToList")}
+        onRetry={handleRetryPresentation}
+      />
+    );
+  }
+
+  if (viewState === "error") {
+    return (
+      <PresentationEditorState
+        title={t("presentations.editorLoadErrorTitle")}
+        description={t("presentations.editorLoadErrorDescription")}
+        retryLabel={t("presentations.editorRetry")}
+        backLabel={t("presentations.editorBackToList")}
+        onRetry={handleRetryPresentation}
+      />
+    );
+  }
+
+  // `viewState === "success"` guarantees presentation is present.
+  if (!presentation) return null;
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -154,11 +210,9 @@ function PresentationEditor() {
           <SlideList
             slides={slideContents}
             activeIndex={activeSlideIndex}
+            enableGlobalKeyboardNav={false}
             onSelect={(index) => {
               setActiveSlideIndex(index);
-              if (isProjectorOpen) {
-                goToSlide(index);
-              }
             }}
             onReorder={reorderSlides}
             onAdd={addSlide}

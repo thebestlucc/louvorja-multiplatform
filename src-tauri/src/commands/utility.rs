@@ -168,11 +168,7 @@ pub fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<String,
         })?;
     }
 
-    Ok(format!(
-        "media/covers/{}.{}",
-        &digest[..24],
-        extension
-    ))
+    Ok(format!("media/covers/{}.{}", &digest[..24], extension))
 }
 
 #[tauri::command]
@@ -183,9 +179,9 @@ pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppErr
         .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
 
     let resolved = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path)
-            .canonicalize()
-            .map_err(|e| AppError::Internal(format!("Failed to resolve absolute media path: {}", e)))?
+        PathBuf::from(&path).canonicalize().map_err(|e| {
+            AppError::Internal(format!("Failed to resolve absolute media path: {}", e))
+        })?
     } else {
         video::resolve_video_path(&app_data_dir, &path)?
     };
@@ -207,9 +203,9 @@ pub fn get_video_metadata(
         .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
 
     let resolved_path = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path)
-            .canonicalize()
-            .map_err(|e| AppError::Internal(format!("Failed to resolve absolute video path: {}", e)))?
+        PathBuf::from(&path).canonicalize().map_err(|e| {
+            AppError::Internal(format!("Failed to resolve absolute video path: {}", e))
+        })?
     } else {
         video::resolve_video_path(&app_data_dir, &path)?
     };
@@ -308,7 +304,9 @@ fn to_sentence_case(text: &str) -> String {
     output
 }
 
-fn load_ffprobe_settings(state: &tauri::State<'_, AppState>) -> Result<(bool, Option<String>), AppError> {
+fn load_ffprobe_settings(
+    state: &tauri::State<'_, AppState>,
+) -> Result<(bool, Option<String>), AppError> {
     let conn = state
         .db
         .lock()

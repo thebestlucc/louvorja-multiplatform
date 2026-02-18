@@ -109,9 +109,8 @@ pub fn parse_video_metadata_with_ffprobe(
         )));
     }
 
-    let json: Value = serde_json::from_str(&stdout).map_err(|e| {
-        AppError::Internal(format!("Failed to parse ffprobe JSON output: {}", e))
-    })?;
+    let json: Value = serde_json::from_str(&stdout)
+        .map_err(|e| AppError::Internal(format!("Failed to parse ffprobe JSON output: {}", e)))?;
 
     let video_stream = json
         .get("streams")
@@ -124,7 +123,9 @@ pub fn parse_video_metadata_with_ffprobe(
                     .unwrap_or(false)
             })
         })
-        .ok_or_else(|| AppError::Internal("ffprobe output did not include a video stream".into()))?;
+        .ok_or_else(|| {
+            AppError::Internal("ffprobe output did not include a video stream".into())
+        })?;
 
     let width = video_stream
         .get("width")
@@ -168,7 +169,10 @@ pub fn parse_video_metadata_with_ffprobe(
 }
 
 fn resolve_ffprobe_binary(configured_binary: Option<&str>) -> Result<PathBuf, AppError> {
-    if let Some(path) = configured_binary.map(|v| v.trim()).filter(|v| !v.is_empty()) {
+    if let Some(path) = configured_binary
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+    {
         return Ok(PathBuf::from(path));
     }
 
@@ -235,11 +239,14 @@ fn parse_mp4_boxes<R: Read + Seek>(
         let payload_start = box_start + header_size;
         let payload_end = box_start + box_size;
         if payload_end > end {
-            return Err(AppError::Internal("MP4 box exceeds container bounds".into()));
+            return Err(AppError::Internal(
+                "MP4 box exceeds container bounds".into(),
+            ));
         }
 
         match &box_type {
-            b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" | b"edts" | b"moof" | b"traf" | b"mvex" => {
+            b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" | b"edts" | b"moof" | b"traf"
+            | b"mvex" => {
                 reader.seek(SeekFrom::Start(payload_start))?;
                 parse_mp4_boxes(reader, payload_end, state)?;
             }
@@ -480,7 +487,9 @@ fn ebml_vint_len(first: u8) -> Result<usize, AppError> {
 
 fn read_ebml_uint<R: Read + Seek>(reader: &mut R, size: u64) -> Result<u64, AppError> {
     if size == 0 || size > 8 {
-        return Err(AppError::Internal("Invalid EBML unsigned integer size".into()));
+        return Err(AppError::Internal(
+            "Invalid EBML unsigned integer size".into(),
+        ));
     }
 
     let mut value = 0u64;

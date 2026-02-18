@@ -5,23 +5,126 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LouvorJA - Music</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#1a0533 0%,#2d1b69 50%,#1a0533 100%);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}
-.container{padding:2rem;max-width:800px;width:100%}
-.label{font-size:1rem;text-transform:uppercase;letter-spacing:0.15em;color:#c084fc;margin-bottom:0.5rem;opacity:0.9}
-.text{font-size:2.5rem;font-weight:300;line-height:1.4;white-space:pre-line;transition:opacity 0.4s ease}
-.title{font-size:1rem;color:#a78bfa;margin-top:1.5rem;opacity:0.7}
-.waiting{color:#a78bfa;font-size:1.2rem;opacity:0.6}
-.disconnected{color:#ef4444;font-size:1.2rem}
-@media(max-width:600px){.text{font-size:1.5rem}.label{font-size:0.85rem}}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+}
+.screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.bg-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.content {
+  position: relative;
+  z-index: 2;
+  width: min(94vw, 1800px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+}
+.label {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.55);
+  display: none;
+}
+.text-wrap {
+  max-width: 92%;
+}
+.text-wrap.with-panel {
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.66);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  padding: 28px 34px;
+}
+.text {
+  font-size: 58px;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: pre-line;
+}
+.text.bible {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.title {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.78);
+  display: none;
+}
+.image-media,
+.video-media {
+  display: none;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.status {
+  position: relative;
+  z-index: 2;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.status.error {
+  color: #ef4444;
+}
+@media (max-width: 900px) {
+  .content { padding: 20px; }
+  .text-wrap.with-panel { padding: 20px 24px; }
+}
 </style>
 </head>
 <body>
-<div class="container">
-  <div id="label" class="label"></div>
-  <div id="text" class="text"><span class="waiting">Waiting for content...</span></div>
-  <div id="title" class="title"></div>
+<div class="screen">
+  <img id="bg-image" class="bg-image" alt="">
+  <div id="bg-overlay" class="bg-overlay"></div>
+
+  <img id="image-media" class="image-media" alt="">
+  <video id="video-media" class="video-media" autoplay muted loop playsinline></video>
+
+  <div id="content" class="content" aria-live="polite">
+    <div id="label" class="label"></div>
+    <div id="text-wrap" class="text-wrap">
+      <div id="text" class="text"></div>
+    </div>
+    <div id="title" class="title"></div>
+  </div>
+
+  <div id="status" class="status"></div>
 </div>
+
 <script>
 let es = null;
 let utilityEs = null;
@@ -29,51 +132,49 @@ let uiEs = null;
 let reconnectTimer = null;
 let utilityReconnectTimer = null;
 let uiReconnectTimer = null;
-let uiLanguage = 'pt';
-let lastPayload = null;
-let lastStatusKey = 'waitingContent';
-let lastStatusClass = 'waiting';
+let uiLanguage = "pt";
+let lastRealPayload = null;
 let lastUtilityEvent = null;
 let activeUtilitySessionId = null;
 
 const I18N = {
   pt: {
-    pageTitle: 'LouvorJA - Musica',
-    waitingContent: 'Aguardando conteudo...',
-    disconnectedWaiting: 'Desconectado. Aguardando servidor...',
-    disconnectedReconnecting: 'Desconectado. Reconectando...',
-    timerLabel: 'Timer',
-    countdownTitle: 'Contagem regressiva',
-    stopwatchTitle: 'Cronometro',
-    clockTitle: 'Relogio',
+    pageTitle: "LouvorJA - Musica",
+    waitingContent: "Aguardando conteudo...",
+    disconnectedWaiting: "Desconectado. Aguardando servidor...",
+    disconnectedReconnecting: "Desconectado. Reconectando...",
+    timerLabel: "Timer",
+    countdownTitle: "Contagem regressiva",
+    stopwatchTitle: "Cronometro",
+    clockTitle: "Relogio"
   },
   en: {
-    pageTitle: 'LouvorJA - Music',
-    waitingContent: 'Waiting for content...',
-    disconnectedWaiting: 'Disconnected. Waiting for server...',
-    disconnectedReconnecting: 'Disconnected. Reconnecting...',
-    timerLabel: 'Timer',
-    countdownTitle: 'Countdown',
-    stopwatchTitle: 'Stopwatch',
-    clockTitle: 'Clock',
+    pageTitle: "LouvorJA - Music",
+    waitingContent: "Waiting for content...",
+    disconnectedWaiting: "Disconnected. Waiting for server...",
+    disconnectedReconnecting: "Disconnected. Reconnecting...",
+    timerLabel: "Timer",
+    countdownTitle: "Countdown",
+    stopwatchTitle: "Stopwatch",
+    clockTitle: "Clock"
   },
   es: {
-    pageTitle: 'LouvorJA - Musica',
-    waitingContent: 'Esperando contenido...',
-    disconnectedWaiting: 'Desconectado. Esperando al servidor...',
-    disconnectedReconnecting: 'Desconectado. Reconectando...',
-    timerLabel: 'Temporizador',
-    countdownTitle: 'Cuenta regresiva',
-    stopwatchTitle: 'Cronometro',
-    clockTitle: 'Reloj',
-  },
+    pageTitle: "LouvorJA - Musica",
+    waitingContent: "Esperando contenido...",
+    disconnectedWaiting: "Desconectado. Esperando al servidor...",
+    disconnectedReconnecting: "Desconectado. Reconectando...",
+    timerLabel: "Temporizador",
+    countdownTitle: "Cuenta regresiva",
+    stopwatchTitle: "Cronometro",
+    clockTitle: "Reloj"
+  }
 };
 
+const DEFAULT_BACKGROUND = "#000";
+
 function normalizeLanguage(value) {
-  if (value === 'en' || value === 'es') {
-    return value;
-  }
-  return 'pt';
+  if (value === "en" || value === "es") return value;
+  return "pt";
 }
 
 function tr(key) {
@@ -82,97 +183,334 @@ function tr(key) {
 }
 
 function localeFromLanguage(language) {
-  if (language === 'en') return 'en-US';
-  if (language === 'es') return 'es-ES';
-  return 'pt-BR';
-}
-
-function applyStaticText() {
-  document.title = tr('pageTitle');
+  if (language === "en") return "en-US";
+  if (language === "es") return "es-ES";
+  return "pt-BR";
 }
 
 function safeText(value) {
-  return typeof value === 'string' ? value.trim() : '';
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function applyLanguage(language) {
-  const normalized = normalizeLanguage(language);
-  if (normalized === uiLanguage) {
-    return;
+function safeNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function encodePathSegment(value) {
+  return encodeURIComponent(value).replace(/%2F/g, "/");
+}
+
+function toStreamingMediaUrl(pathValue) {
+  const value = safeText(pathValue);
+  if (!value) return "";
+  if (
+    value.startsWith("http://")
+    || value.startsWith("https://")
+    || value.startsWith("data:")
+    || value.startsWith("blob:")
+  ) {
+    return value;
   }
-  uiLanguage = normalized;
-  applyStaticText();
-  if (lastPayload) {
-    applyPayload(lastPayload);
-  } else if (lastStatusKey) {
-    setStatus(lastStatusKey, lastStatusClass);
+  if (value.startsWith("/media/")) {
+    return "/media/" + encodePathSegment(value.slice("/media/".length));
+  }
+  if (value.startsWith("media/")) {
+    return "/media/" + encodePathSegment(value.slice("media/".length));
+  }
+  return value;
+}
+
+function getSlideType(payload) {
+  return safeText(payload && (payload.slideType || payload.slide_type || payload.type)).toLowerCase();
+}
+
+function firstDefined(values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function normalizeSlidePayload(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
   }
 
-  if (lastUtilityEvent) {
-    applyUtilityEvent(lastUtilityEvent);
+  const source =
+    raw.current && typeof raw.current === "object" && !raw.slideType && !raw.slide_type && !raw.type
+      ? raw.current
+      : raw;
+
+  const slideType = safeText(source.slideType || source.slide_type || source.type);
+  if (!slideType && !safeText(source.text) && !safeText(source.title) && !safeText(source.src)) {
+    return null;
   }
+
+  const text = firstDefined([source.text, source.lyrics, source.content, source.body]);
+  const textSize = firstDefined([source.textSize, source.text_size, source.fontSize, source.font_size]);
+  const videoPath = firstDefined([source.videoPath, source.video_path]);
+  const imageSrc = firstDefined([source.src, source.imagePath, source.image_path]);
+  const backgroundImage = firstDefined([source.backgroundImage, source.background_image]);
+  const backgroundColor = firstDefined([source.backgroundColor, source.background_color]);
+  const textColor = firstDefined([source.textColor, source.text_color]);
+  const audioPath = firstDefined([source.audioPath, source.audio_path]);
+
+  return {
+    slideType: slideType || "text",
+    label: safeText(source.label),
+    text: typeof text === "string" ? text : "",
+    title: safeText(source.title),
+    subtitle: safeText(source.subtitle),
+    videoPath: typeof videoPath === "string" ? videoPath : "",
+    src: typeof imageSrc === "string" ? imageSrc : "",
+    backgroundImage: typeof backgroundImage === "string" ? backgroundImage : "",
+    backgroundColor: typeof backgroundColor === "string" ? backgroundColor : "",
+    textColor: typeof textColor === "string" ? textColor : "",
+    textSize: safeNumber(textSize) ?? 0,
+    audioPath: typeof audioPath === "string" ? audioPath : ""
+  };
 }
 
-async function refreshUiLanguage() {
-  try {
-    const response = await fetch('/state/ui', { cache: 'no-store' });
-    if (!response.ok) return;
-    const data = await response.json();
-    applyLanguage(data.language);
-  } catch (_) {}
+function payloadSupportsUtility(payload, kind) {
+  const normalized = normalizeSlidePayload(payload);
+  if (!normalized) return false;
+  const currentLabel = safeText(normalized.label).toLowerCase();
+  if (kind === "countdown" || kind === "stopwatch") return currentLabel === "timer";
+  if (kind === "clock") return currentLabel === "clock";
+  return false;
 }
 
-function setStatus(statusKey, cls) {
-  lastStatusKey = statusKey;
-  lastStatusClass = cls;
-  lastPayload = null;
-  const el = document.getElementById('text');
-  el.textContent = '';
-  const span = document.createElement('span');
-  span.className = cls;
-  span.textContent = tr(statusKey);
-  el.appendChild(span);
-  document.getElementById('label').textContent = '';
-  document.getElementById('title').textContent = '';
+function clearStatus() {
+  const status = document.getElementById("status");
+  status.textContent = "";
+  status.className = "status";
 }
 
-function applyPayload(d) {
-  lastPayload = d;
-  lastStatusKey = null;
+function setStatus(key, isError) {
+  hideMedia();
+  const content = document.getElementById("content");
+  content.style.display = "none";
+  const status = document.getElementById("status");
+  status.textContent = tr(key);
+  status.className = isError ? "status error" : "status";
+}
 
-  const label = safeText(d.label);
-  const text = safeText(d.text);
-  const title = safeText(d.title);
-  const subtitle = safeText(d.subtitle);
+function hideMedia() {
+  const image = document.getElementById("image-media");
+  const video = document.getElementById("video-media");
+  image.removeAttribute("src");
+  image.style.display = "none";
+  video.pause();
+  video.removeAttribute("src");
+  video.style.display = "none";
+}
 
-  document.getElementById('label').textContent = label;
-  const mainText = text || title;
-  if (mainText) {
-    document.getElementById('text').textContent = mainText;
+function resetVisualStyle() {
+  document.body.style.background = DEFAULT_BACKGROUND;
+  const bgImage = document.getElementById("bg-image");
+  const bgOverlay = document.getElementById("bg-overlay");
+  bgImage.removeAttribute("src");
+  bgImage.style.opacity = "0";
+  bgOverlay.style.opacity = "0";
+  hideMedia();
+}
+
+function resolveFontSize(baseSize, sourceSize, variant) {
+  const hasExplicit = Number.isFinite(sourceSize);
+  let scaled = baseSize;
+
+  if (hasExplicit) {
+    if (variant === "lyrics") {
+      scaled = sourceSize * 2.8;
+      return Math.max(58, Math.min(210, Math.round(scaled)));
+    }
+    if (variant === "cover") {
+      scaled = sourceSize * 2.3;
+      return Math.max(62, Math.min(220, Math.round(scaled)));
+    }
+    scaled = sourceSize * 2.0;
+    return Math.max(28, Math.min(180, Math.round(scaled)));
+  }
+
+  return Math.round(baseSize);
+}
+
+function applyTextStyles(payload, slideType) {
+  const text = document.getElementById("text");
+  const title = document.getElementById("title");
+  const sourceSize = safeNumber(payload.textSize);
+  const textColor = safeText(payload.textColor);
+  const variant = slideType === "lyrics" ? "lyrics" : slideType === "cover" ? "cover" : "text";
+  const textSize = resolveFontSize(
+    slideType === "cover" ? 64 : slideType === "lyrics" ? 58 : 42,
+    sourceSize,
+    variant
+  );
+  const titleSize = Math.max(16, Math.round((sourceSize || 40) * 1.1));
+
+  text.style.fontSize = textSize + "px";
+  title.style.fontSize = titleSize + "px";
+  text.style.color = textColor || "";
+  title.style.color = textColor ? textColor : "";
+  title.style.opacity = textColor ? "0.78" : "";
+}
+
+function applyBackground(payload) {
+  const backgroundColor = safeText(payload.backgroundColor);
+  const backgroundImage = toStreamingMediaUrl(payload.backgroundImage);
+
+  document.body.style.background = backgroundColor || DEFAULT_BACKGROUND;
+  const bgImage = document.getElementById("bg-image");
+  const bgOverlay = document.getElementById("bg-overlay");
+  if (backgroundImage) {
+    bgImage.src = backgroundImage;
+    bgImage.style.opacity = "1";
+    bgOverlay.style.opacity = "1";
   } else {
-    setStatus('waitingContent', 'waiting');
-    return;
-  }
-
-  // For cover-style payloads (timer/clock), use subtitle as secondary line.
-  document.getElementById('title').textContent = text ? title : subtitle;
-
-  if (lastUtilityEvent) {
-    applyUtilityEvent(lastUtilityEvent);
+    bgImage.removeAttribute("src");
+    bgImage.style.opacity = "0";
+    bgOverlay.style.opacity = "0";
   }
 }
 
-function handleMusicStreamMessage(data) {
-  if (!data || typeof data !== 'object') {
+function setTextPanel(enabled) {
+  const wrap = document.getElementById("text-wrap");
+  if (enabled) {
+    wrap.classList.add("with-panel");
+  } else {
+    wrap.classList.remove("with-panel");
+  }
+}
+
+function showImage(path) {
+  const image = document.getElementById("image-media");
+  image.src = path;
+  image.style.display = "block";
+}
+
+function showVideo(path) {
+  const video = document.getElementById("video-media");
+  video.src = path;
+  video.style.display = "block";
+  const playResult = video.play();
+  if (playResult && typeof playResult.catch === "function") {
+    playResult.catch(function () {});
+  }
+}
+
+function renderPayload(payload, persistRealPayload) {
+  const slide = normalizeSlidePayload(payload);
+  if (!slide) {
+    setStatus("waitingContent", false);
     return;
   }
 
-  if (data.utilityProjection && typeof data.utilityProjection === 'object') {
-    applyUtilityEvent(data.utilityProjection);
+  if (persistRealPayload) {
+    lastRealPayload = slide;
+  }
+
+  clearStatus();
+  const content = document.getElementById("content");
+  content.style.display = "flex";
+  hideMedia();
+
+  applyBackground(slide);
+  const slideType = getSlideType(slide);
+  const label = safeText(slide.label);
+  const text = safeText(slide.text);
+  const title = safeText(slide.title);
+  const subtitle = safeText(slide.subtitle);
+
+  const labelElement = document.getElementById("label");
+  const textElement = document.getElementById("text");
+  const titleElement = document.getElementById("title");
+
+  textElement.classList.toggle("bible", slideType === "bible");
+  labelElement.style.display = "none";
+  titleElement.style.display = "none";
+  textElement.textContent = "";
+
+  applyTextStyles(slide, slideType);
+
+  if (slideType === "image") {
+    const imageSrc = toStreamingMediaUrl(slide.src || text);
+    if (!imageSrc) {
+      setStatus("waitingContent", false);
+      return;
+    }
+    showImage(imageSrc);
+    if (title) {
+      titleElement.style.display = "block";
+      titleElement.textContent = title;
+    } else if (subtitle) {
+      titleElement.style.display = "block";
+      titleElement.textContent = subtitle;
+    }
     return;
   }
 
-  applyPayload(data);
+  if (slideType === "video") {
+    const videoSrc = toStreamingMediaUrl(slide.videoPath || slide.src);
+    if (!videoSrc) {
+      setStatus("waitingContent", false);
+      return;
+    }
+    showVideo(videoSrc);
+    if (text) {
+      textElement.textContent = text;
+      setTextPanel(true);
+    } else {
+      setTextPanel(false);
+    }
+    return;
+  }
+
+  const panelEnabled =
+    Boolean(toStreamingMediaUrl(slide.backgroundImage))
+    && (slideType === "cover" || slideType === "lyrics");
+  setTextPanel(panelEnabled);
+
+  if (slideType === "bible" && title) {
+    labelElement.style.display = "block";
+    labelElement.textContent = title;
+  } else if (label) {
+    labelElement.style.display = "block";
+    labelElement.textContent = label;
+  }
+
+  if (slideType === "cover") {
+    const coverText = title || text;
+    if (!coverText) {
+      setStatus("waitingContent", false);
+      return;
+    }
+    textElement.textContent = coverText;
+    if (subtitle) {
+      titleElement.style.display = "block";
+      titleElement.textContent = subtitle;
+    }
+  } else {
+    const mainText = text || title;
+    if (!mainText) {
+      setStatus("waitingContent", false);
+      return;
+    }
+    textElement.textContent = mainText;
+    if (subtitle) {
+      titleElement.style.display = "block";
+      titleElement.textContent = subtitle;
+    } else if (slideType === "image" && title) {
+      titleElement.style.display = "block";
+      titleElement.textContent = title;
+    }
+  }
+
+  if (lastUtilityEvent && payloadSupportsUtility(lastRealPayload, lastUtilityEvent.kind)) {
+    applyUtilityEvent(lastUtilityEvent, true);
+  }
 }
 
 function formatTimerValue(kind, valueMs) {
@@ -182,179 +520,182 @@ function formatTimerValue(kind, valueMs) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  if (kind === 'stopwatch') {
+  if (kind === "stopwatch") {
     const millis = safeMs % 1000;
     if (hours > 0) {
-      return String(hours).padStart(2, '0') + ':'
-        + String(minutes).padStart(2, '0') + ':'
-        + String(seconds).padStart(2, '0') + '.'
-        + String(millis).padStart(3, '0');
+      return String(hours).padStart(2, "0")
+        + ":" + String(minutes).padStart(2, "0")
+        + ":" + String(seconds).padStart(2, "0")
+        + "." + String(millis).padStart(3, "0");
     }
-    return String(minutes).padStart(2, '0') + ':'
-      + String(seconds).padStart(2, '0') + '.'
-      + String(millis).padStart(3, '0');
+    return String(minutes).padStart(2, "0")
+      + ":" + String(seconds).padStart(2, "0")
+      + "." + String(millis).padStart(3, "0");
   }
 
   if (hours > 0) {
-    return String(hours).padStart(2, '0') + ':'
-      + String(minutes).padStart(2, '0') + ':'
-      + String(seconds).padStart(2, '0');
+    return String(hours).padStart(2, "0")
+      + ":" + String(minutes).padStart(2, "0")
+      + ":" + String(seconds).padStart(2, "0");
   }
-  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
 }
 
 function formatClockTime(valueMs, use24Hour) {
   return new Date(Math.max(0, Math.floor(valueMs))).toLocaleTimeString(
     localeFromLanguage(uiLanguage),
-    {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: !use24Hour,
-    },
+    { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: !use24Hour }
   );
 }
 
 function formatClockDate(valueMs) {
   return new Date(Math.max(0, Math.floor(valueMs))).toLocaleDateString(
     localeFromLanguage(uiLanguage),
-    {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    },
+    { weekday: "long", year: "numeric", month: "long", day: "numeric" }
   );
 }
 
-function payloadSupportsUtility(payload, kind) {
-  if (!payload || typeof payload !== 'object') {
-    return false;
-  }
-
-  const currentLabel = safeText(payload.label).toLowerCase();
-  if (kind === 'countdown' || kind === 'stopwatch') {
-    return currentLabel === 'timer';
-  }
-  if (kind === 'clock') {
-    return currentLabel === 'clock';
-  }
-  return false;
-}
-
-function applyUtilityEvent(eventPayload) {
-  if (!eventPayload || typeof eventPayload !== 'object') {
-    return;
-  }
+function applyUtilityEvent(eventPayload, replayOnly) {
+  if (!eventPayload || typeof eventPayload !== "object") return;
 
   const phase = safeText(eventPayload.phase).toLowerCase();
   const sessionId = safeText(eventPayload.sessionId);
   const kind = safeText(eventPayload.kind).toLowerCase();
-  const valueMs = Number.isFinite(Number(eventPayload.valueMs)) ? Number(eventPayload.valueMs) : 0;
+  const valueMs = safeNumber(eventPayload.valueMs) || 0;
   const use24Hour = Boolean(eventPayload.use24Hour);
   const showDate = Boolean(eventPayload.showDate);
 
-  if (phase !== 'start' && phase !== 'tick' && phase !== 'stop') {
-    return;
-  }
+  if (phase !== "start" && phase !== "tick" && phase !== "stop") return;
+  if (kind !== "countdown" && kind !== "stopwatch" && kind !== "clock") return;
 
-  if (phase === 'stop') {
-    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
-      return;
-    }
+  if (phase === "stop") {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) return;
     activeUtilitySessionId = null;
     lastUtilityEvent = null;
+    if (lastRealPayload) {
+      renderPayload(lastRealPayload, false);
+    }
     return;
   }
 
-  if (kind !== 'countdown' && kind !== 'stopwatch' && kind !== 'clock') {
-    return;
-  }
-
-  if (phase === 'start') {
+  if (phase === "start") {
     activeUtilitySessionId = sessionId || activeUtilitySessionId;
-  } else if (phase === 'tick') {
-    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
-      return;
-    }
-    if (!activeUtilitySessionId && sessionId) {
-      activeUtilitySessionId = sessionId;
-    }
+  } else if (phase === "tick") {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) return;
+    if (!activeUtilitySessionId && sessionId) activeUtilitySessionId = sessionId;
   }
 
-  lastUtilityEvent = {
-    phase,
-    sessionId,
-    kind,
-    valueMs,
-    use24Hour,
-    showDate,
-  };
+  if (!replayOnly) {
+    lastUtilityEvent = {
+      phase: phase,
+      sessionId: sessionId,
+      kind: kind,
+      valueMs: valueMs,
+      use24Hour: use24Hour,
+      showDate: showDate
+    };
+  }
 
-  const currentLabel = kind === 'clock' ? 'clock' : 'timer';
+  let valueText = "";
+  let subtitleText = "";
+  let labelText = "";
+  const utilityLabel = kind === "clock" ? "clock" : "timer";
 
-  let valueText = '';
-  let subtitleText = '';
-  let labelText = currentLabel;
-
-  if (kind === 'countdown') {
-    valueText = formatTimerValue('countdown', valueMs);
-    subtitleText = tr('countdownTitle');
-    labelText = tr('timerLabel');
-  } else if (kind === 'stopwatch') {
-    valueText = formatTimerValue('stopwatch', valueMs);
-    subtitleText = tr('stopwatchTitle');
-    labelText = tr('timerLabel');
-  } else if (kind === 'clock') {
-    valueText = formatClockTime(valueMs, use24Hour);
-    subtitleText = showDate
-      ? formatClockDate(valueMs)
-      : tr('clockTitle');
-    labelText = tr('clockTitle');
+  if (kind === "countdown") {
+    valueText = formatTimerValue("countdown", valueMs);
+    subtitleText = tr("countdownTitle");
+    labelText = tr("timerLabel");
+  } else if (kind === "stopwatch") {
+    valueText = formatTimerValue("stopwatch", valueMs);
+    subtitleText = tr("stopwatchTitle");
+    labelText = tr("timerLabel");
   } else {
-    return;
+    valueText = formatClockTime(valueMs, use24Hour);
+    subtitleText = showDate ? formatClockDate(valueMs) : tr("clockTitle");
+    labelText = tr("clockTitle");
   }
 
-  document.getElementById('label').textContent = labelText;
-  document.getElementById('text').textContent = valueText;
-  document.getElementById('title').textContent = subtitleText;
+  const styleBase = payloadSupportsUtility(lastRealPayload, kind) && lastRealPayload
+    ? (normalizeSlidePayload(lastRealPayload) || {})
+    : {};
 
-  const canReusePayload = payloadSupportsUtility(lastPayload, kind);
-  const basePayload = canReusePayload && lastPayload
-    ? lastPayload
-    : { label: currentLabel, text: '', title: '', subtitle: '' };
-
-  lastPayload = {
-    ...basePayload,
-    label: currentLabel,
-    text: '',
+  renderPayload({
+    slideType: "cover",
+    videoPath: "",
+    label: utilityLabel,
+    text: "",
     title: valueText,
     subtitle: subtitleText,
-  };
-  lastStatusKey = null;
+    backgroundImage: styleBase.backgroundImage || "",
+    backgroundColor: styleBase.backgroundColor || "",
+    textColor: styleBase.textColor || "",
+    textSize: styleBase.textSize || 0,
+    audioPath: ""
+  }, false);
+
+  const labelElement = document.getElementById("label");
+  labelElement.style.display = "block";
+  labelElement.textContent = labelText;
 }
 
-async function fetchUtilitySnapshot() {
+function handleMusicStreamMessage(data) {
+  if (!data || typeof data !== "object") return;
+  if (data.utilityProjection && typeof data.utilityProjection === "object") {
+    applyUtilityEvent(data.utilityProjection, false);
+    return;
+  }
+  renderPayload(data, true);
+}
+
+function applyStaticText() {
+  document.title = tr("pageTitle");
+}
+
+function applyLanguage(language) {
+  const normalized = normalizeLanguage(language);
+  if (normalized === uiLanguage) return;
+  uiLanguage = normalized;
+  applyStaticText();
+  if (lastRealPayload) {
+    renderPayload(lastRealPayload, false);
+  } else {
+    setStatus("waitingContent", false);
+  }
+  if (lastUtilityEvent) {
+    applyUtilityEvent(lastUtilityEvent, true);
+  }
+}
+
+async function refreshUiLanguage() {
   try {
-    const response = await fetch('/state/utility', { cache: 'no-store' });
+    const response = await fetch("/state/ui", { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    applyUtilityEvent(data);
+    applyLanguage(data.language);
   } catch (_) {}
 }
 
 async function fetchSnapshot() {
   try {
-    const response = await fetch('/state/music', { cache: 'no-store' });
+    const response = await fetch("/state/music", { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    applyPayload(data);
+    renderPayload(data, true);
+  } catch (_) {}
+}
+
+async function fetchUtilitySnapshot() {
+  try {
+    const response = await fetch("/state/utility", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyUtilityEvent(data, false);
   } catch (_) {}
 }
 
 async function isServerAvailable() {
   try {
-    const response = await fetch('/status', { cache: 'no-store' });
+    const response = await fetch("/status", { cache: "no-store" });
     return response.ok;
   } catch (_) {
     return false;
@@ -363,7 +704,7 @@ async function isServerAvailable() {
 
 function scheduleReconnect() {
   if (reconnectTimer) return;
-  reconnectTimer = setTimeout(() => {
+  reconnectTimer = setTimeout(function () {
     reconnectTimer = null;
     void connectIfAvailable();
   }, 1500);
@@ -371,7 +712,7 @@ function scheduleReconnect() {
 
 function scheduleUtilityReconnect() {
   if (utilityReconnectTimer) return;
-  utilityReconnectTimer = setTimeout(() => {
+  utilityReconnectTimer = setTimeout(function () {
     utilityReconnectTimer = null;
     connectUtility();
   }, 1500);
@@ -379,7 +720,7 @@ function scheduleUtilityReconnect() {
 
 function scheduleUiReconnect() {
   if (uiReconnectTimer) return;
-  uiReconnectTimer = setTimeout(() => {
+  uiReconnectTimer = setTimeout(function () {
     uiReconnectTimer = null;
     connectUi();
   }, 1500);
@@ -390,7 +731,7 @@ async function connectIfAvailable() {
   if (es) return;
   const ok = await isServerAvailable();
   if (!ok) {
-    setStatus('disconnectedWaiting', 'disconnected');
+    setStatus("disconnectedWaiting", true);
     scheduleReconnect();
     return;
   }
@@ -401,37 +742,30 @@ async function connectIfAvailable() {
 
 function connect() {
   if (es) return;
-  es = new EventSource('/sse/music');
-
-  es.onopen = function () {
-    void fetchSnapshot();
-  };
-
-  es.onmessage = function (e) {
+  es = new EventSource("/sse/music");
+  es.onopen = function () { void fetchSnapshot(); };
+  es.onmessage = function (event) {
     try {
-      handleMusicStreamMessage(JSON.parse(e.data));
+      handleMusicStreamMessage(JSON.parse(event.data));
     } catch (_) {}
   };
-
   es.onerror = function () {
     if (es) {
       es.close();
       es = null;
     }
-    setStatus('disconnectedReconnecting', 'disconnected');
+    setStatus("disconnectedReconnecting", true);
     scheduleReconnect();
   };
 }
 
 function connectUtility() {
   if (utilityEs) return;
-  utilityEs = new EventSource('/sse/utility');
-  utilityEs.onopen = function () {
-    void fetchUtilitySnapshot();
-  };
-  utilityEs.onmessage = function (e) {
+  utilityEs = new EventSource("/sse/utility");
+  utilityEs.onopen = function () { void fetchUtilitySnapshot(); };
+  utilityEs.onmessage = function (event) {
     try {
-      applyUtilityEvent(JSON.parse(e.data));
+      applyUtilityEvent(JSON.parse(event.data), false);
     } catch (_) {}
   };
   utilityEs.onerror = function () {
@@ -445,10 +779,10 @@ function connectUtility() {
 
 function connectUi() {
   if (uiEs) return;
-  uiEs = new EventSource('/sse/ui');
-  uiEs.onmessage = function (e) {
+  uiEs = new EventSource("/sse/ui");
+  uiEs.onmessage = function (event) {
     try {
-      const payload = JSON.parse(e.data);
+      const payload = JSON.parse(event.data);
       applyLanguage(payload.language);
     } catch (_) {}
   };
@@ -462,10 +796,11 @@ function connectUi() {
 }
 
 applyStaticText();
-setStatus('waitingContent', 'waiting');
+resetVisualStyle();
+setStatus("waitingContent", false);
 void connectIfAvailable();
 
-window.addEventListener('beforeunload', () => {
+window.addEventListener("beforeunload", function () {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (utilityReconnectTimer) clearTimeout(utilityReconnectTimer);
   if (uiReconnectTimer) clearTimeout(uiReconnectTimer);

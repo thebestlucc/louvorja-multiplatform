@@ -9,6 +9,7 @@ import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bibl
 import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
 import type {
   Collection,
+  CollectionSearchResult,
   CollectionSong,
   CollectionSongSyncStatus,
   CollectionWithSongs,
@@ -74,14 +75,20 @@ export async function getCollection(id: number): Promise<CollectionWithSongs> {
   return tauriInvoke<CollectionWithSongs>("get_collection", { id });
 }
 
+export async function searchCollections(query: string): Promise<CollectionSearchResult[]> {
+  return tauriInvoke<CollectionSearchResult[]>("search_collections", { query });
+}
+
 export async function createCollection(
   name: string,
   description: string | null,
+  year: number | null,
   coverPath: string | null,
 ): Promise<Collection> {
   return tauriInvoke<Collection>("create_collection", {
     name,
     description,
+    year,
     coverPath,
   });
 }
@@ -90,12 +97,14 @@ export async function updateCollection(
   id: number,
   name: string,
   description: string | null,
+  year: number | null,
   coverPath: string | null,
 ): Promise<Collection> {
   return tauriInvoke<Collection>("update_collection", {
     id,
     name,
     description,
+    year,
     coverPath,
   });
 }
@@ -130,7 +139,10 @@ export async function reorderCollectionSongs(
   collectionId: number,
   songIds: number[],
 ): Promise<void> {
-  return tauriInvoke<void>("reorder_collection_songs", { collectionId, songIds });
+  return tauriInvoke<void>("reorder_collection_songs", {
+    collectionId,
+    songIds,
+  });
 }
 
 // Display

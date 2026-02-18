@@ -38,7 +38,7 @@ pub fn get_versions(conn: &Connection) -> Result<Vec<BibleVersion>, AppError> {
         "SELECT id, name, abbreviation, language, file_path FROM bible_versions ORDER BY name",
     )?;
     let versions = stmt
-        .query_map([], |row| map_version_row(row))?
+        .query_map([], map_version_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(versions)
 }
@@ -75,9 +75,7 @@ pub fn get_verses(
          ORDER BY verse",
     )?;
     let verses = stmt
-        .query_map(params![version_id, book, chapter], |row| {
-            map_verse_row(row)
-        })?
+        .query_map(params![version_id, book, chapter], map_verse_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(verses)
 }
@@ -97,9 +95,10 @@ pub fn get_verse_range(
          ORDER BY verse",
     )?;
     let verses = stmt
-        .query_map(params![version_id, book, chapter, start, end], |row| {
-            map_verse_row(row)
-        })?
+        .query_map(
+            params![version_id, book, chapter, start, end],
+            map_verse_row,
+        )?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(verses)
 }

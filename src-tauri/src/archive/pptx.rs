@@ -78,12 +78,8 @@ pub fn read_pptx(path: &Path) -> Result<PresentationArchive, AppError> {
 
     // Extract title from first slide
     let title = if let Some(first_slide) = slides.first() {
-        let val: serde_json::Value =
-            serde_json::from_str(&first_slide.content).unwrap_or_default();
-        let t = val
-            .get("title")
-            .and_then(|t| t.as_str())
-            .unwrap_or("");
+        let val: serde_json::Value = serde_json::from_str(&first_slide.content).unwrap_or_default();
+        let t = val.get("title").and_then(|t| t.as_str()).unwrap_or("");
         if t.is_empty() {
             val.get("text")
                 .and_then(|t| t.as_str())
@@ -311,10 +307,7 @@ fn extract_slide_shapes(
                         sp_depth -= 1;
                         if sp_depth == 0 {
                             in_sp = false;
-                            if current_paragraphs
-                                .iter()
-                                .any(|p| !p.trim().is_empty())
-                            {
+                            if current_paragraphs.iter().any(|p| !p.trim().is_empty()) {
                                 shapes.push(ShapeText {
                                     placeholder_type: placeholder_type.clone(),
                                     paragraphs: current_paragraphs.clone(),

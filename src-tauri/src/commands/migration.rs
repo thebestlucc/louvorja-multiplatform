@@ -4,10 +4,10 @@ use crate::migration::hymn_importer::import_hymns_domain;
 use crate::migration::service_importer::import_services_domain;
 use crate::migration::{
     import_bible_domain, import_favorites_domain, import_settings_domain, is_cancellation_error,
-    new_run_id, now_iso, open_readonly_source, preflight_source_path, sanitize_error_message,
-    selected_domains, safe_source_label, CANCELLATION_MESSAGE, MigrationDomain, MigrationErrorItem,
+    new_run_id, now_iso, open_readonly_source, preflight_source_path, safe_source_label,
+    sanitize_error_message, selected_domains, MigrationDomain, MigrationErrorItem,
     MigrationOptions, MigrationProgress, MigrationProgressEvent, MigrationReport, MigrationRunInfo,
-    MigrationRunState,
+    MigrationRunState, CANCELLATION_MESSAGE,
 };
 use crate::state::AppState;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,6 +15,28 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager};
+
+struct ProgressUpdate<'a> {
+    run_id: &'a str,
+    step: &'a str,
+    completed: u32,
+    total: u32,
+    status: &'a str,
+    message: String,
+    started_clock: Instant,
+}
+
+struct FinalizeWithErrors<'a> {
+    run_id: &'a str,
+    source_path: &'a str,
+    started_at: &'a str,
+    completed: u32,
+    total: u32,
+    errors: Vec<MigrationErrorItem>,
+    domains: Vec<crate::migration::MigrationDomainReport>,
+    cancelled: bool,
+    started_clock: Instant,
+}
 
 #[tauri::command]
 pub fn start_migration(
@@ -113,9 +135,10 @@ pub fn get_migration_progress(
         .migration
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let run = migration.runs.get(&run_id).ok_or_else(|| {
-        AppError::NotFound(format!("Migration run '{}' was not found.", run_id))
-    })?;
+    let run = migration
+        .runs
+        .get(&run_id)
+        .ok_or_else(|| AppError::NotFound(format!("Migration run '{}' was not found.", run_id)))?;
 
     Ok(run.progress.clone())
 }
@@ -126,9 +149,10 @@ pub fn cancel_migration(run_id: String, state: tauri::State<'_, AppState>) -> Re
         .migration
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let run = migration.runs.get_mut(&run_id).ok_or_else(|| {
-        AppError::NotFound(format!("Migration run '{}' was not found.", run_id))
-    })?;
+    let run = migration
+        .runs
+        .get_mut(&run_id)
+        .ok_or_else(|| AppError::NotFound(format!("Migration run '{}' was not found.", run_id)))?;
 
     run.cancel_flag.store(true, Ordering::Relaxed);
     run.progress.message = "Cancellation requested.".to_string();
@@ -149,12 +173,16 @@ pub fn get_migration_report(
         .migration
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let run = migration.runs.get(&run_id).ok_or_else(|| {
-        AppError::NotFound(format!("Migration run '{}' was not found.", run_id))
-    })?;
+    let run = migration
+        .runs
+        .get(&run_id)
+        .ok_or_else(|| AppError::NotFound(format!("Migration run '{}' was not found.", run_id)))?;
 
     run.report.clone().ok_or_else(|| {
-        AppError::NotFound(format!("Migration report for '{}' is not ready yet.", run_id))
+        AppError::NotFound(format!(
+            "Migration report for '{}' is not ready yet.",
+            run_id
+        ))
     })
 }
 
@@ -176,13 +204,15 @@ fn run_migration_background(
 
     if let Err(error) = update_progress(
         &app,
-        &run_id,
-        "preflight",
-        completed_steps,
-        total_steps,
-        "running",
-        format!("Validating '{}'.", source_label),
-        started_clock,
+        ProgressUpdate {
+            run_id: &run_id,
+            step: "preflight",
+            completed: completed_steps,
+            total: total_steps,
+            status: "running",
+            message: format!("Validating '{}'.", source_label),
+            started_clock,
+        },
     ) {
         finalize_internal_error(&app, &run_id, &source_path, &started_at, error);
         return;
@@ -193,19 +223,21 @@ fn run_migration_background(
         Err(error) => {
             finalize_with_errors(
                 &app,
-                &run_id,
-                &source_path,
-                &started_at,
-                completed_steps,
-                total_steps,
-                vec![MigrationErrorItem {
-                    domain: "preflight".to_string(),
-                    code: "SOURCE_OPEN_FAILED".to_string(),
-                    message: sanitize_error_message(&error.to_string()),
-                }],
-                Vec::new(),
-                false,
-                started_clock,
+                FinalizeWithErrors {
+                    run_id: &run_id,
+                    source_path: &source_path,
+                    started_at: &started_at,
+                    completed: completed_steps,
+                    total: total_steps,
+                    errors: vec![MigrationErrorItem {
+                        domain: "preflight".to_string(),
+                        code: "SOURCE_OPEN_FAILED".to_string(),
+                        message: sanitize_error_message(&error.to_string()),
+                    }],
+                    domains: Vec::new(),
+                    cancelled: false,
+                    started_clock,
+                },
             );
             return;
         }
@@ -219,13 +251,15 @@ fn run_migration_background(
 
         if let Err(error) = update_progress(
             &app,
-            &run_id,
-            domain.id(),
-            completed_steps,
-            total_steps,
-            "running",
-            domain.label().to_string(),
-            started_clock,
+            ProgressUpdate {
+                run_id: &run_id,
+                step: domain.id(),
+                completed: completed_steps,
+                total: total_steps,
+                status: "running",
+                message: domain.label().to_string(),
+                started_clock,
+            },
         ) {
             finalize_internal_error(&app, &run_id, &source_path, &started_at, error);
             return;
@@ -269,15 +303,17 @@ fn run_migration_background(
 
     finalize_with_errors(
         &app,
-        &run_id,
-        &source_path,
-        &started_at,
-        completed_steps,
-        total_steps,
-        errors,
-        domain_reports,
-        cancelled,
-        started_clock,
+        FinalizeWithErrors {
+            run_id: &run_id,
+            source_path: &source_path,
+            started_at: &started_at,
+            completed: completed_steps,
+            total: total_steps,
+            errors,
+            domains: domain_reports,
+            cancelled,
+            started_clock,
+        },
     );
 }
 
@@ -329,44 +365,35 @@ fn execute_domain_import(
     }
 }
 
-fn update_progress(
-    app: &AppHandle,
-    run_id: &str,
-    step: &str,
-    completed: u32,
-    total: u32,
-    status: &str,
-    message: String,
-    started_clock: Instant,
-) -> Result<(), AppError> {
-    let percent = if total == 0 {
+fn update_progress(app: &AppHandle, update: ProgressUpdate<'_>) -> Result<(), AppError> {
+    let percent = if update.total == 0 {
         100.0
     } else {
-        ((completed as f64 / total as f64) * 100.0 * 10.0).round() / 10.0
+        ((update.completed as f64 / update.total as f64) * 100.0 * 10.0).round() / 10.0
     };
 
-    let eta_seconds = if completed == 0 || completed >= total {
+    let eta_seconds = if update.completed == 0 || update.completed >= update.total {
         None
     } else {
-        let elapsed = started_clock.elapsed().as_secs_f64();
+        let elapsed = update.started_clock.elapsed().as_secs_f64();
         if elapsed <= 0.0 {
             None
         } else {
-            let per_step = elapsed / completed as f64;
-            let remaining_steps = (total - completed) as f64;
+            let per_step = elapsed / update.completed as f64;
+            let remaining_steps = (update.total - update.completed) as f64;
             Some((per_step * remaining_steps).round() as u64)
         }
     };
 
     let progress = MigrationProgress {
-        run_id: run_id.to_string(),
-        step: step.to_string(),
-        completed,
-        total,
+        run_id: update.run_id.to_string(),
+        step: update.step.to_string(),
+        completed: update.completed,
+        total: update.total,
         percent,
         eta_seconds,
-        message,
-        status: status.to_string(),
+        message: update.message,
+        status: update.status.to_string(),
         updated_at: now_iso(),
     };
 
@@ -376,44 +403,36 @@ fn update_progress(
             .migration
             .lock()
             .map_err(|e| AppError::Internal(e.to_string()))?;
-        let run = migration.runs.get_mut(run_id).ok_or_else(|| {
-            AppError::NotFound(format!("Migration run '{}' was not found.", run_id))
+        let run = migration.runs.get_mut(update.run_id).ok_or_else(|| {
+            AppError::NotFound(format!("Migration run '{}' was not found.", update.run_id))
         })?;
         run.progress = progress.clone();
     }
 
-    app.emit("migration-progress", MigrationProgressEvent::from(&progress))
-        .map_err(|e| AppError::Tauri(e.to_string()))
+    app.emit(
+        "migration-progress",
+        MigrationProgressEvent::from(&progress),
+    )
+    .map_err(|e| AppError::Tauri(e.to_string()))
 }
 
-fn finalize_with_errors(
-    app: &AppHandle,
-    run_id: &str,
-    source_path: &str,
-    started_at: &str,
-    completed: u32,
-    total: u32,
-    errors: Vec<MigrationErrorItem>,
-    domains: Vec<crate::migration::MigrationDomainReport>,
-    cancelled: bool,
-    started_clock: Instant,
-) {
-    let status = if cancelled {
+fn finalize_with_errors(app: &AppHandle, summary: FinalizeWithErrors<'_>) {
+    let status = if summary.cancelled {
         "cancelled"
-    } else if errors.is_empty() {
+    } else if summary.errors.is_empty() {
         "completed"
     } else {
         "failed"
     };
 
     let report = MigrationReport {
-        run_id: run_id.to_string(),
+        run_id: summary.run_id.to_string(),
         status: status.to_string(),
-        started_at: started_at.to_string(),
+        started_at: summary.started_at.to_string(),
         finished_at: Some(now_iso()),
-        source_path: source_path.to_string(),
-        domains,
-        errors,
+        source_path: summary.source_path.to_string(),
+        domains: summary.domains,
+        errors: summary.errors,
     };
 
     let message = if status == "completed" {
@@ -425,38 +444,40 @@ fn finalize_with_errors(
     };
 
     let final_completed = if status == "completed" {
-        total
+        summary.total
     } else {
-        completed
+        summary.completed
     };
 
     let _ = update_progress(
         app,
-        run_id,
-        "finalize",
-        final_completed,
-        total,
-        status,
-        message,
-        started_clock,
+        ProgressUpdate {
+            run_id: summary.run_id,
+            step: "finalize",
+            completed: final_completed,
+            total: summary.total,
+            status,
+            message,
+            started_clock: summary.started_clock,
+        },
     );
 
     {
         let app_state = app.state::<AppState>();
         let maybe_guard = app_state.migration.lock();
         if let Ok(mut migration) = maybe_guard {
-            if let Some(run) = migration.runs.get_mut(run_id) {
+            if let Some(run) = migration.runs.get_mut(summary.run_id) {
                 run.report = Some(report.clone());
                 run.progress.status = status.to_string();
                 run.progress.updated_at = now_iso();
             }
-            if migration.active_run_id.as_deref() == Some(run_id) {
+            if migration.active_run_id.as_deref() == Some(summary.run_id) {
                 migration.active_run_id = None;
             }
         }
     }
 
-    persist_migration_metadata(app, source_path, status, &report);
+    persist_migration_metadata(app, summary.source_path, status, &report);
 }
 
 fn finalize_internal_error(
@@ -468,23 +489,30 @@ fn finalize_internal_error(
 ) {
     finalize_with_errors(
         app,
-        run_id,
-        source_path,
-        started_at,
-        0,
-        1,
-        vec![MigrationErrorItem {
-            domain: "migration".to_string(),
-            code: "INTERNAL_ERROR".to_string(),
-            message: sanitize_error_message(&error.to_string()),
-        }],
-        Vec::new(),
-        false,
-        Instant::now(),
+        FinalizeWithErrors {
+            run_id,
+            source_path,
+            started_at,
+            completed: 0,
+            total: 1,
+            errors: vec![MigrationErrorItem {
+                domain: "migration".to_string(),
+                code: "INTERNAL_ERROR".to_string(),
+                message: sanitize_error_message(&error.to_string()),
+            }],
+            domains: Vec::new(),
+            cancelled: false,
+            started_clock: Instant::now(),
+        },
     );
 }
 
-fn persist_migration_metadata(app: &AppHandle, source_path: &str, status: &str, report: &MigrationReport) {
+fn persist_migration_metadata(
+    app: &AppHandle,
+    source_path: &str,
+    status: &str,
+    report: &MigrationReport,
+) {
     let report_json = serde_json::to_string(report).unwrap_or_else(|_| "{}".to_string());
     let report_json = truncate(&report_json, 48_000);
     let finished_at = report.finished_at.clone().unwrap_or_else(now_iso);
@@ -505,9 +533,10 @@ fn get_cancel_flag(app: &AppHandle, run_id: &str) -> Result<Arc<AtomicBool>, App
         .migration
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let run = migration.runs.get(run_id).ok_or_else(|| {
-        AppError::NotFound(format!("Migration run '{}' was not found.", run_id))
-    })?;
+    let run = migration
+        .runs
+        .get(run_id)
+        .ok_or_else(|| AppError::NotFound(format!("Migration run '{}' was not found.", run_id)))?;
     Ok(Arc::clone(&run.cancel_flag))
 }
 

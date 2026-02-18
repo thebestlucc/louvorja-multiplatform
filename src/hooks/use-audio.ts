@@ -8,15 +8,20 @@ import {
   audioSeek,
   audioSetVolume,
 } from "../lib/tauri";
+import {
+  ensureProjectionScreensStarted,
+  projectCurrentSlideFromStore,
+} from "../lib/projection-playback";
 
 export function useAudio() {
   const store = useAudioStore();
 
   const play = useCallback(
     async (filePath: string) => {
+      await ensureProjectionScreensStarted();
+      await projectCurrentSlideFromStore();
+      store.startStatusSubscription();
       await audioPlay(filePath);
-      store.setStatus("playing");
-      store.startPolling();
     },
     [store],
   );
@@ -27,14 +32,13 @@ export function useAudio() {
   }, [store]);
 
   const resume = useCallback(async () => {
+    store.startStatusSubscription();
     await audioResume();
-    store.setStatus("playing");
-    store.startPolling();
   }, [store]);
 
   const stop = useCallback(async () => {
     await audioStop();
-    store.stopPolling();
+    store.stopStatusSubscription();
     store.setStatus("idle");
     store.setPosition(0);
   }, [store]);

@@ -28,9 +28,15 @@ import { toast } from "sonner";
 import { cn } from "../../lib/utils";
 import { useMonitorsControl } from "../../hooks/use-monitors";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
-import { clearCurrentSlide, searchHymns, searchBible } from "../../lib/tauri";
+import { stopProjectionAndSongAudio } from "../../lib/projection-control";
+import {
+  searchHymns,
+  searchBible,
+  searchCollections,
+} from "../../lib/tauri";
 import type { Hymn } from "../../types/hymn";
 import type { BibleSearchResult } from "../../types/bible";
+import type { CollectionSearchResult } from "../../types/collection";
 import { CoverImage } from "../media/cover-image";
 
 type PaletteRouteCommand = {
@@ -55,6 +61,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [bibleResults, setBibleResults] = useState<BibleSearchResult[]>([]);
+  const [collectionResults, setCollectionResults] = useState<CollectionSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -82,20 +89,25 @@ export function CommandPalette() {
     if (!query.trim()) {
       setHymns([]);
       setBibleResults([]);
+      setCollectionResults([]);
       setSearching(false);
       return;
     }
     setSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const [h, b] = await Promise.all([
+        const [h, b, c] = await Promise.all([
           searchHymns(query),
           query.trim().length >= 2
             ? searchBible(query, null)
             : Promise.resolve([]),
+          query.trim().length >= 2
+            ? searchCollections(query)
+            : Promise.resolve([]),
         ]);
         setHymns(h.slice(0, 5));
         setBibleResults(b.slice(0, 5));
+        setCollectionResults(c.slice(0, 5));
       } catch {
         // silently fail — transient UI search
       } finally {
@@ -111,12 +123,10 @@ export function CommandPalette() {
       setQuery("");
       setHymns([]);
       setBibleResults([]);
+      setCollectionResults([]);
       setSearching(false);
     }
   }, [open]);
-
-  const hasQuery = query.trim().length > 0;
-  const hasResults = hymns.length > 0 || bibleResults.length > 0;
 
   const routes: PaletteRouteCommand[] = [
     {
@@ -268,7 +278,7 @@ export function CommandPalette() {
       label: t("commandPalette.actions.clearProjection"),
       value: `${t("commandPalette.actions.clearProjection")} escape`,
       onSelect: async () => {
-        await clearCurrentSlide();
+        await stopProjectionAndSongAudio();
       },
     },
     {
@@ -282,6 +292,7 @@ export function CommandPalette() {
     },
   ];
 
+  const hasQuery = query.trim().length > 0;
   const filteredRoutes = routes.filter((route) => {
     if (!hasQuery) return true;
     return route.value.toLowerCase().includes(query.toLowerCase());
@@ -294,6 +305,13 @@ export function CommandPalette() {
     }
     return entry.value.toLowerCase().includes(query.toLowerCase());
   });
+  const hasResults =
+    filteredNavigationRoutes.length > 0 ||
+    filteredUtilityRoutes.length > 0 ||
+    filteredActions.length > 0 ||
+    hymns.length > 0 ||
+    bibleResults.length > 0 ||
+    collectionResults.length > 0;
 
   return (
     <Command.Dialog
@@ -430,6 +448,43 @@ export function CommandPalette() {
                 <span className="truncate">
                   {hymn.number != null ? `#${hymn.number} - ` : ""}
                   {hymn.title}
+                </span>
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+
+        {/* Collections group */}
+        {collectionResults.length > 0 && (
+          <Command.Group
+            heading={t("nav.collections")}
+            className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+          >
+            {collectionResults.map((result, idx) => (
+              <Command.Item
+                key={`collection-search-${result.kind}-${result.collection_id}-${result.song_id ?? "none"}-${idx}`}
+                value={`collection-${result.collection_id}-${result.song_id ?? "none"}-${result.title}-${result.collection_name}`}
+                onSelect={() => {
+                  navigate({
+                    to: "/collections/$collectionId",
+                    params: { collectionId: String(result.collection_id) },
+                  });
+                  setOpen(false);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
+              >
+                {result.kind === "song" ? (
+                  <Music className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{result.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {result.kind === "song"
+                      ? `${result.collection_name} · ${result.snippet || t("collections.songs")}`
+                      : result.snippet || result.collection_name}
+                  </span>
                 </span>
               </Command.Item>
             ))}

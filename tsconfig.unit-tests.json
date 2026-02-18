@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp-test-dist",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "allowImportingTsExtensions": false,
+    "types": ["node"],
+    "sourceMap": false
+  },
+  "include": [
+    "tests/media-path.test.ts",
+    "tests/presentations/editor-state.test.ts",
+    "tests/presentations/editor-state-view.test.ts",
+    "src/lib/media-path.ts",
+    "src/routes/presentations/-editor-state.ts",
+    "src/routes/presentations/-editor-state-view.tsx",
+    "src/components/ui/button.tsx",
+    "src/lib/utils.ts"
+  ]
+}

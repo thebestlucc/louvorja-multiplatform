@@ -208,8 +208,12 @@ export function useCollection(id: number) {
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { name: string; description: string | null; coverPath: string | null }) =>
-      createCollection(vars.name, vars.description, vars.coverPath),
+    mutationFn: (vars: {
+      name: string;
+      description: string | null;
+      year: number | null;
+      coverPath: string | null;
+    }) => createCollection(vars.name, vars.description, vars.year, vars.coverPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
     },
@@ -223,8 +227,9 @@ export function useUpdateCollection() {
       id: number;
       name: string;
       description: string | null;
+      year: number | null;
       coverPath: string | null;
-    }) => updateCollection(vars.id, vars.name, vars.description, vars.coverPath),
+    }) => updateCollection(vars.id, vars.name, vars.description, vars.year, vars.coverPath),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.id) });

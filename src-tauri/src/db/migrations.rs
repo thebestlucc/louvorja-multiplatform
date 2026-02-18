@@ -54,6 +54,26 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (8)", [])?;
     }
 
+    if current_version < 9 {
+        migrate_v9(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (9)", [])?;
+    }
+
+    if current_version < 10 {
+        migrate_v10(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (10)", [])?;
+    }
+
+    if current_version < 11 {
+        migrate_v11(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (11)", [])?;
+    }
+
+    if current_version < 12 {
+        migrate_v12(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (12)", [])?;
+    }
+
     Ok(())
 }
 
@@ -415,6 +435,49 @@ fn migrate_v8(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v9(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(conn, "collections", "year", "INTEGER")?;
+    Ok(())
+}
+
+fn migrate_v10(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        CREATE VIRTUAL TABLE IF NOT EXISTS collections_fts USING fts5(
+            entity_type UNINDEXED,
+            collection_id UNINDEXED,
+            song_id UNINDEXED,
+            collection_name,
+            title,
+            description,
+            body
+        );
+        ",
+    )?;
+    crate::db::queries::collections::rebuild_collections_search_index(conn)?;
+    Ok(())
+}
+
+fn migrate_v11(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('projector.default.contentType', 'logo');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('projector.default.text', 'LouvorJA');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('projector.default.mediaPath', '');
+        ",
+    )?;
+    Ok(())
+}
+
+fn migrate_v12(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('projector.logo.imagePath', '');
+        ",
+    )?;
+    Ok(())
+}
+
 fn add_column_if_missing(
     conn: &Connection,
     table: &str,
@@ -422,10 +485,7 @@ fn add_column_if_missing(
     definition: &str,
 ) -> Result<(), AppError> {
     if !column_exists(conn, table, column)? {
-        let sql = format!(
-            "ALTER TABLE {} ADD COLUMN {} {}",
-            table, column, definition
-        );
+        let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition);
         conn.execute(&sql, [])?;
     }
     Ok(())

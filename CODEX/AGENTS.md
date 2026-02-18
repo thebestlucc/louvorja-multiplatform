@@ -113,7 +113,7 @@ src-tauri/src/                # Backend (Rust)
 - **Components:** Use CVA pattern with exported `*Variants` functions for style variants (see Button, Badge).
 - **Styling:** Tailwind v4 with `@theme` directive for custom tokens. CSS custom properties for 5 themes (azure/white/gray/orange/black). Use `var(--token)` to consume.
 - **Routes:** File-based via TanStack Router Vite plugin. Directory-based for nested routes (e.g., `hymnal/route.tsx` + `hymnal/index.tsx` + `hymnal/$hymnId.tsx`).
-- **Zustand stores:** Client-only UI state. `usePresentationStore` for slide projection state, `useDisplayStore` for monitor/window state, `useUIStore` for sidebar, `useAudioStore` for playback polling.
+- **Zustand stores:** Client-only UI state. `usePresentationStore` for slide projection state, `useDisplayStore` for monitor/window state, `useUIStore` for sidebar, `useAudioStore` for playback event state (pub/sub).
 
 ## Common Errors to Avoid
 
@@ -189,6 +189,12 @@ src-tauri/src/                # Backend (Rust)
    - Keep render-mode-specific constraints (`thumbnail` vs `return-next` vs `editor`) instead of sharing one text style across modes.
    - Validate at 100%/125%/150% zoom with hover controls and scrollbar visible.
 
+11. **Realtime sync anti-pattern (polling):**
+   - Do not implement polling loops for live synchronization (audio/timer/clock/projection/streaming).
+   - Use event-driven pub/sub from backend emitters to frontend/store/template listeners.
+   - Keep playback subscription lifecycle independent from editor/detail route lifecycle.
+   - If polling is temporarily unavoidable, document explicit rationale and removal plan in phase docs.
+
 ### General
 
 - **i18n:** Always add keys to ALL THREE locale files (`en.json`, `pt.json`, `es.json`). Missing keys render as raw key strings.
@@ -198,6 +204,7 @@ src-tauri/src/                # Backend (Rust)
 - **Multi-agent orchestration:** When beneficial, automatically orchestrate multiple agents and use the appropriate Ring orchestration skills (for example `ring:using-ring` and `ring:dispatching-parallel-agents`).
 - **New Tauri commands checklist:** (1) Add query in `db/queries/*.rs`, (2) Add command in `commands/*.rs`, (3) Register in `lib.rs` handler, (4) Add wrapper in `lib/tauri.ts`, (5) Add hook in `lib/queries.ts`.
 - **Projector event flow:** `setCurrentSlide` (Rust) → `app.emit("slide-changed", &slide_data)` → `ProjectorView` listens via `listen<SlideContentFlat>("slide-changed")` → converts with `flatToSlideContent`.
+- **Realtime sync rule:** For live projection state, use pub/sub events as the source of truth across app/projector/return/streaming. Never refresh entire screens or rely on periodic polling as the primary synchronization path.
 - **Link navigation:** Always use TanStack Router `<Link to="/path">` for internal navigation, never `<a href>` or `window.location`.
 - **Cross-module "Add to X" pattern:** When a module (e.g., Bible, Hymnal) needs to add items to another module (e.g., Services), use `usePresentationStore.activeServiceId` to check if a service is active, and `useAddServiceItem()` mutation to add. Show the button conditionally only when `activeServiceId` is set. See `hymn-card.tsx` and `verse-display.tsx` for reference.
 - **Color-coded type maps:** When items have types (e.g., `ServiceItemType`), define parallel `Record<Type, string>` maps for icons, text colors, border colors, and bg colors. Keep them co-located in the component that uses them (e.g., `service-item-list.tsx`).
@@ -210,6 +217,7 @@ src-tauri/src/                # Backend (Rust)
 - **Return monitor:** Two-panel layout (70/30 split) showing current + next slide. Context data (next slide, index, total, title) sent via `setSlideContext()` alongside `setCurrentSlide()`, wrapped in `projectSlideWithContext()` helper in `use-slides.ts`.
 - **Keyboard shortcuts:** B=black screen, L=logo screen, F5=projector, Shift+F5=return monitor, Escape=clear projection.
 - **Hymn projection gating:** The hymn detail page uses `isProjecting` boolean state to gate stanza/thumbnail clicks. When false, clicks only update `localActiveIndex` (UI highlight). When true, clicks call `goToSlide()` → projector/return/streaming. "Project" button starts, "Stop" button calls `clearCurrentSlide()`. See `$hymnId.tsx`.
+- **Playback/editor separation:** Presentation editor flows must not mutate active playback queue or projection synchronization lifecycle. Keep queue control in playback routes/hooks only.
 - **Global search in command palette:** The `CommandPalette` uses `shouldFilter={!hasQuery}` on `Command.Dialog` to disable cmdk's built-in filter when the user types a search query. Dynamic results from `searchHymns()` and `searchBible()` are fetched with 300ms debounce, shown in `Command.Group` sections. No TanStack Query caching — transient UI uses direct `await` calls.
 - **Streaming SSE pattern:** Use raw `std::net::TcpListener` with `TcpStream::write_all()` + `flush()` for SSE — never use buffered HTTP libraries (like tiny_http) for SSE as they buffer small writes. Set `TCP_NODELAY` on connections.
 - **Streaming clear pattern:** When clearing slides, all 3 SSE channels (music/bible/return) must receive empty payloads. HTML templates must handle `null`/empty values explicitly (show "Waiting for content" state).

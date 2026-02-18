@@ -58,10 +58,11 @@ pub fn run() {
             {
                 let db_state = app.state::<AppState>();
                 let conn = db_state.db.lock().map_err(|e| e.to_string())?;
-                let auto_start = crate::db::queries::settings::get_setting(&conn, "streaming.autoStart")
-                    .ok()
-                    .map(|s| s.value == "true")
-                    .unwrap_or(false);
+                let auto_start =
+                    crate::db::queries::settings::get_setting(&conn, "streaming.autoStart")
+                        .ok()
+                        .map(|s| s.value == "true")
+                        .unwrap_or(false);
                 let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
                     .ok()
                     .and_then(|s| s.value.parse::<u16>().ok())
@@ -96,6 +97,7 @@ pub fn run() {
             commands::music::delete_hymn,
             // Collections
             commands::collections::get_collections,
+            commands::collections::search_collections,
             commands::collections::get_collection,
             commands::collections::create_collection,
             commands::collections::update_collection,

@@ -29,5 +29,39 @@ export default defineConfig({
       process.env.TAURI_ENV_PLATFORM == "windows" ? "chrome105" : "safari13",
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return;
+          }
+          if (id.includes("@tauri-apps")) {
+            return "vendor-tauri";
+          }
+          if (id.includes("@tanstack")) {
+            return "vendor-tanstack";
+          }
+          if (
+            id.includes("@radix-ui")
+            || id.includes("@dnd-kit")
+            || id.includes("cmdk")
+            || id.includes("lucide-react")
+          ) {
+            return "vendor-ui";
+          }
+          if (id.includes("i18next") || id.includes("react-i18next")) {
+            return "vendor-i18n";
+          }
+          if (
+            id.includes("react")
+            || id.includes("scheduler")
+            || id.includes("use-sync-external-store")
+          ) {
+            return "vendor-react";
+          }
+          return "vendor-misc";
+        },
+      },
+    },
   },
 });

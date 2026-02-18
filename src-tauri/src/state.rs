@@ -77,7 +77,10 @@ impl TimerRuntimeState {
 
     pub fn current_time_ms(&self) -> u64 {
         match self.mode {
-            TimerMode::Countdown => self.duration_ms.unwrap_or(0).saturating_sub(self.elapsed_ms()),
+            TimerMode::Countdown => self
+                .duration_ms
+                .unwrap_or(0)
+                .saturating_sub(self.elapsed_ms()),
             TimerMode::Stopwatch => self.elapsed_ms(),
         }
     }
@@ -169,6 +172,7 @@ pub struct AppState {
 
 pub struct AudioState {
     pub player: Mutex<AudioPlayer>,
+    pub audio_status_stream_stop: Mutex<Option<Sender<()>>>,
 }
 
 pub struct StreamingState {
@@ -187,6 +191,7 @@ impl AudioState {
     pub fn new() -> Result<Self, AppError> {
         Ok(Self {
             player: Mutex::new(AudioPlayer::new()?),
+            audio_status_stream_stop: Mutex::new(None),
         })
     }
 }

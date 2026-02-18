@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { clearCurrentSlide, setCurrentSlide, setSlideContext } from "../../lib/tauri";
+import { setCurrentSlide, setSlideContext } from "../../lib/tauri";
+import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { ServiceItemList } from "../../components/services/service-item-list";
 import { ServiceTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
@@ -186,7 +187,7 @@ function ServiceEditor() {
 
     // End of service timeline: stop playback and clear projection.
     setPlayingService(false);
-    void clearCurrentSlide().catch((err) => toast.error(String(err)));
+    void stopProjectionAndSongAudio().catch((err) => toast.error(String(err)));
   };
 
   const handlePrevItem = () => {

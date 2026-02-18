@@ -79,6 +79,7 @@
 - Add EN/PT/ES keys for collections/sync/cover/settings copy.
 - Add keyboard/screen-reader labels for icon actions.
 - Enforce validation for cover uploads and import path safety.
+- Enforce pub/sub-only realtime synchronization for playback/projection/streaming (remove remaining polling paths).
 
 ### Batch 9 — Documentation Source of Truth Normalization (New)
 - Enforce docs structure pattern in `docs`:
@@ -86,6 +87,8 @@
   - `docs/phase-{number}-{feature-name}/SPECS.md`
   - `docs/phase-{number}-{feature-name}/TASKS.md`
   - `docs/phase-{number}-{feature-name}/HANDOFF.md` (post implementation)
+- Add/update phase learnings documentation when a non-obvious incident is solved:
+  - `docs/phase-{number}-{feature-name}/LEARNINGS.md`
 - Update tracking files to point to this pattern and declare docs as canonical feature-decision source:
   - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`
   - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/CODEX/AGENTS.md`
@@ -108,6 +111,7 @@
 7. Covers render correctly across hymn/collection surfaces with fallback.
 8. Presentations module and projector/return/streaming flows remain stable.
 9. Docs tracking points to `docs/phase-*` as single source of truth.
+10. No polling-based realtime synchronization remains in projection/playback paths.
 
 ## Verification Commands
 

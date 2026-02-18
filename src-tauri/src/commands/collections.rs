@@ -1,4 +1,7 @@
-use crate::db::models::{Collection, CollectionSong, CollectionSongSyncStatus, CollectionWithSongs};
+use crate::db::models::{
+    Collection, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
+    CollectionWithSongs,
+};
 use crate::error::AppError;
 use crate::state::AppState;
 use rusqlite::params;
@@ -18,6 +21,18 @@ pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<Collecti
 }
 
 #[tauri::command]
+pub fn search_collections(
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<CollectionSearchResult>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::collections::search_collections(&conn, &query, 8)
+}
+
+#[tauri::command]
 pub fn get_collection(
     id: i64,
     state: tauri::State<'_, AppState>,
@@ -33,6 +48,7 @@ pub fn get_collection(
 pub fn create_collection(
     name: String,
     description: Option<String>,
+    year: Option<i32>,
     cover_path: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Collection, AppError> {
@@ -42,6 +58,7 @@ pub fn create_collection(
     if let Some(path) = &cover_path {
         validate_cover_path(path)?;
     }
+    validate_collection_year(year)?;
 
     let conn = state
         .db
@@ -52,6 +69,7 @@ pub fn create_collection(
         &tx,
         &name,
         description.as_deref(),
+        year,
         cover_path.as_deref(),
     )?;
     let collection = crate::db::queries::collections::get_collection_by_id(&tx, id)?;
@@ -64,6 +82,7 @@ pub fn update_collection(
     id: i64,
     name: String,
     description: Option<String>,
+    year: Option<i32>,
     cover_path: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Collection, AppError> {
@@ -73,6 +92,7 @@ pub fn update_collection(
     if let Some(path) = &cover_path {
         validate_cover_path(path)?;
     }
+    validate_collection_year(year)?;
 
     let conn = state
         .db
@@ -84,6 +104,7 @@ pub fn update_collection(
         id,
         &name,
         description.as_deref(),
+        year,
         cover_path.as_deref(),
     )?;
     let collection = crate::db::queries::collections::get_collection_by_id(&tx, id)?;
@@ -137,7 +158,9 @@ pub fn check_collection_song_sync(
     } else {
         let hash = hash_file(&source)?;
         let mtime_ms = source_mtime_ms(&source)?;
-        if song.source_hash.as_deref() == Some(hash.as_str()) && song.source_mtime_ms == Some(mtime_ms) {
+        if song.source_hash.as_deref() == Some(hash.as_str())
+            && song.source_mtime_ms == Some(mtime_ms)
+        {
             CollectionSongSyncStatus::InSync
         } else {
             CollectionSongSyncStatus::Stale
@@ -240,7 +263,15 @@ fn import_or_resync_collection_song(
     let mut media_map: HashMap<String, String> = HashMap::new();
     for media in &archive.media {
         let mapped_relative = write_archive_media_file(&media_root, media)?;
-        media_map.insert(media.filename.clone(), mapped_relative);
+        media_map.insert(media.filename.clone(), mapped_relative.clone());
+        if let Some(file_name) = Path::new(&media.filename)
+            .file_name()
+            .and_then(|value| value.to_str())
+        {
+            media_map
+                .entry(file_name.to_string())
+                .or_insert(mapped_relative);
+        }
     }
 
     let conn = state
@@ -258,7 +289,14 @@ fn import_or_resync_collection_song(
     )?;
     for (index, slide) in archive.slides.iter().enumerate() {
         let remapped_content = remap_video_paths_in_content(&slide.content, &media_map)?;
-        crate::db::queries::slides::insert_slide(&tx, presentation_id, &remapped_content, index as i32)?;
+        crate::db::queries::slides::insert_slide_with_metadata(
+            &tx,
+            presentation_id,
+            &remapped_content,
+            index as i32,
+            slide.notes.as_deref(),
+            slide.transition.as_deref(),
+        )?;
     }
 
     let song_id = if let Some(song_id) = existing_song_id {
@@ -278,17 +316,20 @@ fn import_or_resync_collection_song(
         }
         song_id
     } else {
-        let order = crate::db::queries::collections::next_collection_song_order(&tx, collection_id)?;
+        let order =
+            crate::db::queries::collections::next_collection_song_order(&tx, collection_id)?;
         crate::db::queries::collections::insert_collection_song(
             &tx,
-            collection_id,
-            &canonical.to_string_lossy(),
-            &source_format,
-            Some(&source_hash),
-            Some(source_mtime_ms),
-            Some(presentation_id),
-            CollectionSongSyncStatus::InSync,
-            order,
+            crate::db::queries::collections::InsertCollectionSongInput {
+                collection_id,
+                source_path: &canonical.to_string_lossy(),
+                source_format: &source_format,
+                source_hash: Some(&source_hash),
+                source_mtime_ms: Some(source_mtime_ms),
+                cache_presentation_id: Some(presentation_id),
+                sync_status: CollectionSongSyncStatus::InSync,
+                item_order: order,
+            },
         )?
     };
 
@@ -298,7 +339,10 @@ fn import_or_resync_collection_song(
     Ok(song)
 }
 
-fn refresh_collection_auto_cover(conn: &rusqlite::Transaction<'_>, collection_id: i64) -> Result<(), AppError> {
+fn refresh_collection_auto_cover(
+    conn: &rusqlite::Transaction<'_>,
+    collection_id: i64,
+) -> Result<(), AppError> {
     let songs = crate::db::queries::collections::get_collection_songs(conn, collection_id)?;
     let mut cover: Option<String> = None;
 
@@ -312,7 +356,11 @@ fn refresh_collection_auto_cover(conn: &rusqlite::Transaction<'_>, collection_id
         }
     }
 
-    crate::db::queries::collections::set_collection_auto_cover_path(conn, collection_id, cover.as_deref())?;
+    crate::db::queries::collections::set_collection_auto_cover_path(
+        conn,
+        collection_id,
+        cover.as_deref(),
+    )?;
     Ok(())
 }
 
@@ -332,7 +380,10 @@ fn derive_cover_from_presentation(
             Ok(value) => value,
             Err(_) => continue,
         };
-        let slide_type = value.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+        let slide_type = value
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
         match slide_type {
             "image" => {
                 if let Some(src) = value.get("src").and_then(|v| v.as_str()) {
@@ -420,6 +471,17 @@ fn validate_cover_path(path: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+fn validate_collection_year(year: Option<i32>) -> Result<(), AppError> {
+    if let Some(value) = year {
+        if !(1900..=2200).contains(&value) {
+            return Err(AppError::Internal(
+                "Collection year must be between 1900 and 2200.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn remap_video_paths_in_content(
     content_json: &str,
     media_map: &HashMap<String, String>,
@@ -428,29 +490,64 @@ fn remap_video_paths_in_content(
         Ok(value) => value,
         Err(_) => return Ok(content_json.to_string()),
     };
-
-    if value
+    let slide_type = value
         .get("type")
         .and_then(|v| v.as_str())
-        .map(|slide_type| slide_type != "video")
-        .unwrap_or(true)
-    {
-        return Ok(content_json.to_string());
+        .unwrap_or_default()
+        .to_string();
+
+    let remap_media_path = |path: &str| -> Option<String> {
+        let normalized = path.replace('\\', "/");
+        let key = normalized
+            .strip_prefix("media/")
+            .unwrap_or(&normalized)
+            .to_string();
+        media_map.get(&key).cloned().or_else(|| {
+            Path::new(&key)
+                .file_name()
+                .and_then(|value| value.to_str())
+                .and_then(|file_name| media_map.get(file_name).cloned())
+        })
+    };
+
+    if let Some(background_image) = value.get("backgroundImage").and_then(|v| v.as_str()) {
+        if let Some(remapped) = remap_media_path(background_image) {
+            value["backgroundImage"] = serde_json::Value::String(format!("media/{}", remapped));
+        }
+    }
+
+    if let Some(audio_path) = value.get("audioPath").and_then(|v| v.as_str()) {
+        if let Some(remapped) = remap_media_path(audio_path) {
+            value["audioPath"] = serde_json::Value::String(format!("media/{}", remapped));
+        }
+    }
+
+    if slide_type == "image" {
+        if let Some(current_src) = value.get("src").and_then(|v| v.as_str()) {
+            if let Some(remapped) = remap_media_path(current_src) {
+                value["src"] = serde_json::Value::String(format!("media/{}", remapped));
+            }
+        }
+        return serde_json::to_string(&value).map_err(AppError::from);
+    }
+
+    if slide_type != "video" {
+        return serde_json::to_string(&value).map_err(AppError::from);
     }
 
     let current = value
         .get("videoPath")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .or_else(|| value.get("src").and_then(|v| v.as_str()).map(|s| s.to_string()));
+        .map(str::to_string)
+        .or_else(|| {
+            value
+                .get("src")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        });
 
     if let Some(current_path) = current {
-        let key = current_path
-            .strip_prefix("media/")
-            .unwrap_or(&current_path)
-            .to_string();
-
-        if let Some(remapped) = media_map.get(&key) {
+        if let Some(remapped) = remap_media_path(&current_path) {
             value["videoPath"] = serde_json::Value::String(format!("media/{}", remapped));
         }
     }

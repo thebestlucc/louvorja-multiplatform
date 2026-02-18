@@ -76,11 +76,10 @@ impl AudioPlayer {
 
         match path.map(str::trim).filter(|value| !value.is_empty()) {
             Some(file_path) => {
-                let source =
-                    Decoder::new(BufReader::new(File::open(file_path).map_err(|e| {
-                        AppError::Internal(format!("Failed to open alert audio file: {}", e))
-                    })?))
-                    .map_err(|e| AppError::Internal(format!("Failed to decode alert audio: {}", e)))?;
+                let source = Decoder::new(BufReader::new(File::open(file_path).map_err(|e| {
+                    AppError::Internal(format!("Failed to open alert audio file: {}", e))
+                })?))
+                .map_err(|e| AppError::Internal(format!("Failed to decode alert audio: {}", e)))?;
                 sink.append(source);
             }
             None => {
@@ -172,6 +171,86 @@ impl AudioPlayer {
         let file = File::open(path).ok()?;
         let reader = BufReader::new(file);
         let decoder = Decoder::new(reader).ok()?;
-        decoder.total_duration().map(|d| d.as_millis() as u64)
+        decoder
+            .total_duration()
+            .map(|d| d.as_millis() as u64)
+            .or_else(|| Self::estimate_mp3_duration_cbr(path))
+    }
+
+    fn estimate_mp3_duration_cbr(path: &str) -> Option<u64> {
+        let bytes = std::fs::read(path).ok()?;
+        if bytes.len() < 4 {
+            return None;
+        }
+
+        let mut offset = 0usize;
+        if bytes.len() >= 10 && &bytes[0..3] == b"ID3" {
+            let id3_size = ((bytes[6] as usize & 0x7f) << 21)
+                | ((bytes[7] as usize & 0x7f) << 14)
+                | ((bytes[8] as usize & 0x7f) << 7)
+                | (bytes[9] as usize & 0x7f);
+            offset = 10usize.saturating_add(id3_size);
+            if offset >= bytes.len() {
+                return None;
+            }
+        }
+
+        let mpeg1_l3_bitrate_kbps = [
+            0u32, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0,
+        ];
+        let mpeg2_l3_bitrate_kbps = [
+            0u32, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0,
+        ];
+
+        let mut cursor = offset;
+        while cursor + 4 <= bytes.len() {
+            let header = u32::from_be_bytes([
+                bytes[cursor],
+                bytes[cursor + 1],
+                bytes[cursor + 2],
+                bytes[cursor + 3],
+            ]);
+
+            let sync_word = (header >> 21) & 0x7ff;
+            if sync_word != 0x7ff {
+                cursor += 1;
+                continue;
+            }
+
+            let version_bits = (header >> 19) & 0x3;
+            let layer_bits = (header >> 17) & 0x3;
+            let bitrate_index = ((header >> 12) & 0x0f) as usize;
+            let sample_rate_index = ((header >> 10) & 0x03) as usize;
+
+            if version_bits == 0b01
+                || layer_bits != 0b01
+                || bitrate_index == 0
+                || bitrate_index == 0x0f
+                || sample_rate_index == 0x03
+            {
+                cursor += 1;
+                continue;
+            }
+
+            let bitrate_kbps = if version_bits == 0b11 {
+                mpeg1_l3_bitrate_kbps[bitrate_index]
+            } else {
+                mpeg2_l3_bitrate_kbps[bitrate_index]
+            };
+            if bitrate_kbps == 0 {
+                cursor += 1;
+                continue;
+            }
+
+            let stream_bits = ((bytes.len() - offset) as u128) * 8u128;
+            let bitrate_bps = (bitrate_kbps as u128) * 1000u128;
+            let duration_ms = (stream_bits * 1000u128) / bitrate_bps;
+            if duration_ms == 0 {
+                return None;
+            }
+            return Some(duration_ms as u64);
+        }
+
+        None
     }
 }

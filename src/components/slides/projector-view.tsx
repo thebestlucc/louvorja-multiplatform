@@ -1,17 +1,24 @@
 import { useState, useEffect, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { getCurrentSlide, clearCurrentSlide, getOverlayState } from "../../lib/tauri";
+import { getCurrentSlide, getOverlayState } from "../../lib/tauri";
 import type { SlideContentFlat, OverlayState } from "../../types/presentation";
 import { flatToSlideContent } from "../../types/presentation";
 import { SlideRenderer } from "./slide-renderer";
 import type { SlideContent } from "../../types/presentation";
+import { useAllSettings, useTimerState } from "../../lib/queries";
+import {
+  buildProjectorDefaultSlide,
+  parseProjectorScreenDefaults,
+} from "../../lib/projector-screen-defaults";
 import {
   formatUtilityProjectionDate,
   formatUtilityProjectionValue,
   type UtilityProjectionEventPayload,
 } from "../../types/utilities";
 import { cn } from "../../lib/utils";
+import { stopProjectionAndSongAudio } from "../../lib/projection-control";
+import { useMediaSource } from "../../hooks/use-media-source";
 
 export function ProjectorView() {
   const { t, i18n } = useTranslation();
@@ -19,6 +26,11 @@ export function ProjectorView() {
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  const { data: allSettings } = useAllSettings();
+  const screenDefaults = useMemo(() => parseProjectorScreenDefaults(allSettings), [allSettings]);
+  const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
+  const logoImageSrc = useMediaSource(screenDefaults.logoImagePath);
 
   // Listen to slide changes
   useEffect(() => {
@@ -87,16 +99,41 @@ export function ProjectorView() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        clearCurrentSlide().catch(() => {});
+        stopProjectionAndSongAudio().catch(() => {});
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (screenDefaults.contentType !== "clock") {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [screenDefaults.contentType]);
+
+  const defaultSlide = useMemo(() => {
+    return buildProjectorDefaultSlide({
+      defaults: screenDefaults,
+      now,
+      language: i18n.language,
+      timerState,
+      labels: {
+        countdown: t("utilities.timer.countdown"),
+        stopwatch: t("utilities.timer.stopwatch"),
+        missingMedia: t("settings.projectorDefaultMediaMissing"),
+      },
+    });
+  }, [i18n.language, now, screenDefaults, t, timerState]);
+
   const renderedSlide = useMemo(() => {
     if (!utilityProjection) {
-      return slide;
+      return slide ?? defaultSlide;
     }
 
     const subtitle = utilityProjection.kind === "countdown"
@@ -112,9 +149,9 @@ export function ProjectorView() {
       title: formatUtilityProjectionValue(utilityProjection, i18n.language),
       subtitle,
     } satisfies SlideContent;
-  }, [i18n.language, slide, t, utilityProjection]);
+  }, [defaultSlide, i18n.language, slide, t, utilityProjection]);
 
-  const showLogo = !renderedSlide || logoScreen;
+  const showLogo = logoScreen || (!renderedSlide && screenDefaults.contentType === "logo");
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
@@ -137,7 +174,15 @@ export function ProjectorView() {
           showLogo ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
-        <span className="text-4xl font-bold text-white/80">LouvorJA</span>
+        {logoImageSrc ? (
+          <img
+            src={logoImageSrc}
+            alt={t("settings.projectorDefaultContentLogo")}
+            className="max-h-[70vh] max-w-[80vw] object-contain"
+          />
+        ) : (
+          <span className="text-4xl font-bold text-white/80">LouvorJA</span>
+        )}
       </div>
     </div>
   );

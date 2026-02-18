@@ -1,4 +1,5 @@
 use crate::db::models::{Presentation, Slide};
+use crate::db::queries::collections::reindex_collection_song_documents_by_presentation;
 use crate::error::AppError;
 use rusqlite::{params, Connection};
 
@@ -130,6 +131,17 @@ pub fn insert_slide(
     content_json: &str,
     sort_order: i32,
 ) -> Result<i64, AppError> {
+    insert_slide_with_metadata(conn, presentation_id, content_json, sort_order, None, None)
+}
+
+pub fn insert_slide_with_metadata(
+    conn: &Connection,
+    presentation_id: i64,
+    content_json: &str,
+    sort_order: i32,
+    notes: Option<&str>,
+    transition: Option<&str>,
+) -> Result<i64, AppError> {
     // Parse to extract slide_type
     let slide_type = serde_json::from_str::<serde_json::Value>(content_json)
         .ok()
@@ -140,8 +152,15 @@ pub fn insert_slide(
         .unwrap_or_else(|| "text".to_string());
 
     conn.execute(
-        "INSERT INTO slides (presentation_id, slide_index, slide_type, content) VALUES (?1, ?2, ?3, ?4)",
-        params![presentation_id, sort_order, slide_type, content_json],
+        "INSERT INTO slides (presentation_id, slide_index, slide_type, content, notes, transition) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            presentation_id,
+            sort_order,
+            slide_type,
+            content_json,
+            notes,
+            transition
+        ],
     )?;
 
     // Touch presentation updated_at
@@ -149,11 +168,25 @@ pub fn insert_slide(
         "UPDATE presentations SET updated_at = datetime('now') WHERE id = ?1",
         params![presentation_id],
     )?;
+    reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
 
     Ok(conn.last_insert_rowid())
 }
 
 pub fn update_slide(conn: &Connection, id: i64, content_json: &str) -> Result<(), AppError> {
+    let presentation_id: i64 = conn
+        .query_row(
+            "SELECT presentation_id FROM slides WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::NotFound(format!("Slide with id {} not found", id))
+            }
+            other => AppError::Database(other),
+        })?;
+
     let slide_type = serde_json::from_str::<serde_json::Value>(content_json)
         .ok()
         .and_then(|v| {
@@ -176,9 +209,10 @@ pub fn update_slide(conn: &Connection, id: i64, content_json: &str) -> Result<()
     // Touch parent presentation updated_at
     conn.execute(
         "UPDATE presentations SET updated_at = datetime('now')
-         WHERE id = (SELECT presentation_id FROM slides WHERE id = ?1)",
-        params![id],
+         WHERE id = ?1",
+        params![presentation_id],
     )?;
+    reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
 
     Ok(())
 }
@@ -218,6 +252,7 @@ pub fn delete_slide(conn: &Connection, id: i64) -> Result<(), AppError> {
         "UPDATE presentations SET updated_at = datetime('now') WHERE id = ?1",
         params![presentation_id],
     )?;
+    reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
 
     Ok(())
 }
@@ -240,4 +275,183 @@ pub fn update_slide_orders(
     )?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        delete_slide, insert_presentation_with_kind, insert_slide_with_metadata, update_slide,
+    };
+    use crate::db::models::CollectionSongSyncStatus;
+    use crate::db::queries::collections::{
+        insert_collection, insert_collection_song, next_collection_song_order, search_collections,
+        InsertCollectionSongInput,
+    };
+    use rusqlite::Connection;
+
+    fn setup_conn() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE collections (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              description TEXT,
+              year INTEGER,
+              cover_path TEXT,
+              auto_cover_path TEXT,
+              created_at TEXT DEFAULT (datetime('now')),
+              updated_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE presentations (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              author TEXT,
+              aspect_ratio TEXT NOT NULL,
+              library_kind TEXT,
+              file_path TEXT,
+              created_at TEXT DEFAULT (datetime('now')),
+              updated_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE slides (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              presentation_id INTEGER NOT NULL,
+              slide_index INTEGER NOT NULL,
+              slide_type TEXT NOT NULL,
+              content TEXT NOT NULL,
+              notes TEXT,
+              transition TEXT
+            );
+
+            CREATE TABLE collection_songs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              collection_id INTEGER NOT NULL,
+              source_path TEXT NOT NULL,
+              source_format TEXT NOT NULL,
+              source_hash TEXT,
+              source_mtime_ms INTEGER,
+              cache_presentation_id INTEGER,
+              sync_status TEXT NOT NULL,
+              last_sync_at TEXT,
+              item_order INTEGER NOT NULL,
+              created_at TEXT DEFAULT (datetime('now')),
+              updated_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE VIRTUAL TABLE collections_fts USING fts5(
+              entity_type,
+              collection_id UNINDEXED,
+              song_id UNINDEXED,
+              collection_name,
+              title,
+              description,
+              body
+            );
+            "#,
+        )
+        .expect("schema setup");
+        conn
+    }
+
+    fn insert_song_for_presentation(conn: &Connection, presentation_id: i64) {
+        let collection_id =
+            insert_collection(conn, "Collection", Some("desc"), None, None).expect("collection");
+        let order = next_collection_song_order(conn, collection_id).expect("next order");
+        insert_collection_song(
+            conn,
+            InsertCollectionSongInput {
+                collection_id,
+                source_path: "/tmp/song.lja",
+                source_format: "legacy_lja",
+                source_hash: Some("hash"),
+                source_mtime_ms: Some(1),
+                cache_presentation_id: Some(presentation_id),
+                sync_status: CollectionSongSyncStatus::InSync,
+                item_order: order,
+            },
+        )
+        .expect("song");
+    }
+
+    fn has_song_search_hit(conn: &Connection, query: &str) -> bool {
+        search_collections(conn, query, 10)
+            .expect("search")
+            .iter()
+            .any(|item| item.song_id.is_some())
+    }
+
+    #[test]
+    fn reindexes_collection_song_documents_on_slide_insert() {
+        let conn = setup_conn();
+        let presentation_id =
+            insert_presentation_with_kind(&conn, "Song", "16:9", "collection_song")
+                .expect("presentation");
+        insert_song_for_presentation(&conn, presentation_id);
+
+        assert!(!has_song_search_hit(&conn, "inserttoken"));
+
+        insert_slide_with_metadata(
+            &conn,
+            presentation_id,
+            r#"{"type":"lyrics","text":"inserttoken"}"#,
+            0,
+            None,
+            None,
+        )
+        .expect("insert slide");
+
+        assert!(has_song_search_hit(&conn, "inserttoken"));
+    }
+
+    #[test]
+    fn reindexes_collection_song_documents_on_slide_update() {
+        let conn = setup_conn();
+        let presentation_id =
+            insert_presentation_with_kind(&conn, "Song", "16:9", "collection_song")
+                .expect("presentation");
+        let slide_id = insert_slide_with_metadata(
+            &conn,
+            presentation_id,
+            r#"{"type":"lyrics","text":"oldtoken"}"#,
+            0,
+            None,
+            None,
+        )
+        .expect("insert slide");
+        insert_song_for_presentation(&conn, presentation_id);
+
+        assert!(has_song_search_hit(&conn, "oldtoken"));
+        assert!(!has_song_search_hit(&conn, "newtoken"));
+
+        update_slide(&conn, slide_id, r#"{"type":"lyrics","text":"newtoken"}"#).expect("update");
+
+        assert!(!has_song_search_hit(&conn, "oldtoken"));
+        assert!(has_song_search_hit(&conn, "newtoken"));
+    }
+
+    #[test]
+    fn reindexes_collection_song_documents_on_slide_delete() {
+        let conn = setup_conn();
+        let presentation_id =
+            insert_presentation_with_kind(&conn, "Song", "16:9", "collection_song")
+                .expect("presentation");
+        let slide_id = insert_slide_with_metadata(
+            &conn,
+            presentation_id,
+            r#"{"type":"lyrics","text":"deletetoken"}"#,
+            0,
+            None,
+            None,
+        )
+        .expect("insert slide");
+        insert_song_for_presentation(&conn, presentation_id);
+
+        assert!(has_song_search_hit(&conn, "deletetoken"));
+
+        delete_slide(&conn, slide_id).expect("delete slide");
+
+        assert!(!has_song_search_hit(&conn, "deletetoken"));
+    }
 }

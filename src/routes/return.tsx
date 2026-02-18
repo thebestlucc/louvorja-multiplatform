@@ -6,6 +6,12 @@ import type { SlideContentFlat, SlideContent, SlideContextFlat, OverlayState } f
 import { flatToSlideContent } from "../types/presentation";
 import { getCurrentSlide, getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
 import { SlideRenderer } from "../components/slides/slide-renderer";
+import { useAllSettings, useTimerState } from "../lib/queries";
+import {
+  buildProjectorDefaultSlide,
+  getProjectorDefaultContentLabel,
+  parseProjectorScreenDefaults,
+} from "../lib/projector-screen-defaults";
 import {
   formatUtilityProjectionDate,
   formatUtilityProjectionValue,
@@ -13,6 +19,7 @@ import {
   type UtilityProjectionEventPayload,
 } from "../types/utilities";
 import { cn } from "../lib/utils";
+import { useMediaSource } from "../hooks/use-media-source";
 
 export const Route = createFileRoute("/return")({
   component: ReturnPage,
@@ -26,21 +33,41 @@ function ReturnPage() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [slideTotal, setSlideTotal] = useState(0);
   const [clock, setClock] = useState("");
+  const [clockNow, setClockNow] = useState(() => new Date());
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
+  const { data: allSettings } = useAllSettings();
+  const screenDefaults = useMemo(() => parseProjectorScreenDefaults(allSettings), [allSettings]);
+  const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
+  const logoImageSrc = useMediaSource(screenDefaults.logoImagePath);
   const clockLocale = localeFromLanguage(i18n.language);
 
   // Live clock
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
+      setClockNow(now);
       setClock(now.toLocaleTimeString(clockLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     };
     updateClock();
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
   }, [clockLocale]);
+
+  const defaultSlide = useMemo(() => {
+    return buildProjectorDefaultSlide({
+      defaults: screenDefaults,
+      now: clockNow,
+      language: i18n.language,
+      timerState,
+      labels: {
+        countdown: t("utilities.timer.countdown"),
+        stopwatch: t("utilities.timer.stopwatch"),
+        missingMedia: t("settings.projectorDefaultMediaMissing"),
+      },
+    });
+  }, [clockNow, i18n.language, screenDefaults, t, timerState]);
 
   // Listen to slide changes
   useEffect(() => {
@@ -142,7 +169,7 @@ function ReturnPage() {
 
   const currentSlideToRender = useMemo(() => {
     if (!utilityProjection) {
-      return currentSlide;
+      return currentSlide ?? defaultSlide;
     }
 
     const subtitle = utilityProjection.kind === "countdown"
@@ -158,7 +185,16 @@ function ReturnPage() {
       title: formatUtilityProjectionValue(utilityProjection, i18n.language),
       subtitle,
     } satisfies SlideContent;
-  }, [currentSlide, i18n.language, t, utilityProjection]);
+  }, [currentSlide, defaultSlide, i18n.language, t, utilityProjection]);
+
+  const defaultSlideTitle = getProjectorDefaultContentLabel(screenDefaults.contentType, {
+    logo: t("settings.projectorDefaultContentLogo"),
+    text: t("settings.projectorDefaultContentText"),
+    image: t("settings.projectorDefaultContentImage"),
+    video: t("settings.projectorDefaultContentVideo"),
+    clock: t("settings.projectorDefaultContentClock"),
+    timer: t("settings.projectorDefaultContentTimer"),
+  });
 
   const effectiveSlideTitle = utilityProjection
     ? utilityProjection.kind === "countdown"
@@ -166,15 +202,25 @@ function ReturnPage() {
       : utilityProjection.kind === "stopwatch"
         ? t("utilities.projection.context.stopwatch")
         : t("utilities.projection.context.clock")
-    : slideTitle;
+    : currentSlide
+      ? slideTitle
+      : defaultSlideTitle;
 
   const hasOverlay = blackScreen || logoScreen;
-  const noContent = !currentSlideToRender && !hasOverlay;
+  const noContent = screenDefaults.contentType === "logo" && !currentSlideToRender && !hasOverlay;
 
   if (noContent) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-neutral-950 text-white">
-        <span className="text-4xl font-bold text-white/80">LouvorJA</span>
+        {logoImageSrc ? (
+          <img
+            src={logoImageSrc}
+            alt={t("settings.projectorDefaultContentLogo")}
+            className="max-h-[55vh] max-w-[70vw] object-contain"
+          />
+        ) : (
+          <span className="text-4xl font-bold text-white/80">LouvorJA</span>
+        )}
         <span className="mt-3 font-mono text-sm text-white/40">{clock}</span>
       </div>
     );

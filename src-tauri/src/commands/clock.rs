@@ -1,8 +1,9 @@
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::projection::{
-    emit_utility_projection_event, new_projection_session_id, register_live_utility_projection_sender,
-    stop_live_utility_projection, UtilityProjectionEventPayload,
+    emit_utility_projection_event, new_projection_session_id,
+    register_live_utility_projection_sender, stop_live_utility_projection,
+    UtilityProjectionEventPayload,
 };
 use crate::state::{AppState, StreamingState};
 use chrono::TimeZone;
@@ -51,6 +52,9 @@ fn project_clock_cover(
         }),
         label: Some("clock".to_string()),
         video_path: None,
+        background_image: None,
+        background_color: None,
+        audio_path: None,
         auto_play: None,
         r#loop: None,
         muted: None,
@@ -138,7 +142,8 @@ pub fn start_clock_projection(
                 break;
             }
 
-            let tick_ms = u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or(last_value);
+            let tick_ms =
+                u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or(last_value);
             let tick_second = tick_ms / 1000;
             if tick_second != last_second {
                 last_second = tick_second;

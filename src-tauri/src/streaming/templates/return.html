@@ -5,37 +5,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LouvorJA - Return Monitor</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111;color:#fff;min-height:100vh;display:flex;overflow:hidden}
-.panel{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem;text-align:center}
-.current{background:#1a1a2e;flex:7}
-.next{background:#0d0d1a;flex:3;border-left:2px solid #333}
-.panel-label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.15em;color:#888;margin-bottom:0.75rem}
-.slide-label{font-size:0.85rem;color:#c084fc;margin-bottom:0.3rem}
-.slide-text{font-size:1.8rem;font-weight:300;line-height:1.4;white-space:pre-line}
-.slide-title{font-size:0.85rem;color:#888;margin-top:1rem}
-.slide-counter{font-size:0.75rem;color:#666;margin-top:0.5rem}
-.next .slide-text{font-size:1.1rem;color:#aaa}
-.next .slide-label{font-size:0.75rem}
-.waiting{color:#666;font-size:1rem;opacity:0.6}
-.disconnected{color:#ef4444;font-size:1rem}
-@media(max-width:600px){body{flex-direction:column}.next{border-left:none;border-top:2px solid #333}.slide-text{font-size:1.2rem}.next .slide-text{font-size:0.9rem}}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+  overflow: hidden;
+}
+.return-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 12px;
+  background: #0a0a0a;
+}
+.frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #000;
+}
+.frame.current { flex: 7; }
+.frame.next { flex: 3; background: #0f0f0f; border-color: rgba(255, 255, 255, 0.05); }
+
+.bg-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.panel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.label {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.55);
+  display: none;
+}
+.text-wrap {
+  max-width: 92%;
+}
+.text-wrap.with-panel {
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.66);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.52);
+  padding: 22px 28px;
+}
+.text {
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: pre-line;
+}
+.text.bible {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.title {
+  margin-top: 8px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.78);
+  display: none;
+}
+.image-media,
+.video-media {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 8px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.meta-title {
+  min-width: 0;
+  max-width: 70%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 500;
+}
+.meta-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.62);
+}
+.next-badge {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  z-index: 3;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.62);
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+.next-empty {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.35);
+}
+.status {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.status.error { color: #ef4444; }
+@media (max-width: 900px) {
+  .return-root { padding: 8px; }
+  .text-wrap.with-panel { padding: 16px 20px; }
+}
 </style>
 </head>
 <body>
-<div class="panel current">
-  <div id="panel-current" class="panel-label">Current</div>
-  <div id="cur-label" class="slide-label"></div>
-  <div id="cur-text" class="slide-text"><span class="waiting">Waiting for content...</span></div>
-  <div id="cur-title" class="slide-title"></div>
-  <div id="counter" class="slide-counter"></div>
+<div class="return-root">
+  <div class="frame current">
+    <img id="cur-bg" class="bg-image" alt="">
+    <div id="cur-overlay" class="bg-overlay"></div>
+    <div id="cur-panel" class="panel">
+      <div id="cur-label" class="label"></div>
+      <img id="cur-image" class="image-media" alt="">
+      <video id="cur-video" class="video-media" autoplay muted loop playsinline></video>
+      <div id="cur-text-wrap" class="text-wrap">
+        <div id="cur-text" class="text"></div>
+      </div>
+      <div id="cur-title" class="title"></div>
+      <div id="cur-status" class="status"></div>
+    </div>
+  </div>
+
+  <div class="meta-bar">
+    <div id="meta-title" class="meta-title"></div>
+    <div class="meta-right">
+      <span id="counter"></span>
+      <span id="clock"></span>
+    </div>
+  </div>
+
+  <div class="frame next">
+    <img id="next-bg" class="bg-image" alt="">
+    <div id="next-overlay" class="bg-overlay"></div>
+    <div id="next-badge" class="next-badge"></div>
+    <div id="next-panel" class="panel">
+      <div id="next-label" class="label"></div>
+      <img id="next-image" class="image-media" alt="">
+      <video id="next-video" class="video-media" autoplay muted loop playsinline></video>
+      <div id="next-text-wrap" class="text-wrap">
+        <div id="next-text" class="text"></div>
+      </div>
+      <div id="next-title" class="title"></div>
+      <div id="next-empty" class="next-empty"></div>
+    </div>
+  </div>
 </div>
-<div class="panel next">
-  <div id="panel-next" class="panel-label">Next</div>
-  <div id="next-label" class="slide-label"></div>
-  <div id="next-text" class="slide-text"></div>
-  <div id="next-title" class="slide-title"></div>
-</div>
+
 <script>
 let es = null;
 let utilityEs = null;
@@ -43,57 +202,54 @@ let uiEs = null;
 let reconnectTimer = null;
 let utilityReconnectTimer = null;
 let uiReconnectTimer = null;
-let uiLanguage = 'pt';
-let lastStatusKey = 'waitingContent';
-let lastStatusClass = 'waiting';
-let lastPayload = null;
+let uiLanguage = "pt";
+let lastRealPayload = null;
 let lastUtilityEvent = null;
 let activeUtilitySessionId = null;
+let clockTimer = null;
 
 const I18N = {
   pt: {
-    pageTitle: 'LouvorJA - Monitor de Retorno',
-    panelCurrent: 'Atual',
-    panelNext: 'Proximo',
-    waitingContent: 'Aguardando conteudo...',
-    disconnectedWaiting: 'Desconectado. Aguardando servidor...',
-    disconnectedReconnecting: 'Desconectado. Reconectando...',
-    timerLabel: 'Timer',
-    countdownTitle: 'Contagem regressiva',
-    stopwatchTitle: 'Cronometro',
-    clockTitle: 'Relogio',
+    pageTitle: "LouvorJA - Monitor de Retorno",
+    waitingContent: "Aguardando conteudo...",
+    disconnectedWaiting: "Desconectado. Aguardando servidor...",
+    disconnectedReconnecting: "Desconectado. Reconectando...",
+    nextSlide: "Proximo",
+    noNextSlide: "Sem proximo slide",
+    timerLabel: "Timer",
+    countdownTitle: "Contagem regressiva",
+    stopwatchTitle: "Cronometro",
+    clockTitle: "Relogio"
   },
   en: {
-    pageTitle: 'LouvorJA - Return Monitor',
-    panelCurrent: 'Current',
-    panelNext: 'Next',
-    waitingContent: 'Waiting for content...',
-    disconnectedWaiting: 'Disconnected. Waiting for server...',
-    disconnectedReconnecting: 'Disconnected. Reconnecting...',
-    timerLabel: 'Timer',
-    countdownTitle: 'Countdown',
-    stopwatchTitle: 'Stopwatch',
-    clockTitle: 'Clock',
+    pageTitle: "LouvorJA - Return Monitor",
+    waitingContent: "Waiting for content...",
+    disconnectedWaiting: "Disconnected. Waiting for server...",
+    disconnectedReconnecting: "Disconnected. Reconnecting...",
+    nextSlide: "Next Slide",
+    noNextSlide: "No next slide",
+    timerLabel: "Timer",
+    countdownTitle: "Countdown",
+    stopwatchTitle: "Stopwatch",
+    clockTitle: "Clock"
   },
   es: {
-    pageTitle: 'LouvorJA - Monitor de Retorno',
-    panelCurrent: 'Actual',
-    panelNext: 'Siguiente',
-    waitingContent: 'Esperando contenido...',
-    disconnectedWaiting: 'Desconectado. Esperando al servidor...',
-    disconnectedReconnecting: 'Desconectado. Reconectando...',
-    timerLabel: 'Temporizador',
-    countdownTitle: 'Cuenta regresiva',
-    stopwatchTitle: 'Cronometro',
-    clockTitle: 'Reloj',
-  },
+    pageTitle: "LouvorJA - Monitor de Retorno",
+    waitingContent: "Esperando contenido...",
+    disconnectedWaiting: "Desconectado. Esperando al servidor...",
+    disconnectedReconnecting: "Desconectado. Reconectando...",
+    nextSlide: "Siguiente",
+    noNextSlide: "Sin proxima diapositiva",
+    timerLabel: "Temporizador",
+    countdownTitle: "Cuenta regresiva",
+    stopwatchTitle: "Cronometro",
+    clockTitle: "Reloj"
+  }
 };
 
 function normalizeLanguage(value) {
-  if (value === 'en' || value === 'es') {
-    return value;
-  }
-  return 'pt';
+  if (value === "en" || value === "es") return value;
+  return "pt";
 }
 
 function tr(key) {
@@ -102,126 +258,360 @@ function tr(key) {
 }
 
 function localeFromLanguage(language) {
-  if (language === 'en') return 'en-US';
-  if (language === 'es') return 'es-ES';
-  return 'pt-BR';
+  if (language === "en") return "en-US";
+  if (language === "es") return "es-ES";
+  return "pt-BR";
 }
 
 function safeText(value) {
-  return typeof value === 'string' ? value.trim() : '';
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function applyStaticText() {
-  document.title = tr('pageTitle');
-  document.getElementById('panel-current').textContent = tr('panelCurrent');
-  document.getElementById('panel-next').textContent = tr('panelNext');
+function safeNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function applyLanguage(language) {
-  const normalized = normalizeLanguage(language);
-  if (normalized === uiLanguage) {
+function encodePathSegment(value) {
+  return encodeURIComponent(value).replace(/%2F/g, "/");
+}
+
+function toStreamingMediaUrl(pathValue) {
+  const value = safeText(pathValue);
+  if (!value) return "";
+  if (
+    value.startsWith("http://")
+    || value.startsWith("https://")
+    || value.startsWith("data:")
+    || value.startsWith("blob:")
+  ) {
+    return value;
+  }
+  if (value.startsWith("/media/")) {
+    return "/media/" + encodePathSegment(value.slice("/media/".length));
+  }
+  if (value.startsWith("media/")) {
+    return "/media/" + encodePathSegment(value.slice("media/".length));
+  }
+  return value;
+}
+
+function getSlideType(payload) {
+  return safeText(payload && (payload.slideType || payload.slide_type || payload.type)).toLowerCase();
+}
+
+function firstDefined(values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function normalizeSlidePayload(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const slideType = safeText(raw.slideType || raw.slide_type || raw.type);
+  if (!slideType && !safeText(raw.text) && !safeText(raw.title) && !safeText(raw.src)) {
+    return null;
+  }
+
+  const text = firstDefined([raw.text, raw.lyrics, raw.content, raw.body]);
+  const textSize = firstDefined([raw.textSize, raw.text_size, raw.fontSize, raw.font_size]);
+  const videoPath = firstDefined([raw.videoPath, raw.video_path]);
+  const imageSrc = firstDefined([raw.src, raw.imagePath, raw.image_path]);
+  const backgroundImage = firstDefined([raw.backgroundImage, raw.background_image]);
+  const backgroundColor = firstDefined([raw.backgroundColor, raw.background_color]);
+  const textColor = firstDefined([raw.textColor, raw.text_color]);
+  const audioPath = firstDefined([raw.audioPath, raw.audio_path]);
+
+  return {
+    slideType: slideType || "text",
+    label: safeText(raw.label),
+    text: typeof text === "string" ? text : "",
+    title: safeText(raw.title),
+    subtitle: safeText(raw.subtitle),
+    videoPath: typeof videoPath === "string" ? videoPath : "",
+    src: typeof imageSrc === "string" ? imageSrc : "",
+    backgroundImage: typeof backgroundImage === "string" ? backgroundImage : "",
+    backgroundColor: typeof backgroundColor === "string" ? backgroundColor : "",
+    textColor: typeof textColor === "string" ? textColor : "",
+    textSize: safeNumber(textSize) ?? 0,
+    audioPath: typeof audioPath === "string" ? audioPath : ""
+  };
+}
+
+function payloadSupportsUtility(payload, kind) {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const current = normalizeSlidePayload(payload.current || payload);
+  if (!current) {
+    return false;
+  }
+  const label = safeText(current.label).toLowerCase();
+  if (kind === "countdown" || kind === "stopwatch") return label === "timer";
+  if (kind === "clock") return label === "clock";
+  return false;
+}
+
+function resetPanel(prefix) {
+  const frame = document.querySelector(prefix === "cur" ? ".frame.current" : ".frame.next");
+  frame.style.background = prefix === "cur" ? "#000" : "#0f0f0f";
+
+  const bg = document.getElementById(prefix + "-bg");
+  const overlay = document.getElementById(prefix + "-overlay");
+  bg.removeAttribute("src");
+  bg.style.opacity = "0";
+  overlay.style.opacity = "0";
+
+  const image = document.getElementById(prefix + "-image");
+  const video = document.getElementById(prefix + "-video");
+  image.removeAttribute("src");
+  image.style.display = "none";
+  video.pause();
+  video.removeAttribute("src");
+  video.style.display = "none";
+
+  const label = document.getElementById(prefix + "-label");
+  const text = document.getElementById(prefix + "-text");
+  const title = document.getElementById(prefix + "-title");
+  const wrap = document.getElementById(prefix + "-text-wrap");
+
+  label.style.display = "none";
+  label.textContent = "";
+  text.textContent = "";
+  text.classList.remove("bible");
+  title.style.display = "none";
+  title.textContent = "";
+  wrap.classList.remove("with-panel");
+}
+
+function resolveFontSize(sourceSize, mode, variant) {
+  const hasExplicit = Number.isFinite(sourceSize);
+  let raw;
+
+  if (hasExplicit) {
+    if (mode === "current") {
+      if (variant === "lyrics") {
+        raw = sourceSize * 2.05;
+        return Math.max(36, Math.min(140, Math.round(raw)));
+      }
+      if (variant === "cover") {
+        raw = sourceSize * 1.8;
+        return Math.max(40, Math.min(140, Math.round(raw)));
+      }
+      raw = sourceSize * 1.55;
+      return Math.max(20, Math.min(120, Math.round(raw)));
+    }
+
+    if (variant === "lyrics") {
+      raw = sourceSize * 1.3;
+      return Math.max(20, Math.min(84, Math.round(raw)));
+    }
+    if (variant === "cover") {
+      raw = sourceSize * 1.2;
+      return Math.max(20, Math.min(88, Math.round(raw)));
+    }
+    raw = sourceSize * 1.1;
+    return Math.max(14, Math.min(76, Math.round(raw)));
+  }
+
+  if (mode === "current") {
+    if (variant === "lyrics") return 42;
+    if (variant === "cover") return 46;
+    return 28;
+  }
+
+  if (variant === "lyrics") return 24;
+  if (variant === "cover") return 24;
+  return 18;
+}
+
+function applyPanel(prefix, payload, mode) {
+  resetPanel(prefix);
+
+  const slide = normalizeSlidePayload(payload);
+  if (!slide) {
     return;
   }
-  uiLanguage = normalized;
-  applyStaticText();
-  if (lastPayload) {
-    applyPayload(lastPayload);
-  } else if (lastStatusKey) {
-    setStatus(lastStatusKey, lastStatusClass);
+
+  const slideType = getSlideType(slide);
+  const label = safeText(slide.label);
+  const text = safeText(slide.text);
+  const title = safeText(slide.title);
+  const subtitle = safeText(slide.subtitle);
+  const backgroundColor = safeText(slide.backgroundColor);
+  const backgroundImage = toStreamingMediaUrl(slide.backgroundImage);
+  const textColor = safeText(slide.textColor);
+  const sourceSize = safeNumber(slide.textSize);
+
+  const frame = document.querySelector(prefix === "cur" ? ".frame.current" : ".frame.next");
+  const bg = document.getElementById(prefix + "-bg");
+  const overlay = document.getElementById(prefix + "-overlay");
+  const panelLabel = document.getElementById(prefix + "-label");
+  const panelText = document.getElementById(prefix + "-text");
+  const panelTitle = document.getElementById(prefix + "-title");
+  const panelWrap = document.getElementById(prefix + "-text-wrap");
+  const panelImage = document.getElementById(prefix + "-image");
+  const panelVideo = document.getElementById(prefix + "-video");
+
+  frame.style.background = backgroundColor || (mode === "current" ? "#000" : "#0f0f0f");
+  if (backgroundImage) {
+    bg.src = backgroundImage;
+    bg.style.opacity = "1";
+    overlay.style.opacity = "1";
   }
 
-  if (lastUtilityEvent) {
-    applyUtilityEvent(lastUtilityEvent);
+  const variant = slideType === "lyrics" ? "lyrics" : slideType === "cover" ? "cover" : "text";
+  panelText.style.fontSize = resolveFontSize(sourceSize, mode, variant) + "px";
+  panelText.style.color = textColor || "";
+  panelTitle.style.fontSize = Math.max(12, Math.round(resolveFontSize(sourceSize, mode, "text") * 0.56)) + "px";
+  panelTitle.style.color = textColor || "";
+  panelTitle.style.opacity = textColor ? "0.8" : "";
+  panelText.classList.toggle("bible", slideType === "bible");
+
+  if (slideType === "image") {
+    const src = toStreamingMediaUrl(slide.src || text);
+    if (src) {
+      panelImage.src = src;
+      panelImage.style.display = "block";
+    }
+    if (title) {
+      panelTitle.style.display = "block";
+      panelTitle.textContent = title;
+    }
+    return;
   }
-}
 
-async function refreshUiLanguage() {
-  try {
-    const response = await fetch('/state/ui', { cache: 'no-store' });
-    if (!response.ok) return;
-    const data = await response.json();
-    applyLanguage(data.language);
-  } catch (_) {}
-}
-
-function setStatus(statusKey, cls) {
-  lastStatusKey = statusKey;
-  lastStatusClass = cls;
-  lastPayload = null;
-  const el = document.getElementById('cur-text');
-  el.textContent = '';
-  const span = document.createElement('span');
-  span.className = cls;
-  span.textContent = tr(statusKey);
-  el.appendChild(span);
-  document.getElementById('cur-label').textContent = '';
-  document.getElementById('cur-title').textContent = '';
-  document.getElementById('next-label').textContent = '';
-  document.getElementById('next-text').textContent = '';
-  document.getElementById('next-title').textContent = '';
-  document.getElementById('counter').textContent = '';
-}
-
-function applyPayload(d) {
-  lastPayload = d;
-  lastStatusKey = null;
-
-  if (d.current) {
-    const currentLabel = safeText(d.current.label);
-    const currentText = safeText(d.current.text);
-    const currentTitle = safeText(d.current.title);
-    const currentSubtitle = safeText(d.current.subtitle);
-    const mainCurrentText = currentText || currentTitle;
-    document.getElementById('cur-label').textContent = currentLabel;
-    if (mainCurrentText) {
-      document.getElementById('cur-text').textContent = mainCurrentText;
-    } else {
-      setStatus('waitingContent', 'waiting');
+  if (slideType === "video") {
+    const videoSrc = toStreamingMediaUrl(slide.videoPath || slide.src);
+    if (mode === "next") {
+      panelText.textContent = title || safeText(slide.videoPath);
+      if (!panelText.textContent) {
+        panelText.textContent = "Video";
+      }
+      if (label) {
+        panelLabel.style.display = "block";
+        panelLabel.textContent = label;
+      }
       return;
     }
-    document.getElementById('cur-title').textContent = currentText ? currentTitle : currentSubtitle;
-  } else {
-    document.getElementById('cur-label').textContent = '';
-    setStatus('waitingContent', 'waiting');
-    document.getElementById('cur-title').textContent = '';
+    if (videoSrc) {
+      panelVideo.src = videoSrc;
+      panelVideo.style.display = "block";
+      const playResult = panelVideo.play();
+      if (playResult && typeof playResult.catch === "function") {
+        playResult.catch(function () {});
+      }
+    }
+    if (text) {
+      panelText.textContent = text;
+      panelWrap.classList.add("with-panel");
+    }
+    return;
   }
 
-  if (d.next) {
-    const nextLabel = safeText(d.next.label);
-    const nextText = safeText(d.next.text);
-    const nextTitle = safeText(d.next.title);
-    const nextSubtitle = safeText(d.next.subtitle);
-    document.getElementById('next-label').textContent = nextLabel;
-    document.getElementById('next-text').textContent = nextText || nextTitle;
-    document.getElementById('next-title').textContent = nextText ? nextTitle : nextSubtitle;
-  } else {
-    document.getElementById('next-label').textContent = '';
-    document.getElementById('next-text').textContent = '';
-    document.getElementById('next-title').textContent = '';
+  if (slideType === "bible" && title) {
+    panelLabel.style.display = "block";
+    panelLabel.textContent = title;
+  } else if (label) {
+    panelLabel.style.display = "block";
+    panelLabel.textContent = label;
   }
 
-  if (d.total && d.total > 0) {
-    document.getElementById('counter').textContent = (d.index + 1) + ' / ' + d.total;
-  } else {
-    document.getElementById('counter').textContent = '';
+  if (mode === "current" && backgroundImage && (slideType === "cover" || slideType === "lyrics")) {
+    panelWrap.classList.add("with-panel");
   }
 
-  if (lastUtilityEvent) {
-    applyUtilityEvent(lastUtilityEvent);
+  if (slideType === "cover") {
+    const coverValue = title || text;
+    panelText.textContent = coverValue;
+    if (subtitle) {
+      panelTitle.style.display = "block";
+      panelTitle.textContent = subtitle;
+    }
+  } else {
+    panelText.textContent = text || title;
+    if (subtitle) {
+      panelTitle.style.display = "block";
+      panelTitle.textContent = subtitle;
+    }
   }
 }
 
-function handleReturnStreamMessage(data) {
-  if (!data || typeof data !== 'object') {
+function setCurrentStatus(key, isError) {
+  resetPanel("cur");
+  const status = document.getElementById("cur-status");
+  status.textContent = tr(key);
+  status.className = isError ? "status error" : "status";
+  document.getElementById("meta-title").textContent = "";
+  document.getElementById("counter").textContent = "";
+}
+
+function clearCurrentStatus() {
+  const status = document.getElementById("cur-status");
+  status.textContent = "";
+  status.className = "status";
+}
+
+function updateMeta(payload) {
+  const effectiveTitle = safeText(payload && payload.title);
+  document.getElementById("meta-title").textContent = effectiveTitle;
+  if (payload && Number.isFinite(payload.total) && payload.total > 0) {
+    document.getElementById("counter").textContent = (payload.index + 1) + " / " + payload.total;
+  } else {
+    document.getElementById("counter").textContent = "";
+  }
+}
+
+function applyPayload(payload, persistRealPayload) {
+  if (!payload || typeof payload !== "object") {
+    setCurrentStatus("waitingContent", false);
     return;
   }
 
-  if (data.utilityProjection && typeof data.utilityProjection === 'object') {
-    applyUtilityEvent(data.utilityProjection);
-    return;
+  const hasEnvelopeShape =
+    (payload.current && typeof payload.current === "object")
+    || payload.current === null
+    || payload.next !== undefined;
+  const normalizedPayload = hasEnvelopeShape
+    ? payload
+    : {
+      current: payload,
+      next: null,
+      index: 0,
+      total: 1,
+      title: safeText(payload.title) || safeText(payload.label),
+    };
+
+  if (persistRealPayload) {
+    lastRealPayload = normalizedPayload;
   }
 
-  applyPayload(data);
+  clearCurrentStatus();
+  updateMeta(normalizedPayload);
+
+  if (normalizedPayload.current) {
+    applyPanel("cur", normalizedPayload.current, "current");
+  } else {
+    setCurrentStatus("waitingContent", false);
+  }
+
+  if (normalizedPayload.next) {
+    document.getElementById("next-empty").textContent = "";
+    applyPanel("next", normalizedPayload.next, "next");
+  } else {
+    resetPanel("next");
+    document.getElementById("next-empty").textContent = tr("noNextSlide");
+  }
+
+  if (lastUtilityEvent && payloadSupportsUtility(lastRealPayload, lastUtilityEvent.kind)) {
+    applyUtilityEvent(lastUtilityEvent, true);
+  }
 }
 
 function formatTimerValue(kind, valueMs) {
@@ -231,189 +621,198 @@ function formatTimerValue(kind, valueMs) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  if (kind === 'stopwatch') {
+  if (kind === "stopwatch") {
     const millis = safeMs % 1000;
     if (hours > 0) {
-      return String(hours).padStart(2, '0') + ':'
-        + String(minutes).padStart(2, '0') + ':'
-        + String(seconds).padStart(2, '0') + '.'
-        + String(millis).padStart(3, '0');
+      return String(hours).padStart(2, "0")
+        + ":" + String(minutes).padStart(2, "0")
+        + ":" + String(seconds).padStart(2, "0")
+        + "." + String(millis).padStart(3, "0");
     }
-    return String(minutes).padStart(2, '0') + ':'
-      + String(seconds).padStart(2, '0') + '.'
-      + String(millis).padStart(3, '0');
+    return String(minutes).padStart(2, "0")
+      + ":" + String(seconds).padStart(2, "0")
+      + "." + String(millis).padStart(3, "0");
   }
 
   if (hours > 0) {
-    return String(hours).padStart(2, '0') + ':'
-      + String(minutes).padStart(2, '0') + ':'
-      + String(seconds).padStart(2, '0');
+    return String(hours).padStart(2, "0")
+      + ":" + String(minutes).padStart(2, "0")
+      + ":" + String(seconds).padStart(2, "0");
   }
-  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
 }
 
 function formatClockTime(valueMs, use24Hour) {
   return new Date(Math.max(0, Math.floor(valueMs))).toLocaleTimeString(
     localeFromLanguage(uiLanguage),
-    {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: !use24Hour,
-    },
+    { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: !use24Hour }
   );
 }
 
 function formatClockDate(valueMs) {
   return new Date(Math.max(0, Math.floor(valueMs))).toLocaleDateString(
     localeFromLanguage(uiLanguage),
-    {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    },
+    { weekday: "long", year: "numeric", month: "long", day: "numeric" }
   );
 }
 
-function payloadSupportsUtility(payload, kind) {
-  if (!payload || typeof payload !== 'object' || !payload.current || typeof payload.current !== 'object') {
-    return false;
-  }
-
-  const currentLabel = safeText(payload.current.label).toLowerCase();
-  if (kind === 'countdown' || kind === 'stopwatch') {
-    return currentLabel === 'timer';
-  }
-  if (kind === 'clock') {
-    return currentLabel === 'clock';
-  }
-  return false;
-}
-
-function applyUtilityEvent(eventPayload) {
-  if (!eventPayload || typeof eventPayload !== 'object') {
-    return;
-  }
+function applyUtilityEvent(eventPayload, replayOnly) {
+  if (!eventPayload || typeof eventPayload !== "object") return;
 
   const phase = safeText(eventPayload.phase).toLowerCase();
   const sessionId = safeText(eventPayload.sessionId);
   const kind = safeText(eventPayload.kind).toLowerCase();
-  const valueMs = Number.isFinite(Number(eventPayload.valueMs)) ? Number(eventPayload.valueMs) : 0;
+  const valueMs = safeNumber(eventPayload.valueMs) || 0;
   const use24Hour = Boolean(eventPayload.use24Hour);
   const showDate = Boolean(eventPayload.showDate);
 
-  if (phase !== 'start' && phase !== 'tick' && phase !== 'stop') {
-    return;
-  }
+  if (phase !== "start" && phase !== "tick" && phase !== "stop") return;
+  if (kind !== "countdown" && kind !== "stopwatch" && kind !== "clock") return;
 
-  if (phase === 'stop') {
-    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
-      return;
-    }
+  if (phase === "stop") {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) return;
     activeUtilitySessionId = null;
     lastUtilityEvent = null;
+    if (lastRealPayload) {
+      applyPayload(lastRealPayload, false);
+    }
     return;
   }
 
-  if (kind !== 'countdown' && kind !== 'stopwatch' && kind !== 'clock') {
-    return;
-  }
-
-  if (phase === 'start') {
+  if (phase === "start") {
     activeUtilitySessionId = sessionId || activeUtilitySessionId;
-  } else if (phase === 'tick') {
-    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) {
-      return;
-    }
-    if (!activeUtilitySessionId && sessionId) {
-      activeUtilitySessionId = sessionId;
-    }
+  } else if (phase === "tick") {
+    if (activeUtilitySessionId && sessionId && sessionId !== activeUtilitySessionId) return;
+    if (!activeUtilitySessionId && sessionId) activeUtilitySessionId = sessionId;
   }
 
-  lastUtilityEvent = {
-    phase,
-    sessionId,
-    kind,
-    valueMs,
-    use24Hour,
-    showDate,
-  };
+  if (!replayOnly) {
+    lastUtilityEvent = {
+      phase: phase,
+      sessionId: sessionId,
+      kind: kind,
+      valueMs: valueMs,
+      use24Hour: use24Hour,
+      showDate: showDate
+    };
+  }
 
-  let valueText = '';
-  let utilityTitle = '';
-  let subtitleText = '';
-  let labelText = '';
-  const currentLabel = kind === 'clock' ? 'clock' : 'timer';
+  let valueText = "";
+  let subtitleText = "";
+  let utilityTitle = "";
+  let utilityLabel = "";
 
-  if (kind === 'countdown') {
-    valueText = formatTimerValue('countdown', valueMs);
-    utilityTitle = tr('countdownTitle');
-    subtitleText = utilityTitle;
-    labelText = tr('timerLabel');
-  } else if (kind === 'stopwatch') {
-    valueText = formatTimerValue('stopwatch', valueMs);
-    utilityTitle = tr('stopwatchTitle');
-    subtitleText = utilityTitle;
-    labelText = tr('timerLabel');
-  } else if (kind === 'clock') {
-    valueText = formatClockTime(valueMs, use24Hour);
-    utilityTitle = tr('clockTitle');
-    subtitleText = showDate
-      ? utilityTitle + ' - ' + formatClockDate(valueMs)
-      : utilityTitle;
-    labelText = utilityTitle;
+  if (kind === "countdown") {
+    valueText = formatTimerValue("countdown", valueMs);
+    subtitleText = tr("countdownTitle");
+    utilityTitle = subtitleText;
+    utilityLabel = tr("timerLabel");
+  } else if (kind === "stopwatch") {
+    valueText = formatTimerValue("stopwatch", valueMs);
+    subtitleText = tr("stopwatchTitle");
+    utilityTitle = subtitleText;
+    utilityLabel = tr("timerLabel");
   } else {
-    return;
+    valueText = formatClockTime(valueMs, use24Hour);
+    subtitleText = showDate ? formatClockDate(valueMs) : tr("clockTitle");
+    utilityTitle = tr("clockTitle");
+    utilityLabel = utilityTitle;
   }
 
-  document.getElementById('cur-label').textContent = labelText;
-  document.getElementById('cur-text').textContent = valueText;
-  document.getElementById('cur-title').textContent = subtitleText;
+  const baseCurrent = payloadSupportsUtility(lastRealPayload, kind) && lastRealPayload
+    ? (normalizeSlidePayload(lastRealPayload.current || lastRealPayload) || {})
+    : {};
 
-  const canReusePayload = payloadSupportsUtility(lastPayload, kind);
-  const basePayload = lastPayload && typeof lastPayload === 'object'
-    ? lastPayload
-    : { current: null, next: null, index: 0, total: 1, title: utilityTitle };
-  const currentBase = canReusePayload && basePayload.current && typeof basePayload.current === 'object'
-    ? basePayload.current
-    : { label: currentLabel, text: '', title: '', subtitle: '' };
+  applyPanel("cur", {
+    slideType: "cover",
+    videoPath: "",
+    label: kind === "clock" ? "clock" : "timer",
+    text: "",
+    title: valueText,
+    subtitle: subtitleText,
+    backgroundImage: baseCurrent.backgroundImage || "",
+    backgroundColor: baseCurrent.backgroundColor || "",
+    textColor: baseCurrent.textColor || "",
+    textSize: baseCurrent.textSize || 0,
+    audioPath: ""
+  }, "current");
 
-  lastPayload = {
-    ...basePayload,
-    title: utilityTitle,
-    current: {
-      ...currentBase,
-      label: currentLabel,
-      text: '',
-      title: valueText,
-      subtitle: subtitleText,
-    },
-  };
-  lastStatusKey = null;
+  document.getElementById("cur-label").style.display = "block";
+  document.getElementById("cur-label").textContent = utilityLabel;
+  document.getElementById("meta-title").textContent = utilityTitle;
 }
 
-async function fetchUtilitySnapshot() {
+function handleReturnStreamMessage(data) {
+  if (!data || typeof data !== "object") return;
+  if (data.utilityProjection && typeof data.utilityProjection === "object") {
+    applyUtilityEvent(data.utilityProjection, false);
+    return;
+  }
+  applyPayload(data, true);
+}
+
+function applyStaticText() {
+  document.title = tr("pageTitle");
+  document.getElementById("next-badge").textContent = tr("nextSlide");
+  if (!lastRealPayload || !lastRealPayload.next) {
+    document.getElementById("next-empty").textContent = tr("noNextSlide");
+  }
+}
+
+function updateClock() {
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString(
+    localeFromLanguage(uiLanguage),
+    { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+  );
+}
+
+function applyLanguage(language) {
+  const normalized = normalizeLanguage(language);
+  if (normalized === uiLanguage) return;
+  uiLanguage = normalized;
+  applyStaticText();
+  updateClock();
+
+  if (lastRealPayload) {
+    applyPayload(lastRealPayload, false);
+  } else {
+    setCurrentStatus("waitingContent", false);
+  }
+  if (lastUtilityEvent) {
+    applyUtilityEvent(lastUtilityEvent, true);
+  }
+}
+
+async function refreshUiLanguage() {
   try {
-    const response = await fetch('/state/utility', { cache: 'no-store' });
+    const response = await fetch("/state/ui", { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    applyUtilityEvent(data);
+    applyLanguage(data.language);
   } catch (_) {}
 }
 
 async function fetchSnapshot() {
   try {
-    const response = await fetch('/state/return', { cache: 'no-store' });
+    const response = await fetch("/state/return", { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    applyPayload(data);
+    applyPayload(data, true);
+  } catch (_) {}
+}
+
+async function fetchUtilitySnapshot() {
+  try {
+    const response = await fetch("/state/utility", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyUtilityEvent(data, false);
   } catch (_) {}
 }
 
 async function isServerAvailable() {
   try {
-    const response = await fetch('/status', { cache: 'no-store' });
+    const response = await fetch("/status", { cache: "no-store" });
     return response.ok;
   } catch (_) {
     return false;
@@ -422,7 +821,7 @@ async function isServerAvailable() {
 
 function scheduleReconnect() {
   if (reconnectTimer) return;
-  reconnectTimer = setTimeout(() => {
+  reconnectTimer = setTimeout(function () {
     reconnectTimer = null;
     void connectIfAvailable();
   }, 1500);
@@ -430,7 +829,7 @@ function scheduleReconnect() {
 
 function scheduleUtilityReconnect() {
   if (utilityReconnectTimer) return;
-  utilityReconnectTimer = setTimeout(() => {
+  utilityReconnectTimer = setTimeout(function () {
     utilityReconnectTimer = null;
     connectUtility();
   }, 1500);
@@ -438,7 +837,7 @@ function scheduleUtilityReconnect() {
 
 function scheduleUiReconnect() {
   if (uiReconnectTimer) return;
-  uiReconnectTimer = setTimeout(() => {
+  uiReconnectTimer = setTimeout(function () {
     uiReconnectTimer = null;
     connectUi();
   }, 1500);
@@ -449,7 +848,7 @@ async function connectIfAvailable() {
   if (es) return;
   const ok = await isServerAvailable();
   if (!ok) {
-    setStatus('disconnectedWaiting', 'disconnected');
+    setCurrentStatus("disconnectedWaiting", true);
     scheduleReconnect();
     return;
   }
@@ -460,37 +859,30 @@ async function connectIfAvailable() {
 
 function connect() {
   if (es) return;
-  es = new EventSource('/sse/return');
-
-  es.onopen = function () {
-    void fetchSnapshot();
-  };
-
-  es.onmessage = function (e) {
+  es = new EventSource("/sse/return");
+  es.onopen = function () { void fetchSnapshot(); };
+  es.onmessage = function (event) {
     try {
-      handleReturnStreamMessage(JSON.parse(e.data));
+      handleReturnStreamMessage(JSON.parse(event.data));
     } catch (_) {}
   };
-
   es.onerror = function () {
     if (es) {
       es.close();
       es = null;
     }
-    setStatus('disconnectedReconnecting', 'disconnected');
+    setCurrentStatus("disconnectedReconnecting", true);
     scheduleReconnect();
   };
 }
 
 function connectUtility() {
   if (utilityEs) return;
-  utilityEs = new EventSource('/sse/utility');
-  utilityEs.onopen = function () {
-    void fetchUtilitySnapshot();
-  };
-  utilityEs.onmessage = function (e) {
+  utilityEs = new EventSource("/sse/utility");
+  utilityEs.onopen = function () { void fetchUtilitySnapshot(); };
+  utilityEs.onmessage = function (event) {
     try {
-      applyUtilityEvent(JSON.parse(e.data));
+      applyUtilityEvent(JSON.parse(event.data), false);
     } catch (_) {}
   };
   utilityEs.onerror = function () {
@@ -504,10 +896,10 @@ function connectUtility() {
 
 function connectUi() {
   if (uiEs) return;
-  uiEs = new EventSource('/sse/ui');
-  uiEs.onmessage = function (e) {
+  uiEs = new EventSource("/sse/ui");
+  uiEs.onmessage = function (event) {
     try {
-      const payload = JSON.parse(e.data);
+      const payload = JSON.parse(event.data);
       applyLanguage(payload.language);
     } catch (_) {}
   };
@@ -521,10 +913,16 @@ function connectUi() {
 }
 
 applyStaticText();
-setStatus('waitingContent', 'waiting');
+resetPanel("cur");
+resetPanel("next");
+setCurrentStatus("waitingContent", false);
+document.getElementById("next-empty").textContent = tr("noNextSlide");
+updateClock();
+clockTimer = setInterval(updateClock, 1000);
 void connectIfAvailable();
 
-window.addEventListener('beforeunload', () => {
+window.addEventListener("beforeunload", function () {
+  if (clockTimer) clearInterval(clockTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (utilityReconnectTimer) clearTimeout(utilityReconnectTimer);
   if (uiReconnectTimer) clearTimeout(uiReconnectTimer);

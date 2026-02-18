@@ -25,6 +25,7 @@ interface SlideListProps {
   slides: SlideContent[];
   activeIndex: number;
   onSelect: (index: number) => void;
+  enableGlobalKeyboardNav?: boolean;
   /** If provided, enables drag-and-drop reordering */
   onReorder?: (from: number, to: number) => void;
   /** If provided, shows an "Add Slide" button */
@@ -41,6 +42,7 @@ export function SlideList({
   slides,
   activeIndex,
   onSelect,
+  enableGlobalKeyboardNav = true,
   onReorder,
   onAdd,
   onDuplicate,
@@ -54,6 +56,10 @@ export function SlideList({
   );
 
   useEffect(() => {
+    if (!enableGlobalKeyboardNav) {
+      return;
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -72,7 +78,7 @@ export function SlideList({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeIndex, slides.length, onSelect]);
+  }, [activeIndex, enableGlobalKeyboardNav, slides.length, onSelect]);
 
   if (slides.length === 0 && !onAdd) return null;
 

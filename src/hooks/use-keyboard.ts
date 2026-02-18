@@ -3,7 +3,7 @@ import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
-import { clearCurrentSlide } from "../lib/tauri";
+import { stopProjectionAndSongAudio } from "../lib/projection-control";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const { nextSlide, prevSlide } = useSlides();
@@ -11,7 +11,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
 
   const clearPresentation = useCallback(() => {
     usePresentationStore.getState().setSlides([]);
-    clearCurrentSlide();
+    void stopProjectionAndSongAudio();
   }, []);
 
   useEffect(() => {
