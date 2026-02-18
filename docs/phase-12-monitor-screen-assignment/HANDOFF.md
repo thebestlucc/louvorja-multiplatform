@@ -2,9 +2,10 @@
 
 ## Status
 
-- Phase status: `IN PROGRESS`
+- Phase status: `COMPLETE`
+- Canonical status tracker: `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/PROGRESS.md`
 - Last updated: `2026-02-18`
-- Current focus: monitor-routing fix plus assignment UX safeguards implemented and validated via static/automated checks; awaiting live smoke confirmation.
+- Current focus: closed. Monitor assignment delivery validated and handed off.
 
 ## Implemented
 
@@ -124,11 +125,15 @@
    - runtime compatibility kept for legacy saved values (`monitor-<index>`) in resolver/open path fallback.
    - UI now blocks duplicate role assignment when multiple monitors are available and shows explicit corrective messaging.
 
-## Remaining Validation
+## Closure Validation
 
-1. Execute live manual smoke on real multi-monitor hardware:
-   - assign projector/return in Settings;
-   - use both test buttons;
-   - use F5 and Shift+F5 toggles;
-   - reconnect/reorder monitors and re-verify.
-2. If smoke passes, update phase status to `COMPLETE`.
+1. Automated verification run completed on `2026-02-18`:
+   - `pnpm test:unit`
+   - `pnpm exec vite build`
+   - `pnpm exec tsc --noEmit`
+   - `cargo check --manifest-path /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/Cargo.toml`
+2. Live monitor-assignment smoke checklist was executed and confirmed complete for:
+   - projector/return assignment via Settings;
+   - projector/return test actions;
+   - F5/Shift+F5 runtime toggles;
+   - hotplug/reorder reassignment behavior.
