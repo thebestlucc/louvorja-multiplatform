@@ -144,6 +144,10 @@ pub struct MonitorConfig {
 pub struct MonitorInfo {
     pub id: String,
     pub name: String,
+    pub friendly_name: Option<String>,
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
+    pub connection_type: Option<String>,
     pub width: u32,
     pub height: u32,
     pub is_primary: bool,

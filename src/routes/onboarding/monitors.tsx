@@ -8,7 +8,9 @@ import {
   openProjectorWindow,
   openReturnWindow,
 } from "../../lib/tauri";
+import { resolveProjectionMonitorIndexes } from "../../lib/monitor-resolution";
 import { useMonitorConfigs, useMonitors, useSaveMonitorConfig } from "../../lib/queries";
+import { getPreferredMonitorName } from "../../lib/monitor-display-name";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 
@@ -31,11 +33,16 @@ function OnboardingMonitorsPage() {
     () =>
       monitors.map((monitor, index) => ({
         id: monitor.id,
-        index,
-        label: `${monitor.name} (${monitor.width}x${monitor.height})${monitor.is_primary ? ` • ${t("onboarding.monitors.primary")}` : ""}`,
+        label:
+          `${getPreferredMonitorName(monitor, index)} (${monitor.width}x${monitor.height})${monitor.is_primary ? ` • ${t("onboarding.monitors.primary")}` : ""}`,
       })),
     [monitors, t],
   );
+
+  const hasMonitorSelectionConflict = monitorOptions.length > 1
+    && projectorId.length > 0
+    && returnId.length > 0
+    && projectorId === returnId;
 
   useEffect(() => {
     if (!monitorOptions.length) {
@@ -46,16 +53,31 @@ function OnboardingMonitorsPage() {
 
     const existingProjector = monitorConfigs.find((config) => config.role === "projector")?.monitor_id;
     const existingReturn = monitorConfigs.find((config) => config.role === "return")?.monitor_id;
-    const fallbackProjector = monitorOptions[0]?.id ?? "";
-    const fallbackReturn = monitorOptions[1]?.id ?? monitorOptions[0]?.id ?? "";
-    setProjectorId(existingProjector ?? fallbackProjector);
-    setReturnId(existingReturn ?? fallbackReturn);
-  }, [monitorConfigs, monitorOptions]);
-
-  const projectorIndex = monitorOptions.find((monitor) => monitor.id === projectorId)?.index;
-  const returnIndex = monitorOptions.find((monitor) => monitor.id === returnId)?.index;
+    const existingProjectorValid = existingProjector && monitorOptions.some((option) => option.id === existingProjector)
+      ? existingProjector
+      : undefined;
+    const existingReturnValid = existingReturn && monitorOptions.some((option) => option.id === existingReturn)
+      ? existingReturn
+      : undefined;
+    const fallbackIndexes = resolveProjectionMonitorIndexes(monitors, []);
+    const fallbackProjector = fallbackIndexes
+      ? (monitors[fallbackIndexes.projectorIndex]?.id ?? monitorOptions[0]?.id ?? "")
+      : (monitorOptions[0]?.id ?? "");
+    const fallbackReturn = fallbackIndexes
+      ? (monitors[fallbackIndexes.returnIndex]?.id
+        ?? monitorOptions.find((option) => option.id !== fallbackProjector)?.id
+        ?? fallbackProjector)
+      : (monitorOptions.find((option) => option.id !== fallbackProjector)?.id ?? fallbackProjector);
+    setProjectorId(existingProjectorValid ?? fallbackProjector);
+    setReturnId(existingReturnValid ?? fallbackReturn);
+  }, [monitorConfigs, monitorOptions, monitors]);
 
   const handleSaveAndContinue = async () => {
+    if (hasMonitorSelectionConflict) {
+      setFeedback(t("onboarding.monitors.distinctRequired"));
+      return;
+    }
+
     setFeedback(null);
     setSaving(true);
     try {
@@ -74,20 +96,20 @@ function OnboardingMonitorsPage() {
   };
 
   const openWindowTemporarily = async (type: "projector" | "return") => {
-    const index = type === "projector" ? projectorIndex : returnIndex;
-    if (index == null) {
+    const monitorId = type === "projector" ? projectorId : returnId;
+    if (!monitorId) {
       return;
     }
 
     if (type === "projector") {
-      await openProjectorWindow(index);
+      await openProjectorWindow(monitorId);
       window.setTimeout(() => {
         void closeProjectorWindow();
       }, 2500);
       return;
     }
 
-    await openReturnWindow(index);
+    await openReturnWindow(monitorId);
     window.setTimeout(() => {
       void closeReturnWindow();
     }, 2500);
@@ -111,7 +133,10 @@ function OnboardingMonitorsPage() {
               <span className="font-medium text-foreground">{t("onboarding.monitors.projector")}</span>
               <select
                 value={projectorId}
-                onChange={(event) => setProjectorId(event.target.value)}
+                onChange={(event) => {
+                  setProjectorId(event.target.value);
+                  setFeedback(null);
+                }}
                 className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-foreground"
               >
                 {monitorOptions.map((option) => (
@@ -126,7 +151,10 @@ function OnboardingMonitorsPage() {
               <span className="font-medium text-foreground">{t("onboarding.monitors.return")}</span>
               <select
                 value={returnId}
-                onChange={(event) => setReturnId(event.target.value)}
+                onChange={(event) => {
+                  setReturnId(event.target.value);
+                  setFeedback(null);
+                }}
                 className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-foreground"
               >
                 {monitorOptions.map((option) => (
@@ -144,7 +172,7 @@ function OnboardingMonitorsPage() {
             type="button"
             variant="outline"
             onClick={() => void openWindowTemporarily("projector")}
-            disabled={projectorIndex == null}
+            disabled={projectorId.length === 0}
           >
             <MonitorPlay className="mr-2 h-4 w-4" />
             {t("onboarding.monitors.testProjector")}
@@ -153,12 +181,18 @@ function OnboardingMonitorsPage() {
             type="button"
             variant="outline"
             onClick={() => void openWindowTemporarily("return")}
-            disabled={returnIndex == null}
+            disabled={returnId.length === 0 || hasMonitorSelectionConflict}
           >
             <MonitorPlay className="mr-2 h-4 w-4" />
             {t("onboarding.monitors.testReturn")}
           </Button>
         </div>
+
+        {hasMonitorSelectionConflict ? (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+            {t("onboarding.monitors.distinctRequired")}
+          </p>
+        ) : null}
 
         {feedback ? (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
@@ -167,7 +201,11 @@ function OnboardingMonitorsPage() {
         ) : null}
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => void handleSaveAndContinue()} disabled={saving}>
+          <Button
+            type="button"
+            onClick={() => void handleSaveAndContinue()}
+            disabled={saving || hasMonitorSelectionConflict}
+          >
             {t("onboarding.monitors.saveAndContinue")}
           </Button>
           <Button type="button" variant="outline" onClick={() => navigate({ to: "/onboarding/complete" })}>

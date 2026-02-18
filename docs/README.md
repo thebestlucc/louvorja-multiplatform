@@ -22,6 +22,7 @@ Notes:
 2. `docs/phase-09-utilities-polish`
 3. `docs/phase-10-migration-tools-deployment`
 4. `docs/phase-11-hymn-crud-collections`
+5. `docs/phase-12-monitor-screen-assignment`
 
 ## Realtime Engineering Rule
 

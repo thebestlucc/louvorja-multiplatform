@@ -6,11 +6,11 @@ import {
   setCurrentSlide,
   setSlideContext,
 } from "./tauri";
-import type { MonitorConfig } from "../types/settings";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import type { SlideContent } from "../types/presentation";
 import { slideContentToFlat } from "../types/presentation";
+import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
 
 let ensureProjectionPromise: Promise<void> | null = null;
 
@@ -35,22 +35,26 @@ export async function ensureProjectionScreensStarted(): Promise<void> {
         return;
       }
 
-      const monitorIndexById = new Map(monitors.map((monitor, index) => [monitor.id, index] as const));
-      const { projectorIndex, returnIndex } = resolveProjectionMonitorIndexes(
-        monitorConfigs,
-        monitors.length,
-        monitorIndexById,
-      );
+      const resolvedIndexes = resolveProjectionMonitorIndexes(monitors, monitorConfigs);
+      if (!resolvedIndexes) {
+        return;
+      }
+      const { projectorIndex, returnIndex } = resolvedIndexes;
+      const projectorMonitor = monitors[projectorIndex];
+      const returnMonitor = monitors[returnIndex];
+      if (!projectorMonitor || !returnMonitor) {
+        return;
+      }
 
       if (!useDisplayStore.getState().projectorWindowOpen) {
-        await openProjectorWindow(projectorIndex);
+        await openProjectorWindow(projectorMonitor.id);
         useDisplayStore.getState().setProjectorWindowOpen(true);
       }
 
       if (!useDisplayStore.getState().returnWindowOpen) {
         // Give the first fullscreen transition a moment before opening the second window.
         await sleep(180);
-        await openReturnWindow(returnIndex);
+        await openReturnWindow(returnMonitor.id);
         useDisplayStore.getState().setReturnWindowOpen(true);
       }
     } catch (error) {
@@ -94,52 +98,6 @@ export async function projectCurrentSlideFromStore(): Promise<void> {
     Math.min(presentationState.activeSlideIndex, presentationState.slides.length - 1),
   );
   await projectSlideIndex(index);
-}
-
-function resolveMonitorIndex(
-  configs: MonitorConfig[],
-  role: "projector" | "return",
-  fallbackIndex: number,
-  monitorIndexById: Map<string, number>,
-  monitorCount: number,
-): number {
-  const configIndex = configs
-    .find((config) => config.role === role && config.enabled)
-    ?.monitor_id;
-  const fromConfig = configIndex != null ? monitorIndexById.get(configIndex) : undefined;
-  if (fromConfig != null && Number.isFinite(fromConfig)) {
-    return fromConfig;
-  }
-
-  return Math.max(0, Math.min(fallbackIndex, monitorCount - 1));
-}
-
-function resolveProjectionMonitorIndexes(
-  configs: MonitorConfig[],
-  monitorCount: number,
-  monitorIndexById: Map<string, number>,
-): { projectorIndex: number; returnIndex: number } {
-  const projectorIndex = resolveMonitorIndex(
-    configs,
-    "projector",
-    monitorCount > 1 ? 1 : 0,
-    monitorIndexById,
-    monitorCount,
-  );
-  let returnIndex = resolveMonitorIndex(
-    configs,
-    "return",
-    monitorCount > 2 ? 2 : 0,
-    monitorIndexById,
-    monitorCount,
-  );
-
-  // Avoid opening both projection windows on the same monitor when we have alternatives.
-  if (monitorCount > 1 && returnIndex === projectorIndex) {
-    returnIndex = projectorIndex === 0 ? 1 : 0;
-  }
-
-  return { projectorIndex, returnIndex };
 }
 
 function sleep(ms: number): Promise<void> {
