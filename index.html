@@ -10,6 +10,42 @@
 
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        try {
+          const initial = {
+            time: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            tauriKeys: Object.keys(window).filter((k) => /tauri|__tauri__/i.test(k)),
+            hasTauri: !!window.__TAURI__,
+          };
+          console.log("EARLY_BRIDGE_DEBUG_INIT", initial);
+
+          // Visible indicator for quick debugging (non-intrusive)
+          const el = document.createElement("div");
+          el.id = "bridge-debug";
+          el.style.cssText = "position:fixed;bottom:8px;right:8px;z-index:999999;background:rgba(0,0,0,0.6);color:#fff;padding:6px 8px;border-radius:6px;font-size:11px;opacity:0.9";
+          el.textContent = initial.hasTauri ? "Tauri bridge: available" : "Tauri bridge: missing";
+          document.addEventListener("DOMContentLoaded", () => document.body.appendChild(el));
+
+          // Poll for the bridge for a short time and log results
+          let attempts = 0;
+          const iv = setInterval(() => {
+            attempts += 1;
+            const present = !!window.__TAURI__;
+            if (present || attempts >= 20) {
+              console.log("EARLY_BRIDGE_DEBUG_POLL", { attempts, hasTauri: present, time: new Date().toISOString() });
+              if (document.getElementById("bridge-debug")) {
+                document.getElementById("bridge-debug").textContent = present ? "Tauri bridge: available" : "Tauri bridge: missing";
+              }
+              clearInterval(iv);
+            }
+          }, 250);
+        } catch (e) {
+          console.error("EARLY_BRIDGE_DEBUG_ERROR", e);
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
