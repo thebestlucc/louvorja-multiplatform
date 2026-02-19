@@ -3,6 +3,7 @@ feature: installers-pipeline
 gate: 8
 phase: B - Safe Updates
 date: 2026-02-18
+status: complete
 ---
 
 # Phase B Subtasks: Safe Updates (UX)

@@ -3,6 +3,7 @@ feature: installers-pipeline
 gate: 8
 phase: A - Foundation
 date: 2026-02-18
+status: complete
 ---
 
 # Phase A Subtasks: Foundation (Pipeline Fixes)
