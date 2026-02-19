@@ -25,6 +25,7 @@
     "core:webview:default",
     "core:webview:allow-create-webview-window",
     "opener:default",
-    "dialog:default"
+    "dialog:default",
+    "updater:default"
   ]
 }

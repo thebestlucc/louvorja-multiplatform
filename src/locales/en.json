@@ -633,7 +633,22 @@
     "installing": "Installing update. The app may restart.",
     "updateNow": "Update now",
     "remindLater": "Remind later",
-    "skipVersion": "Skip this version"
+    "skipVersion": "Skip this version",
+    "guardActive": "Update available — will notify after service",
+    "errorNetwork": "Could not download the update",
+    "errorNetworkWhy": "Your internet connection may be unstable.",
+    "errorNetworkAction": "Check your connection and try again.",
+    "errorDiskSpace": "Could not install the update",
+    "errorDiskSpaceWhy": "There is not enough disk space available.",
+    "errorDiskSpaceAction": "Free up some disk space and try again.",
+    "errorPermission": "Could not install the update",
+    "errorPermissionWhy": "The app needs permission to write files.",
+    "errorPermissionAction": "Try running as administrator, or contact your IT administrator.",
+    "errorGeneric": "Something went wrong with the update",
+    "errorGenericWhy": "An unexpected error occurred.",
+    "errorGenericAction": "Try again later, or download the latest version from our website.",
+    "errorDataSafe": "Your data and settings are safe.",
+    "tryAgain": "Try again"
   },
   "help": {
     "title": "Help center",

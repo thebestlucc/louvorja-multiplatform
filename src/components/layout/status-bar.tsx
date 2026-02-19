@@ -1,8 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Timer, Wifi } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import { ProjectorControls } from "../display/projector-controls";
+import { StatusBarUpdateIndicator } from "./status-bar-update-indicator";
 import { StreamingControls } from "../streaming/streaming-controls";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useStreamingStatus, useTimerState } from "../../lib/queries";
@@ -13,6 +15,11 @@ export function StatusBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [streamingOpen, setStreamingOpen] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
   const { data: status } = useStreamingStatus();
   const { data: timerState } = useTimerState();
   const isRunning = status?.isRunning ?? false;
@@ -34,7 +41,10 @@ export function StatusBar() {
 
   return (
     <footer className="flex h-8 items-center justify-between border-t border-border bg-surface px-3 text-[11px] text-muted-foreground">
-      <span>{t("status.ready")}</span>
+      <span>
+        {t("status.ready")}
+        {version ? <span className="ml-2 opacity-60">v{version}</span> : null}
+      </span>
 
       <div className="flex items-center gap-3">
         <button
@@ -53,6 +63,7 @@ export function StatusBar() {
           </span>
         </button>
         <ProjectorControls />
+        <StatusBarUpdateIndicator />
         <button
           onClick={() => setStreamingOpen(true)}
           className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10"
