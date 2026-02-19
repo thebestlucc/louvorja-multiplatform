@@ -475,9 +475,12 @@ fn open_fullscreen_window(
     target_monitor_id: &str,
     app: &AppHandle,
 ) -> Result<(), AppError> {
+    // Emit diagnostic event: function entry
+    let _ = app.emit("open_fullscreen_start", label.to_string());
     let monitors = app
         .available_monitors()
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+    let _ = app.emit("open_fullscreen_after_available_monitors", label.to_string());
     let monitor = monitors
         .iter()
         .find(|monitor| stable_monitor_id(monitor) == target_monitor_id)
@@ -485,6 +488,7 @@ fn open_fullscreen_window(
             parse_legacy_monitor_index(target_monitor_id).and_then(|legacy_index| monitors.get(legacy_index))
         })
         .ok_or_else(|| AppError::NotFound(format!("Monitor id {} not found", target_monitor_id)))?;
+    let _ = app.emit("open_fullscreen_found_monitor", target_monitor_id.to_string());
 
     let position = monitor.position();
     let size = monitor.size();
@@ -515,6 +519,19 @@ fn open_fullscreen_window(
 
     std::thread::sleep(std::time::Duration::from_millis(150));
     window.show().map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    // Notify main/frontends that the window was opened for the given label
+    match label {
+        "projector" => {
+            let _ = app.emit("projector-window-opened", target_monitor_id.to_string());
+        }
+        "return" => {
+            let _ = app.emit("return-window-opened", target_monitor_id.to_string());
+        }
+        _ => {
+            let _ = app.emit("window-opened", (label.to_string(), target_monitor_id.to_string()));
+        }
+    }
 
     // Fullscreen transition can be asynchronous on some platforms.
     // Retry briefly to avoid ending up with a visible but windowed monitor.
