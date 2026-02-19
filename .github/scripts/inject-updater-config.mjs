@@ -8,15 +8,15 @@ const raw = fs.readFileSync(configPath, "utf8");
 const json = JSON.parse(raw);
 
 json.plugins ??= {};
-json.plugins.updater ??= {};
+json.bundle ??= {};
 
 if (endpoint && pubkey) {
-  json.plugins.updater.active = true;
-  json.plugins.updater.endpoints = [endpoint];
-  json.plugins.updater.pubkey = pubkey;
+  json.plugins.updater = { active: true, endpoints: [endpoint], pubkey };
+  json.bundle.createUpdaterArtifacts = true;
   console.log("Updater configuration injected into src-tauri/tauri.conf.json");
 } else {
-  json.plugins.updater.active = false;
+  json.plugins.updater = { active: false, endpoints: [], pubkey: "" };
+  json.bundle.createUpdaterArtifacts = false;
   console.log(
     "TAURI_UPDATER_ENDPOINT or TAURI_UPDATER_PUBLIC_KEY not set — updater disabled for this build."
   );
