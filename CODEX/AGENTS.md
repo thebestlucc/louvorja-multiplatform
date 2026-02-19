@@ -66,6 +66,7 @@ src/                          # Frontend (React)
 ├── lib/
 │   ├── tauri.ts              # Typed `invoke()` wrappers — one function per Tauri command
 │   ├── queries.ts            # TanStack Query hooks (useQuery/useMutation wrappers)
+│   ├── update-errors.ts      # Pastoral error classifier for updater (network/disk/permission/generic)
 │   └── utils.ts              # cn() helper
 ├── locales/                  # en.json, pt.json, es.json
 ├── routes/                   # TanStack Router file-based routes
@@ -84,14 +85,15 @@ src-tauri/src/                # Backend (Rust)
 ├── commands/                 # Tauri command handlers (one module per domain)
 │   ├── music.rs, display.rs, slides.rs, audio.rs, bible.rs, liturgy.rs, ...
 ├── db/
-│   ├── migrations.rs         # Schema versioning (schema_version table, migrate_v1/v2/v3)
+│   ├── migrations.rs         # Schema versioning (schema_version table, migrate_v1...v5)
 │   ├── models.rs             # All data structs (Hymn, Album, Presentation, Slide, SlideContent, etc.)
 │   └── queries/              # DB query functions (one module per domain)
 │       ├── music.rs, slides.rs, bible.rs, liturgy.rs, settings.rs
 ├── archive/                  # .slja read/write + .pptx import
 │   ├── mod.rs, manifest.rs, pptx.rs
 ├── audio/                    # rodio player, sync timeline
-└── display/, streaming/      # Stubs for future phases
+├── display/, streaming/      # Multi-monitor display + SSE streaming server
+└── video/                    # Video path + metadata parsing helpers
 ```
 
 ## Architecture Patterns
@@ -221,6 +223,11 @@ src-tauri/src/                # Backend (Rust)
 - **Global search in command palette:** The `CommandPalette` uses `shouldFilter={!hasQuery}` on `Command.Dialog` to disable cmdk's built-in filter when the user types a search query. Dynamic results from `searchHymns()` and `searchBible()` are fetched with 300ms debounce, shown in `Command.Group` sections. No TanStack Query caching — transient UI uses direct `await` calls.
 - **Streaming SSE pattern:** Use raw `std::net::TcpListener` with `TcpStream::write_all()` + `flush()` for SSE — never use buffered HTTP libraries (like tiny_http) for SSE as they buffer small writes. Set `TCP_NODELAY` on connections.
 - **Streaming clear pattern:** When clearing slides, all 3 SSE channels (music/bible/return) must receive empty payloads. HTML templates must handle `null`/empty values explicitly (show "Waiting for content" state).
+- **Video media path contract:** Persist only managed relative paths (`media/videos/...`) in slide content. Resolve to absolute paths in Rust commands and convert to asset URLs in frontend (`convertFileSrc`) for projector/return rendering.
+- **Service-aware update guard:** `UpdateNotification` subscribes to `usePresentationStore` via `.subscribe()` + `getState()`. Suppresses banner when `isProjectorOpen || isPlayingService || activeServiceId !== null`. Status bar indicator uses lightweight pub-sub callback (`onUpdateDeferredChange`) instead of a full store.
+- **Pastoral error messaging:** `classifyUpdateError()` in `lib/update-errors.ts` pattern-matches error strings into 4 categories (network/disk/permission/generic), each with i18n keys for title/why/action/reassurance. Toasts use `duration: Infinity` so users must dismiss manually.
+- **Version display:** `getVersion()` from `@tauri-apps/api/app` called once in `useEffect`, shown in status bar left side as `v{version}`.
+- **CI/CD pipeline:** GitHub Actions with 5-platform matrix (macOS ARM/Intel, Linux x64/ARM, Windows). Uses `tauri-apps/tauri-action@v0` with Rust cache, Ed25519 signing, and draft releases. Signing env vars: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ## Phase Status
 

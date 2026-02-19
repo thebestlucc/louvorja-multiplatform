@@ -11,10 +11,10 @@ status: approved
 
 | Phase | Name | Tasks | Critical Path | Estimated Duration |
 |-------|------|-------|--------------|-------------------|
-| A | Foundation | TASK-001 to TASK-006 | Yes — unblocks everything | 1 session (~30 min) |
-| B | Safe Updates | TASK-007 to TASK-010 | Yes — core UX value | 1 session (~60 min) |
-| C | User Guides | TASK-011 to TASK-014 | No — can ship without | 1 session (~45 min) |
-| D | Polish | TASK-015 to TASK-016 | No — quality of life | 1 session (~20 min) |
+| A | Foundation | TASK-001 to TASK-006 | Yes — unblocks everything | COMPLETE |
+| B | Safe Updates | TASK-007 to TASK-010 | Yes — core UX value | COMPLETE |
+| C | User Guides | TASK-011 to TASK-014 | No — can ship without | COMPLETE |
+| D | Polish | TASK-015 to TASK-016 | No — quality of life | COMPLETE |
 | **Total** | | **16 tasks** | | **~2.5 hours implementation** |
 
 ## Critical Path
@@ -135,22 +135,22 @@ This is the minimum path to "pipeline works + updates don't disrupt services." E
 
 The feature is complete when:
 
-- [ ] **Pipeline:** CI builds and produces artifacts for all 5 platforms
-- [ ] **Pipeline:** .sig signature files generated alongside all installers
-- [ ] **Pipeline:** Build time <20 min per platform (with cache)
-- [ ] **Pipeline:** Draft release created with all artifacts
-- [ ] **Updater:** Permission fix allows update checks at runtime
-- [ ] **Guard:** Update notification suppressed during projection/service
-- [ ] **Guard:** Status bar indicator visible when update deferred
-- [ ] **Guard:** Notification appears within 2s of guard clearing
-- [ ] **Errors:** Pastoral error messages in PT/EN/ES
-- [ ] **Errors:** Error toasts don't auto-dismiss
-- [ ] **Guides:** 9 installation guide files (3 platforms × 3 languages)
-- [ ] **Guides:** Code signing setup guide
-- [ ] **Polish:** Onboarding works offline
-- [ ] **Polish:** Version visible in app
-- [ ] **Code:** `pnpm vite build && npx tsc --noEmit` passes
-- [ ] **Code:** `cargo build --manifest-path src-tauri/Cargo.toml` passes
+- [x] **Pipeline:** CI builds and produces artifacts for all 5 platforms
+- [x] **Pipeline:** .sig signature files generated alongside all installers
+- [x] **Pipeline:** Build time <20 min per platform (with cache)
+- [x] **Pipeline:** Draft release created with all artifacts
+- [x] **Updater:** Permission fix allows update checks at runtime
+- [x] **Guard:** Update notification suppressed during projection/service
+- [x] **Guard:** Status bar indicator visible when update deferred
+- [x] **Guard:** Notification appears within 2s of guard clearing
+- [x] **Errors:** Pastoral error messages in PT/EN/ES
+- [x] **Errors:** Error toasts don't auto-dismiss
+- [x] **Guides:** 9 installation guide files (3 platforms × 3 languages)
+- [x] **Guides:** Code signing setup guide
+- [x] **Polish:** Onboarding works offline
+- [x] **Polish:** Version visible in app
+- [x] **Code:** `pnpm vite build && npx tsc --noEmit` passes
+- [x] **Code:** `cargo build --manifest-path src-tauri/Cargo.toml` passes
 
 ---
 
