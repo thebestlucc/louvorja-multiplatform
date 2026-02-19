@@ -7,21 +7,17 @@ A cross-platform church worship management desktop application built with **Taur
 - **Hymnal** -- Browse, search (FTS5), and project hymn lyrics with multi-slide display
 - **Presentation Editor** -- Create and edit slide decks with drag-and-drop reordering, import `.pptx` files
 - **Audio Playback** -- Play audio files with slide synchronization via rodio engine
-- **Projector Output** -- Dedicated projector window with fullscreen support and real-time slide events
+- **Bible** -- Full-text search across Bible versions with verse projection
+- **Worship Services** -- Service scheduling with drag-and-drop timeline and item projection
+- **Multi-Monitor** -- Projector, return monitor, and operator screens with per-monitor assignment
+- **Live Streaming** -- HTTP server with SSE for remote viewers (music, bible, return channels)
+- **Video/Multimedia** -- Video slides with managed media paths
+- **Projector Output** -- Dedicated projector window with fullscreen support, real-time slide events, black/logo overlays
 - **Archive Format** -- Custom `.slja` archive format (ZIP-based) for portable presentations
+- **Auto-Updates** -- Service-aware update guard that never interrupts live projection
 - **Internationalization** -- Portuguese, English, and Spanish (i18next)
 - **Themes** -- 5 color themes via CSS custom properties (Azure, White, Gray, Orange, Black)
 - **Command Palette** -- Quick access via Cmd+K / Ctrl+K
-
-### Planned
-
-- Bible verse projection with FTS5 search
-- Worship service scheduling with drag-and-drop timeline
-- Multi-monitor management (operator, projector, return)
-- HTTP live streaming with SSE for remote viewers
-- Video/multimedia slide support
-- Data migration wizard from Delphi version
-- Auto-updater
 
 ## Tech Stack
 
@@ -55,14 +51,28 @@ A cross-platform church worship management desktop application built with **Taur
 | quick-xml 0.36 | `.pptx` XML parsing |
 | thiserror | Error types |
 
-## Prerequisites
+## Installation
+
+Download the latest release for your platform from the [Releases page](https://github.com/nickksoares/louvorja-multiplataform/releases).
+
+| Platform | File | Guide |
+|----------|------|-------|
+| Windows | `LouvorJA_x.x.x_x64-setup.exe` | [English](docs/installation/windows.md) / [Portugues](docs/installation/windows-pt.md) / [Espanol](docs/installation/windows-es.md) |
+| macOS (Apple Silicon) | `LouvorJA_x.x.x_aarch64.dmg` | [English](docs/installation/macos.md) / [Portugues](docs/installation/macos-pt.md) / [Espanol](docs/installation/macos-es.md) |
+| macOS (Intel) | `LouvorJA_x.x.x_x64.dmg` | [English](docs/installation/macos.md) / [Portugues](docs/installation/macos-pt.md) / [Espanol](docs/installation/macos-es.md) |
+| Linux (x64) | `.AppImage` or `.deb` | [English](docs/installation/linux.md) / [Portugues](docs/installation/linux-pt.md) / [Espanol](docs/installation/linux-es.md) |
+| Linux (ARM) | `.AppImage` or `.deb` | [English](docs/installation/linux.md) / [Portugues](docs/installation/linux-pt.md) / [Espanol](docs/installation/linux-es.md) |
+
+## Development
+
+### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 20
 - [pnpm](https://pnpm.io/) >= 9
 - [Rust](https://rustup.rs/) stable toolchain
 - [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS
 
-## Getting Started
+### Getting Started
 
 ```bash
 # Clone
@@ -76,7 +86,7 @@ pnpm install
 pnpm tauri dev
 ```
 
-## Scripts
+### Scripts
 
 ```bash
 pnpm dev              # Start Vite dev server only (no Rust)
@@ -114,21 +124,26 @@ src-tauri/src/                  # Rust backend
 │   ├── models.rs               # Data structs
 │   └── queries/                # SQL query functions (per domain)
 ├── archive/                    # .slja and .pptx file handling
-└── audio/                      # Audio player, sync timeline
+├── audio/                      # Audio player, sync timeline
+├── display/                    # Multi-monitor window management
+├── streaming/                  # SSE streaming server
+└── video/                      # Video path + metadata helpers
 
-docs/                           # Phase documentation source of truth (phase-*/PRD,SPECS,TASKS,HANDOFF)
-PRD.md                          # Product Requirements Document
+docs/                           # Documentation
+├── phase-*/                    # Phase packages (PRD, SPECS, TASKS, HANDOFF)
+├── installation/               # User installation guides (3 platforms × 3 languages)
+├── code-signing-guide.md       # Code signing setup for maintainers
+└── pre-dev/                    # Pre-development planning documents
 CLAUDE.md                       # AI assistant context and patterns
 ```
 
 ## Documentation Map
 
-- Live delivery tracker:
-  - [PROGRESS.md](./PROGRESS.md)
-- Documentation index and conventions:
-  - [docs/README.md](./docs/README.md)
-- Phase packages (PRD, SPECS, TASKS, HANDOFF):
-  - [docs/](./docs/) (see `phase-*` directories)
+- Live delivery tracker: [PROGRESS.md](./PROGRESS.md)
+- Documentation index: [docs/README.md](./docs/README.md)
+- Installation guides: [docs/installation/](./docs/installation/)
+- Code signing guide: [docs/code-signing-guide.md](./docs/code-signing-guide.md)
+- Phase packages (PRD, SPECS, TASKS, HANDOFF): [docs/](./docs/) (see `phase-*` directories)
 - Latest completed handoffs:
   - [docs/phase-11-hymn-crud-collections/HANDOFF.md](./docs/phase-11-hymn-crud-collections/HANDOFF.md)
   - [docs/phase-12-monitor-screen-assignment/HANDOFF.md](./docs/phase-12-monitor-screen-assignment/HANDOFF.md)

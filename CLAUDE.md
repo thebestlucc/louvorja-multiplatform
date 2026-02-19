@@ -66,6 +66,7 @@ src/                          # Frontend (React)
 ├── lib/
 │   ├── tauri.ts              # Typed `invoke()` wrappers — one function per Tauri command
 │   ├── queries.ts            # TanStack Query hooks (useQuery/useMutation wrappers)
+│   ├── update-errors.ts      # Pastoral error classifier for updater (network/disk/permission/generic)
 │   └── utils.ts              # cn() helper
 ├── locales/                  # en.json, pt.json, es.json
 ├── routes/                   # TanStack Router file-based routes
@@ -208,6 +209,9 @@ src-tauri/src/                # Backend (Rust)
 - **Streaming SSE pattern:** Use raw `std::net::TcpListener` with `TcpStream::write_all()` + `flush()` for SSE — never use buffered HTTP libraries (like tiny_http) for SSE as they buffer small writes. Set `TCP_NODELAY` on connections.
 - **Streaming clear pattern:** When clearing slides, all 3 SSE channels (music/bible/return) must receive empty payloads. HTML templates must handle `null`/empty values explicitly (show "Waiting for content" state).
 - **Video media path contract:** Persist only managed relative paths (`media/videos/...`) in slide content. Resolve to absolute paths in Rust commands and convert to asset URLs in frontend (`convertFileSrc`) for projector/return rendering.
+- **Service-aware update guard:** `UpdateNotification` subscribes to `usePresentationStore` via `.subscribe()` + `getState()`. Suppresses banner when `isProjectorOpen || isPlayingService || activeServiceId !== null`. Status bar indicator uses lightweight pub-sub callback (`onUpdateDeferredChange`) instead of a full store.
+- **Pastoral error messaging:** `classifyUpdateError()` in `lib/update-errors.ts` pattern-matches error strings into 4 categories (network/disk/permission/generic), each with i18n keys for title/why/action/reassurance. Toasts use `duration: Infinity` so users must dismiss manually.
+- **Version display:** `getVersion()` from `@tauri-apps/api/app` called once in `useEffect`, shown in status bar left side as `v{version}`.
 
 ## Phase Status
 
