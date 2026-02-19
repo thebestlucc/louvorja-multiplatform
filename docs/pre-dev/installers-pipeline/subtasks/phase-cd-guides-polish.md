@@ -3,6 +3,7 @@ feature: installers-pipeline
 gate: 8
 phase: C+D - Guides & Polish
 date: 2026-02-18
+status: complete
 ---
 
 # Phase C+D Subtasks: User Guides & Polish
