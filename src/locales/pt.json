@@ -633,7 +633,22 @@
     "installing": "Instalando atualização. O aplicativo pode reiniciar.",
     "updateNow": "Atualizar agora",
     "remindLater": "Lembrar depois",
-    "skipVersion": "Ignorar esta versão"
+    "skipVersion": "Ignorar esta versão",
+    "guardActive": "Atualização disponível — será notificado após o culto",
+    "errorNetwork": "Não foi possível baixar a atualização",
+    "errorNetworkWhy": "Sua conexão com a internet pode estar instável.",
+    "errorNetworkAction": "Verifique sua conexão e tente novamente.",
+    "errorDiskSpace": "Não foi possível instalar a atualização",
+    "errorDiskSpaceWhy": "Não há espaço em disco suficiente.",
+    "errorDiskSpaceAction": "Libere espaço no disco e tente novamente.",
+    "errorPermission": "Não foi possível instalar a atualização",
+    "errorPermissionWhy": "O aplicativo precisa de permissão para gravar arquivos.",
+    "errorPermissionAction": "Tente executar como administrador ou entre em contato com o responsável de TI.",
+    "errorGeneric": "Algo deu errado com a atualização",
+    "errorGenericWhy": "Ocorreu um erro inesperado.",
+    "errorGenericAction": "Tente novamente mais tarde ou baixe a versão mais recente do nosso site.",
+    "errorDataSafe": "Seus dados e configurações estão seguros.",
+    "tryAgain": "Tentar novamente"
   },
   "help": {
     "title": "Central de ajuda",

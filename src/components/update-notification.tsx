@@ -3,14 +3,24 @@ import { Download, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useCheckForUpdates, useInstallUpdate } from "../lib/queries";
+import { classifyUpdateError } from "../lib/update-errors";
+import { usePresentationStore } from "../stores/presentation-store";
 import { Button } from "./ui/button";
 
 const SKIP_VERSION_KEY = "updater.skipVersion";
+
+/** Shared state for status bar indicator */
+let updateDeferredListener: ((deferred: boolean) => void) | null = null;
+export function onUpdateDeferredChange(fn: (deferred: boolean) => void) {
+  updateDeferredListener = fn;
+  return () => { updateDeferredListener = null; };
+}
 
 export function UpdateNotification() {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [guardActive, setGuardActive] = useState(false);
   const installMutation = useInstallUpdate();
   const { data: updateInfo } = useCheckForUpdates({ enabled });
 
@@ -19,12 +29,34 @@ export function UpdateNotification() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  // Subscribe to presentation store for guard conditions
+  useEffect(() => {
+    const computeGuard = () => {
+      const s = usePresentationStore.getState();
+      return s.isProjectorOpen || s.isPlayingService || s.activeServiceId !== null;
+    };
+    setGuardActive(computeGuard());
+    const unsub = usePresentationStore.subscribe(() => {
+      setGuardActive(computeGuard());
+    });
+    return unsub;
+  }, []);
+
   const skippedVersion = useMemo(
     () => localStorage.getItem(SKIP_VERSION_KEY),
     [updateInfo?.version],
   );
 
-  if (!updateInfo || dismissed || skippedVersion === updateInfo.version) {
+  const hasUpdate = Boolean(updateInfo) && !dismissed && skippedVersion !== updateInfo?.version;
+  const isDeferred = hasUpdate && guardActive;
+
+  // Notify status bar indicator
+  useEffect(() => {
+    updateDeferredListener?.(isDeferred);
+    return () => updateDeferredListener?.(false);
+  }, [isDeferred]);
+
+  if (!hasUpdate || guardActive) {
     return null;
   }
 
@@ -34,7 +66,7 @@ export function UpdateNotification() {
         <div>
           <p className="text-sm font-semibold text-foreground">{t("updater.title")}</p>
           <p className="text-xs text-muted-foreground">
-            {t("updater.description", { version: updateInfo.version })}
+            {t("updater.description", { version: updateInfo!.version })}
           </p>
         </div>
         <button
@@ -47,8 +79,8 @@ export function UpdateNotification() {
         </button>
       </div>
 
-      {updateInfo.notes ? (
-        <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">{updateInfo.notes}</p>
+      {updateInfo!.notes ? (
+        <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">{updateInfo!.notes}</p>
       ) : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -62,7 +94,11 @@ export function UpdateNotification() {
                 toast.success(t("updater.installing"));
               })
               .catch((error) => {
-                toast.error(String(error));
+                const pastoral = classifyUpdateError(error);
+                toast.error(t(pastoral.titleKey), {
+                  description: `${t(pastoral.whyKey)} ${t(pastoral.actionKey)}\n\n${t(pastoral.reassuranceKey)}`,
+                  duration: Infinity,
+                });
               });
           }}
           disabled={installMutation.isPending}
@@ -78,7 +114,7 @@ export function UpdateNotification() {
           size="sm"
           variant="outline"
           onClick={() => {
-            localStorage.setItem(SKIP_VERSION_KEY, updateInfo.version);
+            localStorage.setItem(SKIP_VERSION_KEY, updateInfo!.version);
             setDismissed(true);
           }}
         >

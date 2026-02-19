@@ -633,7 +633,22 @@
     "installing": "Instalando actualización. La aplicación puede reiniciarse.",
     "updateNow": "Actualizar ahora",
     "remindLater": "Recordar después",
-    "skipVersion": "Omitir esta versión"
+    "skipVersion": "Omitir esta versión",
+    "guardActive": "Actualización disponible — se notificará después del servicio",
+    "errorNetwork": "No se pudo descargar la actualización",
+    "errorNetworkWhy": "Su conexión a internet puede ser inestable.",
+    "errorNetworkAction": "Verifique su conexión e intente de nuevo.",
+    "errorDiskSpace": "No se pudo instalar la actualización",
+    "errorDiskSpaceWhy": "No hay suficiente espacio en disco.",
+    "errorDiskSpaceAction": "Libere espacio en disco e intente de nuevo.",
+    "errorPermission": "No se pudo instalar la actualización",
+    "errorPermissionWhy": "La aplicación necesita permiso para escribir archivos.",
+    "errorPermissionAction": "Intente ejecutar como administrador o contacte al administrador de TI.",
+    "errorGeneric": "Algo salió mal con la actualización",
+    "errorGenericWhy": "Ocurrió un error inesperado.",
+    "errorGenericAction": "Intente de nuevo más tarde o descargue la versión más reciente de nuestro sitio web.",
+    "errorDataSafe": "Sus datos y configuraciones están seguros.",
+    "tryAgain": "Intentar de nuevo"
   },
   "help": {
     "title": "Centro de ayuda",
