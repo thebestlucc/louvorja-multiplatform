@@ -135,6 +135,22 @@ src-tauri/src/                # Backend (Rust)
 
 5. **Tauri plugin registration:** Use `pnpm tauri add <plugin>` — it adds Cargo dep, permissions config, AND `app.plugin(tauri_plugin_*::init())` automatically.
 
+6. **Windows IPC handler blocking:** On Windows, blocking operations (like `std::thread::sleep()`) in `#[tauri::command]` handlers hang the entire IPC bridge, causing `invoke()` calls to stay "Pending" forever with no status. **All long-running operations must spawn on separate threads:**
+   ```rust
+   #[tauri::command]
+   pub fn open_window(monitor_id: String, app: AppHandle) -> Result<(), AppError> {
+       // Spawn window ops on separate thread — never block IPC handler on Windows
+       let app_clone = app.clone();
+       std::thread::spawn(move || {
+           if let Err(e) = window_operation(&app_clone, &monitor_id) {
+               eprintln!("[app] window operation failed: {}", e);
+           }
+       });
+       Ok(()) // Return immediately
+   }
+   ```
+   This is a Windows-specific issue; macOS is more forgiving but best practice applies to both.
+
 ### TypeScript / React
 
 1. **React 19 useRef:** Requires explicit initial value. Use `useRef<T>(undefined)` not `useRef<T>()`.
@@ -200,7 +216,7 @@ src-tauri/src/                # Backend (Rust)
 - **Service item projection:** Items project to the projector via `setCurrentSlide()` with `SlideContentFlat`. Each item type maps to a slide_type: hymn→lyrics, bible→bible, annotation/url/file→text. Always check `isProjectorOpen` and call `toggleProjector()` first if closed.
 - **Play Service mode:** Uses `isPlayingService` + `activeServiceItemIndex` in the presentation store. Toolbar shows prev/next/stop controls. The `useEffect` on `activeServiceItemIndex` auto-projects the current item. Stop resets index to -1.
 - **Inline editing in lists:** Use local `useState` + `useRef` for focus management. Show save/cancel buttons (Check/X icons). Commit via `onEditItem` callback. Escape cancels, Enter saves.
-- **Multi-monitor pattern:** `open_fullscreen_window()` helper in `display.rs` for reusable fullscreen window creation. `useMonitorsControl()` hook exposes projector, return, and overlay controls. Status bar uses `<ProjectorControls />` with icon buttons + green/gray status dots.
+- **Multi-monitor pattern:** `open_fullscreen_window()` helper in `display.rs` for reusable fullscreen window creation. Commands `open_projector_window()` and `open_return_window()` **must spawn window ops on separate threads** to prevent IPC handler blocking on Windows. `useMonitorsControl()` hook exposes projector, return, and overlay controls. Status bar uses `<ProjectorControls />` with icon buttons + green/gray status dots.
 - **Overlay state:** Black/logo screen overlays managed in Rust state, synced via `"overlay-changed"` events. Projector view renders overlay layers with CSS fade transitions. Overlays are mutually exclusive (activating one deactivates the other).
 - **Return monitor:** Two-panel layout (70/30 split) showing current + next slide. Context data (next slide, index, total, title) sent via `setSlideContext()` alongside `setCurrentSlide()`, wrapped in `projectSlideWithContext()` helper in `use-slides.ts`.
 - **Keyboard shortcuts:** B=black screen, L=logo screen, F5=projector, Shift+F5=return monitor, Escape=clear projection.

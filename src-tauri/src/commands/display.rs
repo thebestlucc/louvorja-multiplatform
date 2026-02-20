@@ -111,7 +111,7 @@ fn build_return_stream_payload(
     })
 }
 
-fn stable_monitor_id(monitor: &tauri::Monitor) -> String {
+pub fn stable_monitor_id(monitor: &tauri::Monitor) -> String {
     let size = monitor.size();
     let position = monitor.position();
     let scale_factor = (monitor.scale_factor() * 1000.0).round() as i64;
@@ -131,7 +131,7 @@ fn stable_monitor_id(monitor: &tauri::Monitor) -> String {
     format!("monitor-{:016x}", hasher.finish())
 }
 
-fn parse_legacy_monitor_index(monitor_id: &str) -> Option<usize> {
+pub fn parse_legacy_monitor_index(monitor_id: &str) -> Option<usize> {
     let value = monitor_id.strip_prefix("monitor-")?;
     if !value.chars().all(|char| char.is_ascii_digit()) {
         return None;
@@ -468,6 +468,10 @@ pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppErr
 }
 
 /// Helper: open a fullscreen window on the given monitor
+
+/// Helper: open a fullscreen window on the given monitor
+/// This function is now deprecated - use spawn_projector_process() instead for separate process windows
+#[allow(dead_code)]
 fn open_fullscreen_window(
     label: &str,
     url: &str,
@@ -559,13 +563,14 @@ pub fn open_projector_window(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    open_fullscreen_window(
-        "projector",
-        "/projector",
-        "LouvorJA - Projector",
-        &monitor_id,
-        &app,
-    )?;
+    // Spawn projector as a separate process instead of thread
+    let monitor_id_clone = monitor_id.clone();
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = spawn_projector_process(&app_clone, "--louvorja-projector", &monitor_id_clone, "projector") {
+            eprintln!("[louvorja] Failed to spawn projector process: {}", e);
+        }
+    });
 
     let mut projector_open = state
         .projector_open
@@ -582,9 +587,8 @@ pub fn close_projector_window(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    if let Some(window) = app.get_webview_window("projector") {
-        window.close().map_err(|e| AppError::Tauri(e.to_string()))?;
-    }
+    // Note: Closing a separate process window is handled by the user closing the window
+    // or the child process receiving a termination signal from the OS
     let mut projector_open = state
         .projector_open
         .lock()
@@ -600,13 +604,14 @@ pub fn open_return_window(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    open_fullscreen_window(
-        "return",
-        "/return",
-        "LouvorJA - Return Monitor",
-        &monitor_id,
-        &app,
-    )?;
+    // Spawn return monitor as a separate process instead of thread
+    let monitor_id_clone = monitor_id.clone();
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = spawn_projector_process(&app_clone, "--louvorja-return", &monitor_id_clone, "return") {
+            eprintln!("[louvorja] Failed to spawn return monitor process: {}", e);
+        }
+    });
 
     let mut return_open = state
         .return_open
@@ -623,9 +628,8 @@ pub fn close_return_window(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    if let Some(window) = app.get_webview_window("return") {
-        window.close().map_err(|e| AppError::Tauri(e.to_string()))?;
-    }
+    // Note: Closing a separate process window is handled by the user closing the window
+    // or the child process receiving a termination signal from the OS
     let mut return_open = state
         .return_open
         .lock()
@@ -923,4 +927,53 @@ pub fn get_monitor_configs(
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::get_monitor_configs(&conn)
+}
+
+/// Spawn a separate process for projector or return monitor
+/// This ensures that the main application is not blocked on single-monitor setups
+/// Also monitors the child process and updates app state when it exits
+fn spawn_projector_process(app: &AppHandle, mode_flag: &str, monitor_id: &str, window_label: &str) -> Result<(), AppError> {
+    let exe_path = std::env::current_exe()?;
+    
+    let mut child = std::process::Command::new(&exe_path)
+        .arg(mode_flag)
+        .arg(monitor_id)
+        .spawn()?;
+    
+    // Spawn a thread to monitor the child process and update app state when it exits
+    let app_handle = app.clone();
+    let window_label_owned = window_label.to_string();
+    std::thread::spawn(move || {
+        // Wait for the child process to finish
+        let _ = child.wait();
+        
+        eprintln!("[louvorja] {} process exited", window_label_owned);
+        
+        // Update app state to reflect that the window is closed
+        if let Some(state) = app_handle.try_state::<AppState>() {
+            match window_label_owned.as_str() {
+                "projector" => {
+                    if let Ok(mut open) = state.projector_open.lock() {
+                        *open = false;
+                    }
+                    // Emit to all windows that the projector state changed
+                    if let Some(main_window) = app_handle.get_webview_window("main") {
+                        let _ = main_window.emit("projector-state-changed", false);
+                    }
+                }
+                "return" => {
+                    if let Ok(mut open) = state.return_open.lock() {
+                        *open = false;
+                    }
+                    // Emit to all windows that the return state changed
+                    if let Some(main_window) = app_handle.get_webview_window("main") {
+                        let _ = main_window.emit("return-state-changed", false);
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+    
+    Ok(())
 }
