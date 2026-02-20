@@ -233,6 +233,7 @@ fn run_migration_background(
                         domain: "preflight".to_string(),
                         code: "SOURCE_OPEN_FAILED".to_string(),
                         message: sanitize_error_message(&error.to_string()),
+                        context: None,
                     }],
                     domains: Vec::new(),
                     cancelled: false,
@@ -286,6 +287,7 @@ fn run_migration_background(
                     domain: domain.id().to_string(),
                     code: "DOMAIN_IMPORT_FAILED".to_string(),
                     message: sanitize_error_message(&error.to_string()),
+                    context: None,
                 });
             }
         }
@@ -298,6 +300,7 @@ fn run_migration_background(
             domain: "migration".to_string(),
             code: "CANCELLED".to_string(),
             message: CANCELLATION_MESSAGE.to_string(),
+            context: None,
         });
     }
 
@@ -499,6 +502,7 @@ fn finalize_internal_error(
                 domain: "migration".to_string(),
                 code: "INTERNAL_ERROR".to_string(),
                 message: sanitize_error_message(&error.to_string()),
+                context: None,
             }],
             domains: Vec::new(),
             cancelled: false,
