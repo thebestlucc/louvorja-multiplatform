@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { emit } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { getCurrentSlide, getOverlayState } from "../../lib/tauri";
 import type { SlideContentFlat, OverlayState } from "../../types/presentation";
@@ -35,10 +34,6 @@ export function ProjectorView() {
 
   // Listen to slide changes
   useEffect(() => {
-    console.log("ProjectorView mounted");
-    // signal backend/main window that projector mounted
-    void emit("projector-mounted");
-
     const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
       setSlide(flatToSlideContent(event.payload));
     });

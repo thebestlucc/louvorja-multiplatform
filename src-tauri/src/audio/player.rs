@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use cpal::traits::{DeviceTrait, HostTrait};
 use rodio::source::SineWave;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::fs::File;
@@ -8,8 +9,8 @@ use std::time::Duration;
 
 pub struct AudioPlayer {
     sink: Option<Sink>,
-    _stream: OutputStream,
-    stream_handle: OutputStreamHandle,
+    _stream: Option<OutputStream>,
+    stream_handle: Option<OutputStreamHandle>,
     current_file: Option<PathBuf>,
     duration_ms: Option<u64>,
     volume: f32,
@@ -24,19 +25,62 @@ unsafe impl Sync for AudioPlayer {}
 
 impl AudioPlayer {
     pub fn new() -> Result<Self, AppError> {
-        let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| AppError::Internal(format!("Failed to open audio output: {}", e)))?;
+        let (stream, stream_handle) = Self::try_open_output_stream()
+            .map_err(|e| AppError::Internal(format!("Failed to open audio output: {e}")))?;
         Ok(Self {
             sink: None,
-            _stream: stream,
-            stream_handle,
+            _stream: Some(stream),
+            stream_handle: Some(stream_handle),
             current_file: None,
             duration_ms: None,
             volume: 1.0,
         })
     }
 
+    /// Try to open an audio output stream, falling back to every available
+    /// device on the host if the system default fails (common on Windows when
+    /// WASAPI has issues with the default device).
+    fn try_open_output_stream() -> Result<(OutputStream, OutputStreamHandle), String> {
+        if let Ok(result) = OutputStream::try_default() {
+            return Ok(result);
+        }
+
+        let host = cpal::default_host();
+        if let Ok(devices) = host.output_devices() {
+            for device in devices {
+                if let Ok(result) = OutputStream::try_from_device(&device) {
+                    let name = device.name().unwrap_or_else(|_| "unknown".into());
+                    eprintln!("[louvorja] Using fallback audio device: {name}");
+                    return Ok(result);
+                }
+            }
+        }
+
+        Err("No usable audio output device found".into())
+    }
+
+    /// Creates a disabled player when no audio output device is available.
+    /// Audio commands will return errors gracefully instead of panicking.
+    pub fn disabled() -> Self {
+        Self {
+            sink: None,
+            _stream: None,
+            stream_handle: None,
+            current_file: None,
+            duration_ms: None,
+            volume: 1.0,
+        }
+    }
+
+    fn is_audio_available(&self) -> bool {
+        self.stream_handle.is_some()
+    }
+
     pub fn play(&mut self, path: &str) -> Result<(), AppError> {
+        if !self.is_audio_available() {
+            return Err(AppError::Internal("No audio output device available".into()));
+        }
+
         if let Some(sink) = self.sink.take() {
             sink.stop();
         }
@@ -52,7 +96,8 @@ impl AudioPlayer {
             })?))
             .map_err(|e| AppError::Internal(format!("Failed to decode audio: {}", e)))?;
 
-        let sink = Sink::try_new(&self.stream_handle)
+        // SAFETY: we verified stream_handle.is_some() above
+        let sink = Sink::try_new(self.stream_handle.as_ref().unwrap())
             .map_err(|e| AppError::Internal(format!("Failed to create audio sink: {}", e)))?;
 
         sink.set_volume(self.volume);
@@ -65,8 +110,12 @@ impl AudioPlayer {
     }
 
     pub fn play_alert(&self, path: Option<&str>, volume: Option<f32>) -> Result<(), AppError> {
-        let sink = Sink::try_new(&self.stream_handle)
-            .map_err(|e| AppError::Internal(format!("Failed to create alert sink: {}", e)))?;
+        let Some(ref stream_handle) = self.stream_handle else {
+            return Err(AppError::Internal("No audio output device available".into()));
+        };
+
+        let sink = Sink::try_new(stream_handle)
+            .map_err(|e| AppError::Internal(format!("Failed to create alert sink: {e}")))?;
 
         let mut alert_volume = volume.unwrap_or(self.volume);
         if !alert_volume.is_finite() {

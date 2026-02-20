@@ -38,25 +38,6 @@ export function useMonitorsControl() {
     };
   }, [setProjectorWindowOpen]);
 
-  // Debug: listen for projector/return window open and projector-mounted events
-  useEffect(() => {
-    const un1 = listen<string>("projector-window-opened", (event) => {
-      console.log("projector-window-opened -> monitorId:", event.payload);
-    });
-    const un2 = listen<string>("return-window-opened", (event) => {
-      console.log("return-window-opened -> monitorId:", event.payload);
-    });
-    const un3 = listen("projector-mounted", () => {
-      console.log("projector-mounted event received (projector webview mounted)");
-    });
-
-    return () => {
-      un1.then((fn) => fn());
-      un2.then((fn) => fn());
-      un3.then((fn) => fn());
-    };
-  }, []);
-
   // Sync return window state
   useEffect(() => {
     const unlisten = listen<boolean>("return-state-changed", (event) => {
