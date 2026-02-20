@@ -41,6 +41,7 @@ export interface MigrationErrorItem {
   domain: string;
   code: string;
   message: string;
+  context?: string;
 }
 
 export interface MigrationDomainReport {

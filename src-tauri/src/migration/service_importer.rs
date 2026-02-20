@@ -11,10 +11,13 @@ pub fn import_services_domain(
 ) -> Result<MigrationDomainReport, AppError> {
     is_cancelled(cancel_flag)?;
 
+    // Legacy DB does not have 'services'/'service_items' tables — return empty report gracefully.
     if !table_exists(source, "services")? || !table_exists(source, "service_items")? {
-        return Err(AppError::Internal(
-            "Source database does not contain service tables.".to_string(),
-        ));
+        return Ok(MigrationDomainReport {
+            domain: "services".to_string(),
+            imported: 0,
+            skipped: 0,
+        });
     }
 
     let tx = target.transaction()?;

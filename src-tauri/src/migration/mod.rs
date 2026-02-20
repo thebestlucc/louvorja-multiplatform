@@ -110,6 +110,8 @@ pub struct MigrationErrorItem {
     pub domain: String,
     pub code: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -290,9 +292,10 @@ pub fn import_bible_domain(
 ) -> Result<MigrationDomainReport, AppError> {
     is_cancelled(cancel_flag)?;
 
-    if !table_exists(source, "bible_versions")? || !table_exists(source, "bible_verses")? {
+    // Legacy DB uses singular 'bible_version' and 'bible_verse' (not the plural forms).
+    if !table_exists(source, "bible_version")? || !table_exists(source, "bible_verse")? {
         return Err(AppError::Internal(
-            "Source database does not contain Bible tables.".to_string(),
+            "Source database does not contain Bible tables ('bible_version', 'bible_verse'). This does not appear to be a compatible LouvorJA legacy database.".to_string(),
         ));
     }
 
@@ -308,26 +311,26 @@ pub fn import_bible_domain(
     let mut skipped = 0u32;
 
     {
+        // Legacy columns: id_bible_version, name, abbreviation, id_language (no file_path)
         let mut select_versions = source.prepare(
-            "SELECT id, name, abbreviation, language, file_path FROM bible_versions ORDER BY id ASC",
+            "SELECT id_bible_version, name, abbreviation, id_language FROM bible_version ORDER BY id_bible_version ASC",
         )?;
         let mut rows = select_versions.query([])?;
 
         let sql = if replace_existing {
-            "INSERT INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, ?5)"
+            "INSERT INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, NULL)"
         } else {
-            "INSERT OR IGNORE INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, ?5)"
+            "INSERT OR IGNORE INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, NULL)"
         };
         let mut insert_version = tx.prepare(sql)?;
 
         while let Some(row) = rows.next()? {
             is_cancelled(cancel_flag)?;
             let changed = insert_version.execute(params![
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Option<String>>(4)?
+                row.get::<_, i64>(0)?,    // id_bible_version → id
+                row.get::<_, String>(1)?, // name
+                row.get::<_, String>(2)?, // abbreviation
+                row.get::<_, String>(3)?  // id_language → language
             ])?;
             if changed == 1 {
                 imported = imported.saturating_add(1);
@@ -338,9 +341,21 @@ pub fn import_bible_domain(
     }
 
     {
-        let mut select_verses = source.prepare(
-            "SELECT id, version_id, book, chapter, verse, text FROM bible_verses ORDER BY id ASC",
-        )?;
+        // Legacy: bible_verse JOIN bible_book to resolve book name.
+        // Legacy columns: id_bible_verse, id_bible_version, id_bible_book (FK), chapter, verse, text, id_language.
+        // bible_book has: id_bible_book, name (book name string).
+        let has_bible_book = table_exists(source, "bible_book")?;
+        let verse_sql = if has_bible_book {
+            "SELECT v.id_bible_verse, v.id_bible_version, b.name, v.chapter, v.verse, v.text
+             FROM bible_verse v
+             INNER JOIN bible_book b ON b.id_bible_book = v.id_bible_book AND b.id_language = v.id_language
+             ORDER BY v.id_bible_verse ASC"
+        } else {
+            // Fallback: use book id as string if bible_book table is absent
+            "SELECT id_bible_verse, id_bible_version, CAST(id_bible_book AS TEXT), chapter, verse, text
+             FROM bible_verse ORDER BY id_bible_verse ASC"
+        };
+        let mut select_verses = source.prepare(verse_sql)?;
         let mut rows = select_verses.query([])?;
 
         let sql = if replace_existing {
@@ -357,12 +372,12 @@ pub fn import_bible_domain(
             }
             processed = processed.saturating_add(1);
             let changed = insert_verse.execute(params![
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(4)?,
-                row.get::<_, String>(5)?
+                row.get::<_, i64>(0)?,    // id_bible_verse → id
+                row.get::<_, i64>(1)?,    // id_bible_version → version_id
+                row.get::<_, String>(2)?, // bible_book.name → book
+                row.get::<_, i64>(3)?,    // chapter
+                row.get::<_, i64>(4)?,    // verse
+                row.get::<_, String>(5)?  // text
             ])?;
             if changed == 1 {
                 imported = imported.saturating_add(1);
@@ -396,10 +411,13 @@ pub fn import_favorites_domain(
 ) -> Result<MigrationDomainReport, AppError> {
     is_cancelled(cancel_flag)?;
 
+    // Legacy DB does not have a 'favorites' table — return an empty report gracefully.
     if !table_exists(source, "favorites")? {
-        return Err(AppError::Internal(
-            "Source database does not contain favorites table.".to_string(),
-        ));
+        return Ok(MigrationDomainReport {
+            domain: DOMAIN_FAVORITES.to_string(),
+            imported: 0,
+            skipped: 0,
+        });
     }
 
     let tx = target.transaction()?;
@@ -453,10 +471,13 @@ pub fn import_settings_domain(
 ) -> Result<MigrationDomainReport, AppError> {
     is_cancelled(cancel_flag)?;
 
+    // Legacy DB may not have a 'settings' table — return an empty report gracefully.
     if !table_exists(source, "settings")? {
-        return Err(AppError::Internal(
-            "Source database does not contain settings table.".to_string(),
-        ));
+        return Ok(MigrationDomainReport {
+            domain: DOMAIN_SETTINGS.to_string(),
+            imported: 0,
+            skipped: 0,
+        });
     }
 
     let tx = target.transaction()?;
