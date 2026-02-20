@@ -8,6 +8,8 @@ import { BibleSearch } from "../../components/bible/bible-search";
 import { VersionComparison } from "../../components/bible/version-comparison";
 import { resolveBookIndex } from "../../components/bible/book-catalog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
+import { Button } from "../../components/ui/button";
+import { Monitor, Square } from "lucide-react";
 
 const VERSE_GRID_COLUMNS = 11;
 const PERIODIC_FALLBACK_ORDER_OFFSET = 1000;
@@ -26,7 +28,6 @@ function BibleIndex() {
     book: string;
     chapter: number;
     verseMode: "first" | "last";
-    projectAfter: boolean;
   };
 
   const { t } = useTranslation();
@@ -79,6 +80,16 @@ function BibleIndex() {
     bible.selectVerse(verse);
   };
 
+  const handleDoubleClickVerse = useCallback(
+    (verseNum: number) => {
+      if (bible.isProjecting) {
+        bible.selectSingleVerse(verseNum);
+        void bible.updateBibleProjection();
+      }
+    },
+    [bible],
+  );
+
   useEffect(() => {
     const pending = pendingVerseNavigationRef.current;
     if (!pending) return;
@@ -92,11 +103,8 @@ function BibleIndex() {
     if (targetVerse === null) return;
 
     bible.selectSingleVerse(targetVerse);
-    if (pending.projectAfter) {
-      void bible.projectVerse(targetVerse);
-    }
     pendingVerseNavigationRef.current = null;
-  }, [bible.currentBook, bible.currentChapter, bible.verses, bible.selectSingleVerse, bible.projectVerse]);
+  }, [bible.currentBook, bible.currentChapter, bible.verses, bible.selectSingleVerse]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback(
@@ -140,7 +148,7 @@ function BibleIndex() {
         firstAvailable?.focus();
       };
 
-      const { currentBook, currentChapter, verses, lastSelectedVerse, selectedVerses, projectedVerse } = bible;
+      const { currentBook, currentChapter, verses, lastSelectedVerse, selectedVerses, isProjecting } = bible;
       const currentBookIndex = orderedBooks.findIndex((bookEntry) => bookEntry.name === currentBook);
       const currentBookEntry = currentBookIndex >= 0 ? orderedBooks[currentBookIndex] : null;
       const chapterCount = currentBookEntry?.chapterCount ?? 0;
@@ -154,7 +162,6 @@ function BibleIndex() {
           book: targetBook,
           chapter: targetChapter,
           verseMode,
-          projectAfter: projectedVerse !== null,
         };
         if (targetBook !== currentBook) {
           bible.setBook(targetBook);
@@ -215,8 +222,8 @@ function BibleIndex() {
       const moveToVerse = (verse: number) => {
         const clamped = Math.max(1, Math.min(verse, verseCount));
         bible.selectSingleVerse(clamped);
-        if (projectedVerse !== null) {
-          void bible.projectVerse(clamped);
+        if (isProjecting) {
+          void bible.updateBibleProjection();
         }
       };
 
@@ -273,7 +280,9 @@ function BibleIndex() {
         case "Spacebar":
           e.preventDefault();
           bible.selectSingleVerse(activeVerse);
-          void bible.projectVerse(activeVerse);
+          if (isProjecting) {
+            void bible.updateBibleProjection();
+          }
           break;
       }
     },
@@ -290,26 +299,51 @@ function BibleIndex() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">{t("nav.bible")}</h1>
-        {bible.versions.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{t("bible.selectVersion")}</span>
-            <Select
-              value={String(bible.currentVersionId)}
-              onValueChange={(val) => bible.setVersion(Number(val))}
+        <div className="flex items-center gap-2">
+          {bible.versions.length > 0 && (
+            <>
+              <span className="text-sm text-muted-foreground">{t("bible.selectVersion")}</span>
+              <Select
+                value={String(bible.currentVersionId)}
+                onValueChange={(val) => bible.setVersion(Number(val))}
+              >
+                <SelectTrigger className="w-52 sm:w-72">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {bible.versions.map((v) => (
+                    <SelectItem key={v.id} value={String(v.id)}>
+                      {v.abbreviation} — {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
+          {bible.isProjecting ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                await bible.stopBibleProjection();
+              }}
             >
-              <SelectTrigger className="w-52 sm:w-72">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {bible.versions.map((v) => (
-                  <SelectItem key={v.id} value={String(v.id)}>
-                    {v.abbreviation} — {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+              <Square className="mr-2 h-4 w-4" />
+              {t("bible.stopProjection")}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                await bible.startBibleProjection();
+              }}
+            >
+              <Monitor className="mr-2 h-4 w-4" />
+              {t("bible.project")}
+            </Button>
+          )}
+        </div>
       </div>
 
       {bible.isLoadingVersions && (
@@ -331,7 +365,7 @@ function BibleIndex() {
                   chapter={bible.currentChapter}
                   versionAbbr={currentVersion?.abbreviation}
                   onSelectVerse={bible.selectVerse}
-                  onDoubleClickVerse={bible.projectVerse}
+                  onDoubleClickVerse={handleDoubleClickVerse}
                   isLoading={bible.isLoadingVerses}
                 />
 
@@ -371,7 +405,7 @@ function BibleIndex() {
                 onSelectBook={bible.setBook}
                 onSelectChapter={bible.setChapter}
                 onSelectVerse={bible.selectVerse}
-                onDoubleClickVerse={bible.projectVerse}
+                onDoubleClickVerse={handleDoubleClickVerse}
               />
             )}
           </div>

@@ -17,7 +17,7 @@ import type { SlideContent } from "../../types/presentation";
 import type { SyncPoint } from "../../types/audio";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoverPicker } from "../../components/media/cover-picker";
-import { ensureProjectionScreensStarted } from "../../lib/projection-playback";
+
 import { getSyncPoints as fetchSyncPoints } from "../../lib/tauri";
 import { toast } from "sonner";
 import {
@@ -268,7 +268,6 @@ function HymnDetail() {
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  await ensureProjectionScreensStarted();
                   setIsProjecting(true);
                   await projectHymnSlide(localActiveIndex);
                 }}

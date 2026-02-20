@@ -1,5 +1,6 @@
 import { audioStop, clearCurrentSlide } from "./tauri";
 import { useAudioStore } from "../stores/audio-store";
+import { useDisplayStore } from "../stores/display-store";
 
 /**
  * Clears the current projection and stops song audio playback when active.
@@ -7,6 +8,7 @@ import { useAudioStore } from "../stores/audio-store";
  */
 export async function stopProjectionAndSongAudio(): Promise<void> {
   await clearCurrentSlide();
+  useDisplayStore.getState().setCurrentProjectionType(null);
 
   const audioState = useAudioStore.getState();
 

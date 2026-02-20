@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { setCurrentSlide, setSlideContext } from "../../lib/tauri";
+import { setSlideContext } from "../../lib/tauri";
+import { projectSlideWithType } from "../../lib/projection-playback";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { ServiceItemList } from "../../components/services/service-item-list";
 import { ServiceTimeline } from "../../components/services/service-timeline";
@@ -145,7 +146,7 @@ function ServiceEditor() {
     }
 
     try {
-      await setCurrentSlide(slideData);
+      await projectSlideWithType(slideData, "service");
       // Find the item index in the list for return monitor context
       const itemIndex = items.findIndex((i) => i.id === item.id);
       const nextItem = itemIndex + 1 < items.length ? items[itemIndex + 1] : null;
@@ -187,7 +188,7 @@ function ServiceEditor() {
 
     // End of service timeline: stop playback and clear projection.
     setPlayingService(false);
-    void stopProjectionAndSongAudio().catch((err) => toast.error(String(err)));
+    void stopProjectionAndSongAudio().catch((err: unknown) => toast.error(String(err)));
   };
 
   const handlePrevItem = () => {

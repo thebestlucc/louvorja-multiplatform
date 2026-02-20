@@ -6,6 +6,7 @@ import {
   setCurrentSlide,
   setSlideContext,
 } from "../lib/tauri";
+import { useDisplayStore } from "../stores/display-store";
 import type {
   UtilityProjectionKind,
   UtilityProjectionPayload,
@@ -16,6 +17,7 @@ import type { SlideContentFlat, SlideContextFlat } from "../types/presentation";
 interface ProjectionSnapshot {
   slide: SlideContentFlat | null;
   context: SlideContextFlat | null;
+  projectionType: "bible" | "hymn" | "presentation" | "utility" | "service" | null;
 }
 
 export function useUtilityProjection(kind: UtilityProjectionKind) {
@@ -37,13 +39,19 @@ export function useUtilityProjection(kind: UtilityProjectionKind) {
       getSlideContext(),
     ]);
 
-    snapshotRef.current = { slide, context };
+    const displayState = useDisplayStore.getState();
+    snapshotRef.current = {
+      slide,
+      context,
+      projectionType: displayState.currentProjectionType,
+    };
   }, []);
 
   const project = useCallback(async (payload: UtilityProjectionPayload) => {
     await captureSnapshot();
     await setCurrentSlide(payload.slide);
     await setSlideContext(payload.context);
+    useDisplayStore.getState().setCurrentProjectionType("utility");
 
     if (!isMountedRef.current) {
       return;
@@ -66,17 +74,20 @@ export function useUtilityProjection(kind: UtilityProjectionKind) {
 
     if (!snapshot) {
       await clearCurrentSlide();
+      useDisplayStore.getState().setCurrentProjectionType(null);
       return;
     }
 
     if (!snapshot.slide) {
       await clearCurrentSlide();
+      useDisplayStore.getState().setCurrentProjectionType(null);
       return;
     }
 
     if (!snapshot.context) {
       await clearCurrentSlide();
       await setCurrentSlide(snapshot.slide);
+      useDisplayStore.getState().setCurrentProjectionType(snapshot.projectionType);
       return;
     }
 
@@ -84,6 +95,7 @@ export function useUtilityProjection(kind: UtilityProjectionKind) {
       setCurrentSlide(snapshot.slide),
       setSlideContext(snapshot.context),
     ]);
+    useDisplayStore.getState().setCurrentProjectionType(snapshot.projectionType);
   }, []);
 
   const stopProjection = useCallback(async () => {

@@ -8,7 +8,7 @@ import {
 } from "./tauri";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
-import type { SlideContent } from "../types/presentation";
+import type { SlideContent, SlideContentFlat } from "../types/presentation";
 import { slideContentToFlat } from "../types/presentation";
 import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
 
@@ -79,7 +79,11 @@ export async function projectSlideIndex(index: number): Promise<void> {
     ? presentationState.slides[index + 1]
     : null;
 
-  await setCurrentSlide(slideContentToFlat(currentSlide));
+  // Determine projection type based on context
+  const currentPresentationId = presentationState.currentPresentationId;
+  const projectionType: "hymn" | "presentation" = currentPresentationId ? "presentation" : "hymn";
+
+  await projectSlideWithType(slideContentToFlat(currentSlide), projectionType);
   await setSlideContext({
     next: nextSlide ? slideContentToFlat(nextSlide) : null,
     index,
@@ -121,4 +125,48 @@ function getSlideTitle(slide: SlideContent): string {
     case "video":
       return "Video";
   }
+}
+
+/**
+ * Check if projection is currently active (windows open and type is set)
+ */
+function isProjectionActive(): boolean {
+  const displayState = useDisplayStore.getState();
+  return displayState.currentProjectionType !== null &&
+    (displayState.projectorWindowOpen || displayState.returnWindowOpen);
+}
+
+/**
+ * Project a slide and update the projection type based on slide content type
+ * When projection is already active, this atomically switches to new content
+ * while keeping the windows open.
+ */
+export async function projectSlideWithType(
+  slideData: SlideContent | SlideContentFlat,
+  projectionType: "bible" | "hymn" | "presentation" | "utility" | "service",
+): Promise<void> {
+  const flat = slideData instanceof Object && (slideData as any).slide_type
+    ? (slideData as SlideContentFlat)
+    : slideContentToFlat(slideData as SlideContent);
+  
+  // If projection is already active, atomically switch content
+  // This ensures the new content appears immediately without interruption
+  const wasActive = isProjectionActive();
+  
+  await setCurrentSlide(flat);
+  useDisplayStore.getState().setCurrentProjectionType(projectionType);
+  
+  // Log content switch in active projection for debugging
+  if (wasActive) {
+    console.debug(`[projection] switched content to ${projectionType}`);
+  }
+}
+
+/**
+ * Clear the current slide and reset projection type
+ */
+export async function clearProjectionWithType(): Promise<void> {
+  const { clearCurrentSlide } = await import("./tauri");
+  await clearCurrentSlide();
+  useDisplayStore.getState().setCurrentProjectionType(null);
 }

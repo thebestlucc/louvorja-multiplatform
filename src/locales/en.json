@@ -418,6 +418,7 @@
     "noResults": "No results found",
     "loading": "Loading...",
     "project": "Project",
+    "stopProjection": "Stop projection",
     "oldTestament": "Old Testament",
     "newTestament": "New Testament",
     "selectVersion": "Version:",

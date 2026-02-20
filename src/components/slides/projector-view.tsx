@@ -27,6 +27,7 @@ export function ProjectorView() {
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [slideKey, setSlideKey] = useState(0); // Key to trigger fade animation on slide change
   const { data: allSettings } = useAllSettings();
   const screenDefaults = useMemo(() => parseProjectorScreenDefaults(allSettings), [allSettings]);
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
@@ -36,11 +37,13 @@ export function ProjectorView() {
   useEffect(() => {
     const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
       setSlide(flatToSlideContent(event.payload));
+      setSlideKey((prev) => prev + 1); // Trigger fade animation
     });
 
     void getCurrentSlide()
       .then((data) => {
         setSlide(data ? flatToSlideContent(data) : null);
+        setSlideKey((prev) => prev + 1);
       })
       .catch(() => {});
 
@@ -73,6 +76,7 @@ export function ProjectorView() {
     const unlisten = listen("slide-cleared", () => {
       setSlide(null);
       setUtilityProjection(null);
+      setSlideKey((prev) => prev + 1); // Trigger fade animation
     });
     return () => {
       unlisten.then((fn) => fn());
@@ -156,9 +160,10 @@ export function ProjectorView() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       <SlideRenderer
+        key={slideKey}
         slide={renderedSlide}
         renderMode="projector"
-        className="h-full w-full transition-opacity duration-300"
+        className="h-full w-full transition-opacity duration-300 animate-in fade-in"
       />
       {/* Black screen overlay */}
       <div
