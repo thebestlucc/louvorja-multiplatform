@@ -13,6 +13,13 @@ dist-ssr
 *.local
 .tmp-test-dist
 
+# SQLite database files — never commit runtime data to the repo
+*.db
+*.db-wal
+*.db-shm
+# Exception: legacy Delphi database kept for importer feature (column name mapping)
+!src-tauri/src/db/database.db
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

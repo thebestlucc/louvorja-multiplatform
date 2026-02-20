@@ -2474,6 +2474,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "chrono",
+ "cpal",
  "display-info",
  "log",
  "quick-xml 0.36.2",

@@ -11,7 +11,8 @@ mod streaming;
 mod video;
 
 use state::{AppState, AudioState, StreamingState, TimerRuntimeState};
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
+use std::time::Duration;
 use tauri::{Emitter, Manager};
 
 #[tauri::command]
@@ -32,9 +33,10 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir");
+                .map_err(|e| format!("Failed to get app data dir: {e}"))?;
 
-            let conn = db::init_db(&app_data_dir).expect("Failed to initialize database");
+            let conn = db::init_db(&app_data_dir)
+                .map_err(|e| format!("Failed to initialize database: {e}"))?;
 
             app.manage(AppState {
                 db: Mutex::new(conn),
@@ -49,7 +51,30 @@ pub fn run() {
                 slide_context: Mutex::new(None),
             });
 
-            let audio_state = AudioState::new().expect("Failed to initialize audio state");
+            // Initialize audio in a background thread with a timeout.
+            // On Windows, WASAPI (rodio's backend) can block the calling thread
+            // indefinitely when no audio device is available or a driver issue is
+            // present. Running in a background thread ensures setup() completes
+            // and the Tauri event loop is never blocked, preventing all invoke()
+            // calls from being stuck in pending status.
+            let audio_state = {
+                let (tx, rx) = mpsc::channel::<Result<AudioState, String>>();
+                std::thread::spawn(move || {
+                    let result = AudioState::new().map_err(|e| e.to_string());
+                    let _ = tx.send(result);
+                });
+                match rx.recv_timeout(Duration::from_secs(5)) {
+                    Ok(Ok(state)) => state,
+                    Ok(Err(e)) => {
+                        eprintln!("[louvorja] Audio device unavailable: {e}. Audio features disabled.");
+                        AudioState::disabled()
+                    }
+                    Err(_) => {
+                        eprintln!("[louvorja] Audio initialization timed out (WASAPI hang). Audio features disabled.");
+                        AudioState::disabled()
+                    }
+                }
+            };
             app.manage(audio_state);
 
             app.manage(StreamingState::new(7070));

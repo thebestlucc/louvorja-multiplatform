@@ -194,4 +194,12 @@ impl AudioState {
             audio_status_stream_stop: Mutex::new(None),
         })
     }
+
+    /// Creates a disabled AudioState when no audio output device is available.
+    pub fn disabled() -> Self {
+        Self {
+            player: Mutex::new(AudioPlayer::disabled()),
+            audio_status_stream_stop: Mutex::new(None),
+        }
+    }
 }

@@ -475,12 +475,9 @@ fn open_fullscreen_window(
     target_monitor_id: &str,
     app: &AppHandle,
 ) -> Result<(), AppError> {
-    // Emit diagnostic event: function entry
-    let _ = app.emit("open_fullscreen_start", label.to_string());
     let monitors = app
         .available_monitors()
         .map_err(|e| AppError::Tauri(e.to_string()))?;
-    let _ = app.emit("open_fullscreen_after_available_monitors", label.to_string());
     let monitor = monitors
         .iter()
         .find(|monitor| stable_monitor_id(monitor) == target_monitor_id)
@@ -488,7 +485,6 @@ fn open_fullscreen_window(
             parse_legacy_monitor_index(target_monitor_id).and_then(|legacy_index| monitors.get(legacy_index))
         })
         .ok_or_else(|| AppError::NotFound(format!("Monitor id {} not found", target_monitor_id)))?;
-    let _ = app.emit("open_fullscreen_found_monitor", target_monitor_id.to_string());
 
     let position = monitor.position();
     let size = monitor.size();
