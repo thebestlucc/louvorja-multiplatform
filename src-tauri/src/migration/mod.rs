@@ -244,7 +244,16 @@ pub fn preflight_source_path(path: &str) -> Result<(), AppError> {
     }
 
     let conn = open_readonly_source(path)?;
-    let _: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integrity: String = conn
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .map_err(AppError::Database)?;
+    if integrity != "ok" {
+        return Err(AppError::Internal(format!(
+            "Source database '{}' is corrupted (integrity check: {}).",
+            safe_source_label(path),
+            integrity
+        )));
+    }
     Ok(())
 }
 
@@ -358,11 +367,11 @@ pub fn import_bible_domain(
         let mut select_verses = source.prepare(verse_sql)?;
         let mut rows = select_verses.query([])?;
 
-        let sql = if replace_existing {
-            "INSERT INTO bible_verses (id, version_id, book, chapter, verse, text) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
-        } else {
-            "INSERT OR IGNORE INTO bible_verses (id, version_id, book, chapter, verse, text) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
-        };
+        // Always use OR IGNORE for verses: the legacy Delphi DB may contain orphaned
+        // verse rows whose version_id has no matching bible_version entry. With
+        // PRAGMA foreign_keys=ON those rows would hard-fail; OR IGNORE skips them
+        // gracefully and counts them as skipped instead of aborting the whole import.
+        let sql = "INSERT OR IGNORE INTO bible_verses (id, version_id, book, chapter, verse, text) VALUES (?1, ?2, ?3, ?4, ?5, ?6)";
         let mut insert_verse = tx.prepare(sql)?;
         let mut processed = 0u32;
 
