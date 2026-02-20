@@ -9,7 +9,6 @@ import {
   audioSetVolume,
 } from "../lib/tauri";
 import {
-  ensureProjectionScreensStarted,
   projectCurrentSlideFromStore,
 } from "../lib/projection-playback";
 
@@ -18,7 +17,6 @@ export function useAudio() {
 
   const play = useCallback(
     async (filePath: string) => {
-      await ensureProjectionScreensStarted();
       await projectCurrentSlideFromStore();
       store.startStatusSubscription();
       await audioPlay(filePath);

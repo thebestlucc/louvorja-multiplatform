@@ -8,12 +8,14 @@ interface DisplayState {
   returnWindowOpen: boolean;
   isBlackScreen: boolean;
   isLogoScreen: boolean;
+  currentProjectionType: "bible" | "hymn" | "presentation" | "utility" | "service" | null;
   setMonitors: (monitors: MonitorInfo[]) => void;
   setMonitorAssignment: (monitorId: string, role: string) => void;
   setProjectorWindowOpen: (open: boolean) => void;
   setReturnWindowOpen: (open: boolean) => void;
   setBlackScreen: (v: boolean) => void;
   setLogoScreen: (v: boolean) => void;
+  setCurrentProjectionType: (type: "bible" | "hymn" | "presentation" | "utility" | "service" | null) => void;
 }
 
 export const useDisplayStore = create<DisplayState>((set) => ({
@@ -23,6 +25,7 @@ export const useDisplayStore = create<DisplayState>((set) => ({
   returnWindowOpen: false,
   isBlackScreen: false,
   isLogoScreen: false,
+  currentProjectionType: null,
   setMonitors: (monitors) => set({ monitors }),
   setMonitorAssignment: (monitorId, role) =>
     set((s) => ({
@@ -32,4 +35,5 @@ export const useDisplayStore = create<DisplayState>((set) => ({
   setReturnWindowOpen: (open) => set({ returnWindowOpen: open }),
   setBlackScreen: (v) => set({ isBlackScreen: v }),
   setLogoScreen: (v) => set({ isLogoScreen: v }),
+  setCurrentProjectionType: (type) => set({ currentProjectionType: type }),
 }));

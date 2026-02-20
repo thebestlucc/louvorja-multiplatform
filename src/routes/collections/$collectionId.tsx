@@ -38,7 +38,7 @@ import { parseSlideRow, type SlideRow } from "../../types/presentation";
 import { useSlides as useSlidesControl } from "../../hooks/use-slides";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
-import { ensureProjectionScreensStarted } from "../../lib/projection-playback";
+
 import { normalizeMediaPath } from "../../lib/media-path";
 import {
   Dialog,
@@ -226,7 +226,6 @@ function CollectionDetail() {
     try {
       stopAudioStatusSubscription();
       setAudioSyncPoints([]);
-      await ensureProjectionScreensStarted();
       const slideRows = await getSlides(song.cache_presentation_id);
       const slideContents = slideRows.map((row) => parseSlideRow(row).content);
       if (slideContents.length === 0) {

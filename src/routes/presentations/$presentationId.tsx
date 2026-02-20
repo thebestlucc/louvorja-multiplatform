@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Download } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import { usePresentation2 } from "../../hooks/use-presentation";
 import { useExportSlja } from "../../lib/queries";
 import { SlideList } from "../../components/slides/slide-list";
@@ -12,6 +13,8 @@ import { TransitionSelector, type TransitionConfig } from "../../components/slid
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import type { SlideContent } from "../../types/presentation";
+import { projectSlideWithType } from "../../lib/projection-playback";
+import { usePresentationStore } from "../../stores/presentation-store";
 import {
   isInvalidPresentationId,
   resolvePresentationEditorState,
@@ -74,11 +77,28 @@ function PresentationEditor() {
     [activeSlideIndex, updateSlideContent],
   );
 
-  const handleLoadSlides = useCallback(() => {
-    if (slideContents.length > 0) {
-      setActiveSlideIndex(0);
+  const handleLoadSlides = useCallback(async () => {
+    if (slideContents.length === 0) {
+      toast.error(t("presentations.emptyPresentation"));
+      return;
     }
-  }, [setActiveSlideIndex, slideContents.length]);
+
+    try {
+      // Set the current presentation context in the store
+      const { setCurrentPresentation, setSlides, setActiveSlideIndex: setStoredActiveSlideIndex } = usePresentationStore.getState();
+      setCurrentPresentation(id);
+      setSlides(slideContents);
+      setStoredActiveSlideIndex(0);
+
+      // Project the first slide
+      await projectSlideWithType(slideContents[0], "presentation");
+
+      // Update local UI state
+      setActiveSlideIndex(0);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  }, [id, slideContents, setActiveSlideIndex, t]);
 
   const handleExport = async () => {
     if (!presentation) return;
@@ -195,7 +215,9 @@ function PresentationEditor() {
           </Button>
           <Button
             size="sm"
-            onClick={handleLoadSlides}
+            onClick={() => {
+              void handleLoadSlides();
+            }}
             disabled={slideContents.length === 0}
           >
             {t("presentations.preview")}

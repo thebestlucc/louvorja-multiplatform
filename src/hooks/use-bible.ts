@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
-import { setCurrentSlide, setSlideContext } from "../lib/tauri";
+import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContentFlat } from "../types/presentation";
-import { ensureProjectionScreensStarted } from "../lib/projection-playback";
+import { projectSlideWithType } from "../lib/projection-playback";
+import { useDisplayStore } from "../stores/display-store";
 
 export function useBible() {
   const [currentVersionId, setCurrentVersionId] = useState<number>(0);
@@ -11,11 +12,15 @@ export function useBible() {
   const [currentChapter, setCurrentChapter] = useState(0);
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const [lastSelectedVerse, setLastSelectedVerse] = useState<number | null>(null);
-  const [projectedVerse, setProjectedVerse] = useState<number | null>(null);
+
+  const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
+  const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
 
   const versionsQuery = useBibleVersions();
   const booksQuery = useBooks(currentVersionId);
   const versesQuery = useVerses(currentVersionId, currentBook, currentChapter);
+
+  const isProjecting = currentProjectionType === "bible";
 
   const setVersion = useCallback((versionId: number) => {
     setCurrentVersionId(versionId);
@@ -23,7 +28,6 @@ export function useBible() {
     setCurrentChapter(0);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
-    setProjectedVerse(null);
   }, []);
 
   const setBook = useCallback((book: string) => {
@@ -31,14 +35,12 @@ export function useBible() {
     setCurrentChapter(0);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
-    setProjectedVerse(null);
   }, []);
 
   const setChapter = useCallback((chapter: number) => {
     setCurrentChapter(chapter);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
-    setProjectedVerse(null);
   }, []);
 
   const selectVerse = useCallback((verse: number) => {
@@ -68,10 +70,9 @@ export function useBible() {
   const clearSelection = useCallback(() => {
     setSelectedVerses([]);
     setLastSelectedVerse(null);
-    setProjectedVerse(null);
   }, []);
 
-  const projectVerse = useCallback(async (verseNum: number) => {
+  const projectSingleVerse = useCallback(async (verseNum: number) => {
     if (!currentVersionId || !currentBook || !currentChapter) return;
     const verseData = (versesQuery.data ?? []).find((v) => v.verse === verseNum);
     if (!verseData) return;
@@ -84,16 +85,14 @@ export function useBible() {
     };
 
     try {
-      await ensureProjectionScreensStarted();
-      await setCurrentSlide(slideData);
+      await projectSlideWithType(slideData, "bible");
       await setSlideContext({ next: null, index: 0, total: 1, title: reference });
-      setProjectedVerse(verseNum);
     } catch (err) {
       toast.error(String(err));
     }
   }, [currentVersionId, currentBook, currentChapter, versesQuery.data]);
 
-  const projectSelectedVerses = useCallback(async () => {
+  const projectSelectedVersesRange = useCallback(async () => {
     if (selectedVerses.length === 0 || !currentVersionId || !currentBook || !currentChapter) return;
     const sorted = [...selectedVerses].sort((a, b) => a - b);
     const start = sorted[0];
@@ -116,14 +115,39 @@ export function useBible() {
     };
 
     try {
-      await ensureProjectionScreensStarted();
-      await setCurrentSlide(slideData);
+      await projectSlideWithType(slideData, "bible");
       await setSlideContext({ next: null, index: 0, total: 1, title: reference });
-      setProjectedVerse(null);
     } catch (err) {
       toast.error(String(err));
     }
   }, [selectedVerses, currentVersionId, currentBook, currentChapter, versesQuery.data]);
+
+  const startBibleProjection = useCallback(async () => {
+    setCurrentProjectionType("bible");
+    // Project the selected verses if any
+    if (selectedVerses.length > 0) {
+      await projectSelectedVersesRange();
+    }
+  }, [selectedVerses, setCurrentProjectionType, projectSelectedVersesRange]);
+
+  const stopBibleProjection = useCallback(async () => {
+    try {
+      await clearCurrentSlide();
+      setCurrentProjectionType(null);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  }, [setCurrentProjectionType]);
+
+  const updateBibleProjection = useCallback(async () => {
+    if (!isProjecting) return;
+    if (selectedVerses.length > 0) {
+      await projectSelectedVersesRange();
+    } else {
+      // If no verses selected while projecting, clear the projection
+      await stopBibleProjection();
+    }
+  }, [isProjecting, selectedVerses, projectSelectedVersesRange, stopBibleProjection]);
 
   return {
     currentVersionId,
@@ -131,7 +155,7 @@ export function useBible() {
     currentChapter,
     selectedVerses,
     lastSelectedVerse,
-    projectedVerse,
+    isProjecting,
     versions: versionsQuery.data ?? [],
     books: booksQuery.data ?? [],
     verses: versesQuery.data ?? [],
@@ -145,7 +169,10 @@ export function useBible() {
     selectSingleVerse,
     selectVerseRange,
     clearSelection,
-    projectVerse,
-    projectSelectedVerses,
+    projectSingleVerse,
+    projectSelectedVersesRange,
+    startBibleProjection,
+    stopBibleProjection,
+    updateBibleProjection,
   };
 }
