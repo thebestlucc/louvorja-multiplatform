@@ -18,6 +18,7 @@ import type {
   MigrationProgressEvent,
 } from "../../types/migration";
 import { useOnboardingStore } from "../../stores/onboarding-store";
+import { useMigrationStore } from "../../stores/migration-store";
 
 export const Route = createFileRoute("/onboarding/import")({
   component: OnboardingImportPage,
@@ -36,14 +37,14 @@ function OnboardingImportPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const mode = useOnboardingStore((state) => state.mode);
-  const runId = useOnboardingStore((state) => state.migrationRunId);
-  const storedSourcePath = useOnboardingStore((state) => state.migrationSourcePath);
-  const storedReport = useOnboardingStore((state) => state.migrationReport);
   const setMode = useOnboardingStore((state) => state.setMode);
-  const setMigrationRun = useOnboardingStore((state) => state.setMigrationRun);
-  const setMigrationStatus = useOnboardingStore((state) => state.setMigrationStatus);
-  const setMigrationReport = useOnboardingStore((state) => state.setMigrationReport);
-  const clearMigration = useOnboardingStore((state) => state.clearMigration);
+  const runId = useMigrationStore((state) => state.runId);
+  const storedSourcePath = useMigrationStore((state) => state.sourcePath);
+  const storedReport = useMigrationStore((state) => state.report);
+  const setMigrationRun = useMigrationStore((state) => state.setMigrationRun);
+  const setMigrationStatus = useMigrationStore((state) => state.setMigrationStatus);
+  const setMigrationReport = useMigrationStore((state) => state.setMigrationReport);
+  const clearMigration = useMigrationStore((state) => state.clearMigration);
   const startMutation = useStartMigration();
   const cancelMutation = useCancelMigration();
   const [sourcePath, setSourcePath] = useState(storedSourcePath);
