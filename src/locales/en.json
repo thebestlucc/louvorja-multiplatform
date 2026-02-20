@@ -543,7 +543,11 @@
     "monitorAssignmentTesting": "Testing...",
     "monitorAssignmentTestFailed": "Could not open test monitor window: {{error}}",
     "monitorAssignmentNone": "No monitors detected. Connect a display and try again.",
-    "monitorAssignmentDistinctRequired": "Projector and return must be assigned to different monitors when more than one monitor is available."
+    "monitorAssignmentDistinctRequired": "Projector and return must be assigned to different monitors when more than one monitor is available.",
+    "legacyImport": {
+      "title": "Legacy Database Import",
+      "description": "Import data from an older LouvorJA (Delphi) database into this installation."
+    }
   },
   "onboarding": {
     "title": "Welcome to LouvorJA",

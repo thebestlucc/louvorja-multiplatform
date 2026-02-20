@@ -1,17 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X } from "lucide-react";
+import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Database } from "lucide-react";
 import {
+  useCancelMigration,
   useCopyImageToMedia,
+  useMigrationProgress,
+  useMigrationReport,
   useMonitorConfigs,
   useMonitors,
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
+  useStartMigration,
 } from "../../lib/queries";
+import { ImportWizard } from "../../components/migration/import-wizard";
+import { ImportProgress } from "../../components/migration/import-progress";
+import { useMigrationStore } from "../../stores/migration-store";
+import type {
+  MigrationOptions,
+  MigrationProgress as MigrationProgressType,
+  MigrationProgressEvent,
+} from "../../types/migration";
 import { StreamingControls } from "../../components/streaming/streaming-controls";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
@@ -36,6 +49,15 @@ import { getPreferredMonitorName } from "../../lib/monitor-display-name";
 export const Route = createFileRoute("/settings/")({
   component: SettingsIndex,
 });
+
+const defaultMigrationOptions: MigrationOptions = {
+  includeHymns: true,
+  includeBible: true,
+  includeFavorites: true,
+  includeServices: true,
+  includeSettings: true,
+  replaceExisting: false,
+};
 
 function SettingsIndex() {
   const { t } = useTranslation();
@@ -72,6 +94,34 @@ function SettingsIndex() {
   const [returnMonitorId, setReturnMonitorId] = useState("");
   const [monitorFeedback, setMonitorFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [testingMonitorRole, setTestingMonitorRole] = useState<"projector" | "return" | null>(null);
+
+  // --- Legacy Import state ---
+  const migRunId = useMigrationStore((s) => s.runId);
+  const migStoredSourcePath = useMigrationStore((s) => s.sourcePath);
+  const migStoredReport = useMigrationStore((s) => s.report);
+  const setMigrationRun = useMigrationStore((s) => s.setMigrationRun);
+  const setMigrationStatus = useMigrationStore((s) => s.setMigrationStatus);
+  const setMigrationReport = useMigrationStore((s) => s.setMigrationReport);
+  const clearMigration = useMigrationStore((s) => s.clearMigration);
+  const startMigrationMutation = useStartMigration();
+  const cancelMigrationMutation = useCancelMigration();
+  const [migSourcePath, setMigSourcePath] = useState("");
+  const [migOptions, setMigOptions] = useState<MigrationOptions>(defaultMigrationOptions);
+  const [migError, setMigError] = useState<string | null>(null);
+  const [migEventProgress, setMigEventProgress] = useState<MigrationProgressType | null>(null);
+  const migProgressQuery = useMigrationProgress(migRunId, { enabled: Boolean(migRunId) });
+  const migShouldLoadReport = Boolean(
+    migRunId
+      && migProgressQuery.data
+      && migProgressQuery.data.status !== "running"
+      && migProgressQuery.data.status !== "cancelling",
+  );
+  const migReportQuery = useMigrationReport(migRunId, { enabled: migShouldLoadReport });
+  const migProgress = migProgressQuery.data ?? migEventProgress;
+  const migEffectiveReport = migReportQuery.data ?? migStoredReport;
+  const migIsRunning = migProgress?.status === "running" || migProgress?.status === "cancelling";
+  const migShowProgress = Boolean(migRunId && (migIsRunning || migEffectiveReport || migProgress));
+
   const projectorLogoPreviewSrc = useMediaSource(projectorLogoImagePath);
   const monitorOptions = useMemo(
     () =>
@@ -185,6 +235,46 @@ function SettingsIndex() {
     setProjectorMonitorId(existingProjectorValid ?? fallbackProjector);
     setReturnMonitorId(existingReturnValid ?? fallbackReturn);
   }, [monitorConfigs, monitorOptions, monitors]);
+
+  useEffect(() => {
+    if (migStoredSourcePath) setMigSourcePath(migStoredSourcePath);
+  }, [migStoredSourcePath]);
+
+  useEffect(() => {
+    if (!migProgress) return;
+    setMigrationStatus(migProgress.status);
+  }, [migProgress, setMigrationStatus]);
+
+  useEffect(() => {
+    if (!migReportQuery.data) return;
+    setMigrationReport(migReportQuery.data);
+  }, [migReportQuery.data, setMigrationReport]);
+
+  useEffect(() => {
+    if (!migRunId) {
+      setMigEventProgress(null);
+      return;
+    }
+
+    const unlisten = listen<MigrationProgressEvent>("migration-progress", (event) => {
+      if (event.payload.runId !== migRunId) return;
+      setMigEventProgress((previous) => ({
+        runId: event.payload.runId,
+        step: event.payload.step,
+        completed: event.payload.completed,
+        total: event.payload.total,
+        percent: event.payload.percent,
+        etaSeconds: event.payload.etaSeconds,
+        message: event.payload.message,
+        status: previous?.status ?? "running",
+        updatedAt: previous?.updatedAt ?? new Date().toISOString(),
+      }));
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [migRunId]);
 
   const monitorSelectionConfigs = useMemo<MonitorConfig[]>(() => {
     const configs: MonitorConfig[] = [];
@@ -415,6 +505,36 @@ function SettingsIndex() {
       setTestingMonitorRole((currentRole) => currentRole === role ? null : currentRole);
       toast.error(t("settings.monitorAssignmentTestFailed", { error: String(error) }));
     }
+  };
+
+  const handleStartMigration = async () => {
+    setMigError(null);
+    try {
+      const run = await startMigrationMutation.mutateAsync({
+        oldDbPath: migSourcePath.trim(),
+        options: migOptions,
+      });
+      setMigrationRun(run.runId, migSourcePath.trim());
+      setMigrationReport(null);
+      setMigEventProgress(null);
+    } catch (error) {
+      setMigError(String(error));
+    }
+  };
+
+  const migProgressLabels = {
+    title: t("migration.progress.title"),
+    waiting: t("migration.progress.waiting"),
+    cancel: t("migration.progress.cancel"),
+    continue: t("migration.progress.continue"),
+    retry: t("migration.progress.retry"),
+    statusRunning: t("migration.progress.statusRunning"),
+    statusCompleted: t("migration.progress.statusCompleted"),
+    statusFailed: t("migration.progress.statusFailed"),
+    statusCancelled: t("migration.progress.statusCancelled"),
+    summaryTitle: t("migration.progress.summaryTitle"),
+    summaryErrors: t("migration.progress.summaryErrors"),
+    summaryNoErrors: t("migration.progress.summaryNoErrors"),
   };
 
   return (
@@ -862,6 +982,91 @@ function SettingsIndex() {
             </div>
           )}
         </div>
+      </section>
+
+      {/* Legacy Database Import Section */}
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Database className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.legacyImport.title")}</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">{t("settings.legacyImport.description")}</p>
+
+        {!migShowProgress ? (
+          <ImportWizard
+            title={t("migration.wizard.title")}
+            description={t("migration.wizard.description")}
+            sourcePath={migSourcePath}
+            options={migOptions}
+            loading={startMigrationMutation.isPending}
+            errorMessage={migError}
+            onSourcePathChange={setMigSourcePath}
+            onBrowseSourcePath={async () => {
+              const selected = await openFileDialog({
+                multiple: false,
+                title: t("migration.wizard.browse"),
+                filters: [
+                  {
+                    name: "SQLite",
+                    extensions: ["db", "sqlite", "sqlite3"],
+                  },
+                ],
+              });
+              if (typeof selected === "string") {
+                setMigSourcePath(selected);
+                setMigError(null);
+              }
+            }}
+            onOptionsChange={setMigOptions}
+            onStartImport={() => void handleStartMigration()}
+            onStartFresh={() => {
+              clearMigration();
+              setMigSourcePath("");
+              setMigOptions(defaultMigrationOptions);
+              setMigError(null);
+              setMigEventProgress(null);
+            }}
+            labels={{
+              sourcePath: t("migration.wizard.sourcePath"),
+              browse: t("migration.wizard.browse"),
+              startImport: t("migration.wizard.startImport"),
+              startFresh: t("migration.wizard.startFresh"),
+              includeHymns: t("migration.wizard.includeHymns"),
+              includeBible: t("migration.wizard.includeBible"),
+              includeFavorites: t("migration.wizard.includeFavorites"),
+              includeServices: t("migration.wizard.includeServices"),
+              includeSettings: t("migration.wizard.includeSettings"),
+              replaceExisting: t("migration.wizard.replaceExisting"),
+              domainTitle: t("migration.wizard.domainTitle"),
+              domainsSelected: t("migration.wizard.domainsSelected"),
+              domainsNoneSelected: t("migration.wizard.domainsNoneSelected"),
+            }}
+          />
+        ) : null}
+
+        {migShowProgress ? (
+          <ImportProgress
+            progress={migProgress}
+            report={migEffectiveReport}
+            loadingReport={migReportQuery.isLoading}
+            cancelling={cancelMigrationMutation.isPending}
+            labels={migProgressLabels}
+            onCancel={() => {
+              if (!migRunId) return;
+              cancelMigrationMutation.mutate(migRunId);
+            }}
+            onContinue={() => {
+              clearMigration();
+              setMigSourcePath("");
+              setMigOptions(defaultMigrationOptions);
+              setMigEventProgress(null);
+            }}
+            onRetry={() => {
+              clearMigration();
+              setMigEventProgress(null);
+            }}
+          />
+        ) : null}
       </section>
         </div>
       </div>

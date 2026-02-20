@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { completeOnboarding, invalidateOnboardingCache } from "../../lib/onboarding";
 import { useOnboardingStore } from "../../stores/onboarding-store";
+import { useMigrationStore } from "../../stores/migration-store";
 
 export const Route = createFileRoute("/onboarding/complete")({
   component: OnboardingCompletePage,
@@ -17,7 +18,7 @@ function OnboardingCompletePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mode = useOnboardingStore((state) => state.mode);
-  const report = useOnboardingStore((state) => state.migrationReport);
+  const report = useMigrationStore((state) => state.report);
   const reset = useOnboardingStore((state) => state.reset);
 
   const handleFinish = async () => {

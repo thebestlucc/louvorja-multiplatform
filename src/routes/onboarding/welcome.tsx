@@ -7,6 +7,7 @@ import { LANGUAGES, type Language } from "../../lib/constants";
 import { useSetSetting } from "../../lib/queries";
 import { useThemeStore } from "../../stores/theme-store";
 import { useOnboardingStore } from "../../stores/onboarding-store";
+import { useMigrationStore } from "../../stores/migration-store";
 
 export const Route = createFileRoute("/onboarding/welcome")({
   component: OnboardingWelcomePage,
@@ -18,7 +19,7 @@ function OnboardingWelcomePage() {
   const { language, setLanguage } = useThemeStore();
   const setSettingMutation = useSetSetting();
   const setMode = useOnboardingStore((state) => state.setMode);
-  const clearMigration = useOnboardingStore((state) => state.clearMigration);
+  const clearMigration = useMigrationStore((state) => state.clearMigration);
   const languageLabelByCode: Record<Language, string> = {
     pt: t("settings.languagePt"),
     en: t("settings.languageEn"),

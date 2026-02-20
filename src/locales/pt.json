@@ -543,7 +543,11 @@
     "monitorAssignmentTesting": "Testando...",
     "monitorAssignmentTestFailed": "Não foi possível abrir a janela de teste do monitor: {{error}}",
     "monitorAssignmentNone": "Nenhum monitor detectado. Conecte uma tela e tente novamente.",
-    "monitorAssignmentDistinctRequired": "Projetor e retorno devem ser atribuídos a monitores diferentes quando houver mais de um monitor disponível."
+    "monitorAssignmentDistinctRequired": "Projetor e retorno devem ser atribuídos a monitores diferentes quando houver mais de um monitor disponível.",
+    "legacyImport": {
+      "title": "Importar Banco de Dados Legado",
+      "description": "Importe dados de um banco de dados LouvorJA (Delphi) mais antigo para esta instalacao."
+    }
   },
   "onboarding": {
     "title": "Bem-vindo ao LouvorJA",
