@@ -1,12 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Monitor, Music, Pencil, Save, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Monitor, Music, Pencil, Save, Square, Trash2 } from "lucide-react";
 import { useDeleteHymn, useHymn, useSyncPoints, useUpdateHymn } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useSlides } from "../../hooks/use-slides";
+import { useAudio } from "../../hooks/use-audio";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { LyricsDisplay } from "../../components/music/lyrics-display";
+import { LyricsModal } from "../../components/music/lyrics-modal";
 import { AudioControls } from "../../components/music/audio-controls";
 import { AudioSyncEditor } from "../../components/music/audio-sync-editor";
 import { SlideList } from "../../components/slides/slide-list";
@@ -71,8 +73,10 @@ function HymnDetail() {
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const activeProjectedIndex = usePresentationStore((state) => state.activeSlideIndex);
   const { goToSlide } = useSlides();
+  const { play, setPlaybackMode } = useAudio();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [lyricsModalOpen, setLyricsModalOpen] = useState(false);
   const [isProjecting, setIsProjecting] = useState(false);
   const [isQueueBoundToHymn, setIsQueueBoundToHymn] = useState(false);
   const [resolvedSyncPoints, setResolvedSyncPoints] = useState<SyncPoint[] | null>(null);
@@ -224,6 +228,29 @@ function HymnDetail() {
     }
   };
 
+  const handleStartCantado = async () => {
+    setPlaybackMode("sung");
+    await bindHymnToPlaybackQueue(0);
+    await goToSlide(0);
+    if (hymn.audio_path) await play(hymn.audio_path);
+    setIsProjecting(true);
+  };
+
+  const handleStartPlayback = async () => {
+    setPlaybackMode("karaoke");
+    await bindHymnToPlaybackQueue(0);
+    await goToSlide(0);
+    if (hymn.audio_path) await play(hymn.audio_path);
+    setIsProjecting(true);
+  };
+
+  const handleStartSlidesOnly = async () => {
+    setPlaybackMode("silent");
+    await bindHymnToPlaybackQueue(0);
+    await goToSlide(0);
+    setIsProjecting(true);
+  };
+
   return (
     <div className="flex h-full gap-4">
       {/* Main content */}
@@ -245,36 +272,47 @@ function HymnDetail() {
           {hymn.album && (
             <span className="text-sm text-muted-foreground">{hymn.album}</span>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               {t("actions.edit")}
             </Button>
             {isProjecting ? (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={async () => {
-                  await stopProjectionAndSongAudio();
-                  setIsProjecting(false);
-                  setIsQueueBoundToHymn(false);
-                }}
-              >
-                <Square className="mr-2 h-4 w-4" />
-                {t("hymnal.stopProjection")}
-              </Button>
+              <>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={async () => {
+                    await stopProjectionAndSongAudio();
+                    setIsProjecting(false);
+                    setIsQueueBoundToHymn(false);
+                  }}
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  {t("hymn.stopProjection")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setLyricsModalOpen(true)}>
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  {t("hymn.actionShowLyrics")}
+                </Button>
+              </>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  setIsProjecting(true);
-                  await projectHymnSlide(localActiveIndex);
-                }}
-              >
-                <Monitor className="mr-2 h-4 w-4" />
-                {t("hymnal.project")}
-              </Button>
+              <>
+                <Button size="sm" onClick={() => void handleStartCantado()}>
+                  <Monitor className="mr-2 h-4 w-4" />
+                  {t("hymn.actionSung")}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void handleStartPlayback()}>
+                  {t("hymn.actionPlayback")}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void handleStartSlidesOnly()}>
+                  {t("hymn.actionSlidesOnly")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setLyricsModalOpen(true)}>
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  {t("hymn.actionShowLyrics")}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -451,6 +489,8 @@ function HymnDetail() {
           />
         </div>
       )}
+
+      <LyricsModal hymn={hymn} open={lyricsModalOpen} onOpenChange={setLyricsModalOpen} />
     </div>
   );
 }

@@ -1,12 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { BookOpen, Plus } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Card, CardHeader } from "../ui/card";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
 import type { Hymn } from "../../types/hymn";
 import { CoverImage } from "../media/cover-image";
+import { LyricsModal } from "./lyrics-modal";
+import { useState } from "react";
 
 interface HymnCardProps {
   hymn: Hymn;
@@ -16,6 +18,7 @@ export function HymnCard({ hymn }: HymnCardProps) {
   const { t } = useTranslation();
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
   const addItemMutation = useAddServiceItem();
+  const [lyricsOpen, setLyricsOpen] = useState(false);
 
   const handleAddToService = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -52,6 +55,13 @@ export function HymnCard({ hymn }: HymnCardProps) {
                 <p className="truncate text-xs text-muted-foreground">{hymn.album}</p>
               )}
             </div>
+            <button
+              className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setLyricsOpen(true); }}
+              title={t("hymn.actionShowLyrics")}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+            </button>
             {activeServiceId && (
               <button
                 className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
@@ -64,6 +74,7 @@ export function HymnCard({ hymn }: HymnCardProps) {
           </div>
         </CardHeader>
       </Card>
+      <LyricsModal hymn={hymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />
     </Link>
   );
 }
