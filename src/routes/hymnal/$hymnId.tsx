@@ -229,26 +229,38 @@ function HymnDetail() {
   };
 
   const handleStartCantado = async () => {
-    setPlaybackMode("sung");
-    await bindHymnToPlaybackQueue(0);
-    await goToSlide(0);
-    if (hymn.audio_path) await play(hymn.audio_path);
-    setIsProjecting(true);
+    try {
+      setPlaybackMode("sung");
+      await bindHymnToPlaybackQueue(0);
+      await goToSlide(0);
+      if (hymn.audio_path) await play(hymn.audio_path);
+      setIsProjecting(true);
+    } catch (e) {
+      console.error("[hymn] Failed to start cantado projection:", e);
+    }
   };
 
   const handleStartPlayback = async () => {
-    setPlaybackMode("karaoke");
-    await bindHymnToPlaybackQueue(0);
-    await goToSlide(0);
-    if (hymn.audio_path) await play(hymn.audio_path);
-    setIsProjecting(true);
+    try {
+      setPlaybackMode("karaoke");
+      await bindHymnToPlaybackQueue(0);
+      await goToSlide(0);
+      if (hymn.audio_path) await play(hymn.audio_path);
+      setIsProjecting(true);
+    } catch (e) {
+      console.error("[hymn] Failed to start playback projection:", e);
+    }
   };
 
   const handleStartSlidesOnly = async () => {
-    setPlaybackMode("silent");
-    await bindHymnToPlaybackQueue(0);
-    await goToSlide(0);
-    setIsProjecting(true);
+    try {
+      setPlaybackMode("silent");
+      await bindHymnToPlaybackQueue(0);
+      await goToSlide(0);
+      setIsProjecting(true);
+    } catch (e) {
+      console.error("[hymn] Failed to start slides-only projection:", e);
+    }
   };
 
   return (

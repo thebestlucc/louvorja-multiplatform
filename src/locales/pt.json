@@ -280,7 +280,10 @@
     "actionPlayback": "Playback",
     "actionSlidesOnly": "Só slides",
     "actionShowLyrics": "Ver letra",
-    "stopProjection": "Parar"
+    "stopProjection": "Parar",
+    "lyricsModal": {
+      "noLyrics": "Letra não disponível"
+    }
   },
   "collections": {
     "subtitle": "Monte bibliotecas de músicas separadas das apresentações.",

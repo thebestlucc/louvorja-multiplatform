@@ -280,7 +280,10 @@
     "actionPlayback": "Playback",
     "actionSlidesOnly": "Slides only",
     "actionShowLyrics": "Show lyrics",
-    "stopProjection": "Stop"
+    "stopProjection": "Stop",
+    "lyricsModal": {
+      "noLyrics": "No lyrics available"
+    }
   },
   "collections": {
     "subtitle": "Build song libraries separate from presentations.",
