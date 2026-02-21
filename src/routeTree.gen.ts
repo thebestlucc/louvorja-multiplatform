@@ -15,6 +15,7 @@ import { Route as UtilitiesRouteRouteImport } from './routes/utilities/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as ServicesRouteRouteImport } from './routes/services/route'
 import { Route as PresentationsRouteRouteImport } from './routes/presentations/route'
+import { Route as OperatorRouteRouteImport } from './routes/operator/route'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as HymnalRouteRouteImport } from './routes/hymnal/route'
 import { Route as HelpRouteRouteImport } from './routes/help/route'
@@ -25,6 +26,7 @@ import { Route as UtilitiesIndexRouteImport } from './routes/utilities/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
 import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
+import { Route as OperatorIndexRouteImport } from './routes/operator/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as HymnalIndexRouteImport } from './routes/hymnal/index'
 import { Route as CollectionsIndexRouteImport } from './routes/collections/index'
@@ -70,6 +72,11 @@ const ServicesRouteRoute = ServicesRouteRouteImport.update({
 const PresentationsRouteRoute = PresentationsRouteRouteImport.update({
   id: '/presentations',
   path: '/presentations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperatorRouteRoute = OperatorRouteRouteImport.update({
+  id: '/operator',
+  path: '/operator',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
@@ -121,6 +128,11 @@ const PresentationsIndexRoute = PresentationsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PresentationsRouteRoute,
+} as any)
+const OperatorIndexRoute = OperatorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OperatorRouteRoute,
 } as any)
 const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   id: '/',
@@ -211,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRouteWithChildren
+  '/operator': typeof OperatorRouteRouteWithChildren
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
@@ -233,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/collections/': typeof CollectionsIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/operator/': typeof OperatorIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -259,6 +273,7 @@ export interface FileRoutesByTo {
   '/collections': typeof CollectionsIndexRoute
   '/hymnal': typeof HymnalIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
+  '/operator': typeof OperatorIndexRoute
   '/presentations': typeof PresentationsIndexRoute
   '/services': typeof ServicesIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -272,6 +287,7 @@ export interface FileRoutesById {
   '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRouteWithChildren
+  '/operator': typeof OperatorRouteRouteWithChildren
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
@@ -294,6 +310,7 @@ export interface FileRoutesById {
   '/collections/': typeof CollectionsIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/operator/': typeof OperatorIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -308,6 +325,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/hymnal'
     | '/onboarding'
+    | '/operator'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -330,6 +348,7 @@ export interface FileRouteTypes {
     | '/collections/'
     | '/hymnal/'
     | '/onboarding/'
+    | '/operator/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
@@ -356,6 +375,7 @@ export interface FileRouteTypes {
     | '/collections'
     | '/hymnal'
     | '/onboarding'
+    | '/operator'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -368,6 +388,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/hymnal'
     | '/onboarding'
+    | '/operator'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -390,6 +411,7 @@ export interface FileRouteTypes {
     | '/collections/'
     | '/hymnal/'
     | '/onboarding/'
+    | '/operator/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
@@ -403,6 +425,7 @@ export interface RootRouteChildren {
   HelpRouteRoute: typeof HelpRouteRoute
   HymnalRouteRoute: typeof HymnalRouteRouteWithChildren
   OnboardingRouteRoute: typeof OnboardingRouteRouteWithChildren
+  OperatorRouteRoute: typeof OperatorRouteRouteWithChildren
   PresentationsRouteRoute: typeof PresentationsRouteRouteWithChildren
   ServicesRouteRoute: typeof ServicesRouteRouteWithChildren
   SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
@@ -453,6 +476,13 @@ declare module '@tanstack/react-router' {
       path: '/presentations'
       fullPath: '/presentations'
       preLoaderRoute: typeof PresentationsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operator': {
+      id: '/operator'
+      path: '/operator'
+      fullPath: '/operator'
+      preLoaderRoute: typeof OperatorRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -524,6 +554,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/presentations/'
       preLoaderRoute: typeof PresentationsIndexRouteImport
       parentRoute: typeof PresentationsRouteRoute
+    }
+    '/operator/': {
+      id: '/operator/'
+      path: '/'
+      fullPath: '/operator/'
+      preLoaderRoute: typeof OperatorIndexRouteImport
+      parentRoute: typeof OperatorRouteRoute
     }
     '/onboarding/': {
       id: '/onboarding/'
@@ -699,6 +736,18 @@ const OnboardingRouteRouteWithChildren = OnboardingRouteRoute._addFileChildren(
   OnboardingRouteRouteChildren,
 )
 
+interface OperatorRouteRouteChildren {
+  OperatorIndexRoute: typeof OperatorIndexRoute
+}
+
+const OperatorRouteRouteChildren: OperatorRouteRouteChildren = {
+  OperatorIndexRoute: OperatorIndexRoute,
+}
+
+const OperatorRouteRouteWithChildren = OperatorRouteRoute._addFileChildren(
+  OperatorRouteRouteChildren,
+)
+
 interface PresentationsRouteRouteChildren {
   PresentationsPresentationIdRoute: typeof PresentationsPresentationIdRoute
   PresentationsIndexRoute: typeof PresentationsIndexRoute
@@ -765,6 +814,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpRouteRoute: HelpRouteRoute,
   HymnalRouteRoute: HymnalRouteRouteWithChildren,
   OnboardingRouteRoute: OnboardingRouteRouteWithChildren,
+  OperatorRouteRoute: OperatorRouteRouteWithChildren,
   PresentationsRouteRoute: PresentationsRouteRouteWithChildren,
   ServicesRouteRoute: ServicesRouteRouteWithChildren,
   SettingsRouteRoute: SettingsRouteRouteWithChildren,
