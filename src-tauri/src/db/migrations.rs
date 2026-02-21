@@ -74,6 +74,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (12)", [])?;
     }
 
+    if current_version < 13 {
+        migrate_v13(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (13)", [])?;
+    }
+
     Ok(())
 }
 
@@ -476,6 +481,118 @@ fn migrate_v12(conn: &Connection) -> Result<(), AppError> {
         ",
     )?;
     Ok(())
+}
+
+fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
+    // Only run if legacy Delphi-schema tables exist
+    if !table_exists(conn, "musics")? {
+        return Ok(());
+    }
+
+    // Skip if hymns already has data — either already imported or user has their own hymns
+    let hymn_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM hymns",
+        [],
+        |row| row.get(0),
+    )?;
+    if hymn_count > 0 {
+        return Ok(());
+    }
+
+    // Import musics + lyrics + albums + files → hymns
+    // Legacy schema (from analysis of database.db):
+    //   musics(id_music, name, id_file_music, id_language)
+    //   albums(id_album, name)
+    //   albums_musics(id_album, id_music, track)
+    //   categories(id_category, slug)
+    //   categories_albums(id_category, id_album, id_language)
+    //   lyrics(id_lyric, id_music, lyric, "order", show_slide, id_language)
+    //   files(id_file, name, dir)
+    conn.execute_batch("
+        INSERT INTO hymns (number, title, album, lyrics, audio_path, category)
+        SELECT
+            am.track,
+            m.name,
+            a.name,
+            (
+                SELECT GROUP_CONCAT(l.lyric, char(10) || char(10))
+                FROM lyrics l
+                WHERE l.id_music = m.id_music
+                  AND l.id_language = 'pt'
+                ORDER BY l.\"order\"
+            ),
+            CASE
+                WHEN f.dir IS NOT NULL AND f.name IS NOT NULL
+                THEN f.dir || '/' || f.name
+                ELSE NULL
+            END,
+            cat.slug
+        FROM musics m
+        INNER JOIN albums_musics am ON am.id_music = m.id_music
+        INNER JOIN albums a ON a.id_album = am.id_album
+        LEFT JOIN files f ON f.id_file = m.id_file_music
+        LEFT JOIN categories_albums ca ON ca.id_album = a.id_album
+            AND ca.id_language = 'pt'
+        LEFT JOIN categories cat ON cat.id_category = ca.id_category
+        WHERE m.id_language = 'pt'
+        ORDER BY am.track;
+
+        DELETE FROM hymns_fts;
+        INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+        SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
+        FROM hymns;
+    ")?;
+
+    // Import legacy bible data if legacy tables exist and new bible_verses is sparse
+    if !table_exists(conn, "bible_verse")? || !table_exists(conn, "bible_book")? {
+        return Ok(());
+    }
+
+    let new_verse_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM bible_verses",
+        [],
+        |row| row.get(0),
+    )?;
+    // ARA seed (migrate_v3) has ~100 verses; full bible has 31000+.
+    // Skip if we already have a substantial bible imported.
+    if new_verse_count > 1000 {
+        return Ok(());
+    }
+
+    conn.execute_batch("
+        INSERT OR IGNORE INTO bible_versions (name, abbreviation, language)
+        SELECT name, abbreviation, id_language
+        FROM bible_version
+        WHERE id_language = 'pt';
+
+        INSERT OR IGNORE INTO bible_verses (version_id, book, chapter, verse, text)
+        SELECT
+            nv.id,
+            bb.name,
+            bv.chapter,
+            bv.verse,
+            bv.text
+        FROM bible_verse bv
+        INNER JOIN bible_version lv ON lv.id_bible_version = bv.id_bible_version
+        INNER JOIN bible_book bb ON bb.id_bible_book = bv.id_bible_book
+        INNER JOIN bible_versions nv ON nv.abbreviation = lv.abbreviation
+        WHERE lv.id_language = 'pt';
+
+        DELETE FROM bible_fts;
+        INSERT INTO bible_fts(rowid, text, book)
+        SELECT id, text, book FROM bible_verses;
+    ")?;
+
+    Ok(())
+}
+
+fn table_exists(conn: &Connection, table: &str) -> Result<bool, AppError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+        rusqlite::params![table],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
 }
 
 fn add_column_if_missing(
