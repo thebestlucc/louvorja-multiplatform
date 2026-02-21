@@ -10,7 +10,7 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 Roadmap and feature decisions are tracked in `docs/phase-*` folders (`PRD.md`, `SPECS.md`, `TASKS.md`, `HANDOFF.md`).
 
-**Phases 0–10 are COMPLETE.** Phase 11 is in progress.
+**Phases 0–11 are COMPLETE.**
 
 ## Tech Stack
 
@@ -55,7 +55,7 @@ src/                          # Frontend (React)
 │   ├── display/              # projector-controls
 │   ├── layout/               # sidebar, header, status-bar
 │   ├── music/                # hymn-search, hymn-card, album-card, lyrics-display,
-│   │                         # audio-controls, audio-sync-editor
+│   │                         # audio-controls, audio-sync-editor, lyrics-modal
 │   ├── services/             # service-item-list, service-timeline, add-item-modal
 │   ├── slides/               # slide-renderer, slide-thumbnail, slide-list, slide-editor,
 │   │                         # projector-view, background-picker, aspect-ratio-selector,
@@ -74,7 +74,8 @@ src/                          # Frontend (React)
 │   ├── index.tsx             # Dashboard home
 │   ├── hymnal/               # route.tsx, index.tsx, $hymnId.tsx
 │   ├── presentations/        # route.tsx, index.tsx, $presentationId.tsx
-│   └── services/             # route.tsx, index.tsx, $serviceId.tsx
+│   ├── services/             # route.tsx, index.tsx, $serviceId.tsx
+│   └── operator/             # Operator screen (slide preview + controls)
 ├── stores/                   # Zustand stores (presentation-store, display-store, audio-store, ui-store)
 └── types/                    # TypeScript type definitions
 
@@ -107,6 +108,7 @@ src-tauri/src/                # Backend (Rust)
 - **SlideContent model:** Flat struct on Rust side (slide_type + optional fields). Discriminated union on TS side with converter functions (`slideContentToFlat` / `flatToSlideContent`).
 - **DB migrations:** Versioned in `migrations.rs`. Each version checks `schema_version` table. New tables/columns go in `migrate_vN`.
 - **Projector window:** Built dynamically with `WebviewWindowBuilder`: hidden → position → sleep(150ms) → show → fullscreen.
+- **Same-process projection windows:** Projector ("projector") and return ("return") windows are created via `WebviewWindowBuilder` in the main Tauri process — NOT in separate child processes. Window creation (sleep + fullscreen retries) runs on a background thread (`std::thread::spawn`) to prevent IPC blocking on all OSes. The `open_fullscreen_window()` helper in `commands/display.rs` encapsulates this. `skip_taskbar(false)` ensures windows appear in the OS window switcher (alt+tab).
 
 ### Frontend Side
 
@@ -150,6 +152,10 @@ src-tauri/src/                # Backend (Rust)
    }
    ```
    This is a Windows-specific issue; macOS is more forgiving but best practice applies to both.
+
+7. **Projection window creation must be on a background thread:** `open_fullscreen_window()` in `display.rs` uses `sleep()` and a fullscreen retry loop. This MUST run via `std::thread::spawn` — blocking the IPC handler thread causes all `invoke()` calls to hang on any OS. The commands `open_projector_window` and `open_return_window` spawn a thread and return immediately.
+
+8. **`skip_taskbar(true)` hides from alt+tab:** Setting `.skip_taskbar(true)` on a `WebviewWindowBuilder` hides the window from the OS window switcher (alt+tab on Windows, Mission Control on macOS). Projector windows use `.skip_taskbar(false)`.
 
 ### TypeScript / React
 
@@ -230,6 +236,9 @@ src-tauri/src/                # Backend (Rust)
 - **Service-aware update guard:** `UpdateNotification` subscribes to `usePresentationStore` via `.subscribe()` + `getState()`. Suppresses banner when `isProjectorOpen || isPlayingService || activeServiceId !== null`. Status bar indicator uses lightweight pub-sub callback (`onUpdateDeferredChange`) instead of a full store.
 - **Pastoral error messaging:** `classifyUpdateError()` in `lib/update-errors.ts` pattern-matches error strings into 4 categories (network/disk/permission/generic), each with i18n keys for title/why/action/reassurance. Toasts use `duration: Infinity` so users must dismiss manually.
 - **Version display:** `getVersion()` from `@tauri-apps/api/app` called once in `useEffect`, shown in status bar left side as `v{version}`.
+- **Operator screen:** The `/operator` route shows what's currently projected. It listens to Tauri events (`slide-changed`, `overlay-changed`, `slide-cleared`) directly (main process, events work). Controls call `useSlides().prevSlide()/nextSlide()` and `useAudio().togglePlayPause()`. Does NOT auto-open projection screens.
+- **Hymn 4 actions:** Hymn detail page has 4 explicit buttons: Cantado (sung mode + project), Playback (karaoke mode + project), Só slides (silent, no audio), Ver letra (LyricsModal). `LyricsModal` in `components/music/lyrics-modal.tsx` uses Radix `Dialog`.
+- **Legacy DB import:** `migrate_v13` in `migrations.rs` detects Delphi-schema tables (`musics`, `lyrics`, `albums`, `files`) and imports them into `hymns`. Idempotent: skips if `hymns` already has rows or if `musics` table is absent.
 
 ## Phase Status
 
@@ -246,6 +255,7 @@ src-tauri/src/                # Backend (Rust)
 | 8 | Video/Multimedia (09) | COMPLETE |
 | 9 | Utilities & Polish (10) | Pending |
 | 10 | Migration & Deploy (11) | Pending |
+| 11 | Projection Overhaul | COMPLETE |
 
 ## Self-Improvement Protocol
 
