@@ -66,6 +66,10 @@ export async function deleteHymn(id: number): Promise<void> {
   return tauriInvoke<void>("delete_hymn", { id });
 }
 
+export async function getHymnAudioPath(hymnId: number): Promise<string | null> {
+  return tauriInvoke<string | null>("get_hymn_audio_path", { hymn_id: hymnId });
+}
+
 // Collections
 export async function getCollections(): Promise<Collection[]> {
   return tauriInvoke<Collection[]>("get_collections");
@@ -318,27 +322,14 @@ export async function getVerses(versionId: number, book: string, chapter: number
   return tauriInvoke<Verse[]>("get_verses", { versionId, book, chapter });
 }
 
-export async function getVerseRange(versionId: number, book: string, chapter: number, start: number, end: number): Promise<Verse[]> {
-  return tauriInvoke<Verse[]>("get_verse_range", { versionId, book, chapter, start, end });
-}
-
 export async function searchBible(query: string, versionId: number | null): Promise<BibleSearchResult[]> {
   return tauriInvoke<BibleSearchResult[]>("search_bible", { query, versionId });
-}
-
-export async function projectBibleVerse(versionId: number, book: string, chapter: number, start: number, end: number): Promise<void> {
-  return tauriInvoke<void>("project_bible_verse", { versionId, book, chapter, start, end });
 }
 
 export async function importBibleVersion(name: string, abbreviation: string, language: string, versesJson: string): Promise<number> {
   return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
 }
 
-export async function navigateBibleVerse(direction: "next" | "prev"): Promise<void> {
-  return tauriInvoke<void>("navigate_bible_verse", { direction });
-}
-
-// Services
 export async function getServices(): Promise<Service[]> {
   return tauriInvoke<Service[]>("get_services");
 }
