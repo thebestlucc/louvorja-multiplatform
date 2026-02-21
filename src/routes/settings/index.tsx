@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
@@ -16,7 +16,9 @@ import {
   useSetting,
   useSetSetting,
   useStartMigration,
+  queryKeys,
 } from "../../lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { ImportWizard } from "../../components/migration/import-wizard";
 import { ImportProgress } from "../../components/migration/import-progress";
 import { useMigrationStore } from "../../stores/migration-store";
@@ -61,6 +63,7 @@ const defaultMigrationOptions: MigrationOptions = {
 
 function SettingsIndex() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { theme, language, setTheme, setLanguage } = useThemeStore();
 
   const { data: themeSetting } = useSetting("app.theme");
@@ -244,6 +247,18 @@ function SettingsIndex() {
     if (!migProgress) return;
     setMigrationStatus(migProgress.status);
   }, [migProgress, setMigrationStatus]);
+
+  // Invalidate data caches when migration completes so hymns/bible listings reflect new data.
+  const prevMigStatus = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const status = migProgress?.status;
+    if (status === "completed" && prevMigStatus.current !== "completed") {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
+    }
+    prevMigStatus.current = status;
+  }, [migProgress?.status, queryClient]);
 
   useEffect(() => {
     if (!migReportQuery.data) return;
