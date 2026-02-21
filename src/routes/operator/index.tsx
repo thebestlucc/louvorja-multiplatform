@@ -38,30 +38,24 @@ function OperatorScreen() {
   useEffect(() => {
     const unsub = listen<SlideContentFlat>("slide-changed", (e) => {
       setCurrentSlide(flatToSlideContent(e.payload));
-    });
-    return () => {
-      void unsub.then((fn) => fn());
-    };
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
   }, []);
 
   // Listen for slide-cleared
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
       setCurrentSlide(null);
-    });
-    return () => {
-      void unsub.then((fn) => fn());
-    };
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
   }, []);
 
   // Listen for overlay-changed
   useEffect(() => {
     const unsub = listen<OverlayState>("overlay-changed", (e) => {
       setOverlay(e.payload);
-    });
-    return () => {
-      void unsub.then((fn) => fn());
-    };
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
   }, []);
 
   const isAudioControllable = audioStatus === "playing" || audioStatus === "paused";
@@ -89,7 +83,7 @@ function OperatorScreen() {
       {/* Slide preview */}
       <div className="overflow-hidden rounded-lg border border-border bg-black" style={{ aspectRatio: "16/9" }}>
         {currentSlide ? (
-          <SlideRenderer slide={currentSlide} />
+          <SlideRenderer slide={currentSlide} renderMode="thumbnail" />
         ) : (
           <div className="flex h-full items-center justify-center">
             <span className="text-sm text-muted-foreground">{t("operator.noSlide")}</span>
