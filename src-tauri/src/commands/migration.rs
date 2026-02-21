@@ -283,11 +283,21 @@ fn run_migration_background(
                     cancelled = true;
                     break;
                 }
+                let error_str = error.to_string();
+                let context = if error_str.contains("disk image is malformed") || error_str.contains("database disk image") {
+                    Some("The source database file has corrupted pages. Try opening it in the legacy app to let it repair itself, or use a backup copy.".to_string())
+                } else if error_str.contains("FOREIGN KEY") {
+                    Some("Some records reference data that could not be imported. These rows were skipped.".to_string())
+                } else if error_str.contains("does not appear to be a compatible") {
+                    Some("This file does not match the expected LouvorJA legacy database format.".to_string())
+                } else {
+                    None
+                };
                 errors.push(MigrationErrorItem {
                     domain: domain.id().to_string(),
                     code: "DOMAIN_IMPORT_FAILED".to_string(),
-                    message: sanitize_error_message(&error.to_string()),
-                    context: None,
+                    message: sanitize_error_message(&error_str),
+                    context,
                 });
             }
         }

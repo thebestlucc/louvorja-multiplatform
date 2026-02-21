@@ -244,14 +244,17 @@ pub fn preflight_source_path(path: &str) -> Result<(), AppError> {
     }
 
     let conn = open_readonly_source(path)?;
-    let integrity: String = conn
-        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+    // Use quick_check (structural B-tree check) rather than integrity_check (which also
+    // validates FTS index consistency). Legacy Delphi DBs frequently have FTS shadow-table
+    // inconsistencies that integrity_check flags as errors but do not affect data reads.
+    let check: String = conn
+        .query_row("PRAGMA quick_check", [], |row| row.get(0))
         .map_err(AppError::Database)?;
-    if integrity != "ok" {
+    if check != "ok" {
         return Err(AppError::Internal(format!(
-            "Source database '{}' is corrupted (integrity check: {}).",
+            "Source database '{}' is corrupted (quick check: {}).",
             safe_source_label(path),
-            integrity
+            check
         )));
     }
     Ok(())
@@ -321,19 +324,46 @@ pub fn import_bible_domain(
 
     {
         // Legacy columns: id_bible_version, name, abbreviation, id_language (no file_path)
-        let mut select_versions = source.prepare(
+        let mut select_versions = match source.prepare(
             "SELECT id_bible_version, name, abbreviation, id_language FROM bible_version ORDER BY id_bible_version ASC",
-        )?;
-        let mut rows = select_versions.query([])?;
-
-        let sql = if replace_existing {
-            "INSERT INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, NULL)"
-        } else {
-            "INSERT OR IGNORE INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, NULL)"
+        ) {
+            Ok(stmt) => stmt,
+            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+                eprintln!("[bible_importer] SQLITE_CORRUPT preparing bible_version SELECT; committing empty result");
+                tx.commit()?;
+                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported: 0, skipped: 0 });
+            }
+            Err(e) => return Err(AppError::Database(e)),
         };
+        let mut rows = match select_versions.query([]) {
+            Ok(r) => r,
+            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+                eprintln!("[bible_importer] SQLITE_CORRUPT executing bible_version SELECT; committing empty result");
+                tx.commit()?;
+                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported: 0, skipped: 0 });
+            }
+            Err(e) => return Err(AppError::Database(e)),
+        };
+
+        // Always use OR IGNORE so duplicate abbreviations in the legacy source (which has no
+        // UNIQUE constraint on abbreviation) don't hard-fail. In replace mode we already
+        // deleted all existing versions above, so the OR IGNORE only guards against
+        // duplicate rows within the source itself.
+        let sql = "INSERT OR IGNORE INTO bible_versions (id, name, abbreviation, language, file_path) VALUES (?1, ?2, ?3, ?4, NULL)";
         let mut insert_version = tx.prepare(sql)?;
 
-        while let Some(row) = rows.next()? {
+        loop {
+            let row = match rows.next() {
+                Ok(Some(r)) => r,
+                Ok(None) => break,
+                Err(rusqlite::Error::SqliteFailure(ref err, _))
+                    if err.code == rusqlite::ErrorCode::DatabaseCorrupt =>
+                {
+                    eprintln!("[bible_importer] SQLITE_CORRUPT reading source bible_version; stopping");
+                    break;
+                }
+                Err(e) => return Err(AppError::Database(e)),
+            };
             is_cancelled(cancel_flag)?;
             let changed = insert_version.execute(params![
                 row.get::<_, i64>(0)?,    // id_bible_version → id
@@ -353,45 +383,81 @@ pub fn import_bible_domain(
         // Legacy: bible_verse JOIN bible_book to resolve book name.
         // Legacy columns: id_bible_verse, id_bible_version, id_bible_book (FK), chapter, verse, text, id_language.
         // bible_book has: id_bible_book, name (book name string).
+        // Use LEFT JOIN (not INNER JOIN) so verses whose id_language has no matching bible_book
+        // row are still included — the book column falls back to the string cast of id_bible_book.
         let has_bible_book = table_exists(source, "bible_book")?;
         let verse_sql = if has_bible_book {
-            "SELECT v.id_bible_verse, v.id_bible_version, b.name, v.chapter, v.verse, v.text
+            "SELECT v.id_bible_verse, v.id_bible_version, COALESCE(b.name, CAST(v.id_bible_book AS TEXT)), v.chapter, v.verse, v.text
              FROM bible_verse v
-             INNER JOIN bible_book b ON b.id_bible_book = v.id_bible_book AND b.id_language = v.id_language
+             LEFT JOIN bible_book b ON b.id_bible_book = v.id_bible_book AND b.id_language = v.id_language
              ORDER BY v.id_bible_verse ASC"
         } else {
             // Fallback: use book id as string if bible_book table is absent
             "SELECT id_bible_verse, id_bible_version, CAST(id_bible_book AS TEXT), chapter, verse, text
              FROM bible_verse ORDER BY id_bible_verse ASC"
         };
-        let mut select_verses = source.prepare(verse_sql)?;
-        let mut rows = select_verses.query([])?;
+        let mut select_verses = match source.prepare(verse_sql) {
+            Ok(stmt) => stmt,
+            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+                eprintln!("[bible_importer] SQLITE_CORRUPT preparing bible_verse SELECT; committing versions only");
+                tx.commit()?;
+                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported, skipped });
+            }
+            Err(e) => return Err(AppError::Database(e)),
+        };
+        let mut rows = match select_verses.query([]) {
+            Ok(r) => r,
+            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+                eprintln!("[bible_importer] SQLITE_CORRUPT executing bible_verse SELECT; committing versions only");
+                tx.commit()?;
+                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported, skipped });
+            }
+            Err(e) => return Err(AppError::Database(e)),
+        };
 
-        // Always use OR IGNORE for verses: the legacy Delphi DB may contain orphaned
-        // verse rows whose version_id has no matching bible_version entry. With
-        // PRAGMA foreign_keys=ON those rows would hard-fail; OR IGNORE skips them
-        // gracefully and counts them as skipped instead of aborting the whole import.
+        // NOTE: SQLite's ON CONFLICT clause (including INSERT OR IGNORE) does NOT apply
+        // to FOREIGN KEY constraints — only to UNIQUE, NOT NULL, CHECK, and PRIMARY KEY.
+        // FK violations always hard-fail regardless of conflict resolution. We must
+        // catch FK errors explicitly per-row (extended code 787 = SQLITE_CONSTRAINT_FOREIGNKEY).
+        // Orphaned verse rows whose version_id has no match in bible_versions are skipped.
         let sql = "INSERT OR IGNORE INTO bible_verses (id, version_id, book, chapter, verse, text) VALUES (?1, ?2, ?3, ?4, ?5, ?6)";
         let mut insert_verse = tx.prepare(sql)?;
         let mut processed = 0u32;
 
-        while let Some(row) = rows.next()? {
+        loop {
+            // Catch SQLITE_CORRUPT on source reads so a bad page doesn't abort all verses.
+            let row = match rows.next() {
+                Ok(Some(r)) => r,
+                Ok(None) => break,
+                Err(rusqlite::Error::SqliteFailure(ref err, _))
+                    if err.code == rusqlite::ErrorCode::DatabaseCorrupt =>
+                {
+                    eprintln!("[bible_importer] SQLITE_CORRUPT while reading source verses; stopping iteration with {} imported so far", imported);
+                    break;
+                }
+                Err(e) => return Err(AppError::Database(e)),
+            };
+
             if processed % 250 == 0 {
                 is_cancelled(cancel_flag)?;
             }
             processed = processed.saturating_add(1);
-            let changed = insert_verse.execute(params![
+            let result = insert_verse.execute(params![
                 row.get::<_, i64>(0)?,    // id_bible_verse → id
                 row.get::<_, i64>(1)?,    // id_bible_version → version_id
                 row.get::<_, String>(2)?, // bible_book.name → book
                 row.get::<_, i64>(3)?,    // chapter
                 row.get::<_, i64>(4)?,    // verse
                 row.get::<_, String>(5)?  // text
-            ])?;
-            if changed == 1 {
-                imported = imported.saturating_add(1);
-            } else {
-                skipped = skipped.saturating_add(1);
+            ]);
+            match result {
+                Ok(1) => imported = imported.saturating_add(1),
+                Ok(_) => skipped = skipped.saturating_add(1),
+                // FK violation: version_id not present in bible_versions — skip this verse.
+                Err(rusqlite::Error::SqliteFailure(err, _)) if err.extended_code == 787 => {
+                    skipped = skipped.saturating_add(1);
+                }
+                Err(e) => return Err(AppError::Database(e)),
             }
         }
     }

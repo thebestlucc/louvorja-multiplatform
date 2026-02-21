@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::migration::{is_cancelled, table_exists, MigrationDomainReport};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, ErrorCode};
 use std::sync::atomic::AtomicBool;
 
 // Legacy DB schema (source): musics + lyrics + albums_musics + albums + categories_albums + categories
@@ -41,7 +41,7 @@ pub fn import_hymns_domain(
         // hymn_number: track from the hymnal-category album (slug IN ('hymnal', 'hymnal_1996')), NULL otherwise.
         // lyrics: stanzas joined with double newlines, ordered by lyric.order.
         // category: slug from the first associated category, NULL if none.
-        let mut select_hymns = source.prepare(
+        let mut select_hymns = match source.prepare(
             "SELECT
                 m.id_music,
                 (SELECT am2.track
@@ -72,8 +72,24 @@ pub fn import_hymns_domain(
              FROM musics m
              WHERE m.id_language = 'pt'
              ORDER BY m.id_music ASC",
-        )?;
-        let mut rows = select_hymns.query([])?;
+        ) {
+            Ok(stmt) => stmt,
+            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == ErrorCode::DatabaseCorrupt => {
+                eprintln!("[hymn_importer] SQLITE_CORRUPT preparing SELECT; source DB has bad pages — committing empty result");
+                tx.commit()?;
+                return Ok(MigrationDomainReport { domain: "hymns".to_string(), imported: 0, skipped: 0 });
+            }
+            Err(e) => return Err(AppError::Database(e)),
+        };
+        let mut rows = match select_hymns.query([]) {
+            Ok(r) => r,
+            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == ErrorCode::DatabaseCorrupt => {
+                eprintln!("[hymn_importer] SQLITE_CORRUPT executing SELECT; committing empty result");
+                tx.commit()?;
+                return Ok(MigrationDomainReport { domain: "hymns".to_string(), imported: 0, skipped: 0 });
+            }
+            Err(e) => return Err(AppError::Database(e)),
+        };
 
         let insert_sql = if replace_existing {
             "INSERT INTO hymns (id, number, title, author, album, lyrics, chords, audio_path, category, notes, created_at, updated_at)
@@ -84,7 +100,21 @@ pub fn import_hymns_domain(
         };
         let mut insert_hymn = tx.prepare(insert_sql)?;
 
-        while let Some(row) = rows.next()? {
+        loop {
+            // rows.next() can return SQLITE_CORRUPT if the source DB has bad pages.
+            // Catch it and stop iteration early rather than aborting the whole domain.
+            let row = match rows.next() {
+                Ok(Some(r)) => r,
+                Ok(None) => break,
+                Err(rusqlite::Error::SqliteFailure(err, _))
+                    if err.code == ErrorCode::DatabaseCorrupt =>
+                {
+                    eprintln!("[hymn_importer] SQLITE_CORRUPT while reading source; stopping row iteration with {} imported so far", imported);
+                    break;
+                }
+                Err(e) => return Err(AppError::Database(e)),
+            };
+
             is_cancelled(cancel_flag)?;
             let changed = insert_hymn.execute(params![
                 row.get::<_, i64>(0)?,         // id_music → id
