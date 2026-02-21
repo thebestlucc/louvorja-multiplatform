@@ -111,6 +111,8 @@ export function BookSelector({
     verseRefs.current.get(targetVerse)?.focus();
   }, [currentBook, currentChapter, verseCount, selectedVerseTail]);
 
+  const selectedVerseSet = new Set(selectedVerses);
+
   return (
     <div className="space-y-3">
       {/* Periodic Table Grid */}
@@ -190,7 +192,7 @@ export function BookSelector({
           </p>
           <div className="grid min-w-[640px] grid-cols-11 gap-[3px]">
             {Array.from({ length: verseCount }, (_, i) => i + 1).map((v) => {
-              const isSelected = selectedVerses.includes(v);
+              const isSelected = selectedVerseSet.has(v);
               return (
                 <button
                   key={v}

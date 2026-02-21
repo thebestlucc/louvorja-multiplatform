@@ -266,13 +266,16 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
       {book && chapter > 0 && (
         <>
           <ScrollArea className="h-44">
+            {(() => {
+              const selectedVerseSet = new Set(selectedVerses);
+              return (
             <div className="grid grid-cols-8 gap-1.5">
               {(verses ?? []).map((v) => (
                 <button
                   key={v.verse}
                   className={cn(
                     "flex h-7 cursor-pointer items-center justify-center rounded-md text-xs font-medium transition-colors duration-150",
-                    selectedVerses.includes(v.verse)
+                    selectedVerseSet.has(v.verse)
                       ? "bg-primary text-primary-foreground"
                       : "border border-border hover:bg-surface-hover",
                   )}
@@ -282,6 +285,8 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
                 </button>
               ))}
             </div>
+              );
+            })()}
           </ScrollArea>
           <Button size="sm" disabled={selectedVerses.length === 0} onClick={handleAdd}>
             {t("actions.add")}
