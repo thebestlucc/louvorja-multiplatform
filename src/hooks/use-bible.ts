@@ -28,17 +28,9 @@ export function useBible() {
 
   const isProjecting = currentProjectionType === "bible";
 
-  const setVersion = useCallback((versionId: number) => {
-    storeSetVersion(versionId);
-  }, [storeSetVersion]);
-
-  const setBook = useCallback((book: string) => {
-    storeSetBook(book);
-  }, [storeSetBook]);
-
-  const setChapter = useCallback((chapter: number) => {
-    storeSetChapter(chapter);
-  }, [storeSetChapter]);
+  const setVersion = storeSetVersion;
+  const setBook = storeSetBook;
+  const setChapter = storeSetChapter;
 
   const selectVerse = useCallback((verse: number) => {
     const prev = useBibleStore.getState().selectedVerses;

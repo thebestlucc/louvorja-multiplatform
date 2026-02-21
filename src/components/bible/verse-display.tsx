@@ -79,6 +79,8 @@ export function VerseDisplay({
     return <p className="text-sm text-muted-foreground">{t("bible.noResults")}</p>;
   }
 
+  const selectedSet = new Set(selectedVerses);
+
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface pb-2">
@@ -106,7 +108,7 @@ export function VerseDisplay({
             ref={(el) => setVerseRef(v.verse, el)}
             className={cn(
               "cursor-pointer rounded-sm px-2 py-1 text-sm leading-relaxed transition-colors",
-              selectedVerses.includes(v.verse)
+              selectedSet.has(v.verse)
                 ? "bg-primary/15 text-primary"
                 : "hover:bg-muted",
             )}
