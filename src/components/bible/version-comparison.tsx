@@ -12,7 +12,8 @@ interface VersionComparisonItemProps {
 function VersionComparisonItem({ version, book, chapter, selectedVerses }: VersionComparisonItemProps) {
   const { data: verses } = useVerses(version.id, book, chapter);
 
-  const filtered = verses?.filter((v) => selectedVerses.includes(v.verse)) ?? [];
+  const verseSet = new Set(selectedVerses);
+  const filtered = verses?.filter((v) => verseSet.has(v.verse)) ?? [];
 
   if (filtered.length === 0) return null;
 

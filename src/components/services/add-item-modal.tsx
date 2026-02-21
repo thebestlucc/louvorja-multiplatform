@@ -180,8 +180,9 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
     const sorted = [...selectedVerses].sort((a, b) => a - b);
     const range = sorted.length === 1 ? String(sorted[0]) : `${sorted[0]}-${sorted[sorted.length - 1]}`;
     const title = `${book} ${chapter}:${range}${currentVersion ? ` (${currentVersion.abbreviation})` : ""}`;
+    const verseSet = new Set(sorted);
     const verseTexts = (verses ?? [])
-      .filter((v) => sorted.includes(v.verse))
+      .filter((v) => verseSet.has(v.verse))
       .map((v) => `${v.verse} ${v.text}`)
       .join("\n");
     onAdd("bible", title, null, verseTexts || null);

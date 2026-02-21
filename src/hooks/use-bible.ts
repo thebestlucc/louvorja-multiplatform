@@ -74,8 +74,9 @@ export function useBible() {
     const start = sorted[0];
     const end = sorted[sorted.length - 1];
 
+    const verseSet = new Set(sorted);
     const selectedTexts = (versesQuery.data ?? [])
-      .filter((v) => sorted.includes(v.verse))
+      .filter((v) => verseSet.has(v.verse))
       .map((v) => `${v.verse} ${v.text}`)
       .join("\n");
 
