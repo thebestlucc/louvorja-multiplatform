@@ -553,6 +553,13 @@ pub fn open_projector_window(
             &app, "projector", "/projector", "LouvorJA - Projector", &monitor_id,
         ) {
             eprintln!("[display] Failed to open projector window: {e}");
+            // Roll back optimistic state
+            if let Some(state) = app.try_state::<crate::state::AppState>() {
+                if let Ok(mut open) = state.projector_open.lock() {
+                    *open = false;
+                }
+            }
+            let _ = app.emit("projector-state-changed", false);
         }
     });
     Ok(())
@@ -593,6 +600,13 @@ pub fn open_return_window(
             &app, "return", "/return", "LouvorJA - Return Monitor", &monitor_id,
         ) {
             eprintln!("[display] Failed to open return window: {e}");
+            // Roll back optimistic state
+            if let Some(state) = app.try_state::<crate::state::AppState>() {
+                if let Ok(mut open) = state.return_open.lock() {
+                    *open = false;
+                }
+            }
+            let _ = app.emit("return-state-changed", false);
         }
     });
     Ok(())
