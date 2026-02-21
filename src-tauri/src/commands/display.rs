@@ -467,133 +467,108 @@ pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppErr
     Ok(infos)
 }
 
-/// Helper: open a fullscreen window on the given monitor
-
-/// Helper: open a fullscreen window on the given monitor
-/// This function is now deprecated - use spawn_projector_process() instead for separate process windows
-#[allow(dead_code)]
+/// Opens a fullscreen window on the specified monitor.
+/// MUST be called from a background thread — sleep() and fullscreen retries
+/// block the calling thread and would hang IPC on all OSes.
 fn open_fullscreen_window(
+    app: &AppHandle,
     label: &str,
     url: &str,
     title: &str,
     target_monitor_id: &str,
-    app: &AppHandle,
 ) -> Result<(), AppError> {
     let monitors = app
         .available_monitors()
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+
     let monitor = monitors
         .iter()
-        .find(|monitor| stable_monitor_id(monitor) == target_monitor_id)
+        .find(|m| stable_monitor_id(m) == target_monitor_id)
         .or_else(|| {
-            parse_legacy_monitor_index(target_monitor_id).and_then(|legacy_index| monitors.get(legacy_index))
+            parse_legacy_monitor_index(target_monitor_id)
+                .and_then(|i| monitors.get(i))
         })
-        .ok_or_else(|| AppError::NotFound(format!("Monitor id {} not found", target_monitor_id)))?;
+        .ok_or_else(|| AppError::NotFound(
+            format!("Monitor {} not found", target_monitor_id)
+        ))?;
 
     let position = monitor.position();
     let size = monitor.size();
 
-    // Close existing window if open
-    if let Some(existing) = app.get_webview_window(label) {
-        let _ = existing.close();
-    }
+    let window = tauri::WebviewWindowBuilder::new(
+        app,
+        label,
+        tauri::WebviewUrl::App(url.into()),
+    )
+    .title(title)
+    .visible(false)
+    .background_throttling(BackgroundThrottlingPolicy::Disabled)
+    .fullscreen(true)
+    .decorations(false)
+    .resizable(false)
+    .always_on_top(true)
+    .skip_taskbar(false)
+    .build()
+    .map_err(|e| AppError::Tauri(e.to_string()))?;
 
-    let window = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App(url.into()))
-        .title(title)
-        .visible(false)
-        .background_throttling(BackgroundThrottlingPolicy::Disabled)
-        .fullscreen(true)
-        .decorations(false)
-        .resizable(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .build()
+    window.set_size(tauri::Size::Physical(*size))
         .map_err(|e| AppError::Tauri(e.to_string()))?;
-
-    window
-        .set_size(tauri::Size::Physical(*size))
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    window
-        .set_position(tauri::Position::Physical(*position))
+    window.set_position(tauri::Position::Physical(*position))
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     std::thread::sleep(std::time::Duration::from_millis(150));
     window.show().map_err(|e| AppError::Tauri(e.to_string()))?;
 
-    // Notify main/frontends that the window was opened for the given label
-    match label {
-        "projector" => {
-            let _ = app.emit("projector-window-opened", target_monitor_id.to_string());
-        }
-        "return" => {
-            let _ = app.emit("return-window-opened", target_monitor_id.to_string());
-        }
-        _ => {
-            let _ = app.emit("window-opened", (label.to_string(), target_monitor_id.to_string()));
-        }
-    }
-
-    // Fullscreen transition can be asynchronous on some platforms.
-    // Retry briefly to avoid ending up with a visible but windowed monitor.
-    let mut fullscreen_applied = false;
     for _ in 0..6 {
-        window
-            .set_fullscreen(true)
-            .map_err(|e| AppError::Tauri(e.to_string()))?;
+        let _ = window.set_fullscreen(true);
         std::thread::sleep(std::time::Duration::from_millis(120));
-        let is_fullscreen = window
-            .is_fullscreen()
-            .map_err(|e| AppError::Tauri(e.to_string()))?;
-        if is_fullscreen {
-            fullscreen_applied = true;
-            break;
+        if window.is_fullscreen().unwrap_or(false) {
+            return Ok(());
         }
     }
-
-    if !fullscreen_applied {
-        let _ = window.maximize();
-    }
-
+    let _ = window.maximize();
     Ok(())
 }
 
 #[tauri::command]
 pub fn open_projector_window(
     monitor_id: String,
-    app: AppHandle,
     state: tauri::State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), AppError> {
-    // Spawn projector as a separate process instead of thread
-    let monitor_id_clone = monitor_id.clone();
-    let app_clone = app.clone();
+    // If window already exists, just show and focus it
+    if let Some(win) = app.get_webview_window("projector") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+    // Mark as open optimistically before thread runs
+    if let Ok(mut open) = state.projector_open.lock() {
+        *open = true;
+    }
+    let _ = app.emit("projector-state-changed", true);
+    // Spawn on background thread — window creation with sleep/retries blocks
     std::thread::spawn(move || {
-        if let Err(e) = spawn_projector_process(&app_clone, "--louvorja-projector", &monitor_id_clone, "projector") {
-            eprintln!("[louvorja] Failed to spawn projector process: {}", e);
+        if let Err(e) = open_fullscreen_window(
+            &app, "projector", "/projector", "LouvorJA - Projector", &monitor_id,
+        ) {
+            eprintln!("[display] Failed to open projector window: {e}");
         }
     });
-
-    let mut projector_open = state
-        .projector_open
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    *projector_open = true;
-    let _ = app.emit("projector-state-changed", true);
-
     Ok(())
 }
 
 #[tauri::command]
 pub fn close_projector_window(
-    app: AppHandle,
     state: tauri::State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), AppError> {
-    // Note: Closing a separate process window is handled by the user closing the window
-    // or the child process receiving a termination signal from the OS
-    let mut projector_open = state
-        .projector_open
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    *projector_open = false;
+    if let Some(win) = app.get_webview_window("projector") {
+        win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
+    }
+    if let Ok(mut open) = state.projector_open.lock() {
+        *open = false;
+    }
     let _ = app.emit("projector-state-changed", false);
     Ok(())
 }
@@ -601,40 +576,39 @@ pub fn close_projector_window(
 #[tauri::command]
 pub fn open_return_window(
     monitor_id: String,
-    app: AppHandle,
     state: tauri::State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), AppError> {
-    // Spawn return monitor as a separate process instead of thread
-    let monitor_id_clone = monitor_id.clone();
-    let app_clone = app.clone();
+    if let Some(win) = app.get_webview_window("return") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+    if let Ok(mut open) = state.return_open.lock() {
+        *open = true;
+    }
+    let _ = app.emit("return-state-changed", true);
     std::thread::spawn(move || {
-        if let Err(e) = spawn_projector_process(&app_clone, "--louvorja-return", &monitor_id_clone, "return") {
-            eprintln!("[louvorja] Failed to spawn return monitor process: {}", e);
+        if let Err(e) = open_fullscreen_window(
+            &app, "return", "/return", "LouvorJA - Return Monitor", &monitor_id,
+        ) {
+            eprintln!("[display] Failed to open return window: {e}");
         }
     });
-
-    let mut return_open = state
-        .return_open
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    *return_open = true;
-    let _ = app.emit("return-state-changed", true);
-
     Ok(())
 }
 
 #[tauri::command]
 pub fn close_return_window(
-    app: AppHandle,
     state: tauri::State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), AppError> {
-    // Note: Closing a separate process window is handled by the user closing the window
-    // or the child process receiving a termination signal from the OS
-    let mut return_open = state
-        .return_open
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    *return_open = false;
+    if let Some(win) = app.get_webview_window("return") {
+        win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
+    }
+    if let Ok(mut open) = state.return_open.lock() {
+        *open = false;
+    }
     let _ = app.emit("return-state-changed", false);
     Ok(())
 }
@@ -929,51 +903,3 @@ pub fn get_monitor_configs(
     crate::db::queries::settings::get_monitor_configs(&conn)
 }
 
-/// Spawn a separate process for projector or return monitor
-/// This ensures that the main application is not blocked on single-monitor setups
-/// Also monitors the child process and updates app state when it exits
-fn spawn_projector_process(app: &AppHandle, mode_flag: &str, monitor_id: &str, window_label: &str) -> Result<(), AppError> {
-    let exe_path = std::env::current_exe()?;
-    
-    let mut child = std::process::Command::new(&exe_path)
-        .arg(mode_flag)
-        .arg(monitor_id)
-        .spawn()?;
-    
-    // Spawn a thread to monitor the child process and update app state when it exits
-    let app_handle = app.clone();
-    let window_label_owned = window_label.to_string();
-    std::thread::spawn(move || {
-        // Wait for the child process to finish
-        let _ = child.wait();
-        
-        eprintln!("[louvorja] {} process exited", window_label_owned);
-        
-        // Update app state to reflect that the window is closed
-        if let Some(state) = app_handle.try_state::<AppState>() {
-            match window_label_owned.as_str() {
-                "projector" => {
-                    if let Ok(mut open) = state.projector_open.lock() {
-                        *open = false;
-                    }
-                    // Emit to all windows that the projector state changed
-                    if let Some(main_window) = app_handle.get_webview_window("main") {
-                        let _ = main_window.emit("projector-state-changed", false);
-                    }
-                }
-                "return" => {
-                    if let Ok(mut open) = state.return_open.lock() {
-                        *open = false;
-                    }
-                    // Emit to all windows that the return state changed
-                    if let Some(main_window) = app_handle.get_webview_window("main") {
-                        let _ = main_window.emit("return-state-changed", false);
-                    }
-                }
-                _ => {}
-            }
-        }
-    });
-    
-    Ok(())
-}

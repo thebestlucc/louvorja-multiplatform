@@ -6,7 +6,6 @@ mod display;
 mod error;
 mod migration;
 mod projection;
-mod projector_process;
 mod state;
 mod streaming;
 mod video;
@@ -15,30 +14,6 @@ use state::{AppState, AudioState, StreamingState, TimerRuntimeState};
 use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 use tauri::{Emitter, Manager};
-
-/// Check if we should run in projector mode instead of normal app
-fn should_run_projector_process() -> Option<(projector_process::ProjectorWindowType, String)> {
-    let args: Vec<String> = std::env::args().collect();
-    
-    for (i, arg) in args.iter().enumerate() {
-        match arg.as_str() {
-            "--projector" | "--louvorja-projector" => {
-                if i + 1 < args.len() {
-                    let monitor_id = args[i + 1].clone();
-                    return Some((projector_process::ProjectorWindowType::Projector, monitor_id));
-                }
-            }
-            "--return" | "--louvorja-return" => {
-                if i + 1 < args.len() {
-                    let monitor_id = args[i + 1].clone();
-                    return Some((projector_process::ProjectorWindowType::Return, monitor_id));
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
 
 /// Create the main window dynamically
 fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
@@ -71,17 +46,6 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Check if we should run in projector/return mode (separate process)
-    if let Some((window_type, monitor_id)) = should_run_projector_process() {
-        match projector_process::run_projector_process(window_type, monitor_id) {
-            Ok(_) => return,
-            Err(e) => {
-                eprintln!("[louvorja] Failed to run projector process: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
-
     // Normal app initialization
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
