@@ -528,7 +528,9 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
             END,
             cat.slug
         FROM musics m
-        INNER JOIN albums_musics am ON am.id_music = m.id_music
+        INNER JOIN albums_musics am ON am.id_album = (
+            SELECT MIN(id_album) FROM albums_musics WHERE id_music = m.id_music
+        ) AND am.id_music = m.id_music
         INNER JOIN albums a ON a.id_album = am.id_album
         LEFT JOIN files f ON f.id_file = m.id_file_music
         LEFT JOIN categories_albums ca ON ca.id_album = a.id_album
@@ -544,7 +546,7 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
     ")?;
 
     // Import legacy bible data if legacy tables exist and new bible_verses is sparse
-    if !table_exists(conn, "bible_verse")? || !table_exists(conn, "bible_book")? {
+    if !table_exists(conn, "bible_verse")? || !table_exists(conn, "bible_book")? || !table_exists(conn, "bible_version")? {
         return Ok(());
     }
 
