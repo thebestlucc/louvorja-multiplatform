@@ -275,6 +275,13 @@
     "stopProjection": "Stop projection",
     "slides": "Slides"
   },
+  "hymn": {
+    "actionSung": "Sung",
+    "actionPlayback": "Playback",
+    "actionSlidesOnly": "Slides only",
+    "actionShowLyrics": "Show lyrics",
+    "stopProjection": "Stop"
+  },
   "collections": {
     "subtitle": "Build song libraries separate from presentations.",
     "createTitle": "Create collection",

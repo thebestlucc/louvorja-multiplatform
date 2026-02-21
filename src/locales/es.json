@@ -275,6 +275,13 @@
     "stopProjection": "Detener proyección",
     "slides": "Diapositivas"
   },
+  "hymn": {
+    "actionSung": "Cantado",
+    "actionPlayback": "Playback",
+    "actionSlidesOnly": "Solo diapositivas",
+    "actionShowLyrics": "Ver letra",
+    "stopProjection": "Detener"
+  },
   "collections": {
     "subtitle": "Construya bibliotecas de canciones separadas de presentaciones.",
     "createTitle": "Crear colección",
