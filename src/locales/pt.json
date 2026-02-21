@@ -9,9 +9,21 @@
     "bible": "Bíblia",
     "presentations": "Apresentações",
     "services": "Cultos",
+    "operator": "Operador",
     "utilities": "Utilidades",
     "settings": "Configurações",
     "help": "Ajuda"
+  },
+  "operator": {
+    "projectorActive": "Projetor ativo",
+    "projectorInactive": "Projetor inativo",
+    "noSlide": "Nenhum slide projetado",
+    "blackScreenActive": "Tela preta ativa",
+    "logoScreenActive": "Tela de logo ativa",
+    "prevSlide": "Slide anterior",
+    "nextSlide": "Próximo slide",
+    "play": "Reproduzir",
+    "pause": "Pausar"
   },
   "actions": {
     "save": "Salvar",

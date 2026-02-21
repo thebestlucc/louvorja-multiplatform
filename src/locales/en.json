@@ -9,9 +9,21 @@
     "bible": "Bible",
     "presentations": "Presentations",
     "services": "Services",
+    "operator": "Operator",
     "utilities": "Utilities",
     "settings": "Settings",
     "help": "Help"
+  },
+  "operator": {
+    "projectorActive": "Projector active",
+    "projectorInactive": "Projector inactive",
+    "noSlide": "No slide projected",
+    "blackScreenActive": "Black screen active",
+    "logoScreenActive": "Logo screen active",
+    "prevSlide": "Previous slide",
+    "nextSlide": "Next slide",
+    "play": "Play",
+    "pause": "Pause"
   },
   "actions": {
     "save": "Save",
