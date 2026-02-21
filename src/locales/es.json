@@ -280,7 +280,10 @@
     "actionPlayback": "Playback",
     "actionSlidesOnly": "Solo diapositivas",
     "actionShowLyrics": "Ver letra",
-    "stopProjection": "Detener"
+    "stopProjection": "Detener",
+    "lyricsModal": {
+      "noLyrics": "Letra no disponible"
+    }
   },
   "collections": {
     "subtitle": "Construya bibliotecas de canciones separadas de presentaciones.",

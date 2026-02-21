@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Hymn } from "../../types/hymn";
 
 interface LyricsModalProps {
@@ -9,6 +10,7 @@ interface LyricsModalProps {
 }
 
 export function LyricsModal({ hymn, open, onOpenChange }: LyricsModalProps) {
+  const { t } = useTranslation();
   const stanzas = (hymn.lyrics ?? "").split(/\n\n+/).filter(Boolean);
 
   return (
@@ -33,7 +35,7 @@ export function LyricsModal({ hymn, open, onOpenChange }: LyricsModalProps) {
                 <p key={i} className="whitespace-pre-line">{stanza}</p>
               ))
             ) : (
-              <p className="text-muted-foreground italic">Letra não disponível</p>
+              <p className="text-muted-foreground italic">{t("hymn.lyricsModal.noLyrics")}</p>
             )}
           </div>
         </Dialog.Content>
