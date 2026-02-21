@@ -68,26 +68,6 @@ export function useBible() {
     storeSetLastSelectedVerse(null);
   }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
 
-  const projectSingleVerse = useCallback(async (verseNum: number) => {
-    if (!currentVersionId || !currentBook || !currentChapter) return;
-    const verseData = (versesQuery.data ?? []).find((v) => v.verse === verseNum);
-    if (!verseData) return;
-
-    const reference = `${currentBook} ${currentChapter}:${verseNum}`;
-    const slideData: SlideContentFlat = {
-      slide_type: "bible",
-      text: `${verseData.verse} ${verseData.text}`,
-      title: reference,
-    };
-
-    try {
-      await projectSlideWithType(slideData, "bible");
-      await setSlideContext({ next: null, index: 0, total: 1, title: reference });
-    } catch (err) {
-      toast.error(String(err));
-    }
-  }, [currentVersionId, currentBook, currentChapter, versesQuery.data]);
-
   const projectSelectedVersesRange = useCallback(async () => {
     if (selectedVerses.length === 0 || !currentVersionId || !currentBook || !currentChapter) return;
     const sorted = [...selectedVerses].sort((a, b) => a - b);
@@ -165,7 +145,6 @@ export function useBible() {
     selectSingleVerse,
     selectVerseRange,
     clearSelection,
-    projectSingleVerse,
     projectSelectedVersesRange,
     startBibleProjection,
     stopBibleProjection,
