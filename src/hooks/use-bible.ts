@@ -1,17 +1,23 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import { projectSlideWithType } from "../lib/projection-playback";
 import { useDisplayStore } from "../stores/display-store";
+import { useBibleStore } from "../stores/bible-store";
 
 export function useBible() {
-  const [currentVersionId, setCurrentVersionId] = useState<number>(0);
-  const [currentBook, setCurrentBook] = useState("");
-  const [currentChapter, setCurrentChapter] = useState(0);
-  const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
-  const [lastSelectedVerse, setLastSelectedVerse] = useState<number | null>(null);
+  const currentVersionId = useBibleStore((s) => s.currentVersionId);
+  const currentBook = useBibleStore((s) => s.currentBook);
+  const currentChapter = useBibleStore((s) => s.currentChapter);
+  const selectedVerses = useBibleStore((s) => s.selectedVerses);
+  const lastSelectedVerse = useBibleStore((s) => s.lastSelectedVerse);
+  const storeSetVersion = useBibleStore((s) => s.setVersion);
+  const storeSetBook = useBibleStore((s) => s.setBook);
+  const storeSetChapter = useBibleStore((s) => s.setChapter);
+  const storeSetSelectedVerses = useBibleStore((s) => s.setSelectedVerses);
+  const storeSetLastSelectedVerse = useBibleStore((s) => s.setLastSelectedVerse);
 
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
   const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
@@ -23,54 +29,44 @@ export function useBible() {
   const isProjecting = currentProjectionType === "bible";
 
   const setVersion = useCallback((versionId: number) => {
-    setCurrentVersionId(versionId);
-    setCurrentBook("");
-    setCurrentChapter(0);
-    setSelectedVerses([]);
-    setLastSelectedVerse(null);
-  }, []);
+    storeSetVersion(versionId);
+  }, [storeSetVersion]);
 
   const setBook = useCallback((book: string) => {
-    setCurrentBook(book);
-    setCurrentChapter(0);
-    setSelectedVerses([]);
-    setLastSelectedVerse(null);
-  }, []);
+    storeSetBook(book);
+  }, [storeSetBook]);
 
   const setChapter = useCallback((chapter: number) => {
-    setCurrentChapter(chapter);
-    setSelectedVerses([]);
-    setLastSelectedVerse(null);
-  }, []);
+    storeSetChapter(chapter);
+  }, [storeSetChapter]);
 
   const selectVerse = useCallback((verse: number) => {
-    setSelectedVerses((prev) => {
-      if (prev.includes(verse)) {
-        return prev.filter((v) => v !== verse);
-      }
-      return [...prev, verse].sort((a, b) => a - b);
-    });
-    setLastSelectedVerse(verse);
-  }, []);
+    const prev = useBibleStore.getState().selectedVerses;
+    const next = prev.includes(verse)
+      ? prev.filter((v) => v !== verse)
+      : [...prev, verse].sort((a, b) => a - b);
+    storeSetSelectedVerses(next);
+    storeSetLastSelectedVerse(verse);
+  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
 
   const selectSingleVerse = useCallback((verse: number) => {
-    setSelectedVerses([verse]);
-    setLastSelectedVerse(verse);
-  }, []);
+    storeSetSelectedVerses([verse]);
+    storeSetLastSelectedVerse(verse);
+  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
 
   const selectVerseRange = useCallback((start: number, end: number) => {
     const range: number[] = [];
     for (let i = start; i <= end; i++) {
       range.push(i);
     }
-    setSelectedVerses(range);
-    setLastSelectedVerse(start);
-  }, []);
+    storeSetSelectedVerses(range);
+    storeSetLastSelectedVerse(start);
+  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
 
   const clearSelection = useCallback(() => {
-    setSelectedVerses([]);
-    setLastSelectedVerse(null);
-  }, []);
+    storeSetSelectedVerses([]);
+    storeSetLastSelectedVerse(null);
+  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
 
   const projectSingleVerse = useCallback(async (verseNum: number) => {
     if (!currentVersionId || !currentBook || !currentChapter) return;
