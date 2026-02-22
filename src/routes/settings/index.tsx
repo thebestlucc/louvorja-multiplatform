@@ -4,10 +4,15 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Database } from "lucide-react";
+import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Database, Cloud, Trash2 } from "lucide-react";
 import {
+  useCancelLegacyFetch,
   useCancelMigration,
+  useClearDatabase,
   useCopyImageToMedia,
+  useFetchLegacyParams,
+  useLegacyFetchProgress,
+  useLegacyFetchReport,
   useMigrationProgress,
   useMigrationReport,
   useMonitorConfigs,
@@ -15,22 +20,36 @@ import {
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
+  useStartLegacyFetch,
   useStartMigration,
   queryKeys,
 } from "../../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { ImportWizard } from "../../components/migration/import-wizard";
 import { ImportProgress } from "../../components/migration/import-progress";
+import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
 import { useMigrationStore } from "../../stores/migration-store";
+import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import type {
   MigrationOptions,
   MigrationProgress as MigrationProgressType,
   MigrationProgressEvent,
 } from "../../types/migration";
+import type {
+  LegacyFetchOptions,
+} from "../../types/legacy-fetch";
 import { StreamingControls } from "../../components/streaming/streaming-controls";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../stores/theme-store";
 import { LANGUAGES, THEMES, type Language, type Theme } from "../../lib/constants";
@@ -82,6 +101,7 @@ function SettingsIndex() {
   const setSettingMutation = useSetSetting();
   const copyImageMutation = useCopyImageToMedia();
   const saveMonitorConfigMutation = useSaveMonitorConfig();
+  const clearDatabaseMutation = useClearDatabase();
 
   const [port, setPort] = useState("7070");
   const [autoStart, setAutoStart] = useState(false);
@@ -97,6 +117,7 @@ function SettingsIndex() {
   const [returnMonitorId, setReturnMonitorId] = useState("");
   const [monitorFeedback, setMonitorFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [testingMonitorRole, setTestingMonitorRole] = useState<"projector" | "return" | null>(null);
+  const [showClearDbConfirm, setShowClearDbConfirm] = useState(false);
 
   // --- Legacy Import state ---
   const migRunId = useMigrationStore((s) => s.runId);
@@ -124,6 +145,33 @@ function SettingsIndex() {
   const migEffectiveReport = migReportQuery.data ?? migStoredReport;
   const migIsRunning = migProgress?.status === "running" || migProgress?.status === "cancelling";
   const migShowProgress = Boolean(migRunId && (migIsRunning || migEffectiveReport || migProgress));
+
+  // --- Legacy Fetch state (from LouvorJA server) - uses global Zustand store ---
+  const legacyFetchRunId = useLegacyFetchStore((s) => s.runId);
+  const setLegacyFetchRunId = useLegacyFetchStore((s) => s.setRunId);
+  const legacyFetchStoreProgress = useLegacyFetchStore((s) => s.progress);
+  const legacyFetchStoreReport = useLegacyFetchStore((s) => s.report);
+  const legacyFetchCancelling = useLegacyFetchStore((s) => s.isCancelling);
+  const setLegacyFetchCancelling = useLegacyFetchStore((s) => s.setIsCancelling);
+  const resetLegacyFetch = useLegacyFetchStore((s) => s.reset);
+  const startLegacyFetchMutation = useStartLegacyFetch();
+  const cancelLegacyFetchMutation = useCancelLegacyFetch();
+  const legacyFetchProgressQuery = useLegacyFetchProgress(legacyFetchRunId, { enabled: Boolean(legacyFetchRunId) });
+  const legacyFetchShouldLoadReport = Boolean(
+    legacyFetchRunId
+      && legacyFetchProgressQuery.data
+      && !["pending", "fetching", "importing", "downloading"].includes(legacyFetchProgressQuery.data.status),
+  );
+  const legacyFetchReportQuery = useLegacyFetchReport(legacyFetchRunId, { enabled: legacyFetchShouldLoadReport });
+  // Use store progress/report first (updated by global listener), fallback to query data
+  const legacyFetchProgress = legacyFetchStoreProgress ?? legacyFetchProgressQuery.data;
+  const legacyFetchReport = legacyFetchStoreReport ?? legacyFetchReportQuery.data;
+  const legacyFetchIsRunning = legacyFetchProgress
+    && ["pending", "fetching", "importing", "downloading"].includes(legacyFetchProgress.status);
+  const legacyFetchShowProgress = Boolean(legacyFetchRunId && (legacyFetchIsRunning || legacyFetchProgress || legacyFetchReport));
+  const [connectionStatus, setConnectionStatus] = useState<"idle" | "connecting" | "connected" | "failed">("idle");
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const fetchLegacyParamsMutation = useFetchLegacyParams({ enabled: false });
 
   const projectorLogoPreviewSrc = useMediaSource(projectorLogoImagePath);
   const monitorOptions = useMemo(
@@ -290,6 +338,8 @@ function SettingsIndex() {
       unlisten.then((fn) => fn());
     };
   }, [migRunId]);
+
+  // No longer need local event listener for legacy fetch - it's handled globally in __root.tsx
 
   const monitorSelectionConfigs = useMemo<MonitorConfig[]>(() => {
     const configs: MonitorConfig[] = [];
@@ -534,6 +584,57 @@ function SettingsIndex() {
       setMigEventProgress(null);
     } catch (error) {
       setMigError(String(error));
+    }
+  };
+
+  // --- Legacy Fetch handlers ---
+  const handleTestConnection = async () => {
+    setConnectionStatus("connecting");
+    setConnectionError(null);
+    try {
+      await fetchLegacyParamsMutation.refetch();
+      setConnectionStatus("connected");
+    } catch (error) {
+      setConnectionStatus("failed");
+      setConnectionError(String(error));
+    }
+  };
+
+  const handleStartLegacyFetch = async (options: LegacyFetchOptions) => {
+    setConnectionError(null);
+    try {
+      const runId = await startLegacyFetchMutation.mutateAsync(options);
+      setLegacyFetchRunId(runId);
+    } catch (error) {
+      setConnectionError(String(error));
+    }
+  };
+
+  const handleCancelLegacyFetch = () => {
+    if (!legacyFetchRunId) return;
+    setLegacyFetchCancelling(true);
+    cancelLegacyFetchMutation.mutate(legacyFetchRunId, {
+      onSettled: () => setLegacyFetchCancelling(false),
+    });
+  };
+
+  const handleLegacyFetchDone = () => {
+    resetLegacyFetch();
+  };
+
+  const handleLegacyFetchRetry = () => {
+    resetLegacyFetch();
+    setConnectionError(null);
+  };
+
+  // --- Clear Database handler ---
+  const handleClearDatabase = async () => {
+    try {
+      await clearDatabaseMutation.mutateAsync();
+      setShowClearDbConfirm(false);
+      toast.success(t("settings.dangerZone.clearDatabaseSuccess"));
+    } catch (error) {
+      toast.error(t("settings.dangerZone.clearDatabaseError", { error: String(error) }));
     }
   };
 
@@ -1083,6 +1184,88 @@ function SettingsIndex() {
           />
         ) : null}
       </section>
+
+      {/* Legacy Fetch from Server Section */}
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Cloud className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.legacyFetch.title")}</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">{t("settings.legacyFetch.description")}</p>
+
+        {!legacyFetchShowProgress ? (
+          <LegacyFetchWizard
+            onStartFetch={handleStartLegacyFetch}
+            loading={startLegacyFetchMutation.isPending}
+            connectionStatus={connectionStatus}
+            connectionError={connectionError}
+            onTestConnection={handleTestConnection}
+          />
+        ) : (
+          <LegacyFetchProgressCard
+            progress={legacyFetchProgress ?? null}
+            report={legacyFetchReport ?? null}
+            cancelling={legacyFetchCancelling}
+            onCancel={handleCancelLegacyFetch}
+            onDone={handleLegacyFetchDone}
+            onRetry={handleLegacyFetchRetry}
+          />
+        )}
+      </section>
+
+      {/* Danger Zone Section */}
+      <section className="rounded-lg border border-destructive/50 bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Trash2 className="h-5 w-5 text-destructive" />
+          <h2 className="text-lg font-medium text-destructive">{t("settings.dangerZone.title")}</h2>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <label className="text-sm font-medium">{t("settings.dangerZone.clearDatabase")}</label>
+              <p className="text-xs text-muted-foreground">{t("settings.dangerZone.clearDatabaseDesc")}</p>
+            </div>
+            <Button
+              variant="destructive"
+              className="shrink-0 whitespace-nowrap"
+              onClick={() => setShowClearDbConfirm(true)}
+              disabled={clearDatabaseMutation.isPending}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {t("settings.dangerZone.clearDatabaseButton")}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Clear Database Confirmation Dialog */}
+      <Dialog open={showClearDbConfirm} onOpenChange={setShowClearDbConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("settings.dangerZone.clearDatabaseConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("settings.dangerZone.clearDatabaseConfirmDesc")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowClearDbConfirm(false)}
+              disabled={clearDatabaseMutation.isPending}
+            >
+              {t("settings.dangerZone.clearDatabaseCancelButton")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleClearDatabase()}
+              disabled={clearDatabaseMutation.isPending}
+            >
+              {clearDatabaseMutation.isPending ? "..." : t("settings.dangerZone.clearDatabaseConfirmButton")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
         </div>
       </div>
     </div>

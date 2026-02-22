@@ -65,6 +65,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   setVolume: (volume) => set({ volume }),
   setPlaybackMode: (mode) => set({ playbackMode: mode }),
   setSyncPoints: (points) => {
+    console.log("[audio-store] setSyncPoints called with", points.length, "points:", points);
     const sorted = [...points].sort((a, b) => a.timestampMs - b.timestampMs);
     set({ syncPoints: sorted, lastSyncSlide: -1 });
   },
@@ -92,6 +93,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
 
     const queueSlideProjection = (slideIndex: number) => {
       const state = get();
+      console.log("[audio-store] queueSlideProjection called with slideIndex=", slideIndex, "lastSyncSlide=", state.lastSyncSlide);
       if (slideIndex < 0 || slideIndex === state.lastSyncSlide) {
         return;
       }
@@ -108,6 +110,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         while (queuedSlide != null) {
           const nextSlide = queuedSlide;
           queuedSlide = null;
+          console.log("[audio-store] Projecting slide:", nextSlide);
           usePresentationStore.getState().setActiveSlideIndex(nextSlide);
           try {
             await projectSlideIndex(nextSlide);
@@ -147,6 +150,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
 
       if ((payload.isPlaying || payload.isPaused) && currentState.syncPoints.length > 0) {
         const targetSlide = findSlideAtPosition(currentState.syncPoints, payload.positionMs);
+        console.log("[audio-store] Sync check: positionMs=", payload.positionMs, "targetSlide=", targetSlide, "syncPoints=", currentState.syncPoints.length);
         if (targetSlide >= 0) {
           if (manualSyncLock) {
             const lockReached =
@@ -161,6 +165,8 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
           }
           queueSlideProjection(targetSlide);
         }
+      } else if (payload.isPlaying || payload.isPaused) {
+        console.log("[audio-store] No sync points available, syncPoints.length=", currentState.syncPoints.length);
       }
 
       if (!payload.isPlaying && !payload.isPaused) {

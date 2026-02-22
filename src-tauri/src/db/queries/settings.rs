@@ -82,3 +82,36 @@ pub fn set_monitor_config(conn: &Connection, config: &MonitorConfig) -> Result<(
 
     Ok(())
 }
+
+/// Resets the app to default state by clearing user data (hymns, presentations, services, collections)
+/// while preserving Bible data, settings, and schema version.
+pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
+    // Delete from tables that reference other tables first (foreign keys), then parent tables
+    // Order matters due to foreign key constraints
+    // NOTE: Bible data (bible_verses, bible_versions, bible_fts) is preserved
+    conn.execute_batch(
+        "
+        -- Clear child tables first
+        DELETE FROM audio_sync_points;
+        DELETE FROM slides;
+        DELETE FROM service_items;
+        DELETE FROM favorites;
+        DELETE FROM collection_songs;
+
+        -- Clear parent tables (but NOT bible tables)
+        DELETE FROM hymns;
+        DELETE FROM presentations;
+        DELETE FROM services;
+        DELETE FROM collections;
+
+        -- Clear FTS tables (but NOT bible_fts)
+        DELETE FROM hymns_fts;
+
+        -- Reset monitor configs but keep settings
+        DELETE FROM monitor_configs;
+        ",
+    )
+    .map_err(AppError::Database)?;
+
+    Ok(())
+}

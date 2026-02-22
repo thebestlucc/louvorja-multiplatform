@@ -12,6 +12,21 @@ The LouvorJA multiplatform database contains **46 tables** organized in two laye
 
 All tables support **multi-language content** via the `id_language` foreign key (currently: `en`, `pt`, `es`).
 
+## Legacy Database Migration Strategy
+
+When importing from a legacy LouvorJA database (Delphi-era):
+- **Legacy hymn data** is merged into the modern `hymns` table
+- **Audio/image file references** are preserved via `legacy_file_id` → `files` table
+- This allows resolution of file paths like `/musics/pt/Hinário Adventista/001.mp3` even if the physical files are missing
+
+**How to resolve audio paths:**
+```rust
+use db::queries::music::resolve_hymn_audio_path;
+
+let path = resolve_hymn_audio_path(conn, hymn_id)?;
+// Returns: Some("/musics/pt/Hinário Adventista/001.mp3") or None
+```
+
 ---
 
 ## Core Application Tables
@@ -151,9 +166,81 @@ CREATE UNIQUE INDEX categories_albums_id_category_id_album_unique
 
 ---
 
-### Hymns/Songs
+### Modern Hymns Table
 
-#### `musics`
+#### `hymns`
+```sql
+CREATE TABLE hymns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  number INTEGER,
+  title TEXT NOT NULL,
+  author TEXT,
+  album TEXT,
+  lyrics TEXT,
+  chords TEXT,
+  audio_path TEXT,
+  category TEXT,
+  notes TEXT,
+  legacy_file_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (legacy_file_id) REFERENCES files(id_file)
+);
+```
+**Purpose:** Modern hymn records with full metadata and optional audio/imaging.
+
+**Fields:**
+- `number`: Track number (from legacy import or manual assignment)
+- `title`: Hymn title
+- `author`: Composer/author name
+- `album`: Album/collection name
+- `lyrics`: Full lyrics text (concatenated stanzas)
+- `chords`: Optional chord progression (for musicians)
+- `audio_path`: Direct path to audio file (modern media directory)
+- `category`: Hymn category slug (hymnal, doxology, etc.)
+- `notes`: Extra metadata/commentary
+- `legacy_file_id`: **Foreign key to legacy `files` table** (populated during migration)
+
+**Use Case for `legacy_file_id`:**
+When importing from a legacy database without physical files, `legacy_file_id` preserves references to the legacy `files` table. Use the helper function:
+```rust
+resolve_hymn_audio_path(conn, hymn_id) -> Option<String>
+```
+This returns the reconstructed path (e.g., `/musics/pt/Hinário Adventista/001.mp3`) or `audio_path` if set.
+
+**Full-Text Search:**
+Updates automatically propagate to `hymns_fts` table for fast searching.
+
+---
+
+### Legacy Hymn/Songs Tables
+
+#### `musics` (Legacy)
+```sql
+CREATE TABLE musics (
+  id_music INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  name VARCHAR,
+  id_file_image INTEGER,
+  id_file_music INTEGER,
+  id_file_instrumental_music INTEGER,
+  id_language VARCHAR NOT NULL,
+  created_at DATETIME,
+  updated_at DATETIME,
+  FOREIGN KEY (id_language) REFERENCES languages(id_language),
+  FOREIGN KEY (id_file_image) REFERENCES files(id_file),
+  FOREIGN KEY (id_file_music) REFERENCES files(id_file),
+  FOREIGN KEY (id_file_instrumental_music) REFERENCES files(id_file)
+);
+```
+**Note:** This is part of the legacy Delphi schema. Modern code uses the `hymns` table instead.
+
+---
+
+## Legacy Hymn System (Delphi-era)
+
+The following tables and views are from the original Delphi system and are maintained for data migration purposes.
+
+#### `musics` (Legacy Music Records)
 ```sql
 CREATE TABLE musics (
   id_music INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

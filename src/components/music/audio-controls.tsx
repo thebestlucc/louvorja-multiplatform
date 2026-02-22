@@ -12,7 +12,7 @@ function formatTime(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-const PLAYBACK_MODES: PlaybackMode[] = ["sung", "karaoke", "silent"];
+const PLAYBACK_MODES: PlaybackMode[] = ["sung", "karaoke"];
 
 interface AudioControlsProps {
   filePath: string;
@@ -136,7 +136,7 @@ export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
                 playbackMode === mode
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
-              } ${mode === "sung" ? "rounded-l-md" : ""} ${mode === "silent" ? "rounded-r-md" : ""}`}
+              } ${mode === "sung" ? "rounded-l-md" : ""} ${mode === "karaoke" ? "rounded-r-md" : ""}`}
             >
               {t(`audio.${mode}`)}
             </button>

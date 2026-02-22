@@ -108,6 +108,18 @@ fn validate_hymn_input(input: &HymnWriteInput) -> Result<(), AppError> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_hymn_audio_path(
+    hymn_id: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::music::resolve_hymn_audio_path(&conn, hymn_id)
+}
+
 fn validate_cover_path(path: &str) -> Result<(), AppError> {
     let trimmed = path.trim();
     if trimmed.is_empty() {

@@ -11,6 +11,12 @@ struct SettingChangedPayload {
     value: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearDatabaseResult {
+    pub success: bool,
+}
+
 #[tauri::command]
 pub fn get_setting(key: String, state: tauri::State<'_, AppState>) -> Result<Setting, AppError> {
     let conn = state
@@ -58,4 +64,14 @@ pub fn get_all_settings(state: tauri::State<'_, AppState>) -> Result<Vec<Setting
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::get_all_settings(&conn)
+}
+
+#[tauri::command]
+pub fn clear_database(state: tauri::State<'_, AppState>) -> Result<ClearDatabaseResult, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::settings::clear_database(&conn)?;
+    Ok(ClearDatabaseResult { success: true })
 }
