@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import type { AudioStatusPayload, PlaybackStatus, PlaybackMode, SyncPoint } from "../types/audio";
 import { usePresentationStore } from "./presentation-store";
+import { useDisplayStore } from "./display-store";
 import { projectSlideIndex } from "../lib/projection-playback";
 
 interface AudioStoreState {
@@ -29,6 +30,8 @@ interface AudioStoreState {
   setSyncPoints: (points: SyncPoint[]) => void;
   setManualSyncLock: (slideIndex: number, targetTimestampMs: number, holdMs?: number) => void;
   clearManualSyncLock: () => void;
+  /** Immediately sync active slide to a given audio position (e.g. after seek). */
+  syncToPosition: (positionMs: number) => void;
   startStatusSubscription: () => void;
   stopStatusSubscription: () => void;
   reset: () => void;
@@ -80,6 +83,20 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     });
   },
   clearManualSyncLock: () => set({ manualSyncLock: null }),
+  syncToPosition: (positionMs: number) => {
+    const state = get();
+    if (state.syncPoints.length === 0) return;
+    const slideIndex = findSlideAtPosition(state.syncPoints, positionMs);
+    if (slideIndex >= 0 && slideIndex !== state.lastSyncSlide) {
+      set({ lastSyncSlide: slideIndex });
+      usePresentationStore.getState().setActiveSlideIndex(slideIndex);
+      // Only project if projection windows are active
+      const displayState = useDisplayStore.getState();
+      if (displayState.projectorWindowOpen || displayState.returnWindowOpen) {
+        void projectSlideIndex(slideIndex);
+      }
+    }
+  },
   startStatusSubscription: () => {
     const state = get();
     if (state.statusSubscription) {
@@ -107,15 +124,21 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
 
       projectedSlideInFlight = true;
       void (async () => {
+        // Check if projection is active before projecting
+        const displayState = useDisplayStore.getState();
+        const shouldProject = displayState.projectorWindowOpen || displayState.returnWindowOpen;
+        
         while (queuedSlide != null) {
           const nextSlide = queuedSlide;
           queuedSlide = null;
-          console.log("[audio-store] Projecting slide:", nextSlide);
+          console.log("[audio-store] Syncing slide:", nextSlide, "shouldProject:", shouldProject);
           usePresentationStore.getState().setActiveSlideIndex(nextSlide);
-          try {
-            await projectSlideIndex(nextSlide);
-          } catch {
-            // Ignore transient projection update errors.
+          if (shouldProject) {
+            try {
+              await projectSlideIndex(nextSlide);
+            } catch {
+              // Ignore transient projection update errors.
+            }
           }
         }
         projectedSlideInFlight = false;

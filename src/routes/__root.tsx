@@ -106,8 +106,14 @@ function RootLayout() {
       if (!store.runId || event.payload.runId === store.runId) {
         setLegacyFetchProgress(event.payload);
         
-        // Invalidate hymns when fetch completes
         const status = event.payload.status;
+
+        // Reset cancelling flag when a terminal status is reached
+        if (["cancelled", "completed", "failed"].includes(status) && store.isCancelling) {
+          useLegacyFetchStore.getState().setIsCancelling(false);
+        }
+
+        // Invalidate hymns when fetch completes
         if (status === "completed" && prevLegacyFetchStatusRef.current !== "completed") {
           queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });

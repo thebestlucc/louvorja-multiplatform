@@ -161,6 +161,9 @@ pub fn run() {
             commands::collections::resync_collection_song,
             commands::collections::remove_collection_song,
             commands::collections::reorder_collection_songs,
+            commands::collections::get_collection_hymns,
+            commands::collections::add_hymn_to_collection,
+            commands::collections::remove_hymn_from_collection,
             // Bible
             commands::bible::get_bible_versions,
             commands::bible::get_books,
@@ -255,6 +258,7 @@ pub fn run() {
             commands::legacy_fetch::cancel_legacy_fetch,
             commands::legacy_fetch::get_legacy_fetch_report,
             commands::legacy_fetch::fetch_legacy_params,
+            commands::legacy_fetch::restore_hymn_from_api,
             // Updater
             commands::updater::check_for_updates,
             commands::updater::install_update,

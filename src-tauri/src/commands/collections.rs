@@ -1,6 +1,6 @@
 use crate::db::models::{
     Collection, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
-    CollectionWithSongs,
+    CollectionWithSongs, Hymn,
 };
 use crate::error::AppError;
 use crate::state::AppState;
@@ -71,6 +71,8 @@ pub fn create_collection(
         description.as_deref(),
         year,
         cover_path.as_deref(),
+        "file",
+        None,
     )?;
     let collection = crate::db::queries::collections::get_collection_by_id(&tx, id)?;
     tx.commit()?;
@@ -622,4 +624,45 @@ fn uniquify_relative_path(media_root: &Path, original: &Path) -> PathBuf {
     let mut fallback = parent;
     fallback.push(format!("{}-fallback", stem));
     fallback
+}
+
+// --- Collection-Hymn commands (for API-imported album collections) ---
+
+#[tauri::command]
+pub fn get_collection_hymns(
+    collection_id: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Hymn>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::collections::get_collection_hymns(&conn, collection_id)
+}
+
+#[tauri::command]
+pub fn add_hymn_to_collection(
+    collection_id: i64,
+    hymn_id: i64,
+    item_order: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<i64, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::collections::insert_collection_hymn(&conn, collection_id, hymn_id, item_order)
+}
+
+#[tauri::command]
+pub fn remove_hymn_from_collection(
+    collection_id: i64,
+    hymn_id: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::collections::delete_collection_hymn(&conn, collection_id, hymn_id)
 }

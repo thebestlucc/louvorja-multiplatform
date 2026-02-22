@@ -1,6 +1,6 @@
 use crate::db::models::{
-    Collection, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
-    CollectionWithSongs,
+    Collection, CollectionHymn, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
+    CollectionWithHymns, CollectionWithSongs, Hymn,
 };
 use crate::error::AppError;
 use rusqlite::{params, Connection, Row};
@@ -15,6 +15,8 @@ fn map_collection_row(row: &Row) -> Result<Collection, rusqlite::Error> {
         cover_path: row.get("cover_path")?,
         auto_cover_path: row.get("auto_cover_path")?,
         song_count: row.get("song_count")?,
+        source_type: row.get("source_type")?,
+        api_album_id: row.get("api_album_id")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -345,9 +347,14 @@ pub fn get_collections(conn: &Connection) -> Result<Vec<Collection>, AppError> {
                 c.year,
                 c.cover_path,
                 c.auto_cover_path,
+                c.source_type,
+                c.api_album_id,
                 c.created_at,
                 c.updated_at,
-                (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id) AS song_count
+                (
+                    (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
+                    + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
+                ) AS song_count
          FROM collections
          AS c
          ORDER BY c.updated_at DESC, c.name ASC",
@@ -366,9 +373,14 @@ pub fn get_collection_by_id(conn: &Connection, id: i64) -> Result<Collection, Ap
                 c.year,
                 c.cover_path,
                 c.auto_cover_path,
+                c.source_type,
+                c.api_album_id,
                 c.created_at,
                 c.updated_at,
-                (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id) AS song_count
+                (
+                    (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
+                    + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
+                ) AS song_count
          FROM collections AS c
          WHERE c.id = ?1",
         params![id],
@@ -416,15 +428,19 @@ pub fn insert_collection(
     description: Option<&str>,
     year: Option<i32>,
     cover_path: Option<&str>,
+    source_type: &str,
+    api_album_id: Option<i64>,
 ) -> Result<i64, AppError> {
     conn.execute(
-        "INSERT INTO collections (name, description, year, cover_path)
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO collections (name, description, year, cover_path, source_type, api_album_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             name.trim(),
             description.map(str::trim),
             year,
             cover_path.map(str::trim),
+            source_type,
+            api_album_id,
         ],
     )?;
     let collection_id = conn.last_insert_rowid();
@@ -675,4 +691,69 @@ pub fn set_collection_auto_cover_path(
         params![auto_cover_path, collection_id],
     )?;
     Ok(())
+}
+
+// --- Collection-Hymn join table queries (for API-imported album collections) ---
+
+pub fn insert_collection_hymn(
+    conn: &Connection,
+    collection_id: i64,
+    hymn_id: i64,
+    item_order: i64,
+) -> Result<i64, AppError> {
+    conn.execute(
+        "INSERT OR IGNORE INTO collection_hymns (collection_id, hymn_id, item_order)
+         VALUES (?1, ?2, ?3)",
+        params![collection_id, hymn_id, item_order],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn get_collection_hymns(conn: &Connection, collection_id: i64) -> Result<Vec<Hymn>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords,
+                h.audio_path, h.playback_path, h.category, h.notes, h.cover_path,
+                h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
+         FROM collection_hymns ch
+         JOIN hymns h ON h.id = ch.hymn_id
+         WHERE ch.collection_id = ?1
+         ORDER BY ch.item_order ASC, ch.id ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![collection_id], super::music::map_hymn_row_pub)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+pub fn get_collection_with_hymns(
+    conn: &Connection,
+    id: i64,
+) -> Result<CollectionWithHymns, AppError> {
+    let collection = get_collection_by_id(conn, id)?;
+    let hymns = get_collection_hymns(conn, id)?;
+    Ok(CollectionWithHymns { collection, hymns })
+}
+
+pub fn delete_collection_hymn(
+    conn: &Connection,
+    collection_id: i64,
+    hymn_id: i64,
+) -> Result<(), AppError> {
+    conn.execute(
+        "DELETE FROM collection_hymns WHERE collection_id = ?1 AND hymn_id = ?2",
+        params![collection_id, hymn_id],
+    )?;
+    Ok(())
+}
+
+pub fn find_collection_by_api_album_id(
+    conn: &Connection,
+    api_album_id: i64,
+) -> Option<i64> {
+    conn.query_row(
+        "SELECT id FROM collections WHERE api_album_id = ?1",
+        params![api_album_id],
+        |row| row.get(0),
+    )
+    .ok()
 }

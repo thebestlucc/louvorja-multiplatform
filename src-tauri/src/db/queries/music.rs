@@ -1,6 +1,6 @@
 use crate::db::models::{Album, Hymn};
 use crate::error::AppError;
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 
 fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
     Ok(Hymn {
@@ -17,9 +17,15 @@ fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
         notes: row.get("notes")?,
         cover_path: row.get("cover_path")?,
         lyrics_sync: row.get("lyrics_sync")?,
+        api_music_id: row.get("api_music_id")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
+}
+
+/// Public wrapper for cross-module use (e.g., collection_hymns JOIN queries)
+pub fn map_hymn_row_pub(row: &Row) -> Result<Hymn, rusqlite::Error> {
+    map_hymn_row(row)
 }
 
 fn sanitize_fts_query(query: &str) -> String {
@@ -37,7 +43,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
 
     if trimmed.is_empty() {
         let mut stmt = conn.prepare(
-            "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, created_at, updated_at
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
              FROM hymns ORDER BY number, title"
         )?;
         let hymns = stmt
@@ -49,7 +55,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     // If numeric, search by number
     if let Ok(num) = trimmed.parse::<i64>() {
         let mut stmt = conn.prepare(
-            "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, created_at, updated_at
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
              FROM hymns WHERE number = ?1 ORDER BY title"
         )?;
         let hymns = stmt
@@ -66,7 +72,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
 
     let fts_query = format!("{}*", sanitized);
     let mut stmt = conn.prepare(
-        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.created_at, h.updated_at
+        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
          FROM hymns h
          JOIN hymns_fts ON hymns_fts.rowid = h.id
          WHERE hymns_fts MATCH ?1
@@ -80,7 +86,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
 
 pub fn get_hymn_by_id(conn: &Connection, id: i64) -> Result<Hymn, AppError> {
     conn.query_row(
-        "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, created_at, updated_at
+        "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
          FROM hymns WHERE id = ?1",
         params![id],
         map_hymn_row,
@@ -111,7 +117,7 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<Album>, AppError> {
 
 pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, created_at, updated_at
+        "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
          FROM hymns WHERE album = ?1 ORDER BY number, title"
     )?;
     let hymns = stmt
@@ -239,25 +245,16 @@ fn parse_time_to_ms(time_str: &str) -> Option<u64> {
     let colon_count = time_str.chars().filter(|&c| c == ':').count();
 
     if colon_count == 2 {
-        // Format: MM:SS:frames or MM:SS:mmm (e.g., "00:01:50" or "00:00:03")
+        // Format: HH:MM:SS (e.g., "00:01:50" means 1 min 50 sec)
+        // This is the standard format from the LouvorJA API.
         let parts: Vec<&str> = time_str.split(':').collect();
         if parts.len() != 3 {
             return None;
         }
-        let minutes: u64 = parts[0].parse().ok()?;
-        let seconds: u64 = parts[1].parse().ok()?;
-        // Third part could be frames (2 digits = centiseconds) or milliseconds (3 digits)
-        let frac_str = parts[2];
-        let millis: u64 = if frac_str.len() <= 2 {
-            // Centiseconds (frames) - multiply by 10
-            let centis: u64 = frac_str.parse().ok()?;
-            centis * 10
-        } else {
-            // Milliseconds
-            let padded = format!("{:0<3}", frac_str);
-            padded[..3].parse().unwrap_or(0)
-        };
-        return Some(minutes * 60 * 1000 + seconds * 1000 + millis);
+        let hours: u64 = parts[0].parse().ok()?;
+        let minutes: u64 = parts[1].parse().ok()?;
+        let seconds: u64 = parts[2].parse().ok()?;
+        return Some(hours * 3600 * 1000 + minutes * 60 * 1000 + seconds * 1000);
     } else if colon_count == 1 {
         // Format: MM:SS.mmm (e.g., "00:01.500")
         let parts: Vec<&str> = time_str.split(':').collect();
@@ -434,4 +431,13 @@ pub fn resolve_hymn_audio_path(conn: &Connection, hymn_id: i64) -> Result<Option
     )?;
 
     Ok(legacy_path)
+}
+
+pub fn find_hymn_by_api_music_id(conn: &Connection, api_music_id: i64) -> Option<i64> {
+    conn.query_row(
+        "SELECT id FROM hymns WHERE api_music_id = ?1",
+        params![api_music_id],
+        |row| row.get(0),
+    )
+    .ok()
 }

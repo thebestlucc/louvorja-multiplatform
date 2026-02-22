@@ -82,10 +82,14 @@ export function useSlides() {
   }, []);
 
   const goToSlide = useCallback(
-    async (index: number) => {
+    async (index: number, options?: { seekAudio?: boolean }) => {
       const state = usePresentationStore.getState();
       if (index >= 0 && index < state.slides.length) {
-        await seekAudioToSlideSyncPoint(index);
+        // Only seek audio if explicitly requested (e.g., from operator sync-aware navigation).
+        // Default: don't seek audio when user clicks a slide/verse in the UI.
+        if (options?.seekAudio) {
+          await seekAudioToSlideSyncPoint(index);
+        }
         state.setActiveSlideIndex(index);
         const slide = state.slides[index];
         const next = index + 1 < state.slides.length ? state.slides[index + 1] : null;

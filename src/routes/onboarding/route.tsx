@@ -8,7 +8,6 @@ export const Route = createFileRoute("/onboarding")({
 
 const STEP_ORDER = [
   { to: "/onboarding/welcome", key: "onboarding.steps.welcome" },
-  { to: "/onboarding/import", key: "onboarding.steps.import" },
   { to: "/onboarding/monitors", key: "onboarding.steps.monitors" },
   { to: "/onboarding/complete", key: "onboarding.steps.complete" },
 ] as const;
@@ -25,7 +24,7 @@ function OnboardingLayout() {
         <p className="text-sm text-muted-foreground">{t("onboarding.subtitle")}</p>
       </header>
 
-      <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ol className="grid grid-cols-3 gap-2">
         {STEP_ORDER.map((step, index) => {
           const isDone = currentStep > index;
           const isActive = currentStep === index;

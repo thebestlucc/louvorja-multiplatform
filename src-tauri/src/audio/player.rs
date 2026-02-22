@@ -12,6 +12,9 @@ pub struct AudioPlayer {
     _stream: Option<OutputStream>,
     stream_handle: Option<OutputStreamHandle>,
     current_file: Option<PathBuf>,
+    /// The original (unresolved) path passed by the frontend, used for identity
+    /// checks in the UI (e.g. comparing which hymn is playing).
+    input_path: Option<String>,
     duration_ms: Option<u64>,
     volume: f32,
 }
@@ -32,6 +35,7 @@ impl AudioPlayer {
             _stream: Some(stream),
             stream_handle: Some(stream_handle),
             current_file: None,
+            input_path: None,
             duration_ms: None,
             volume: 1.0,
         })
@@ -67,6 +71,7 @@ impl AudioPlayer {
             _stream: None,
             stream_handle: None,
             current_file: None,
+            input_path: None,
             duration_ms: None,
             volume: 1.0,
         }
@@ -166,6 +171,7 @@ impl AudioPlayer {
             sink.stop();
         }
         self.current_file = None;
+        self.input_path = None;
         self.duration_ms = None;
     }
 
@@ -210,10 +216,15 @@ impl AudioPlayer {
         self.volume
     }
 
+    /// Returns the original (unresolved) file path passed by the caller.
+    /// This is the path the frontend uses for identity comparison.
     pub fn current_file(&self) -> Option<String> {
-        self.current_file
-            .as_ref()
-            .map(|p| p.to_string_lossy().to_string())
+        self.input_path.clone()
+    }
+
+    /// Store the original (unresolved) file path for identity matching.
+    pub fn set_input_path(&mut self, path: &str) {
+        self.input_path = Some(path.to_string());
     }
 
     fn read_duration(path: &str) -> Option<u64> {

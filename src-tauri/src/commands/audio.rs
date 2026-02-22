@@ -125,6 +125,9 @@ pub fn audio_play(
             .lock()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         player.play(&resolved_path)?;
+        // Store the original (unresolved) path so the frontend can identify
+        // which file is playing using the same relative path it passed in.
+        player.set_input_path(&file_path);
     }
 
     start_audio_status_stream(&app, &state)?;

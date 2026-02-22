@@ -1,3 +1,5 @@
+import type { Hymn } from "./hymn";
+
 export type CollectionSongSyncStatus =
   | "in_sync"
   | "stale"
@@ -12,6 +14,8 @@ export interface Collection {
   cover_path: string | null;
   auto_cover_path: string | null;
   song_count: number;
+  source_type: string;
+  api_album_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,4 +48,17 @@ export interface CollectionSearchResult {
   collection_name: string;
   title: string;
   snippet: string;
+}
+
+export interface CollectionHymn {
+  id: number;
+  collectionId: number;
+  hymnId: number;
+  itemOrder: number;
+  createdAt: string;
+}
+
+export interface CollectionWithHymns {
+  collection: Collection;
+  hymns: Hymn[];
 }

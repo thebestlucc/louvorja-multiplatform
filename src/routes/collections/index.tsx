@@ -42,6 +42,7 @@ function CollectionsIndex() {
   const deleteMutation = useDeleteCollection();
   const importSongMutation = useImportCollectionSong();
 
+  const [tab, setTab] = useState<"albums" | "custom">("albums");
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -71,14 +72,19 @@ function CollectionsIndex() {
 
   const filtered = useMemo(() => {
     const value = deferredSearch.trim().toLowerCase();
-    if (!value) return data ?? [];
-    return (data ?? []).filter((entry) => {
+    const all = data ?? [];
+    // Filter by tab: albums = api-sourced, custom = file-sourced
+    const byTab = all.filter((entry) =>
+      tab === "albums" ? entry.source_type === "api" : entry.source_type !== "api"
+    );
+    if (!value) return byTab;
+    return byTab.filter((entry) => {
       return (
         entry.name.toLowerCase().includes(value) ||
         (entry.description ?? "").toLowerCase().includes(value)
       );
     });
-  }, [data, deferredSearch]);
+  }, [data, deferredSearch, tab]);
 
   const resetCreateForm = () => {
     setName("");
@@ -158,7 +164,7 @@ function CollectionsIndex() {
           <h1 className="text-2xl font-semibold tracking-tight">{t("nav.collections")}</h1>
           <p className="text-sm text-muted-foreground">{t("collections.subtitle")}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={() => setCreateOpen(true)} className={tab !== "custom" ? "invisible" : ""}>
           <Plus className="mr-2 h-4 w-4" />
           {t("collections.create")}
         </Button>
@@ -302,6 +308,34 @@ function CollectionsIndex() {
         </DialogContent>
       </Dialog>
 
+      {/* Tab switcher */}
+      <div className="flex items-center gap-1 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setTab("albums")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors",
+            tab === "albums"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {t("collections.tabAlbums")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("custom")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors",
+            tab === "custom"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {t("collections.tabCustom")}
+        </button>
+      </div>
+
       <Input
         value={search}
         onChange={(event) => setSearch(event.target.value)}
@@ -335,7 +369,10 @@ function CollectionsIndex() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute top-2 right-2 h-7 w-7 text-destructive hover:bg-destructive/10"
+                      className={cn(
+                        "absolute top-2 right-2 h-7 w-7 text-destructive hover:bg-destructive/10",
+                        collection.source_type === "api" && "hidden"
+                      )}
                       onClick={async () => {
                         try {
                           await deleteMutation.mutateAsync(collection.id);

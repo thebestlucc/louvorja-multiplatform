@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  searchHymns, getHymn, getAlbums, getHymnsByAlbum, createHymn, updateHymn, deleteHymn, getHymnAudioPath,
+  searchHymns, getHymn, getAlbums, getHymnsByAlbum, updateHymn, deleteHymn, getHymnAudioPath,
   getAvailableMonitors, setCurrentSlide, getSyncPoints, saveSyncPoints,
   getCollections, getCollection, createCollection, updateCollection, deleteCollection, importCollectionSong,
   checkCollectionSongSync, resyncCollectionSong, removeCollectionSong, reorderCollectionSongs,
+  getCollectionHymns, addHymnToCollection, removeHymnFromCollection,
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
@@ -13,8 +14,8 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings, clearDatabase,
-  startMigration, getMigrationProgress, cancelMigration, getMigrationReport,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
+  restoreHymnFromApi,
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
 } from "./tauri";
@@ -23,7 +24,7 @@ import type { SyncPoint } from "../types/audio";
 import type { HymnWriteInput } from "../types/hymn";
 import type { TimerMode, TextFormat } from "../types/utilities";
 import type { CollectionSongSyncStatus } from "../types/collection";
-import type { MigrationOptions, UpdateInfo } from "../types/migration";
+import type { UpdateInfo } from "../types/migration";
 import type { LegacyFetchOptions } from "../types/legacy-fetch";
 
 export const queryKeys = {
@@ -41,6 +42,7 @@ export const queryKeys = {
     all: ["collections"] as const,
     detail: (id: number) => ["collections", id] as const,
     songs: (id: number) => ["collections", id, "songs"] as const,
+    hymns: (id: number) => ["collections", id, "hymns"] as const,
     songSync: (songId: number) => ["collections", "songSync", songId] as const,
   },
   bible: {
@@ -64,10 +66,6 @@ export const queryKeys = {
   settings: {
     all: ["settings"] as const,
     detail: (key: string) => ["settings", key] as const,
-  },
-  migration: {
-    progress: (runId: string) => ["migration", "progress", runId] as const,
-    report: (runId: string) => ["migration", "report", runId] as const,
   },
   legacyFetch: {
     progress: (runId: string) => ["legacyFetch", "progress", runId] as const,
@@ -134,17 +132,6 @@ export function useHymnsByAlbum(album: string) {
     queryKey: queryKeys.hymns.byAlbum(album),
     queryFn: () => getHymnsByAlbum(album),
     enabled: album.length > 0,
-  });
-}
-
-export function useCreateHymn() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: HymnWriteInput) => createHymn(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-    },
   });
 }
 
@@ -323,6 +310,51 @@ export function useReorderCollectionSongs() {
       reorderCollectionSongs(vars.collectionId, vars.songIds),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
+    },
+  });
+}
+
+export function useCollectionHymns(collectionId: number) {
+  return useQuery({
+    queryKey: queryKeys.collections.hymns(collectionId),
+    queryFn: () => getCollectionHymns(collectionId),
+    enabled: collectionId > 0,
+  });
+}
+
+export function useAddHymnToCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { collectionId: number; hymnId: number; itemOrder: number }) =>
+      addHymnToCollection(vars.collectionId, vars.hymnId, vars.itemOrder),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+    },
+  });
+}
+
+export function useRemoveHymnFromCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { collectionId: number; hymnId: number }) =>
+      removeHymnFromCollection(vars.collectionId, vars.hymnId),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+    },
+  });
+}
+
+export function useRestoreHymnFromApi() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (hymnId: number) => restoreHymnFromApi(hymnId),
+    onSuccess: (_, hymnId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(hymnId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
     },
   });
 }
@@ -631,57 +663,6 @@ export function useClearDatabase() {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
       queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
-    },
-  });
-}
-
-// Migration
-export function useStartMigration() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { oldDbPath: string; options: MigrationOptions }) =>
-      startMigration(vars.oldDbPath, vars.options),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.migration.progress(data.runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.migration.report(data.runId) });
-    },
-  });
-}
-
-export function useMigrationProgress(runId: string | null, options?: { enabled?: boolean }) {
-  const enabled = Boolean(runId && (options?.enabled ?? true));
-  return useQuery({
-    queryKey: queryKeys.migration.progress(runId ?? ""),
-    queryFn: () => getMigrationProgress(runId ?? ""),
-    enabled,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === "running" || status === "cancelling") {
-        return 500;
-      }
-      return false;
-    },
-    refetchIntervalInBackground: true,
-  });
-}
-
-export function useMigrationReport(runId: string | null, options?: { enabled?: boolean }) {
-  const enabled = Boolean(runId && (options?.enabled ?? true));
-  return useQuery({
-    queryKey: queryKeys.migration.report(runId ?? ""),
-    queryFn: () => getMigrationReport(runId ?? ""),
-    enabled,
-    retry: false,
-  });
-}
-
-export function useCancelMigration() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (runId: string) => cancelMigration(runId),
-    onSuccess: (_, runId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.migration.progress(runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.migration.report(runId) });
     },
   });
 }

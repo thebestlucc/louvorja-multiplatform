@@ -15,6 +15,7 @@ pub struct Hymn {
     pub notes: Option<String>,
     pub cover_path: Option<String>,
     pub lyrics_sync: Option<String>,
+    pub api_music_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -224,6 +225,8 @@ pub struct Collection {
     pub cover_path: Option<String>,
     pub auto_cover_path: Option<String>,
     pub song_count: i64,
+    pub source_type: String,
+    pub api_album_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -289,4 +292,21 @@ pub struct CollectionSearchResult {
     pub collection_name: String,
     pub title: String,
     pub snippet: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionHymn {
+    pub id: i64,
+    pub collection_id: i64,
+    pub hymn_id: i64,
+    pub item_order: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionWithHymns {
+    pub collection: Collection,
+    pub hymns: Vec<Hymn>,
 }

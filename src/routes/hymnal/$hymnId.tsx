@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, BookOpen, Monitor, Music, Pencil, Save, Square, Trash2 } from "lucide-react";
-import { useDeleteHymn, useHymn, useSyncPoints, useUpdateHymn } from "../../lib/queries";
+import { ArrowLeft, BookOpen, Monitor, Music, Pencil, RefreshCw, Save, Square, Trash2 } from "lucide-react";
+import { useDeleteHymn, useHymn, useRestoreHymnFromApi, useSyncPoints, useUpdateHymn } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useSlides } from "../../hooks/use-slides";
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/hymnal/$hymnId")({
   component: HymnDetail,
 });
 
-function hymnToSlides(title: string, lyrics: string | null, album: string | null): SlideContent[] {
+function hymnToSlides(title: string, lyrics: string | null, album: string | null, coverPath?: string | null): SlideContent[] {
   const slides: SlideContent[] = [];
 
   // Cover slide
@@ -43,6 +43,7 @@ function hymnToSlides(title: string, lyrics: string | null, album: string | null
     type: "cover",
     title,
     subtitle: album ?? undefined,
+    backgroundImage: coverPath ?? undefined,
   });
 
   if (lyrics) {
@@ -52,6 +53,7 @@ function hymnToSlides(title: string, lyrics: string | null, album: string | null
         type: "lyrics",
         text: stanza.trim(),
         label: `${i + 1}/${stanzas.length}`,
+        backgroundImage: coverPath ?? undefined,
       });
     });
   }
@@ -98,10 +100,11 @@ function HymnDetail() {
   const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
   const updateMutation = useUpdateHymn();
   const deleteMutation = useDeleteHymn();
+  const restoreMutation = useRestoreHymnFromApi();
 
   const generatedSlides = useMemo(() => {
     if (!hymn) return [];
-    return hymnToSlides(hymn.title, hymn.lyrics, hymn.album);
+    return hymnToSlides(hymn.title, hymn.lyrics, hymn.album, hymn.cover_path);
   }, [hymn]);
 
   useEffect(() => {
@@ -158,12 +161,15 @@ function HymnDetail() {
   }, [bindHymnToPlaybackQueue, generatedSlides.length, goToSlide]);
 
   useEffect(() => {
-    console.log("[hymnId] useEffect: isProjecting=", isProjecting, "activeProjectedIndex=", activeProjectedIndex);
-    if (!isProjecting) {
+    // Sync localActiveIndex from presentation store when:
+    // 1. isProjecting is true (slide changes from projection)
+    // 2. isQueueBoundToHymn is true (audio is playing, sync points update activeSlideIndex)
+    console.log("[hymnId] useEffect: isProjecting=", isProjecting, "isQueueBoundToHymn=", isQueueBoundToHymn, "activeProjectedIndex=", activeProjectedIndex);
+    if (!isProjecting && !isQueueBoundToHymn) {
       return;
     }
     setLocalActiveIndex(activeProjectedIndex);
-  }, [activeProjectedIndex, isProjecting]);
+  }, [activeProjectedIndex, isProjecting, isQueueBoundToHymn]);
 
   useEffect(() => {
     if (!isQueueBoundToHymn || syncPointsData === undefined) {
@@ -297,6 +303,25 @@ function HymnDetail() {
               <Pencil className="mr-2 h-4 w-4" />
               {t("actions.edit")}
             </Button>
+            {hymn.api_music_id != null && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={restoreMutation.isPending}
+                onClick={async () => {
+                  try {
+                    await restoreMutation.mutateAsync(id);
+                    toast.success(t("hymn.restoreSuccess"));
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    toast.error(t("hymn.restoreFailed", { error: message }));
+                  }
+                }}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${restoreMutation.isPending ? "animate-spin" : ""}`} />
+                {t("hymn.restoreFromApi")}
+              </Button>
+            )}
             {isProjecting ? (
               <>
                 <Button
@@ -461,6 +486,7 @@ function HymnDetail() {
         {hymn.audio_path && (
           <AudioControls
             filePath={hymn.audio_path}
+            playbackPath={hymn.playback_path}
             onBeforePlay={() => bindHymnToPlaybackQueue(localActiveIndex)}
           />
         )}
