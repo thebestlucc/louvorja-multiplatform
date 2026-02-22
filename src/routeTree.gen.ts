@@ -39,7 +39,6 @@ import { Route as ServicesServiceIdRouteImport } from './routes/services/$servic
 import { Route as PresentationsPresentationIdRouteImport } from './routes/presentations/$presentationId'
 import { Route as OnboardingWelcomeRouteImport } from './routes/onboarding/welcome'
 import { Route as OnboardingMonitorsRouteImport } from './routes/onboarding/monitors'
-import { Route as OnboardingImportRouteImport } from './routes/onboarding/import'
 import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
 import { Route as CollectionsCollectionIdRouteImport } from './routes/collections/$collectionId'
@@ -195,11 +194,6 @@ const OnboardingMonitorsRoute = OnboardingMonitorsRouteImport.update({
   path: '/monitors',
   getParentRoute: () => OnboardingRouteRoute,
 } as any)
-const OnboardingImportRoute = OnboardingImportRouteImport.update({
-  id: '/import',
-  path: '/import',
-  getParentRoute: () => OnboardingRouteRoute,
-} as any)
 const OnboardingCompleteRoute = OnboardingCompleteRouteImport.update({
   id: '/complete',
   path: '/complete',
@@ -233,7 +227,6 @@ export interface FileRoutesByFullPath {
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
-  '/onboarding/import': typeof OnboardingImportRoute
   '/onboarding/monitors': typeof OnboardingMonitorsRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
@@ -260,7 +253,6 @@ export interface FileRoutesByTo {
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
-  '/onboarding/import': typeof OnboardingImportRoute
   '/onboarding/monitors': typeof OnboardingMonitorsRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
@@ -297,7 +289,6 @@ export interface FileRoutesById {
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
-  '/onboarding/import': typeof OnboardingImportRoute
   '/onboarding/monitors': typeof OnboardingMonitorsRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
@@ -335,7 +326,6 @@ export interface FileRouteTypes {
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
-    | '/onboarding/import'
     | '/onboarding/monitors'
     | '/onboarding/welcome'
     | '/presentations/$presentationId'
@@ -362,7 +352,6 @@ export interface FileRouteTypes {
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
-    | '/onboarding/import'
     | '/onboarding/monitors'
     | '/onboarding/welcome'
     | '/presentations/$presentationId'
@@ -398,7 +387,6 @@ export interface FileRouteTypes {
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
-    | '/onboarding/import'
     | '/onboarding/monitors'
     | '/onboarding/welcome'
     | '/presentations/$presentationId'
@@ -646,13 +634,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingMonitorsRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
-    '/onboarding/import': {
-      id: '/onboarding/import'
-      path: '/import'
-      fullPath: '/onboarding/import'
-      preLoaderRoute: typeof OnboardingImportRouteImport
-      parentRoute: typeof OnboardingRouteRoute
-    }
     '/onboarding/complete': {
       id: '/onboarding/complete'
       path: '/complete'
@@ -718,7 +699,6 @@ const HymnalRouteRouteWithChildren = HymnalRouteRoute._addFileChildren(
 
 interface OnboardingRouteRouteChildren {
   OnboardingCompleteRoute: typeof OnboardingCompleteRoute
-  OnboardingImportRoute: typeof OnboardingImportRoute
   OnboardingMonitorsRoute: typeof OnboardingMonitorsRoute
   OnboardingWelcomeRoute: typeof OnboardingWelcomeRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
@@ -726,7 +706,6 @@ interface OnboardingRouteRouteChildren {
 
 const OnboardingRouteRouteChildren: OnboardingRouteRouteChildren = {
   OnboardingCompleteRoute: OnboardingCompleteRoute,
-  OnboardingImportRoute: OnboardingImportRoute,
   OnboardingMonitorsRoute: OnboardingMonitorsRoute,
   OnboardingWelcomeRoute: OnboardingWelcomeRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,

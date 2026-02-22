@@ -12,6 +12,7 @@ export interface Hymn {
   notes: string | null;
   cover_path: string | null;
   lyrics_sync: string | null;
+  api_music_id: number | null;
   created_at: string;
   updated_at: string;
 }

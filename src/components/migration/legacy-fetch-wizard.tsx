@@ -25,6 +25,7 @@ export function LegacyFetchWizard({
   const [options, setOptions] = useState<LegacyFetchOptions>({
     language: (i18n.language as ApiLanguage) || "pt",
     includeHymnal: true,
+    includeAlbums: true,
     replaceExisting: false,
     downloadAudio: true,
     downloadImages: true,
@@ -105,6 +106,12 @@ export function LegacyFetchWizard({
             hint={t("settings.legacyFetch.optionHymnalHint")}
             checked={options.includeHymnal}
             onChange={(checked) => setOptions({ ...options, includeHymnal: checked })}
+          />
+          <OptionToggle
+            label={t("settings.legacyFetch.optionAlbums")}
+            hint={t("settings.legacyFetch.optionAlbumsHint")}
+            checked={options.includeAlbums}
+            onChange={(checked) => setOptions({ ...options, includeAlbums: checked })}
           />
           <OptionToggle
             label={t("settings.legacyFetch.optionReplace")}
@@ -214,6 +221,17 @@ export function LegacyFetchProgressCard({
         ? t("settings.legacyFetch.statusCancelled")
         : t("settings.legacyFetch.statusFetching");
 
+  const stepLabelMap: Record<string, string> = {
+    connecting: t("settings.legacyFetch.stepConnecting"),
+    fetching: t("settings.legacyFetch.stepFetching"),
+    importing: t("settings.legacyFetch.stepImporting"),
+    fetching_albums: t("settings.legacyFetch.stepFetchingAlbums"),
+    importing_album: t("settings.legacyFetch.stepImportingAlbum"),
+    importing_album_music: t("settings.legacyFetch.stepImportingAlbumMusic"),
+    done: t("settings.legacyFetch.stepDone"),
+  };
+  const translatedStep = progress?.step ? (stepLabelMap[progress.step] ?? progress.step) : "...";
+
   return (
     <Card>
       <CardHeader>
@@ -227,7 +245,7 @@ export function LegacyFetchProgressCard({
         {/* Progress Bar */}
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{progress?.step ?? "..."}</span>
+            <span>{translatedStep}</span>
             <span>{Math.round(progress?.percent ?? 0)}%</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -292,6 +310,18 @@ export function LegacyFetchProgressCard({
                     <span className="text-muted-foreground">{t("settings.legacyFetch.reportSkipped")}</span>
                     <span className="ml-1 font-medium text-yellow-600">{report.hymnsSkipped}</span>
                   </div>
+                  {(report.albumsCreated > 0 || report.collectionHymnsLinked > 0) && (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">{t("settings.legacyFetch.reportAlbumsCreated")}</span>
+                        <span className="ml-1 font-medium text-blue-600">{report.albumsCreated}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">{t("settings.legacyFetch.reportHymnsLinked")}</span>
+                        <span className="ml-1 font-medium text-blue-600">{report.collectionHymnsLinked}</span>
+                      </div>
+                    </>
+                  )}
                   <div>
                     <span className="text-muted-foreground">{t("settings.legacyFetch.reportDuration")}</span>
                     <span className="ml-1 font-medium">{(report.durationMs / 1000).toFixed(1)}s</span>
@@ -318,7 +348,7 @@ export function LegacyFetchProgressCard({
               className="flex-1"
             >
               {cancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t("settings.legacyFetch.cancel")}
+              {cancelling ? t("settings.legacyFetch.cancelling") : t("settings.legacyFetch.cancel")}
             </Button>
           )}
           {(isCompleted || isCancelled) && (

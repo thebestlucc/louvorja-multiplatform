@@ -89,6 +89,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (15)", [])?;
     }
 
+    if current_version < 16 {
+        migrate_v16(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (16)", [])?;
+    }
+
     Ok(())
 }
 
@@ -668,6 +673,31 @@ fn migrate_v15(conn: &Connection) -> Result<(), AppError> {
     // Add lyrics_sync column to store synchronized lyrics data (JSON format)
     // Format: [{ "lyric": "...", "order": 0, "time": "00:00:03", "instrumental_time": "00:00:05" }, ...]
     add_column_if_missing(conn, "hymns", "lyrics_sync", "TEXT")?;
+
+    Ok(())
+}
+
+fn migrate_v16(conn: &Connection) -> Result<(), AppError> {
+    // Create collection_hymns join table for API-imported album ↔ hymn links
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS collection_hymns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+            hymn_id INTEGER NOT NULL REFERENCES hymns(id) ON DELETE CASCADE,
+            item_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(collection_id, hymn_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_collection_hymns_collection ON collection_hymns(collection_id);
+        CREATE INDEX IF NOT EXISTS idx_collection_hymns_hymn ON collection_hymns(hymn_id);",
+    )?;
+
+    // Extend collections with source_type and api_album_id
+    add_column_if_missing(conn, "collections", "source_type", "TEXT NOT NULL DEFAULT 'file'")?;
+    add_column_if_missing(conn, "collections", "api_album_id", "INTEGER")?;
+
+    // Extend hymns with api_music_id
+    add_column_if_missing(conn, "hymns", "api_music_id", "INTEGER")?;
 
     Ok(())
 }

@@ -102,7 +102,6 @@ pub struct ApiErrorResponse {
 }
 
 /// Album entry from the API
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiAlbum {
     pub id_album: i64,
@@ -114,11 +113,16 @@ pub struct ApiAlbum {
     #[serde(default)]
     pub url_image: Option<String>,
     #[serde(default)]
+    pub subtitle: Option<String>,
+    #[serde(default)]
+    pub order: Option<i64>,
+    #[serde(default)]
+    pub image_version: Option<String>,
+    #[serde(default)]
     pub musics: Vec<ApiMusic>,
 }
 
 /// Category from the API
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiCategory {
     pub id_category: i64,
@@ -165,6 +169,8 @@ pub struct LegacyFetchOptions {
     pub download_audio: bool,
     /// Whether to download cover images
     pub download_images: bool,
+    /// Whether to import albums as collections
+    pub include_albums: bool,
 }
 
 /// Progress information for a legacy fetch operation
@@ -202,6 +208,8 @@ pub struct LegacyFetchReport {
     pub hymns_imported: u64,
     pub hymns_skipped: u64,
     pub albums_fetched: u64,
+    pub albums_created: u64,
+    pub collection_hymns_linked: u64,
     pub audio_downloaded: u64,
     pub images_downloaded: u64,
     pub errors: Vec<LegacyFetchError>,
@@ -291,27 +299,72 @@ pub mod fetcher {
         Ok(all_musics)
     }
 
-    /// Fetch all albums for a language
-    #[allow(dead_code)]
+    /// Fetch all albums for a language — handles pagination
     pub async fn fetch_albums(lang: ApiLanguage) -> Result<Vec<ApiAlbum>, AppError> {
-        let url = format!("{}/{}/albums", API_BASE_URL, lang.as_str());
+        let mut all_albums = Vec::new();
+        let mut page = 1;
+
+        loop {
+            let url = format!("{}/{}/albums?page={}", API_BASE_URL, lang.as_str(), page);
+            let response = reqwest::get(&url)
+                .await
+                .map_err(|e| AppError::Internal(format!("Failed to fetch albums page {}: {}", page, e)))?;
+
+            if !response.status().is_success() {
+                return Err(AppError::Internal(format!(
+                    "API returned error status: {}",
+                    response.status()
+                )));
+            }
+
+            let body = response.text().await
+                .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
+
+            // Check if response is an error
+            if let Ok(error_resp) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                if error_resp.error.contains("não encontrado") || error_resp.error.contains("not found") {
+                    return Err(AppError::Internal(format!("NO_CONTENT_AVAILABLE:{}", lang.as_str())));
+                }
+                return Err(AppError::Internal(format!("API error: {}", error_resp.error)));
+            }
+
+            let paginated: PaginatedResponse<ApiAlbum> = serde_json::from_str(&body)
+                .map_err(|e| AppError::Internal(format!("Failed to parse albums response page {}: {}", page, e)))?;
+
+            let is_last = paginated.last_page.map(|lp| page >= lp).unwrap_or(true)
+                || paginated.data.is_empty();
+
+            all_albums.extend(paginated.data);
+
+            if is_last {
+                break;
+            }
+            page += 1;
+        }
+
+        Ok(all_albums)
+    }
+
+    /// Fetch a single album with nested musics list (no lyrics)
+    pub async fn fetch_album_detail(lang: ApiLanguage, album_id: i64) -> Result<ApiAlbum, AppError> {
+        let url = format!("{}/{}/albums/{}", API_BASE_URL, lang.as_str(), album_id);
         let response = reqwest::get(&url)
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to fetch albums: {}", e)))?;
-        
+            .map_err(|e| AppError::Internal(format!("Failed to fetch album {}: {}", album_id, e)))?;
+
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
-                "API returned error status: {}",
-                response.status()
+                "API returned error status for album {}: {}",
+                album_id, response.status()
             )));
         }
 
-        let albums = response
-            .json::<Vec<ApiAlbum>>()
+        let single: SingleResponse<ApiAlbum> = response
+            .json()
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to parse albums response: {}", e)))?;
-        
-        Ok(albums)
+            .map_err(|e| AppError::Internal(format!("Failed to parse album {} response: {}", album_id, e)))?;
+
+        Ok(single.data)
     }
 
     /// Fetch hymnal musics (official hymnal collection) - handles pagination
@@ -597,9 +650,11 @@ pub mod importer {
             playback_path.as_deref(),
             cover_path.as_deref(),
             replace_existing,
+            None,
+            None,
         )?;
 
-        Ok((was_imported, audio_count, image_count))
+        Ok((was_imported.0, audio_count, image_count))
     }
 
     /// Import a music entry into the hymns table (sync, with pre-downloaded paths)
@@ -610,19 +665,34 @@ pub mod importer {
         playback_path: Option<&str>,
         cover_path: Option<&str>,
         replace_existing: bool,
-    ) -> Result<bool, AppError> {
+        album_name: Option<&str>,
+        api_music_id: Option<i64>,
+    ) -> Result<(bool, Option<i64>), AppError> {
         let lyrics_text = lyrics_to_text(&music.lyrics);
         let lyrics_sync = lyrics_to_sync_json(&music.lyrics);
         let track_number = music.track;
 
-        // Check if hymn with this title already exists
-        let existing_id: Option<i64> = conn
-            .query_row(
-                "SELECT id FROM hymns WHERE title = ?1",
-                rusqlite::params![music.name],
+        // Check if hymn with this api_music_id already exists (preferred dedup)
+        let existing_id: Option<i64> = if let Some(amid) = api_music_id {
+            conn.query_row(
+                "SELECT id FROM hymns WHERE api_music_id = ?1",
+                rusqlite::params![amid],
                 |row| row.get(0),
             )
-            .optional()?;
+            .optional()?
+        } else {
+            None
+        };
+
+        // Fall back to title-based dedup
+        let existing_id = existing_id.or_else(|| {
+            conn.query_row(
+                "SELECT id FROM hymns WHERE title = ?1",
+                rusqlite::params![music.name],
+                |row| row.get::<_, i64>(0),
+            )
+            .ok()
+        });
 
         let (was_imported, hymn_id) = match existing_id {
             Some(id) if replace_existing => {
@@ -635,8 +705,10 @@ pub mod importer {
                         playback_path = COALESCE(?4, playback_path),
                         cover_path = COALESCE(?5, cover_path),
                         lyrics_sync = COALESCE(?6, lyrics_sync),
+                        album = COALESCE(?7, album),
+                        api_music_id = COALESCE(?8, api_music_id),
                         updated_at = datetime('now')
-                    WHERE id = ?7
+                    WHERE id = ?9
                     "#,
                     rusqlite::params![
                         track_number,
@@ -645,27 +717,39 @@ pub mod importer {
                         playback_path,
                         cover_path,
                         lyrics_sync.as_ref(),
+                        album_name,
+                        api_music_id,
                         id,
                     ],
                 )?;
                 (true, Some(id))
             }
-            Some(_) => (false, None), // Exists but don't replace
+            Some(id) => {
+                // Exists but don't replace — still set api_music_id if missing
+                if api_music_id.is_some() {
+                    conn.execute(
+                        "UPDATE hymns SET api_music_id = COALESCE(api_music_id, ?1) WHERE id = ?2",
+                        rusqlite::params![api_music_id, id],
+                    )?;
+                }
+                (false, Some(id))
+            }
             None => {
                 conn.execute(
                     r#"
-                    INSERT INTO hymns (number, title, album, lyrics, audio_path, playback_path, cover_path, lyrics_sync, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))
+                    INSERT INTO hymns (number, title, album, lyrics, audio_path, playback_path, cover_path, lyrics_sync, api_music_id, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))
                     "#,
                     rusqlite::params![
                         track_number,
                         music.name,
-                        Option::<String>::None,
+                        album_name,
                         if lyrics_text.is_empty() { None } else { Some(lyrics_text) },
                         audio_path,
                         playback_path,
                         cover_path,
                         lyrics_sync,
+                        api_music_id,
                     ],
                 )?;
                 let new_id = conn.last_insert_rowid();
@@ -677,11 +761,11 @@ pub mod importer {
         if let Some(id) = hymn_id {
             // Delete old FTS entry if updating
             if existing_id.is_some() {
-                conn.execute(
+                let _ = conn.execute(
                     "INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
                      VALUES('delete', ?1, '', '', '', '')",
                     rusqlite::params![id],
-                )?;
+                );
             }
             // Insert new FTS entry
             conn.execute(
@@ -692,7 +776,7 @@ pub mod importer {
             )?;
         }
 
-        Ok(was_imported)
+        Ok((was_imported, hymn_id))
     }
 }
 

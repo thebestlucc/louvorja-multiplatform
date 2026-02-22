@@ -8,16 +8,14 @@ import {
   audioSeek,
   audioSetVolume,
 } from "../lib/tauri";
-import {
-  projectCurrentSlideFromStore,
-} from "../lib/projection-playback";
 
 export function useAudio() {
   const store = useAudioStore();
 
   const play = useCallback(
     async (filePath: string) => {
-      await projectCurrentSlideFromStore();
+      // Start audio playback with sync point subscription.
+      // Projection is NOT triggered here - caller must handle projection separately.
       store.startStatusSubscription();
       await audioPlay(filePath);
     },
@@ -44,8 +42,11 @@ export function useAudio() {
   const seek = useCallback(
     async (ms: number) => {
       await audioSeek(ms);
+      store.setPosition(ms);
+      // Immediately sync slide index to the new position
+      store.syncToPosition(ms);
     },
-    [],
+    [store],
   );
 
   const setVolume = useCallback(

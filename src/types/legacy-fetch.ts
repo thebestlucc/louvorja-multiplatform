@@ -3,6 +3,7 @@ export type ApiLanguage = "pt" | "en" | "es";
 export interface LegacyFetchOptions {
   language: ApiLanguage;
   includeHymnal: boolean;
+  includeAlbums: boolean;
   replaceExisting: boolean;
   downloadAudio: boolean;
   downloadImages: boolean;
@@ -39,6 +40,8 @@ export interface LegacyFetchReport {
   hymnsImported: number;
   hymnsSkipped: number;
   albumsFetched: number;
+  albumsCreated: number;
+  collectionHymnsLinked: number;
   audioDownloaded: number;
   imagesDownloaded: number;
   errors: LegacyFetchError[];

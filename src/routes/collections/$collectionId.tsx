@@ -7,6 +7,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   ArrowLeft,
   ExternalLink,
+  Music,
   Pencil,
   Play,
   RefreshCcw,
@@ -19,6 +20,7 @@ import { toast } from "sonner";
 import {
   useCheckCollectionSongSync,
   useCollection,
+  useCollectionHymns,
   useImportCollectionSong,
   useRemoveCollectionSong,
   useReorderCollectionSongs,
@@ -91,6 +93,8 @@ function CollectionDetail() {
   const startAudioStatusSubscription = useAudioStore((state) => state.startStatusSubscription);
   const stopAudioStatusSubscription = useAudioStore((state) => state.stopStatusSubscription);
   const { data: autoCheckSetting } = useSetting("collections.autoCheckSourceOnOpen");
+  const isApiCollection = data?.collection.source_type === "api";
+  const { data: collectionHymns } = useCollectionHymns(isApiCollection ? id : -1);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -301,14 +305,56 @@ function CollectionDetail() {
               <Pencil className="mr-2 h-4 w-4" />
               {t("actions.edit")}
             </Button>
-            <Button variant="outline" onClick={handleImport} disabled={importMutation.isPending}>
-              <Upload className="mr-2 h-4 w-4" />
-              {t("collections.importSong")}
-            </Button>
+            {!isApiCollection && (
+              <Button variant="outline" onClick={handleImport} disabled={importMutation.isPending}>
+                <Upload className="mr-2 h-4 w-4" />
+                {t("collections.importSong")}
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
+      {isApiCollection ? (
+        /* Album (API) collection → list linked hymns */
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-medium">{t("collections.hymns")}</h2>
+            <span className="text-xs text-muted-foreground">
+              {t("collections.hymnCount", { count: collectionHymns?.length ?? 0 })}
+            </span>
+          </div>
+
+          {!collectionHymns || collectionHymns.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("collections.emptyHymns")}</p>
+          ) : (
+            <div className="space-y-2">
+              {collectionHymns.map((hymn, index) => (
+                <Link
+                  key={hymn.id}
+                  to="/hymnal/$hymnId"
+                  params={{ hymnId: String(hymn.id) }}
+                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:bg-surface-hover"
+                >
+                  <span className="w-5 text-xs text-muted-foreground">{index + 1}</span>
+                  <Music className="h-4 w-4 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{hymn.title}</p>
+                    {hymn.album && (
+                      <p className="truncate text-xs text-muted-foreground">{hymn.album}</p>
+                    )}
+                  </div>
+                  {hymn.number != null && (
+                    <Badge variant="secondary" className="tabular-nums text-xs">
+                      #{hymn.number}
+                    </Badge>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-medium">{t("collections.songs")}</h2>
@@ -437,6 +483,7 @@ function CollectionDetail() {
           </div>
         )}
       </div>
+      )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl">

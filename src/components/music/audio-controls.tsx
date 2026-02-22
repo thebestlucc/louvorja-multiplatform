@@ -15,11 +15,14 @@ function formatTime(ms: number): string {
 const PLAYBACK_MODES: PlaybackMode[] = ["sung", "karaoke"];
 
 interface AudioControlsProps {
+  /** Sung/cantado audio file path */
   filePath: string;
+  /** Karaoke/playback audio file path (falls back to filePath if not provided) */
+  playbackPath?: string | null;
   onBeforePlay?: () => Promise<void> | void;
 }
 
-export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
+export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioControlsProps) {
   const { t } = useTranslation();
   const {
     play,
@@ -28,6 +31,7 @@ export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
     seek,
     setVolume,
     status,
+    currentFile,
     positionMs,
     durationMs,
     volume,
@@ -35,17 +39,33 @@ export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
     setPlaybackMode,
   } = useAudio();
 
-  const isPlaying = status === "playing";
-  const isPaused = status === "paused";
+  // Determine which audio file this component should play based on mode
+  const targetFile = playbackMode === "karaoke" 
+    ? (playbackPath ?? filePath) 
+    : filePath;
+
+  // Check if THIS hymn's audio is currently playing/paused
+  const isThisHymnPlaying = currentFile === targetFile || currentFile === filePath || currentFile === playbackPath;
+  const isPlaying = status === "playing" && isThisHymnPlaying;
+  const isPaused = status === "paused" && isThisHymnPlaying;
   const isActive = isPlaying || isPaused;
   const isMuted = volume === 0;
 
+  // Show position/duration only for this hymn's audio, otherwise show 0
+  const displayPosition = isThisHymnPlaying ? positionMs : 0;
+  const displayDuration = isThisHymnPlaying ? durationMs : 0;
+
   const handlePlay = async () => {
     if (isActive) {
+      // This hymn is already playing/paused, toggle
       await togglePlayPause();
     } else {
+      // Stop any currently playing audio before starting this one
+      if (status === "playing" || status === "paused") {
+        await stop();
+      }
       await onBeforePlay?.();
-      await play(filePath);
+      await play(targetFile);
     }
   };
 
@@ -54,7 +74,7 @@ export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
   };
 
   const handleSeek = (value: number[]) => {
-    if (value[0] != null) {
+    if (value[0] != null && isThisHymnPlaying) {
       seek(value[0]);
     }
   };
@@ -74,18 +94,19 @@ export function AudioControls({ filePath, onBeforePlay }: AudioControlsProps) {
       {/* Progress bar */}
       <div className="flex items-center gap-2">
         <span className="w-10 text-xs tabular-nums text-muted-foreground">
-          {formatTime(positionMs)}
+          {formatTime(displayPosition)}
         </span>
         <Slider
-          value={[positionMs]}
+          value={[displayPosition]}
           min={0}
-          max={durationMs || 1}
+          max={displayDuration || 1}
           step={100}
           onValueChange={handleSeek}
+          disabled={!isThisHymnPlaying}
           className="flex-1"
         />
         <span className="w-10 text-xs tabular-nums text-muted-foreground">
-          {formatTime(durationMs)}
+          {formatTime(displayDuration)}
         </span>
       </div>
 

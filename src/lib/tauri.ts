@@ -19,10 +19,6 @@ import type { StreamingInfo } from "../types/streaming";
 import type { TimerMode, TimerStateData, TextFormat } from "../types/utilities";
 import type { VideoMetadata } from "../types/video";
 import type {
-  MigrationOptions,
-  MigrationProgress,
-  MigrationReport,
-  MigrationRunInfo,
   UpdateInfo,
 } from "../types/migration";
 import type {
@@ -60,10 +56,6 @@ export async function getHymnsByAlbum(album: string): Promise<Hymn[]> {
   return tauriInvoke<Hymn[]>("get_hymns_by_album", { album });
 }
 
-export async function createHymn(input: HymnWriteInput): Promise<Hymn> {
-  return tauriInvoke<Hymn>("create_hymn", { input });
-}
-
 export async function updateHymn(id: number, input: HymnWriteInput): Promise<Hymn> {
   return tauriInvoke<Hymn>("update_hymn", { id, input });
 }
@@ -73,7 +65,7 @@ export async function deleteHymn(id: number): Promise<void> {
 }
 
 export async function getHymnAudioPath(hymnId: number): Promise<string | null> {
-  return tauriInvoke<string | null>("get_hymn_audio_path", { hymn_id: hymnId });
+  return tauriInvoke<string | null>("get_hymn_audio_path", { hymnId });
 }
 
 // Collections
@@ -152,6 +144,32 @@ export async function reorderCollectionSongs(
   return tauriInvoke<void>("reorder_collection_songs", {
     collectionId,
     songIds,
+  });
+}
+
+export async function getCollectionHymns(collectionId: number): Promise<Hymn[]> {
+  return tauriInvoke<Hymn[]>("get_collection_hymns", { collectionId });
+}
+
+export async function addHymnToCollection(
+  collectionId: number,
+  hymnId: number,
+  itemOrder: number,
+): Promise<number> {
+  return tauriInvoke<number>("add_hymn_to_collection", {
+    collectionId,
+    hymnId,
+    itemOrder,
+  });
+}
+
+export async function removeHymnFromCollection(
+  collectionId: number,
+  hymnId: number,
+): Promise<void> {
+  return tauriInvoke<void>("remove_hymn_from_collection", {
+    collectionId,
+    hymnId,
   });
 }
 
@@ -393,48 +411,29 @@ export async function clearDatabase(): Promise<{ success: boolean }> {
   return tauriInvoke<{ success: boolean }>("clear_database");
 }
 
-// Migration
-export async function startMigration(
-  oldDbPath: string,
-  options: MigrationOptions,
-): Promise<MigrationRunInfo> {
-  return tauriInvoke<MigrationRunInfo>("start_migration", {
-    oldDbPath,
-    options,
-  });
-}
-
-export async function getMigrationProgress(runId: string): Promise<MigrationProgress> {
-  return tauriInvoke<MigrationProgress>("get_migration_progress", { run_id: runId });
-}
-
-export async function cancelMigration(runId: string): Promise<void> {
-  return tauriInvoke<void>("cancel_migration", { run_id: runId });
-}
-
-export async function getMigrationReport(runId: string): Promise<MigrationReport> {
-  return tauriInvoke<MigrationReport>("get_migration_report", { run_id: runId });
-}
-
 // Legacy Fetch (From LouvorJA Server)
 export async function startLegacyFetch(options: LegacyFetchOptions): Promise<string> {
   return tauriInvoke<string>("start_legacy_fetch", { options });
 }
 
 export async function getLegacyFetchProgress(runId: string): Promise<LegacyFetchProgress> {
-  return tauriInvoke<LegacyFetchProgress>("get_legacy_fetch_progress", { run_id: runId });
+  return tauriInvoke<LegacyFetchProgress>("get_legacy_fetch_progress", { runId });
 }
 
 export async function cancelLegacyFetch(runId: string): Promise<void> {
-  return tauriInvoke<void>("cancel_legacy_fetch", { run_id: runId });
+  return tauriInvoke<void>("cancel_legacy_fetch", { runId });
 }
 
 export async function getLegacyFetchReport(runId: string): Promise<LegacyFetchReport | null> {
-  return tauriInvoke<LegacyFetchReport | null>("get_legacy_fetch_report", { run_id: runId });
+  return tauriInvoke<LegacyFetchReport | null>("get_legacy_fetch_report", { runId });
 }
 
 export async function fetchLegacyParams(): Promise<ApiParams> {
   return tauriInvoke<ApiParams>("fetch_legacy_params");
+}
+
+export async function restoreHymnFromApi(hymnId: number): Promise<void> {
+  return tauriInvoke<void>("restore_hymn_from_api", { hymnId });
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
