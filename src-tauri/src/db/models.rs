@@ -10,9 +10,11 @@ pub struct Hymn {
     pub lyrics: Option<String>,
     pub chords: Option<String>,
     pub audio_path: Option<String>,
+    pub playback_path: Option<String>,
     pub category: Option<String>,
     pub notes: Option<String>,
     pub cover_path: Option<String>,
+    pub lyrics_sync: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -26,9 +28,11 @@ pub struct HymnWriteInput {
     pub lyrics: Option<String>,
     pub chords: Option<String>,
     pub audio_path: Option<String>,
+    pub playback_path: Option<String>,
     pub category: Option<String>,
     pub notes: Option<String>,
     pub cover_path: Option<String>,
+    pub lyrics_sync: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

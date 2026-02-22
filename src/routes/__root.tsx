@@ -16,8 +16,10 @@ import { queryKeys, useMonitorConfigs, useMonitors } from "../lib/queries";
 import { setMonitorConfig } from "../lib/tauri";
 import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
+import { useLegacyFetchStore } from "../stores/legacy-fetch-store";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
+import type { LegacyFetchProgress, LegacyFetchReport } from "../types/legacy-fetch";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -91,6 +93,41 @@ function RootLayout() {
       unlistenPromise.then((unlisten) => unlisten());
     };
   }, [queryClient]);
+
+  // Global listener for legacy fetch progress events - persists across navigation
+  const setLegacyFetchProgress = useLegacyFetchStore((s) => s.setProgress);
+  const setLegacyFetchReport = useLegacyFetchStore((s) => s.setReport);
+  const prevLegacyFetchStatusRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const unlistenProgress = listen<LegacyFetchProgress>("legacy-fetch-progress", (event) => {
+      const store = useLegacyFetchStore.getState();
+      // Only update if runId matches or if no runId is set yet
+      if (!store.runId || event.payload.runId === store.runId) {
+        setLegacyFetchProgress(event.payload);
+        
+        // Invalidate hymns when fetch completes
+        const status = event.payload.status;
+        if (status === "completed" && prevLegacyFetchStatusRef.current !== "completed") {
+          queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+        }
+        prevLegacyFetchStatusRef.current = status;
+      }
+    }).catch(() => () => {});
+
+    const unlistenReport = listen<LegacyFetchReport>("legacy-fetch-report", (event) => {
+      const store = useLegacyFetchStore.getState();
+      if (!store.runId || event.payload.runId === store.runId) {
+        setLegacyFetchReport(event.payload);
+      }
+    }).catch(() => () => {});
+
+    return () => {
+      unlistenProgress.then((unlisten) => unlisten());
+      unlistenReport.then((unlisten) => unlisten());
+    };
+  }, [queryClient, setLegacyFetchProgress, setLegacyFetchReport]);
 
   useEffect(() => {
     if (isBareRoute) {

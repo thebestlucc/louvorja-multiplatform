@@ -1,6 +1,7 @@
 use crate::audio::AudioPlayer;
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
+use crate::legacy_fetch::LegacyFetchRuntimeState;
 use crate::migration::MigrationRuntimeState;
 use crate::streaming::StreamingServer;
 use rusqlite::Connection;
@@ -161,6 +162,7 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub timer: Mutex<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
+    pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: Mutex<Option<SlideContent>>,
     pub projector_open: Mutex<bool>,

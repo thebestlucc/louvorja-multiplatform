@@ -131,6 +131,7 @@ function HymnDetail() {
 
     const clampedIndex = Math.max(0, Math.min(startIndex, generatedSlides.length - 1));
     const points = await resolveHymnSyncPoints();
+    console.log("[hymnId] bindHymnToPlaybackQueue: resolved", points.length, "sync points:", points);
     setCurrentPresentation(null);
     setPresentationSlides(generatedSlides);
     setPresentationActiveSlideIndex(clampedIndex);
@@ -157,6 +158,7 @@ function HymnDetail() {
   }, [bindHymnToPlaybackQueue, generatedSlides.length, goToSlide]);
 
   useEffect(() => {
+    console.log("[hymnId] useEffect: isProjecting=", isProjecting, "activeProjectedIndex=", activeProjectedIndex);
     if (!isProjecting) {
       return;
     }
@@ -216,9 +218,11 @@ function HymnDetail() {
           lyrics: form.lyrics.trim() || null,
           chords: form.chords.trim() || null,
           audio_path: form.audioPath.trim() || null,
+          playback_path: hymn.playback_path,
           category: form.category.trim() || null,
           notes: form.notes.trim() || null,
           cover_path: form.coverPath,
+          lyrics_sync: hymn.lyrics_sync,
         },
       });
       setEditOpen(false);
@@ -232,11 +236,12 @@ function HymnDetail() {
     try {
       setPlaybackMode("sung");
       await bindHymnToPlaybackQueue(0);
+      setIsProjecting(true);
       await goToSlide(0);
       if (hymn.audio_path) await play(hymn.audio_path);
-      setIsProjecting(true);
     } catch (e) {
       console.error("[hymn] Failed to start cantado projection:", e);
+      setIsProjecting(false);
     }
   };
 
@@ -244,11 +249,13 @@ function HymnDetail() {
     try {
       setPlaybackMode("karaoke");
       await bindHymnToPlaybackQueue(0);
-      await goToSlide(0);
-      if (hymn.audio_path) await play(hymn.audio_path);
       setIsProjecting(true);
+      await goToSlide(0);
+      const audioPath = hymn.playback_path || hymn.audio_path;
+      if (audioPath) await play(audioPath);
     } catch (e) {
       console.error("[hymn] Failed to start playback projection:", e);
+      setIsProjecting(false);
     }
   };
 
@@ -256,10 +263,11 @@ function HymnDetail() {
     try {
       setPlaybackMode("silent");
       await bindHymnToPlaybackQueue(0);
-      await goToSlide(0);
       setIsProjecting(true);
+      await goToSlide(0);
     } catch (e) {
       console.error("[hymn] Failed to start slides-only projection:", e);
+      setIsProjecting(false);
     }
   };
 

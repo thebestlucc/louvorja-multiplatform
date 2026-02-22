@@ -3,6 +3,7 @@ pub mod bible;
 pub mod clock;
 pub mod collections;
 pub mod display;
+pub mod legacy_fetch;
 pub mod liturgy;
 pub mod migration;
 pub mod music;

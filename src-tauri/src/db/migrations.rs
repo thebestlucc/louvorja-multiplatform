@@ -79,6 +79,16 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (13)", [])?;
     }
 
+    if current_version < 14 {
+        migrate_v14(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (14)", [])?;
+    }
+
+    if current_version < 15 {
+        migrate_v15(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (15)", [])?;
+    }
+
     Ok(())
 }
 
@@ -617,4 +627,47 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, A
         .query_map([], |row| row.get::<_, String>("name"))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(columns.iter().any(|name| name == column))
+}
+fn migrate_v14(conn: &Connection) -> Result<(), AppError> {
+    // Add legacy_file_id column to preserve references to legacy files table
+    // This allows resolving audio/image paths from the legacy database
+    add_column_if_missing(
+        conn,
+        "hymns",
+        "legacy_file_id",
+        "INTEGER",
+    )?;
+
+    // If legacy tables exist and audio_path is populated, try to capture the file IDs
+    if table_exists(conn, "musics")? && table_exists(conn, "files")? {
+        // Update hymns.legacy_file_id by joining back to legacy data
+        // For each hymn, find its corresponding musics.id_file_music
+        conn.execute_batch(
+            "
+            UPDATE hymns
+            SET legacy_file_id = (
+                SELECT m.id_file_music
+                FROM musics m
+                WHERE m.name = hymns.title
+                  AND m.id_language = 'pt'
+                LIMIT 1
+            )
+            WHERE legacy_file_id IS NULL
+              AND audio_path IS NOT NULL;
+            ",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn migrate_v15(conn: &Connection) -> Result<(), AppError> {
+    // Add playback_path column for instrumental/karaoke audio files
+    add_column_if_missing(conn, "hymns", "playback_path", "TEXT")?;
+
+    // Add lyrics_sync column to store synchronized lyrics data (JSON format)
+    // Format: [{ "lyric": "...", "order": 0, "time": "00:00:03", "instrumental_time": "00:00:05" }, ...]
+    add_column_if_missing(conn, "hymns", "lyrics_sync", "TEXT")?;
+
+    Ok(())
 }

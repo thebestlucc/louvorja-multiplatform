@@ -25,6 +25,12 @@ import type {
   MigrationRunInfo,
   UpdateInfo,
 } from "../types/migration";
+import type {
+  LegacyFetchOptions,
+  LegacyFetchProgress,
+  LegacyFetchReport,
+  ApiParams,
+} from "../types/legacy-fetch";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -383,6 +389,10 @@ export async function getAllSettings(): Promise<Settings[]> {
   return tauriInvoke<Settings[]>("get_all_settings");
 }
 
+export async function clearDatabase(): Promise<{ success: boolean }> {
+  return tauriInvoke<{ success: boolean }>("clear_database");
+}
+
 // Migration
 export async function startMigration(
   oldDbPath: string,
@@ -395,15 +405,36 @@ export async function startMigration(
 }
 
 export async function getMigrationProgress(runId: string): Promise<MigrationProgress> {
-  return tauriInvoke<MigrationProgress>("get_migration_progress", { runId });
+  return tauriInvoke<MigrationProgress>("get_migration_progress", { run_id: runId });
 }
 
 export async function cancelMigration(runId: string): Promise<void> {
-  return tauriInvoke<void>("cancel_migration", { runId });
+  return tauriInvoke<void>("cancel_migration", { run_id: runId });
 }
 
 export async function getMigrationReport(runId: string): Promise<MigrationReport> {
-  return tauriInvoke<MigrationReport>("get_migration_report", { runId });
+  return tauriInvoke<MigrationReport>("get_migration_report", { run_id: runId });
+}
+
+// Legacy Fetch (From LouvorJA Server)
+export async function startLegacyFetch(options: LegacyFetchOptions): Promise<string> {
+  return tauriInvoke<string>("start_legacy_fetch", { options });
+}
+
+export async function getLegacyFetchProgress(runId: string): Promise<LegacyFetchProgress> {
+  return tauriInvoke<LegacyFetchProgress>("get_legacy_fetch_progress", { run_id: runId });
+}
+
+export async function cancelLegacyFetch(runId: string): Promise<void> {
+  return tauriInvoke<void>("cancel_legacy_fetch", { run_id: runId });
+}
+
+export async function getLegacyFetchReport(runId: string): Promise<LegacyFetchReport | null> {
+  return tauriInvoke<LegacyFetchReport | null>("get_legacy_fetch_report", { run_id: runId });
+}
+
+export async function fetchLegacyParams(): Promise<ApiParams> {
+  return tauriInvoke<ApiParams>("fetch_legacy_params");
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {

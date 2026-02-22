@@ -109,9 +109,11 @@ function HymnalIndex() {
         lyrics: null,
         chords: null,
         audio_path: null,
+        playback_path: null,
         category: null,
         notes: null,
         cover_path: null,
+        lyrics_sync: null,
       });
       let importedCount = 0;
       for (const path of uploadPaths) {

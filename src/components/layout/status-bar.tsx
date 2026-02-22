@@ -1,7 +1,7 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Timer, Wifi } from "lucide-react";
+import { Loader2, Timer, Wifi } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { ProjectorControls } from "../display/projector-controls";
 import { StatusBarUpdateIndicator } from "./status-bar-update-indicator";
@@ -9,11 +9,13 @@ import { StreamingControls } from "../streaming/streaming-controls";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useStreamingStatus, useTimerState } from "../../lib/queries";
 import { formatUtilityTimer } from "../../types/utilities";
+import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import { cn } from "../../lib/utils";
 
 export function StatusBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const routerState = useRouterState();
   const [streamingOpen, setStreamingOpen] = useState(false);
   const [version, setVersion] = useState("");
 
@@ -22,6 +24,8 @@ export function StatusBar() {
   }, []);
   const { data: status } = useStreamingStatus();
   const { data: timerState } = useTimerState();
+  const legacyFetchProgress = useLegacyFetchStore((s) => s.progress);
+  
   const isRunning = status?.isRunning ?? false;
   const hasTimerProgress = Boolean(
     timerState
@@ -39,6 +43,12 @@ export function StatusBar() {
     ? formatUtilityTimer(timerState.currentTimeMs, timerState.mode)
     : null;
 
+  // Hide sync indicator when on settings route (full progress card is visible there)
+  const isOnSettings = routerState.location.pathname.startsWith("/settings");
+  const isSyncing = legacyFetchProgress && 
+    ["fetching", "importing", "downloading"].includes(legacyFetchProgress.status);
+  const showSyncIndicator = isSyncing && !isOnSettings;
+
   return (
     <footer className="flex h-8 items-center justify-between border-t border-border bg-surface px-3 text-[11px] text-muted-foreground">
       <span>
@@ -47,6 +57,22 @@ export function StatusBar() {
       </span>
 
       <div className="flex items-center gap-3">
+        {showSyncIndicator && (
+          <button
+            onClick={() => navigate({ to: "/settings" })}
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-blue-400 hover:bg-white/10"
+            title={t("settings.legacyFetch.progressTitle")}
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>
+              {t("settings.legacyFetch.syncIndicator.label")}{" "}
+              {t("settings.legacyFetch.syncIndicator.progress", {
+                current: legacyFetchProgress?.itemsProcessed ?? 0,
+                total: legacyFetchProgress?.itemsTotal ?? 0,
+              })}
+            </span>
+          </button>
+        )}
         <button
           onClick={() => navigate({ to: "/utilities/timer" })}
           className={cn(

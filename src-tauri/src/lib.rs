@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod display;
 mod error;
+mod legacy_fetch;
 mod migration;
 mod projection;
 mod state;
@@ -64,6 +65,7 @@ pub fn run() {
                 db: Mutex::new(conn),
                 timer: Mutex::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
+                legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),
@@ -146,6 +148,7 @@ pub fn run() {
             commands::music::create_hymn,
             commands::music::update_hymn,
             commands::music::delete_hymn,
+            commands::music::get_hymn_audio_path,
             // Collections
             commands::collections::get_collections,
             commands::collections::search_collections,
@@ -228,6 +231,7 @@ pub fn run() {
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::get_all_settings,
+            commands::settings::clear_database,
             // Timer
             commands::timer::start_timer,
             commands::timer::pause_timer,
@@ -245,6 +249,12 @@ pub fn run() {
             commands::migration::get_migration_progress,
             commands::migration::cancel_migration,
             commands::migration::get_migration_report,
+            // Legacy Fetch
+            commands::legacy_fetch::start_legacy_fetch,
+            commands::legacy_fetch::get_legacy_fetch_progress,
+            commands::legacy_fetch::cancel_legacy_fetch,
+            commands::legacy_fetch::get_legacy_fetch_report,
+            commands::legacy_fetch::fetch_legacy_params,
             // Updater
             commands::updater::check_for_updates,
             commands::updater::install_update,
