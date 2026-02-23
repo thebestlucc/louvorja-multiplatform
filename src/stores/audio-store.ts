@@ -46,7 +46,8 @@ function findSlideAtPosition(syncPoints: SyncPoint[], positionMs: number): numbe
       break;
     }
   }
-  return slide;
+  // Before the first sync point → title/cover slide (index 0)
+  return slide >= 0 ? slide : 0;
 }
 
 export const useAudioStore = create<AudioStoreState>((set, get) => ({
@@ -90,9 +91,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     if (slideIndex >= 0 && slideIndex !== state.lastSyncSlide) {
       set({ lastSyncSlide: slideIndex });
       usePresentationStore.getState().setActiveSlideIndex(slideIndex);
-      // Only project if projection windows are active
+      // Only project if projection is explicitly active
       const displayState = useDisplayStore.getState();
-      if (displayState.projectorWindowOpen || displayState.returnWindowOpen) {
+      if (displayState.currentProjectionType !== null &&
+          (displayState.projectorWindowOpen || displayState.returnWindowOpen)) {
         void projectSlideIndex(slideIndex);
       }
     }
@@ -124,13 +126,14 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
 
       projectedSlideInFlight = true;
       void (async () => {
-        // Check if projection is active before projecting
-        const displayState = useDisplayStore.getState();
-        const shouldProject = displayState.projectorWindowOpen || displayState.returnWindowOpen;
-        
         while (queuedSlide != null) {
           const nextSlide = queuedSlide;
           queuedSlide = null;
+          // Check fresh state each iteration: only project if projection is
+          // explicitly active (not just because windows happen to be open).
+          const displayState = useDisplayStore.getState();
+          const shouldProject = displayState.currentProjectionType !== null &&
+            (displayState.projectorWindowOpen || displayState.returnWindowOpen);
           console.log("[audio-store] Syncing slide:", nextSlide, "shouldProject:", shouldProject);
           usePresentationStore.getState().setActiveSlideIndex(nextSlide);
           if (shouldProject) {

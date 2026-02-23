@@ -123,6 +123,8 @@ pub struct ApiAlbum {
 }
 
 /// Category from the API
+/// Planned for album-import-collections feature (see docs/pre-dev/album-import-collections/)
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiCategory {
     pub id_category: i64,
@@ -436,6 +438,9 @@ pub mod fetcher {
         Ok(single.data)
     }
 
+    /// Maximum download size (50 MB) to guard against oversized API responses
+    pub const MAX_DOWNLOAD_SIZE: u64 = 50 * 1024 * 1024;
+
     /// Download a file from a URL to a local path
     pub async fn download_file(url: &str, target_path: &std::path::Path) -> Result<(), AppError> {
         let response = reqwest::get(url)
@@ -449,10 +454,28 @@ pub mod fetcher {
             )));
         }
 
+        // Guard against oversized responses
+        if let Some(len) = response.content_length() {
+            if len > MAX_DOWNLOAD_SIZE {
+                return Err(AppError::Internal(format!(
+                    "File too large: {} bytes (max {} bytes)",
+                    len, MAX_DOWNLOAD_SIZE
+                )));
+            }
+        }
+
         let bytes = response
             .bytes()
             .await
             .map_err(|e| AppError::Internal(format!("Failed to read download bytes: {}", e)))?;
+
+        // Post-download size check for responses without content-length header
+        if bytes.len() as u64 > MAX_DOWNLOAD_SIZE {
+            return Err(AppError::Internal(format!(
+                "Downloaded file too large: {} bytes (max {} bytes)",
+                bytes.len(), MAX_DOWNLOAD_SIZE
+            )));
+        }
         
         // Create parent directories if needed
         if let Some(parent) = target_path.parent() {
@@ -577,85 +600,7 @@ pub mod importer {
         }
     }
 
-    /// Import a music entry with file downloads
-    #[allow(dead_code)]
-    pub async fn import_music_with_download(
-        conn: &Connection,
-        music: &ApiMusic,
-        media_dir: &Path,
-        replace_existing: bool,
-        download_audio: bool,
-        download_images: bool,
-    ) -> Result<(bool, u32, u32), AppError> {
-        // Download files if requested
-        let mut audio_count = 0u32;
-        let mut image_count = 0u32;
 
-        let audio_path = if download_audio {
-            let path = download_media_file(
-                music.url_music.as_ref(),
-                media_dir,
-                "audio",
-                music.id_music,
-                "mp3",
-            )
-            .await;
-            if path.is_some() {
-                audio_count += 1;
-            }
-            path
-        } else {
-            None
-        };
-
-        // Download playback/instrumental version
-        let playback_path = if download_audio {
-            let path = download_media_file(
-                music.url_instrumental_music.as_ref(),
-                media_dir,
-                "playback",
-                music.id_music,
-                "mp3",
-            )
-            .await;
-            if path.is_some() {
-                audio_count += 1;
-            }
-            path
-        } else {
-            None
-        };
-
-        let cover_path = if download_images {
-            let path = download_media_file(
-                music.url_image.as_ref(),
-                media_dir,
-                "images",
-                music.id_music,
-                "jpg",
-            )
-            .await;
-            if path.is_some() {
-                image_count += 1;
-            }
-            path
-        } else {
-            None
-        };
-
-        let was_imported = import_music_to_db(
-            conn,
-            music,
-            audio_path.as_deref(),
-            playback_path.as_deref(),
-            cover_path.as_deref(),
-            replace_existing,
-            None,
-            None,
-        )?;
-
-        Ok((was_imported.0, audio_count, image_count))
-    }
 
     /// Import a music entry into the hymns table (sync, with pre-downloaded paths)
     pub fn import_music_to_db(
@@ -797,5 +742,147 @@ pub struct LegacyFetchRunState {
 pub struct LegacyFetchRuntimeState {
     pub active_run_id: Option<String>,
     pub runs: HashMap<String, LegacyFetchRunState>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn setup_hymns_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE hymns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                number INTEGER,
+                title TEXT NOT NULL,
+                author TEXT,
+                album TEXT,
+                lyrics TEXT,
+                chords TEXT,
+                audio_path TEXT,
+                playback_path TEXT,
+                category TEXT,
+                notes TEXT,
+                cover_path TEXT,
+                lyrics_sync TEXT,
+                api_music_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE VIRTUAL TABLE hymns_fts USING fts5(
+                title, lyrics, author, album, content=hymns, content_rowid=id
+            );
+            "#,
+        )
+        .expect("schema setup");
+        conn
+    }
+
+    fn make_api_music(id: i64, name: &str) -> ApiMusic {
+        ApiMusic {
+            id_music: id,
+            name: name.to_string(),
+            track: Some(1),
+            id_file_image: None,
+            id_file_music: None,
+            id_file_instrumental_music: None,
+            url_image: None,
+            url_music: None,
+            url_instrumental_music: None,
+            id_language: None,
+            lyrics: vec![],
+        }
+    }
+
+    /// Verify import_music_to_db with replace_existing=true updates existing hymns
+    #[test]
+    fn import_music_to_db_replace_existing_updates_cover() {
+        let conn = setup_hymns_db();
+        let music = make_api_music(42, "Test Hymn");
+
+        // First import
+        let (was_imported, hymn_id) = importer::import_music_to_db(
+            &conn,
+            &music,
+            None,
+            None,
+            Some("media/images/42/old_cover.jpg"),
+            false,
+            Some("Album A"),
+            Some(42),
+        )
+        .unwrap();
+        assert!(was_imported);
+        let hid = hymn_id.unwrap();
+
+        // Verify initial cover
+        let cover: Option<String> = conn
+            .query_row("SELECT cover_path FROM hymns WHERE id = ?1", rusqlite::params![hid], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cover, Some("media/images/42/old_cover.jpg".to_string()));
+
+        // Re-import with replace_existing=true and new cover
+        let (was_imported2, hymn_id2) = importer::import_music_to_db(
+            &conn,
+            &music,
+            None,
+            None,
+            Some("media/images/42/new_cover.jpg"),
+            true, // replace_existing
+            Some("Album A"),
+            Some(42),
+        )
+        .unwrap();
+        assert!(was_imported2);
+        assert_eq!(hymn_id2, Some(hid), "should return same hymn id");
+
+        // Verify cover was updated
+        let cover2: Option<String> = conn
+            .query_row("SELECT cover_path FROM hymns WHERE id = ?1", rusqlite::params![hid], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cover2, Some("media/images/42/new_cover.jpg".to_string()));
+    }
+
+    /// Verify import_music_to_db with replace_existing=false doesn't overwrite
+    #[test]
+    fn import_music_to_db_no_replace_keeps_existing() {
+        let conn = setup_hymns_db();
+        let music = make_api_music(42, "Test Hymn");
+
+        // First import
+        importer::import_music_to_db(
+            &conn,
+            &music,
+            None,
+            None,
+            Some("media/images/42/original.jpg"),
+            false,
+            Some("Album A"),
+            Some(42),
+        )
+        .unwrap();
+
+        // Re-import with replace_existing=false
+        let (was_imported, _) = importer::import_music_to_db(
+            &conn,
+            &music,
+            None,
+            None,
+            Some("media/images/42/should_not_replace.jpg"),
+            false,
+            Some("Album A"),
+            Some(42),
+        )
+        .unwrap();
+        assert!(!was_imported, "should not flag as imported when not replacing");
+
+        // Verify cover wasn't changed
+        let cover: Option<String> = conn
+            .query_row("SELECT cover_path FROM hymns WHERE api_music_id = 42", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cover, Some("media/images/42/original.jpg".to_string()));
+    }
 }
 

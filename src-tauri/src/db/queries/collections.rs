@@ -1,5 +1,5 @@
 use crate::db::models::{
-    Collection, CollectionHymn, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
+    Collection, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
     CollectionWithHymns, CollectionWithSongs, Hymn,
 };
 use crate::error::AppError;
@@ -700,13 +700,24 @@ pub fn insert_collection_hymn(
     collection_id: i64,
     hymn_id: i64,
     item_order: i64,
-) -> Result<i64, AppError> {
+) -> Result<bool, AppError> {
+    // Check if link already exists (to return accurate "was new" flag)
+    let exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM collection_hymns WHERE collection_id = ?1 AND hymn_id = ?2",
+            params![collection_id, hymn_id],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
     conn.execute(
-        "INSERT OR IGNORE INTO collection_hymns (collection_id, hymn_id, item_order)
-         VALUES (?1, ?2, ?3)",
+        "INSERT INTO collection_hymns (collection_id, hymn_id, item_order)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(collection_id, hymn_id) DO UPDATE SET item_order = excluded.item_order",
         params![collection_id, hymn_id, item_order],
     )?;
-    Ok(conn.last_insert_rowid())
+
+    Ok(!exists) // true = newly created link
 }
 
 pub fn get_collection_hymns(conn: &Connection, collection_id: i64) -> Result<Vec<Hymn>, AppError> {
@@ -725,6 +736,8 @@ pub fn get_collection_hymns(conn: &Connection, collection_id: i64) -> Result<Vec
     Ok(rows)
 }
 
+/// Scaffolded for future collection detail endpoint.
+#[allow(dead_code)]
 pub fn get_collection_with_hymns(
     conn: &Connection,
     id: i64,
@@ -756,4 +769,131 @@ pub fn find_collection_by_api_album_id(
         |row| row.get(0),
     )
     .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn setup_conn() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE collections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                year INTEGER,
+                cover_path TEXT,
+                auto_cover_path TEXT,
+                source_type TEXT NOT NULL DEFAULT 'file',
+                api_album_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE hymns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                number INTEGER,
+                title TEXT NOT NULL,
+                author TEXT,
+                album TEXT,
+                lyrics TEXT,
+                chords TEXT,
+                audio_path TEXT,
+                playback_path TEXT,
+                category TEXT,
+                notes TEXT,
+                cover_path TEXT,
+                lyrics_sync TEXT,
+                api_music_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE collection_hymns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+                hymn_id INTEGER NOT NULL REFERENCES hymns(id) ON DELETE CASCADE,
+                item_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(collection_id, hymn_id)
+            );
+            "#,
+        )
+        .expect("schema setup");
+        conn
+    }
+
+    fn insert_test_collection(conn: &Connection) -> i64 {
+        conn.execute(
+            "INSERT INTO collections (name) VALUES ('Test Album')",
+            [],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    fn insert_test_hymn(conn: &Connection, title: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO hymns (title) VALUES (?1)",
+            params![title],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    /// Fix 4: insert_collection_hymn should return accurate info on duplicates.
+    /// Currently returns stale last_insert_rowid() when INSERT OR IGNORE skips.
+    /// After fix: returns `bool` — true if newly inserted, false if already existed.
+    #[test]
+    fn insert_collection_hymn_returns_false_on_duplicate() {
+        let conn = setup_conn();
+        let coll_id = insert_test_collection(&conn);
+        let hymn_id = insert_test_hymn(&conn, "Amazing Grace");
+
+        // First insert — should indicate "newly created"
+        let first = insert_collection_hymn(&conn, coll_id, hymn_id, 1);
+        assert!(first.is_ok());
+        assert_eq!(first.unwrap(), true, "first insert should return true (new link)");
+
+        // Second insert (duplicate) — should indicate "already existed"
+        let second = insert_collection_hymn(&conn, coll_id, hymn_id, 1);
+        assert!(second.is_ok());
+        assert_eq!(second.unwrap(), false, "duplicate insert should return false (already existed)");
+    }
+
+    /// Fix 5: item_order should be updated when re-importing the same hymn-collection link.
+    /// Currently INSERT OR IGNORE silently discards the new item_order.
+    #[test]
+    fn insert_collection_hymn_updates_item_order_on_duplicate() {
+        let conn = setup_conn();
+        let coll_id = insert_test_collection(&conn);
+        let hymn_id = insert_test_hymn(&conn, "How Great Thou Art");
+
+        // Insert with order 1
+        insert_collection_hymn(&conn, coll_id, hymn_id, 1).unwrap();
+
+        // Verify initial order
+        let order: i64 = conn
+            .query_row(
+                "SELECT item_order FROM collection_hymns WHERE collection_id = ?1 AND hymn_id = ?2",
+                params![coll_id, hymn_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(order, 1);
+
+        // Re-insert with order 5 (simulating re-import with different track order)
+        insert_collection_hymn(&conn, coll_id, hymn_id, 5).unwrap();
+
+        // item_order should be updated to 5
+        let updated_order: i64 = conn
+            .query_row(
+                "SELECT item_order FROM collection_hymns WHERE collection_id = ?1 AND hymn_id = ?2",
+                params![coll_id, hymn_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(updated_order, 5, "item_order should be updated on re-import");
+    }
 }

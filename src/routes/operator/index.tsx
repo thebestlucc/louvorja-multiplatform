@@ -133,7 +133,7 @@ function OperatorScreen() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <span className="min-w-[5rem] text-center text-sm text-muted-foreground">
+          <span className="min-w-20 text-center text-sm text-muted-foreground">
             {slideTotal > 0
               ? `${slideIndex + 1} / ${slideTotal}`
               : "—"}

@@ -294,6 +294,9 @@ pub struct CollectionSearchResult {
     pub snippet: String,
 }
 
+/// Join table struct for collection ↔ hymn links.
+/// Scaffolded for future direct-link CRUD endpoints; current queries return `Vec<Hymn>` instead.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionHymn {
@@ -304,6 +307,9 @@ pub struct CollectionHymn {
     pub created_at: String,
 }
 
+/// Collection with its linked hymns.
+/// Used by `get_collection_with_hymns` query (scaffolded for future collection detail endpoint).
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionWithHymns {

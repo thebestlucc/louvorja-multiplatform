@@ -646,7 +646,7 @@ pub fn add_hymn_to_collection(
     hymn_id: i64,
     item_order: i64,
     state: tauri::State<'_, AppState>,
-) -> Result<i64, AppError> {
+) -> Result<bool, AppError> {
     let conn = state
         .db
         .lock()

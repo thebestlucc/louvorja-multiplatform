@@ -357,7 +357,7 @@ mod tests {
 
     fn insert_song_for_presentation(conn: &Connection, presentation_id: i64) {
         let collection_id =
-            insert_collection(conn, "Collection", Some("desc"), None, None).expect("collection");
+            insert_collection(conn, "Collection", Some("desc"), None, None, "manual", None).expect("collection");
         let order = next_collection_song_order(conn, collection_id).expect("next order");
         insert_collection_song(
             conn,
