@@ -927,7 +927,7 @@ function SettingsIndex() {
                 <label className="text-sm font-medium">{t("settings.projectorDefaultMediaPath")}</label>
                 <p className="text-xs text-muted-foreground">{t("settings.projectorDefaultMediaPathDesc")}</p>
               </div>
-              <div className="flex w-[28rem] items-center gap-2">
+              <div className="flex w-md items-center gap-2">
                 <Input
                   readOnly
                   value={projectorScreenDefaultMediaPath}

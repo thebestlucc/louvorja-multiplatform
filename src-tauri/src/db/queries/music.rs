@@ -1,6 +1,6 @@
 use crate::db::models::{Album, Hymn};
 use crate::error::AppError;
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, Row};
 
 fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
     Ok(Hymn {
@@ -285,12 +285,10 @@ fn parse_time_to_ms(time_str: &str) -> Option<u64> {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SyncLyric {
-    #[allow(dead_code)]
-    lyric: String,
+    _lyric: String,
     order: i32,
     time: Option<String>,
-    #[allow(dead_code)]
-    instrumental_time: Option<String>,
+    _instrumental_time: Option<String>,
 }
 
 pub fn get_sync_points(

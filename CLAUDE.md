@@ -209,6 +209,7 @@ src-tauri/src/                # Backend (Rust)
 
 ### General
 
+- **Don't delete scaffolded code:** Before removing `#[allow(dead_code)]` items or any apparently unused code, check `docs/plans/` and `docs/pre-dev/` for planned features that depend on it. Scaffolded structs, functions, and queries are often placed ahead of time for upcoming phases. Prefer prefixing unused fields with `_` (idiomatic Rust for deserialize-only fields) over deletion. When `#[allow(dead_code)]` is justified, keep it with a `///` doc comment pointing to the relevant plan (e.g., `/// Planned for album-import-collections feature (see docs/pre-dev/album-import-collections/)`).
 - **i18n:** Always add keys to ALL THREE locale files (`en.json`, `pt.json`, `es.json`). Missing keys render as raw key strings.
 - **UI design skill:** For UI/UX design tasks, use the `ui-ux-pro-max` skill before proposing or implementing interface changes.
 - **Ring skill selection:** Automatically select and apply the correct Ring skill(s) based on the task context, using the minimal set required for the job.

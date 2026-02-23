@@ -66,7 +66,7 @@ function hymnToSlides(title: string, lyrics: string | null, album: string | null
 
 function HymnDetail() {
   const { hymnId } = Route.useParams();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const id = Number(hymnId);
   const { data: hymn, isLoading } = useHymn(id);
@@ -74,7 +74,7 @@ function HymnDetail() {
   const setPresentationActiveSlideIndex = usePresentationStore((state) => state.setActiveSlideIndex);
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const activeProjectedIndex = usePresentationStore((state) => state.activeSlideIndex);
-  const { goToSlide } = useSlides();
+  const { goToSlide, seekAudioToSlideSyncPoint } = useSlides();
   const { play, setPlaybackMode } = useAudio();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -156,7 +156,7 @@ function HymnDetail() {
 
     const clampedIndex = Math.max(0, Math.min(index, generatedSlides.length - 1));
     await bindHymnToPlaybackQueue(clampedIndex);
-    await goToSlide(clampedIndex);
+    await goToSlide(clampedIndex, { seekAudio: true });
     setLocalActiveIndex(clampedIndex);
   }, [bindHymnToPlaybackQueue, generatedSlides.length, goToSlide]);
 
@@ -310,7 +310,8 @@ function HymnDetail() {
                 disabled={restoreMutation.isPending}
                 onClick={async () => {
                   try {
-                    await restoreMutation.mutateAsync(id);
+                    const lang = (i18n.language as "pt" | "en" | "es") || "pt";
+                    await restoreMutation.mutateAsync({ hymnId: id, language: lang });
                     toast.success(t("hymn.restoreSuccess"));
                   } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
@@ -510,6 +511,10 @@ function HymnDetail() {
                 void projectHymnSlide(i + 1);
               } else {
                 setLocalActiveIndex(i);
+                // Seek audio to the stanza sync point when audio is playing
+                if (isQueueBoundToHymn) {
+                  void seekAudioToSlideSyncPoint(i + 1);
+                }
               }
             }}
           />
@@ -530,6 +535,10 @@ function HymnDetail() {
                 void projectHymnSlide(i);
               } else {
                 setLocalActiveIndex(i);
+                // Seek audio to the slide sync point when audio is playing
+                if (isQueueBoundToHymn) {
+                  void seekAudioToSlideSyncPoint(i);
+                }
               }
             }}
           />

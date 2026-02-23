@@ -85,6 +85,18 @@ pub fn start_legacy_fetch(
             .legacy_fetch
             .lock()
             .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        // Prune completed/cancelled/failed runs to prevent unbounded growth
+        fetch_state.runs.retain(|_, run| {
+            matches!(
+                run.progress.status,
+                LegacyFetchStatus::Pending
+                    | LegacyFetchStatus::Fetching
+                    | LegacyFetchStatus::Importing
+                    | LegacyFetchStatus::Downloading
+            )
+        });
+
         fetch_state.active_run_id = Some(run_id.clone());
         fetch_state.runs.insert(
             run_id.clone(),
@@ -721,8 +733,8 @@ async fn run_legacy_fetch_background(
                                 crate::db::queries::music::find_hymn_by_api_music_id(&db_guard, music.id_music)
                             };
 
-                            let hymn_id = if let Some(hid) = existing_hymn_id {
-                                hid
+                            let hymn_id = if existing_hymn_id.is_some() && !options.replace_existing {
+                                existing_hymn_id.unwrap()
                             } else {
                                 // Fetch music detail with lyrics
                                 let music_with_lyrics = match fetcher::fetch_music_detail(options.language, music.id_music).await {
@@ -817,9 +829,9 @@ async fn run_legacy_fetch_background(
                                 Ok(g) => g,
                                 Err(_) => continue,
                             };
-                            if crate::db::queries::collections::insert_collection_hymn(
+                            if let Ok(true) = crate::db::queries::collections::insert_collection_hymn(
                                 &db_guard, collection_id, hymn_id, track_order,
-                            ).is_ok() {
+                            ) {
                                 collection_hymns_linked += 1;
                             }
                         }
@@ -909,12 +921,16 @@ fn finalize_fetch(
         items_processed: hymns_imported + hymns_skipped,
     };
 
-    // Update state with final progress and report
+    // Update state with final progress and report, clear active_run_id
     if let Some(state) = app.try_state::<AppState>() {
         if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
             if let Some(run) = fetch_state.runs.get_mut(run_id) {
                 run.progress = progress.clone();
                 run.report = Some(report.clone());
+            }
+            // Clear active run so new runs can start
+            if fetch_state.active_run_id.as_deref() == Some(run_id) {
+                fetch_state.active_run_id = None;
             }
         }
     }
@@ -934,12 +950,12 @@ fn finalize_fetch(
 #[tauri::command]
 pub async fn restore_hymn_from_api(
     hymn_id: i64,
+    language: crate::legacy_fetch::ApiLanguage,
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), AppError> {
     use crate::legacy_fetch::fetcher::fetch_music_detail;
     use crate::legacy_fetch::importer::import_music_to_db;
-    use crate::legacy_fetch::ApiLanguage;
 
     // 1. Look up the hymn to get its api_music_id and album
     let (api_music_id, album_name): (i64, Option<String>) = {
@@ -960,15 +976,16 @@ pub async fn restore_hymn_from_api(
     };
 
     // 2. Fetch music detail from API
-    let detail = fetch_music_detail(ApiLanguage::Pt, api_music_id)
+    let detail = fetch_music_detail(language, api_music_id)
         .await
         .map_err(|e| AppError::Internal(format!("API fetch failed: {}", e)))?;
 
-    // 3. Resolve data dir for cover download
+    // 3. Resolve media dir for cover download (must include "media" to match batch import paths)
     let data_dir: PathBuf = app
         .path()
         .app_data_dir()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .join("media");
 
     // 4. Download cover if present — use same media/images/{id}/ structure as batch fetch
     let cover_path =

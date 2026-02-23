@@ -19,6 +19,7 @@ Church worship desktop app: **Tauri 2 + React 19 + Rust**.
 - **React 19 refs:** `useRef<T>(undefined)` — always provide an initial value.
 - **Navigation:** Use TanStack Router `<Link to="...">` — never `<a href>` or `window.location`.
 - **Conditional hooks:** Never call hooks after an early return. Use `{ enabled: false }` pattern instead.
+- **Don't delete scaffolded code:** Before removing `#[allow(dead_code)]` or unused code, check `docs/plans/` and `docs/pre-dev/` for planned features. Add a `///` doc comment pointing to the relevant plan when `#[allow(dead_code)]` is justified.
 
 ## Tech Stack Summary
 

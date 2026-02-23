@@ -127,6 +127,7 @@ export function useSlides() {
     goToSlide,
     projectSlide,
     projectSlideWithContext,
+    seekAudioToSlideSyncPoint,
   };
 }
 

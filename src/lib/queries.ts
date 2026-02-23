@@ -351,9 +351,10 @@ export function useRemoveHymnFromCollection() {
 export function useRestoreHymnFromApi() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (hymnId: number) => restoreHymnFromApi(hymnId),
-    onSuccess: (_, hymnId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(hymnId) });
+    mutationFn: (vars: { hymnId: number; language: string }) =>
+      restoreHymnFromApi(vars.hymnId, vars.language),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(vars.hymnId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
     },
   });

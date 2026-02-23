@@ -155,8 +155,8 @@ export async function addHymnToCollection(
   collectionId: number,
   hymnId: number,
   itemOrder: number,
-): Promise<number> {
-  return tauriInvoke<number>("add_hymn_to_collection", {
+): Promise<boolean> {
+  return tauriInvoke<boolean>("add_hymn_to_collection", {
     collectionId,
     hymnId,
     itemOrder,
@@ -432,8 +432,8 @@ export async function fetchLegacyParams(): Promise<ApiParams> {
   return tauriInvoke<ApiParams>("fetch_legacy_params");
 }
 
-export async function restoreHymnFromApi(hymnId: number): Promise<void> {
-  return tauriInvoke<void>("restore_hymn_from_api", { hymnId });
+export async function restoreHymnFromApi(hymnId: number, language: string): Promise<void> {
+  return tauriInvoke<void>("restore_hymn_from_api", { hymnId, language });
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
