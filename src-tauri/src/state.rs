@@ -7,6 +7,7 @@ use crate::streaming::StreamingServer;
 use rusqlite::Connection;
 use serde::Serialize;
 use std::sync::mpsc::Sender;
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -178,6 +179,9 @@ pub struct AppState {
     pub overlay: Mutex<OverlayRuntimeState>,
     pub return_open: Mutex<bool>,
     pub slide_context: Mutex<Option<SlideContext>>,
+    /// Maps action IDs to their currently registered global shortcut string.
+    /// Used by update_global_shortcut to unregister before re-registering.
+    pub global_shortcuts: Mutex<HashMap<String, String>>,
 }
 
 pub struct AudioState {

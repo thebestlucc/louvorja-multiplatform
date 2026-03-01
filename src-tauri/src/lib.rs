@@ -79,6 +79,7 @@ pub fn run() {
                 overlay: Mutex::new(OverlayRuntimeState::default()),
                 return_open: Mutex::new(false),
                 slide_context: Mutex::new(None),
+                global_shortcuts: Mutex::new(std::collections::HashMap::new()),
             });
 
             // Initialize audio in a background thread with a timeout.
@@ -142,55 +143,53 @@ pub fn run() {
             // Create the main window dynamically for normal mode
             create_main_window(app.handle())?;
 
-            // Register global shortcuts (opt-in, configured via settings)
+            // Register global shortcuts — reads custom values from DB, falls back to defaults.
+            // Action IDs match SHORTCUT_DEFINITIONS in the frontend shortcut-definitions.ts.
             {
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-                let app_handle = app.handle().clone();
+                // (action_id, default_shortcut_str)
+                let global_defaults: &[(&str, &str)] = &[
+                    ("slides-next", "Alt+Right"),
+                    ("slides-prev", "Alt+Left"),
+                    ("display-black", "Alt+B"),
+                    ("display-logo", "Alt+L"),
+                    ("app-command-palette", "Alt+K"),
+                    ("app-shortcuts-help", "Alt+H"),
+                ];
 
-                // Alt+Right — next slide
-                let app_clone = app_handle.clone();
-                let _ = app_handle.global_shortcut().on_shortcut(
-                    "Alt+Right".parse::<Shortcut>().unwrap(),
-                    move |_app, _shortcut, event| {
-                        if event.state == ShortcutState::Pressed {
-                            let _ = app_clone.emit("global-shortcut", "next-slide");
-                        }
-                    },
-                );
+                let db_state = app.state::<AppState>();
+                let conn = db_state.db.lock().map_err(|e| e.to_string())?;
+                let mut shortcuts_map = db_state
+                    .global_shortcuts
+                    .lock()
+                    .map_err(|e| e.to_string())?;
 
-                // Alt+Left — prev slide
-                let app_clone = app_handle.clone();
-                let _ = app_handle.global_shortcut().on_shortcut(
-                    "Alt+Left".parse::<Shortcut>().unwrap(),
-                    move |_app, _shortcut, event| {
-                        if event.state == ShortcutState::Pressed {
-                            let _ = app_clone.emit("global-shortcut", "prev-slide");
-                        }
-                    },
-                );
+                for (action, default_str) in global_defaults {
+                    let key = format!("shortcut.{}.global", action);
+                    let combo_str = crate::db::queries::settings::get_setting(&conn, &key)
+                        .ok()
+                        .map(|s| s.value)
+                        .filter(|v| !v.is_empty())
+                        .unwrap_or_else(|| default_str.to_string());
 
-                // Alt+B — toggle black screen
-                let app_clone = app_handle.clone();
-                let _ = app_handle.global_shortcut().on_shortcut(
-                    "Alt+B".parse::<Shortcut>().unwrap(),
-                    move |_app, _shortcut, event| {
-                        if event.state == ShortcutState::Pressed {
-                            let _ = app_clone.emit("global-shortcut", "toggle-black");
-                        }
-                    },
-                );
+                    if let Ok(shortcut) = combo_str.parse::<Shortcut>() {
+                        let action_id = action.to_string();
+                        let app_clone = app.handle().clone();
+                        let _ = app.handle().global_shortcut().on_shortcut(
+                            shortcut,
+                            move |_app, _shortcut, event| {
+                                if event.state == ShortcutState::Pressed {
+                                    let _ = app_clone.emit("global-shortcut", &action_id);
+                                }
+                            },
+                        );
+                        shortcuts_map.insert(action.to_string(), combo_str);
+                    }
+                }
 
-                // Alt+L — toggle logo screen
-                let app_clone = app_handle.clone();
-                let _ = app_handle.global_shortcut().on_shortcut(
-                    "Alt+L".parse::<Shortcut>().unwrap(),
-                    move |_app, _shortcut, event| {
-                        if event.state == ShortcutState::Pressed {
-                            let _ = app_clone.emit("global-shortcut", "toggle-logo");
-                        }
-                    },
-                );
+                drop(conn);
+                drop(shortcuts_map);
             }
 
             Ok(())
@@ -291,6 +290,7 @@ pub fn run() {
             commands::settings::set_setting,
             commands::settings::get_all_settings,
             commands::settings::clear_database,
+            commands::settings::update_global_shortcut,
             // Timer
             commands::timer::start_timer,
             commands::timer::pause_timer,

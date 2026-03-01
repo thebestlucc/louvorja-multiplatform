@@ -89,17 +89,26 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     import("@tauri-apps/api/event").then(({ listen }) => {
       listen<string>("global-shortcut", (event) => {
         switch (event.payload) {
-          case "next-slide":
+          case "slides-next":
             nextSlide();
             break;
-          case "prev-slide":
+          case "slides-prev":
             prevSlide();
             break;
-          case "toggle-black":
+          case "display-black":
             toggleBlackScreen();
             break;
-          case "toggle-logo":
+          case "display-logo":
             toggleLogoScreen();
+            break;
+          case "app-command-palette":
+            // Simulate Cmd+K to open the command palette (matches the header button behavior)
+            document.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
+            );
+            break;
+          case "app-shortcuts-help":
+            openKeyboardShortcutsPanel();
             break;
         }
       }).then((fn) => {

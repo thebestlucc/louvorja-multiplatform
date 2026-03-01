@@ -636,6 +636,26 @@
         "progress": "{{current}}/{{total}}"
       }
     },
+    "tabs": {
+      "general": "General",
+      "appearance": "Appearance",
+      "shortcuts": "Shortcuts",
+      "monitor": "Monitor",
+      "streaming": "Streaming",
+      "migration": "Migration",
+      "data": "Data"
+    },
+    "shortcuts": {
+      "description": "Customize and manage your keyboard shortcuts to navigate and perform actions faster.",
+      "localLabel": "In-App",
+      "globalLabel": "Global",
+      "record": "Record",
+      "recording": "Recording...",
+      "cancel": "Cancel",
+      "clear": "Clear",
+      "conflict": "Already used by: {{action}}",
+      "unset": "---"
+    },
     "dangerZone": {
       "title": "Danger Zone",
       "clearDatabase": "Reset App Data",

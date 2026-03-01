@@ -636,6 +636,26 @@
         "progress": "{{current}}/{{total}}"
       }
     },
+    "tabs": {
+      "general": "General",
+      "appearance": "Apariencia",
+      "shortcuts": "Atajos",
+      "monitor": "Monitor",
+      "streaming": "Streaming",
+      "migration": "Migración",
+      "data": "Datos"
+    },
+    "shortcuts": {
+      "description": "Personaliza y gestiona tus atajos de teclado para navegar y realizar acciones más rápido.",
+      "localLabel": "En App",
+      "globalLabel": "Global",
+      "record": "Grabar",
+      "recording": "Grabando...",
+      "cancel": "Cancelar",
+      "clear": "Limpiar",
+      "conflict": "Ya usado por: {{action}}",
+      "unset": "---"
+    },
     "dangerZone": {
       "title": "Zona de Peligro",
       "clearDatabase": "Restablecer Datos de la App",
