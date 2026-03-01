@@ -10,6 +10,9 @@
   ],
   "permissions": [
     "window-state:default",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
+    "store:default"
   ]
 }
