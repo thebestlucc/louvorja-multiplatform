@@ -51,6 +51,9 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     .always_on_top(true)
     .skip_taskbar(true)
     .shadow(true)
+    // macOS: appear on whichever Space is active when shown, not pinned to the
+    // Space where the main window lives.
+    .visible_on_all_workspaces(true)
     .build()
     .map_err(|e| AppError::Internal(format!("Failed to create spotlight window: {e}")))?;
 
