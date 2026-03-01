@@ -3,11 +3,89 @@
 //! Fetches hymns, albums, and lyrics from the LouvorJA API server
 //! at api.louvorja.com.br
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Deserialize a value that may be an integer, a numeric string, an empty string, or null
+/// into `Option<i64>`. Used for API fields like `order` that return `""` instead of `null`.
+fn deserialize_flexible_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de;
+    struct FlexibleI64Visitor;
+    impl<'de> de::Visitor<'de> for FlexibleI64Visitor {
+        type Value = Option<i64>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("an integer, a numeric string, an empty string, or null")
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+            Ok(Some(v))
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+            Ok(Some(v as i64))
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
+            Ok(Some(v as i64))
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            if v.is_empty() {
+                Ok(None)
+            } else {
+                v.parse::<i64>().map(Some).map_err(de::Error::custom)
+            }
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+    deserializer.deserialize_any(FlexibleI64Visitor)
+}
+
+/// Deserialize a value that may be a string, an integer, or null into `Option<String>`.
+/// Used for API fields like `image_version` that return `1` (int) instead of `"1"` (string).
+fn deserialize_flexible_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de;
+    struct FlexibleStringVisitor;
+    impl<'de> de::Visitor<'de> for FlexibleStringVisitor {
+        type Value = Option<String>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a string, an integer, or null")
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            if v.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(v.to_string()))
+            }
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+    deserializer.deserialize_any(FlexibleStringVisitor)
+}
 
 /// Base API URL
 pub const API_BASE_URL: &str = "https://api.louvorja.com.br";
@@ -114,9 +192,9 @@ pub struct ApiAlbum {
     pub url_image: Option<String>,
     #[serde(default)]
     pub subtitle: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_i64")]
     pub order: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_string")]
     pub image_version: Option<String>,
     #[serde(default)]
     pub musics: Vec<ApiMusic>,

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "martinholovsky-tauri": {
+      "source": "smithery/ai",
+      "sourceType": "well-known",
+      "computedHash": "714f09eeebcc6293bc904ea18e0826866bf49057d6cfd1897a96b9d64361c8b7"
+    }
+  }
+}

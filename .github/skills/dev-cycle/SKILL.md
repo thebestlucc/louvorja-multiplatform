@@ -1,5 +1,5 @@
 ---
-name: ring:dev-cycle
+name: dev-cycle
 description: |
   Main orchestrator for the 10-gate development cycle system. Loads tasks/subtasks
   from PM team output and executes through implementation → devops → SRE → unit testing → fuzz testing → property testing → integration testing (write) → chaos testing (write) → review → validation
