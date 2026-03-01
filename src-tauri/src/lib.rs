@@ -44,6 +44,7 @@ pub fn run() {
                 let _ = win.unminimize();
             }
         }))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(tauri_plugin_window_state::StateFlags::all())
@@ -134,6 +135,57 @@ pub fn run() {
 
             // Create the main window dynamically for normal mode
             create_main_window(app.handle())?;
+
+            // Register global shortcuts (opt-in, configured via settings)
+            {
+                use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+
+                let app_handle = app.handle().clone();
+
+                // Alt+Right — next slide
+                let app_clone = app_handle.clone();
+                let _ = app_handle.global_shortcut().on_shortcut(
+                    "Alt+Right".parse::<Shortcut>().unwrap(),
+                    move |_app, _shortcut, event| {
+                        if event.state == ShortcutState::Pressed {
+                            let _ = app_clone.emit("global-shortcut", "next-slide");
+                        }
+                    },
+                );
+
+                // Alt+Left — prev slide
+                let app_clone = app_handle.clone();
+                let _ = app_handle.global_shortcut().on_shortcut(
+                    "Alt+Left".parse::<Shortcut>().unwrap(),
+                    move |_app, _shortcut, event| {
+                        if event.state == ShortcutState::Pressed {
+                            let _ = app_clone.emit("global-shortcut", "prev-slide");
+                        }
+                    },
+                );
+
+                // Alt+B — toggle black screen
+                let app_clone = app_handle.clone();
+                let _ = app_handle.global_shortcut().on_shortcut(
+                    "Alt+B".parse::<Shortcut>().unwrap(),
+                    move |_app, _shortcut, event| {
+                        if event.state == ShortcutState::Pressed {
+                            let _ = app_clone.emit("global-shortcut", "toggle-black");
+                        }
+                    },
+                );
+
+                // Alt+L — toggle logo screen
+                let app_clone = app_handle.clone();
+                let _ = app_handle.global_shortcut().on_shortcut(
+                    "Alt+L".parse::<Shortcut>().unwrap(),
+                    move |_app, _shortcut, event| {
+                        if event.state == ShortcutState::Pressed {
+                            let _ = app_clone.emit("global-shortcut", "toggle-logo");
+                        }
+                    },
+                );
+            }
 
             Ok(())
         })
