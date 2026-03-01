@@ -10,16 +10,22 @@ use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "macos")]
 fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
     use objc2::runtime::AnyObject;
-    use objc2_app_kit::NSWindowCollectionBehavior;
+    use objc2_app_kit::{NSStatusWindowLevel, NSWindowCollectionBehavior};
 
     if let Ok(ns_win_ptr) = win.ns_window() {
         // SAFETY: Tauri gives us the raw NSWindow pointer; we only call methods
         // that are safe on any NSWindow from the main thread.
         unsafe {
             let ns_win = &*(ns_win_ptr as *const AnyObject as *const objc2_app_kit::NSWindow);
+            // CanJoinAllSpaces: visible on every Space
+            // FullScreenAuxiliary: slides over fullscreen apps instead of hiding
             let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
                 | NSWindowCollectionBehavior::FullScreenAuxiliary;
             ns_win.setCollectionBehavior(behavior);
+            // NSStatusWindowLevel (25) keeps the window above normal app windows
+            // AND above fullscreen apps — required for the FullScreenAuxiliary
+            // behavior to actually float the window on top.
+            ns_win.setLevel(NSStatusWindowLevel);
         }
     }
 }
@@ -27,16 +33,23 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
 /// Compute the centered position for the spotlight window on the primary monitor.
 fn spotlight_position(app: &AppHandle) -> (f64, f64) {
     let monitor = app.primary_monitor().ok().flatten();
-    let (screen_w, screen_x, screen_y) = if let Some(m) = monitor {
+    let (screen_w, screen_h, screen_x, screen_y) = if let Some(m) = monitor {
         let pos = m.position();
         let size = m.size();
-        (size.width as f64, pos.x as f64, pos.y as f64)
+        let scale = m.scale_factor();
+        (
+            size.width as f64 / scale,
+            size.height as f64 / scale,
+            pos.x as f64 / scale,
+            pos.y as f64 / scale,
+        )
     } else {
-        (1440.0, 0.0, 0.0)
+        (1440.0, 900.0, 0.0, 0.0)
     };
-    let window_w = 640.0_f64;
+    let window_w = 680.0_f64;
+    let window_h = 480.0_f64;
     let x = screen_x + (screen_w - window_w) / 2.0;
-    let y = screen_y + 120.0; // ~18% from top
+    let y = screen_y + (screen_h - window_h) / 2.0;
     (x, y)
 }
 
@@ -58,8 +71,8 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
         return Ok(());
     }
 
-    let window_w = 640.0_f64;
-    let window_h = 440.0_f64;
+    let window_w = 680.0_f64;
+    let window_h = 480.0_f64;
 
     tauri::WebviewWindowBuilder::new(
         app,
@@ -76,6 +89,7 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     .always_on_top(true)
     .skip_taskbar(true)
     .shadow(true)
+    .transparent(true)
     // macOS: appear on whichever Space is active when shown, not pinned to the
     // Space where the main window lives.
     .visible_on_all_workspaces(true)

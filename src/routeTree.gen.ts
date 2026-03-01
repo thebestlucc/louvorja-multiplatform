@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SpotlightRouteImport } from './routes/spotlight'
 import { Route as ReturnRouteImport } from './routes/return'
 import { Route as ProjectorRouteImport } from './routes/projector'
 import { Route as UtilitiesRouteRouteImport } from './routes/utilities/route'
@@ -43,6 +44,11 @@ import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/comp
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
 import { Route as CollectionsCollectionIdRouteImport } from './routes/collections/$collectionId'
 
+const SpotlightRoute = SpotlightRouteImport.update({
+  id: '/spotlight',
+  path: '/spotlight',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReturnRoute = ReturnRouteImport.update({
   id: '/return',
   path: '/return',
@@ -224,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/utilities': typeof UtilitiesRouteRouteWithChildren
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
+  '/spotlight': typeof SpotlightRoute
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/help': typeof HelpRouteRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
+  '/spotlight': typeof SpotlightRoute
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/utilities': typeof UtilitiesRouteRouteWithChildren
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
+  '/spotlight': typeof SpotlightRoute
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
@@ -323,6 +332,7 @@ export interface FileRouteTypes {
     | '/utilities'
     | '/projector'
     | '/return'
+    | '/spotlight'
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
@@ -349,6 +359,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/projector'
     | '/return'
+    | '/spotlight'
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
@@ -384,6 +395,7 @@ export interface FileRouteTypes {
     | '/utilities'
     | '/projector'
     | '/return'
+    | '/spotlight'
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
     | '/onboarding/complete'
@@ -420,10 +432,18 @@ export interface RootRouteChildren {
   UtilitiesRouteRoute: typeof UtilitiesRouteRouteWithChildren
   ProjectorRoute: typeof ProjectorRoute
   ReturnRoute: typeof ReturnRoute
+  SpotlightRoute: typeof SpotlightRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/spotlight': {
+      id: '/spotlight'
+      path: '/spotlight'
+      fullPath: '/spotlight'
+      preLoaderRoute: typeof SpotlightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/return': {
       id: '/return'
       path: '/return'
@@ -800,6 +820,7 @@ const rootRouteChildren: RootRouteChildren = {
   UtilitiesRouteRoute: UtilitiesRouteRouteWithChildren,
   ProjectorRoute: ProjectorRoute,
   ReturnRoute: ReturnRoute,
+  SpotlightRoute: SpotlightRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
