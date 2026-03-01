@@ -3,9 +3,7 @@
   "identifier": "default",
   "description": "Default permissions for LouvorJA",
   "windows": [
-    "main",
-    "projector",
-    "return"
+    "main"
   ],
   "permissions": [
     "core:default",

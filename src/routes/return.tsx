@@ -261,20 +261,19 @@ function ReturnPage() {
       </div>
 
       {/* Next slide — bottom 30% */}
-      <div className="flex-[3] overflow-hidden rounded-lg border border-white/5 bg-neutral-900">
+      <div className="relative flex-[3] overflow-hidden rounded-lg border border-white/5 bg-neutral-900">
+        {/* Always mounted so useMediaSource cache is preserved across null→slide transitions */}
+        <SlideRenderer
+          slide={nextSlide}
+          renderMode="return-next"
+          className="h-full w-full opacity-70"
+        />
         {nextSlide ? (
-          <div className="relative h-full w-full">
-            <div className="absolute left-2 top-1 z-10 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/50">
-              {t("display.nextSlide")}
-            </div>
-            <SlideRenderer
-              slide={nextSlide}
-              renderMode="return-next"
-              className="h-full w-full opacity-70"
-            />
+          <div className="absolute left-2 top-1 z-10 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/50">
+            {t("display.nextSlide")}
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-white/30">
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-white/30">
             {t("display.noNextSlide")}
           </div>
         )}
