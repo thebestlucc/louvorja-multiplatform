@@ -3,9 +3,11 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import type { Verse } from "../../types/bible";
-import { Plus } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
+import { copyToClipboard } from "../../lib/clipboard";
+import { toast } from "sonner";
 import { getLocalizedBookName } from "./book-catalog";
 
 interface VerseDisplayProps {
@@ -54,6 +56,19 @@ export function VerseDisplay({
     }
   }, [scrollToVerse]);
 
+  const handleCopyVerses = async () => {
+    if (selectedVerses.length === 0) return;
+    const sorted = [...selectedVerses].sort((a, b) => a - b);
+    const reference = `${displayBook} ${chapter}:${sorted.length === 1 ? sorted[0] : `${sorted[0]}-${sorted[sorted.length - 1]}`}${versionAbbr ? ` (${versionAbbr})` : ""}`;
+    const selectedSet = new Set(sorted);
+    const text = verses
+      .filter((v) => selectedSet.has(v.verse))
+      .map((v) => `${v.verse} ${v.text}`)
+      .join("\n");
+    await copyToClipboard(`${reference}\n${text}`);
+    toast.success(t("bible.verseCopied"));
+  };
+
   const handleAddToService = () => {
     if (!activeServiceId || selectedVerses.length === 0) return;
     const sorted = [...selectedVerses].sort((a, b) => a - b);
@@ -94,11 +109,18 @@ export function VerseDisplay({
             </span>
           )}
         </div>
-        {selectedVerses.length > 0 && activeServiceId && (
-          <Button size="sm" variant="outline" onClick={handleAddToService}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            {t("services.addToService")}
-          </Button>
+        {selectedVerses.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => void handleCopyVerses()} title={t("bible.copyVerse")}>
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+            {activeServiceId && (
+              <Button size="sm" variant="outline" onClick={handleAddToService}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                {t("services.addToService")}
+              </Button>
+            )}
+          </div>
         )}
       </div>
       <div className="space-y-0.5">
