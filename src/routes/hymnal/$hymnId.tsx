@@ -1,12 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, BookOpen, Monitor, Music, Pencil, RefreshCw, Save, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Copy, Monitor, Music, Pencil, RefreshCw, Save, Square, Trash2 } from "lucide-react";
 import { useDeleteHymn, useHymn, useRestoreHymnFromApi, useSyncPoints, useUpdateHymn } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useSlides } from "../../hooks/use-slides";
 import { useAudio } from "../../hooks/use-audio";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
+import { copyToClipboard } from "../../lib/clipboard";
 import { LyricsDisplay } from "../../components/music/lyrics-display";
 import { LyricsModal } from "../../components/music/lyrics-modal";
 import { AudioControls } from "../../components/music/audio-controls";
@@ -341,6 +342,19 @@ function HymnDetail() {
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t("hymn.actionShowLyrics")}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (hymn?.lyrics) {
+                      await copyToClipboard(hymn.lyrics);
+                      toast.success(t("hymn.lyricsCopied"));
+                    }
+                  }}
+                >
+                  <Copy className="mr-1 h-4 w-4" />
+                  {t("hymn.copyLyrics")}
+                </Button>
               </>
             ) : (
               <>
@@ -357,6 +371,19 @@ function HymnDetail() {
                 <Button size="sm" variant="ghost" onClick={() => setLyricsModalOpen(true)}>
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t("hymn.actionShowLyrics")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (hymn?.lyrics) {
+                      await copyToClipboard(hymn.lyrics);
+                      toast.success(t("hymn.lyricsCopied"));
+                    }
+                  }}
+                >
+                  <Copy className="mr-1 h-4 w-4" />
+                  {t("hymn.copyLyrics")}
                 </Button>
               </>
             )}
