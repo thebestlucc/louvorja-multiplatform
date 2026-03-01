@@ -1,6 +1,29 @@
 use crate::error::AppError;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// On macOS, set NSWindowCollectionBehavior so the spotlight window appears above
+/// fullscreen apps on whichever Space is currently active.
+///
+/// Flags used:
+///   CanJoinAllSpaces   (1 << 0) — visible on every Space
+///   FullScreenAuxiliary (1 << 8) — slides over fullscreen apps instead of hiding
+#[cfg(target_os = "macos")]
+fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
+    use objc2::runtime::AnyObject;
+    use objc2_app_kit::NSWindowCollectionBehavior;
+
+    if let Ok(ns_win_ptr) = win.ns_window() {
+        // SAFETY: Tauri gives us the raw NSWindow pointer; we only call methods
+        // that are safe on any NSWindow from the main thread.
+        unsafe {
+            let ns_win = &*(ns_win_ptr as *const AnyObject as *const objc2_app_kit::NSWindow);
+            let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
+                | NSWindowCollectionBehavior::FullScreenAuxiliary;
+            ns_win.setCollectionBehavior(behavior);
+        }
+    }
+}
+
 /// Compute the centered position for the spotlight window on the primary monitor.
 fn spotlight_position(app: &AppHandle) -> (f64, f64) {
     let monitor = app.primary_monitor().ok().flatten();
@@ -28,6 +51,8 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
             x: x as i32,
             y: y as i32,
         }));
+        #[cfg(target_os = "macos")]
+        set_macos_collection_behavior(&win);
         let _ = win.show();
         let _ = win.set_focus();
         return Ok(());
@@ -56,6 +81,13 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     .visible_on_all_workspaces(true)
     .build()
     .map_err(|e| AppError::Internal(format!("Failed to create spotlight window: {e}")))?;
+
+    // Apply macOS collection behavior after creation so the window floats
+    // above fullscreen apps on the currently active Space.
+    #[cfg(target_os = "macos")]
+    if let Some(win) = app.get_webview_window("spotlight") {
+        set_macos_collection_behavior(&win);
+    }
 
     Ok(())
 }
