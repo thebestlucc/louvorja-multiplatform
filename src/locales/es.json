@@ -121,6 +121,10 @@
       "toggleReturn": "Alternar ventana de retorno",
       "toggleBlack": "Alternar pantalla negra",
       "toggleLogo": "Alternar pantalla de logo",
+      "globalNextSlide": "Siguiente diapositiva (global)",
+      "globalPrevSlide": "Diapositiva anterior (global)",
+      "globalBlack": "Alternar pantalla negra (global)",
+      "globalLogo": "Alternar pantalla logo (global)",
       "projectTimer": "Proyectar temporizador desde utilidades",
       "projectClock": "Proyectar reloj desde utilidades",
       "projectLottery": "Proyectar resultado del sorteo"

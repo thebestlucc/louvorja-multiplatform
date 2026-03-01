@@ -121,6 +121,10 @@
       "toggleReturn": "Alternar janela de retorno",
       "toggleBlack": "Alternar tela preta",
       "toggleLogo": "Alternar tela de logo",
+      "globalNextSlide": "Proximo slide (global)",
+      "globalPrevSlide": "Slide anterior (global)",
+      "globalBlack": "Alternar tela preta (global)",
+      "globalLogo": "Alternar tela logo (global)",
       "projectTimer": "Projetar timer nas utilidades",
       "projectClock": "Projetar relógio nas utilidades",
       "projectLottery": "Projetar resultado do sorteio"
