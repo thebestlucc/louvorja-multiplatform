@@ -101,6 +101,9 @@
     "bible": "Bible Verses",
     "searching": "Searching..."
   },
+  "spotlight": {
+    "projectToScreen": "Project to screen"
+  },
   "shortcuts": {
     "title": "Keyboard Shortcuts",
     "searchPlaceholder": "Search shortcuts...",

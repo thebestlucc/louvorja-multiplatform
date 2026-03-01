@@ -599,3 +599,14 @@ export async function updateGlobalShortcut(
 ): Promise<void> {
   return tauriInvoke<void>("update_global_shortcut", { action, shortcutStr });
 }
+
+export async function spotlightSelect(
+  kind: "navigate" | "action" | "hide",
+  payload: string,
+): Promise<void> {
+  return tauriInvoke<void>("spotlight_select", { kind, payload });
+}
+
+export async function spotlightHide(): Promise<void> {
+  return tauriInvoke<void>("spotlight_hide");
+}

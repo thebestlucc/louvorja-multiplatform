@@ -176,14 +176,37 @@ pub fn run() {
                     if let Ok(shortcut) = combo_str.parse::<Shortcut>() {
                         let action_id = action.to_string();
                         let app_clone = app.handle().clone();
-                        let _ = app.handle().global_shortcut().on_shortcut(
-                            shortcut,
-                            move |_app, _shortcut, event| {
-                                if event.state == ShortcutState::Pressed {
-                                    let _ = app_clone.emit("global-shortcut", &action_id);
-                                }
-                            },
-                        );
+
+                        if action_id == "app-command-palette" {
+                            // Toggle detached spotlight window instead of emitting to frontend
+                            let _ = app.handle().global_shortcut().on_shortcut(
+                                shortcut,
+                                move |_app, _shortcut, event| {
+                                    if event.state == ShortcutState::Pressed {
+                                        if let Some(win) = app_clone.get_webview_window("spotlight") {
+                                            if win.is_visible().unwrap_or(false) {
+                                                let _ = win.hide();
+                                            } else {
+                                                let _ = win.show();
+                                                let _ = win.set_focus();
+                                            }
+                                        } else {
+                                            let _ = crate::commands::spotlight::open_spotlight_window(&app_clone);
+                                        }
+                                    }
+                                },
+                            );
+                        } else {
+                            let _ = app.handle().global_shortcut().on_shortcut(
+                                shortcut,
+                                move |_app, _shortcut, event| {
+                                    if event.state == ShortcutState::Pressed {
+                                        let _ = app_clone.emit("global-shortcut", &action_id);
+                                    }
+                                },
+                            );
+                        }
+
                         shortcuts_map.insert(action.to_string(), combo_str);
                     }
                 }
@@ -325,6 +348,9 @@ pub fn run() {
             commands::utility::copy_image_to_media,
             commands::utility::get_video_metadata,
             commands::utility::resolve_media_path,
+            // Spotlight
+            commands::spotlight::spotlight_select,
+            commands::spotlight::spotlight_hide,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
