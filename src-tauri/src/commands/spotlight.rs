@@ -1,6 +1,9 @@
 use crate::error::AppError;
 use tauri::{AppHandle, Emitter, Manager};
 
+const SPOTLIGHT_W: f64 = 680.0;
+const SPOTLIGHT_H: f64 = 480.0;
+
 /// On macOS, set NSWindowCollectionBehavior so the spotlight window appears above
 /// fullscreen apps on whichever Space is currently active.
 ///
@@ -32,9 +35,31 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
     }
 }
 
-/// Compute the centered position for the spotlight window on the primary monitor.
+/// Compute the centered position for the spotlight window.
+/// Targets the monitor whose bounds contain the current cursor position.
+/// Falls back to the primary monitor, then to a hardcoded default.
 fn spotlight_position(app: &AppHandle) -> (f64, f64) {
-    let monitor = app.primary_monitor().ok().flatten();
+    // Try to find which monitor the cursor is on
+    let cursor_monitor: Option<tauri::Monitor> = (|| {
+        let cursor = app.cursor_position().ok()?;
+        let monitors = app.available_monitors().ok()?;
+        monitors.into_iter().find(|m| {
+            let pos = m.position();
+            let size = m.size();
+            let scale = m.scale_factor();
+            let lx = cursor.x;
+            let ly = cursor.y;
+            let mx = pos.x as f64 / scale;
+            let my = pos.y as f64 / scale;
+            let mw = size.width as f64 / scale;
+            let mh = size.height as f64 / scale;
+            lx >= mx && lx < mx + mw && ly >= my && ly < my + mh
+        })
+    })();
+
+    let monitor = cursor_monitor
+        .or_else(|| app.primary_monitor().ok().flatten());
+
     let (screen_w, screen_h, screen_x, screen_y) = if let Some(m) = monitor {
         let pos = m.position();
         let size = m.size();
@@ -48,10 +73,9 @@ fn spotlight_position(app: &AppHandle) -> (f64, f64) {
     } else {
         (1440.0, 900.0, 0.0, 0.0)
     };
-    let window_w = 680.0_f64;
-    let window_h = 480.0_f64;
-    let x = screen_x + (screen_w - window_w) / 2.0;
-    let y = screen_y + (screen_h - window_h) / 2.0;
+
+    let x = screen_x + (screen_w - SPOTLIGHT_W) / 2.0;
+    let y = screen_y + (screen_h - SPOTLIGHT_H) / 2.0;
     (x, y)
 }
 
@@ -73,18 +97,15 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
         return Ok(());
     }
 
-    let window_w = 680.0_f64;
-    let window_h = 480.0_f64;
-
     tauri::WebviewWindowBuilder::new(
         app,
         "spotlight",
         tauri::WebviewUrl::App("/spotlight".into()),
     )
     .title("LouvorJA Search")
-    .inner_size(window_w, window_h)
-    .min_inner_size(window_w, window_h)
-    .max_inner_size(window_w, window_h)
+    .inner_size(SPOTLIGHT_W, SPOTLIGHT_H)
+    .min_inner_size(SPOTLIGHT_W, SPOTLIGHT_H)
+    .max_inner_size(SPOTLIGHT_W, SPOTLIGHT_H)
     .position(x, y)
     .resizable(false)
     .decorations(false)
