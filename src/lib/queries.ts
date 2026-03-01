@@ -24,7 +24,7 @@ import type { SyncPoint } from "../types/audio";
 import type { HymnWriteInput } from "../types/hymn";
 import type { TimerMode, TextFormat } from "../types/utilities";
 import type { CollectionSongSyncStatus } from "../types/collection";
-import type { UpdateInfo } from "../types/migration";
+import type { UpdateInfo } from "../types/updater";
 import type { LegacyFetchOptions } from "../types/legacy-fetch";
 
 export const queryKeys = {

@@ -814,31 +814,29 @@ pub fn get_slide_context(
 }
 
 // Overlay state (black/logo screen)
+// Single mutex on OverlayRuntimeState eliminates the former ABBA deadlock:
+// toggle_black_screen acquired is_black_screen → is_logo_screen while
+// toggle_logo_screen acquired them in reverse order.
 
 #[tauri::command]
 pub fn toggle_black_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let mut black = state
-        .is_black_screen
+    let mut overlay = state
+        .overlay
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    *black = !*black;
-    // If black screen activates, turn off logo screen
-    let mut logo = state
-        .is_logo_screen
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    if *black {
-        *logo = false;
+    overlay.is_black_screen = !overlay.is_black_screen;
+    if overlay.is_black_screen {
+        overlay.is_logo_screen = false;
     }
-    let overlay = OverlayState {
-        black_screen: *black,
-        logo_screen: *logo,
+    let result = OverlayState {
+        black_screen: overlay.is_black_screen,
+        logo_screen: overlay.is_logo_screen,
     };
-    let _ = app.emit("overlay-changed", &overlay);
-    Ok(overlay)
+    let _ = app.emit("overlay-changed", &result);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -846,40 +844,31 @@ pub fn toggle_logo_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let mut logo = state
-        .is_logo_screen
+    let mut overlay = state
+        .overlay
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    *logo = !*logo;
-    // If logo screen activates, turn off black screen
-    let mut black = state
-        .is_black_screen
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    if *logo {
-        *black = false;
+    overlay.is_logo_screen = !overlay.is_logo_screen;
+    if overlay.is_logo_screen {
+        overlay.is_black_screen = false;
     }
-    let overlay = OverlayState {
-        black_screen: *black,
-        logo_screen: *logo,
+    let result = OverlayState {
+        black_screen: overlay.is_black_screen,
+        logo_screen: overlay.is_logo_screen,
     };
-    let _ = app.emit("overlay-changed", &overlay);
-    Ok(overlay)
+    let _ = app.emit("overlay-changed", &result);
+    Ok(result)
 }
 
 #[tauri::command]
 pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
-    let black = state
-        .is_black_screen
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let logo = state
-        .is_logo_screen
+    let overlay = state
+        .overlay
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(OverlayState {
-        black_screen: *black,
-        logo_screen: *logo,
+        black_screen: overlay.is_black_screen,
+        logo_screen: overlay.is_logo_screen,
     })
 }
 

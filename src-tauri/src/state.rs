@@ -158,6 +158,15 @@ impl TimerRuntimeState {
     }
 }
 
+/// Combined overlay state — single mutex eliminates the ABBA deadlock
+/// that occurred when toggle_black_screen and toggle_logo_screen acquired
+/// is_black_screen and is_logo_screen in opposite order simultaneously.
+#[derive(Debug, Default)]
+pub struct OverlayRuntimeState {
+    pub is_black_screen: bool,
+    pub is_logo_screen: bool,
+}
+
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub timer: Mutex<TimerRuntimeState>,
@@ -166,8 +175,7 @@ pub struct AppState {
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: Mutex<Option<SlideContent>>,
     pub projector_open: Mutex<bool>,
-    pub is_black_screen: Mutex<bool>,
-    pub is_logo_screen: Mutex<bool>,
+    pub overlay: Mutex<OverlayRuntimeState>,
     pub return_open: Mutex<bool>,
     pub slide_context: Mutex<Option<SlideContext>>,
 }

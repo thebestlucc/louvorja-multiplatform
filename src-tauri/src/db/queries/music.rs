@@ -44,7 +44,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     if trimmed.is_empty() {
         let mut stmt = conn.prepare(
             "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
-             FROM hymns ORDER BY number, title"
+             FROM hymns ORDER BY number, title LIMIT 200"
         )?;
         let hymns = stmt
             .query_map([], map_hymn_row)?
@@ -56,7 +56,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     if let Ok(num) = trimmed.parse::<i64>() {
         let mut stmt = conn.prepare(
             "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
-             FROM hymns WHERE number = ?1 ORDER BY title"
+             FROM hymns WHERE number = ?1 ORDER BY title LIMIT 200"
         )?;
         let hymns = stmt
             .query_map(params![num], map_hymn_row)?
@@ -76,7 +76,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
          FROM hymns h
          JOIN hymns_fts ON hymns_fts.rowid = h.id
          WHERE hymns_fts MATCH ?1
-         ORDER BY rank"
+         ORDER BY rank LIMIT 200"
     )?;
     let hymns = stmt
         .query_map(params![fts_query], map_hymn_row)?
@@ -376,15 +376,20 @@ pub fn get_sync_points(
 }
 
 pub fn save_sync_points(
-    conn: &Connection,
+    conn: &mut Connection,
     hymn_id: i64,
     points: &[crate::audio::SyncPoint],
 ) -> Result<(), AppError> {
-    conn.execute(
+    // Wrap in a transaction: a failed INSERT mid-loop would leave the hymn with
+    // zero sync points (DELETE already committed) without this guard.
+    let tx = conn.transaction()?;
+
+    tx.execute(
         "DELETE FROM audio_sync_points WHERE hymn_id = ?1",
         params![hymn_id],
     )?;
-    let mut stmt = conn.prepare(
+
+    let mut stmt = tx.prepare(
         "INSERT INTO audio_sync_points (hymn_id, slide_index, timestamp_ms) VALUES (?1, ?2, ?3)",
     )?;
     for point in points {
@@ -394,6 +399,10 @@ pub fn save_sync_points(
             point.timestamp_ms as i64
         ])?;
     }
+    drop(stmt);
+
+    tx.commit()?;
+
     Ok(())
 }
 

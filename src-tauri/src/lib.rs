@@ -11,7 +11,7 @@ mod state;
 mod streaming;
 mod video;
 
-use state::{AppState, AudioState, StreamingState, TimerRuntimeState};
+use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
 use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 use tauri::{Emitter, Manager};
@@ -35,14 +35,6 @@ fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     .map_err(|e| format!("Failed to create main window: {e}"))?;
     
     Ok(())
-}
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!(
-        "Hello, {}! welcome to the new multiplatform LouvorJA!",
-        name
-    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -69,8 +61,7 @@ pub fn run() {
                 utility_projection_stop: Mutex::new(None),
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),
-                is_black_screen: Mutex::new(false),
-                is_logo_screen: Mutex::new(false),
+                overlay: Mutex::new(OverlayRuntimeState::default()),
                 return_open: Mutex::new(false),
                 slide_context: Mutex::new(None),
             });
@@ -139,7 +130,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             // Music
             commands::music::search_hymns,
             commands::music::get_hymn,

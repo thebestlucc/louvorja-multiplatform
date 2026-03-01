@@ -7,7 +7,7 @@ use rand::seq::SliceRandom;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const MAX_COVER_SIZE_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -43,13 +43,23 @@ pub fn format_text(text: String, format: String) -> Result<String, AppError> {
     }
 }
 
+/// Copy a video file to the managed media directory.
+///
+/// Returns immediately — heavy work (blake3 hash + fs::copy) runs on a
+/// background thread to avoid blocking the IPC bridge on Windows (where a
+/// 2 GB file can take 10–30 seconds).
+///
+/// # Events
+/// - `"video-copy-complete"`: `(presentation_id: i64, rel_path: String)` on success
+/// - `"video-copy-error"`:    `(presentation_id: i64, error: String)` on failure
 #[tauri::command]
 pub fn copy_video_to_media(
     video_path: String,
     presentation_id: i64,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
-) -> Result<String, AppError> {
+) -> Result<(), AppError> {
+    // Fast synchronous checks — validate before spawning the thread
     {
         let conn = state
             .db
@@ -67,8 +77,7 @@ pub fn copy_video_to_media(
             )));
         }
     }
-
-    let source = PathBuf::from(video_path);
+    let source = PathBuf::from(&video_path);
     if !source.exists() {
         return Err(AppError::NotFound(format!(
             "Video file '{}' does not exist",
@@ -76,6 +85,25 @@ pub fn copy_video_to_media(
         )));
     }
 
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        match do_copy_video_work(&video_path, &app_clone) {
+            Ok(rel_path) => {
+                let _ = app_clone.emit("video-copy-complete", (presentation_id, rel_path));
+            }
+            Err(e) => {
+                let _ = app_clone.emit("video-copy-error", (presentation_id, e.to_string()));
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Performs the blake3 hash + fs::copy work for a video file.
+/// Called from a background thread; must not hold AppState references.
+fn do_copy_video_work(video_path: &str, app: &AppHandle) -> Result<String, AppError> {
+    let source = PathBuf::from(video_path);
     let canonical_source = source
         .canonicalize()
         .map_err(|e| AppError::Internal(format!("Failed to resolve source video path: {}", e)))?;
@@ -116,20 +144,18 @@ pub fn copy_video_to_media(
 }
 
 #[tauri::command]
-pub fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<String, AppError> {
-    let source = PathBuf::from(image_path);
+pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<String, AppError> {
+    let source = PathBuf::from(&image_path);
     if !source.exists() {
         return Err(AppError::NotFound(format!(
             "Image file '{}' does not exist",
             source.display()
         )));
     }
-
     let canonical_source = source
         .canonicalize()
         .map_err(|e| AppError::Internal(format!("Failed to resolve source image path: {}", e)))?;
     let extension = ensure_supported_cover_image(&canonical_source)?;
-
     let file_size = std::fs::metadata(&canonical_source)?.len();
     if file_size > MAX_COVER_SIZE_BYTES {
         return Err(AppError::Internal(format!(
@@ -137,38 +163,44 @@ pub fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<String,
             file_size, MAX_COVER_SIZE_BYTES
         )));
     }
-
-    let mut hasher = blake3::Hasher::new();
-    let mut input = File::open(&canonical_source)?;
-    let mut buf = [0u8; 8192];
-    loop {
-        let read = input.read(&mut buf)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buf[..read]);
-    }
-    let digest = hasher.finalize().to_hex().to_string();
-    let filename = format!("{}.{}", &digest[..24], extension);
-
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
-    let media_dir = app_data_dir.join("media").join("covers");
-    std::fs::create_dir_all(&media_dir)?;
 
-    let destination = media_dir.join(filename);
-    if destination != canonical_source && !destination.exists() {
-        std::fs::copy(&canonical_source, &destination).map_err(|e| {
-            AppError::Internal(format!(
-                "Failed to copy image to managed media directory: {}",
-                e
-            ))
-        })?;
-    }
+    // Offload hash + copy to a blocking thread — image files can be up to 8 MB
+    // and blocking the IPC thread hangs all invoke() calls on Windows.
+    tokio::task::spawn_blocking(move || {
+        let mut hasher = blake3::Hasher::new();
+        let mut input = File::open(&canonical_source)?;
+        let mut buf = [0u8; 8192];
+        loop {
+            let read = input.read(&mut buf)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buf[..read]);
+        }
+        let digest = hasher.finalize().to_hex().to_string();
+        let filename = format!("{}.{}", &digest[..24], extension);
 
-    Ok(format!("media/covers/{}.{}", &digest[..24], extension))
+        let media_dir = app_data_dir.join("media").join("covers");
+        std::fs::create_dir_all(&media_dir)?;
+
+        let destination = media_dir.join(&filename);
+        if destination != canonical_source && !destination.exists() {
+            std::fs::copy(&canonical_source, &destination).map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to copy image to managed media directory: {}",
+                    e
+                ))
+            })?;
+        }
+
+        Ok::<String, AppError>(format!("media/covers/{}.{}", &digest[..24], extension))
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Image copy task panicked: {}", e)))?
 }
 
 #[tauri::command]
@@ -191,8 +223,14 @@ pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppErr
     Ok(resolved.to_string_lossy().to_string())
 }
 
+/// Get metadata for a video file.
+///
+/// The native parser runs synchronously (fast). If it fails and ffprobe is
+/// enabled, the ffprobe fallback can block up to 4 seconds — that work is
+/// offloaded to `tokio::task::spawn_blocking` so the IPC bridge stays
+/// responsive on Windows during the wait.
 #[tauri::command]
-pub fn get_video_metadata(
+pub async fn get_video_metadata(
     path: String,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
@@ -220,24 +258,34 @@ pub fn get_video_metadata(
     let format = video::ensure_supported_video(&resolved_path)?;
     let file_size = std::fs::metadata(&resolved_path)?.len() as i64;
 
-    let parsed = match video::parse_video_metadata(&resolved_path) {
-        Ok(parsed) => parsed,
-        Err(primary_error) => {
-            let (ffprobe_enabled, ffprobe_path) = load_ffprobe_settings(&state)?;
-            if !ffprobe_enabled {
-                return Err(primary_error);
-            }
+    // Load ffprobe settings before entering spawn_blocking — tauri::State
+    // is not Send and cannot cross the async boundary.
+    let (ffprobe_enabled, ffprobe_path) = load_ffprobe_settings(&state)?;
 
-            video::parse_video_metadata_with_ffprobe(&resolved_path, ffprobe_path.as_deref(), 4000)
+    let resolved_path_clone = resolved_path.clone();
+    let parsed = tokio::task::spawn_blocking(move || {
+        match video::parse_video_metadata(&resolved_path_clone) {
+            Ok(parsed) => Ok(parsed),
+            Err(primary_error) => {
+                if !ffprobe_enabled {
+                    return Err(primary_error);
+                }
+                video::parse_video_metadata_with_ffprobe(
+                    &resolved_path_clone,
+                    ffprobe_path.as_deref(),
+                    4000,
+                )
                 .map_err(|fallback_error| {
                     AppError::Internal(format!(
                         "Video metadata parsing failed (native parser error: {}; ffprobe fallback error: {})",
-                        primary_error,
-                        fallback_error
+                        primary_error, fallback_error
                     ))
-                })?
+                })
+            }
         }
-    };
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Metadata task panicked: {}", e)))??;
 
     Ok(VideoMetadata {
         duration_ms: parsed.duration_ms,

@@ -115,11 +115,11 @@ pub fn update_slide(
 
 #[tauri::command]
 pub fn delete_slide(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let conn = state
+    let mut conn = state
         .db
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::slides::delete_slide(&conn, id)
+    crate::db::queries::slides::delete_slide(&mut conn, id)
 }
 
 #[tauri::command]
@@ -128,11 +128,11 @@ pub fn reorder_slides(
     slide_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
+    let mut conn = state
         .db
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::slides::update_slide_orders(&conn, presentation_id, &slide_ids)
+    crate::db::queries::slides::update_slide_orders(&mut conn, presentation_id, &slide_ids)
 }
 
 #[tauri::command]

@@ -252,11 +252,11 @@ pub fn save_sync_points(
     points: Vec<SyncPoint>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
+    let mut conn = state
         .db
         .lock()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::music::save_sync_points(&conn, hymn_id, &points)
+    crate::db::queries::music::save_sync_points(&mut conn, hymn_id, &points)
 }
 
 fn resolve_audio_path(path: &str, app: &AppHandle) -> Result<String, AppError> {
