@@ -217,13 +217,13 @@ pub fn update_slide(conn: &Connection, id: i64, content_json: &str) -> Result<()
     Ok(())
 }
 
-pub fn delete_slide(conn: &Connection, id: i64) -> Result<(), AppError> {
-    // Get presentation_id before deleting
-    let presentation_id: i64 = conn
+pub fn delete_slide(conn: &mut Connection, id: i64) -> Result<(), AppError> {
+    // Get presentation_id and slide_index before deleting
+    let (presentation_id, deleted_index): (i64, i64) = conn
         .query_row(
-            "SELECT presentation_id FROM slides WHERE id = ?1",
+            "SELECT presentation_id, slide_index FROM slides WHERE id = ?1",
             params![id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -232,47 +232,54 @@ pub fn delete_slide(conn: &Connection, id: i64) -> Result<(), AppError> {
             other => AppError::Database(other),
         })?;
 
-    conn.execute("DELETE FROM slides WHERE id = ?1", params![id])?;
+    // Wrap in a transaction: DELETE + re-index + timestamp update must be atomic.
+    // A failure mid-operation would leave slide_index values with gaps.
+    let tx = conn.transaction()?;
 
-    // Re-index remaining slides
-    let mut stmt =
-        conn.prepare("SELECT id FROM slides WHERE presentation_id = ?1 ORDER BY slide_index")?;
-    let slide_ids: Vec<i64> = stmt
-        .query_map(params![presentation_id], |row| row.get(0))?
-        .collect::<Result<Vec<_>, _>>()?;
+    tx.execute("DELETE FROM slides WHERE id = ?1", params![id])?;
 
-    for (i, sid) in slide_ids.iter().enumerate() {
-        conn.execute(
-            "UPDATE slides SET slide_index = ?1 WHERE id = ?2",
-            params![i as i32, sid],
-        )?;
-    }
+    // Single SQL statement replaces the N+1 SELECT+UPDATE loop for re-indexing.
+    // Shifts slide_index down by 1 for all slides after the deleted one.
+    tx.execute(
+        "UPDATE slides SET slide_index = slide_index - 1 \
+         WHERE presentation_id = ?1 AND slide_index > ?2",
+        params![presentation_id, deleted_index],
+    )?;
 
-    conn.execute(
+    tx.execute(
         "UPDATE presentations SET updated_at = datetime('now') WHERE id = ?1",
         params![presentation_id],
     )?;
+
+    tx.commit()?;
+
     reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
 
     Ok(())
 }
 
 pub fn update_slide_orders(
-    conn: &Connection,
+    conn: &mut Connection,
     presentation_id: i64,
     slide_ids: &[i64],
 ) -> Result<(), AppError> {
+    // Wrap in a transaction: partial failure would leave indices in an
+    // inconsistent state, making slides appear in the wrong order.
+    let tx = conn.transaction()?;
+
     for (i, id) in slide_ids.iter().enumerate() {
-        conn.execute(
+        tx.execute(
             "UPDATE slides SET slide_index = ?1 WHERE id = ?2 AND presentation_id = ?3",
             params![i as i32, id, presentation_id],
         )?;
     }
 
-    conn.execute(
+    tx.execute(
         "UPDATE presentations SET updated_at = datetime('now') WHERE id = ?1",
         params![presentation_id],
     )?;
+
+    tx.commit()?;
 
     Ok(())
 }

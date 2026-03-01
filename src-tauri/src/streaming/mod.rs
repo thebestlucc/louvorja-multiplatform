@@ -588,22 +588,41 @@ fn serve_media(
         return;
     }
 
-    let data = match std::fs::read(&candidate) {
-        Ok(bytes) => bytes,
+    // Stream in 64 KB chunks — loading the entire file into RAM would allocate
+    // hundreds of MB per concurrent request for large video files.
+    let file = match std::fs::File::open(&candidate) {
+        Ok(f) => f,
         Err(_) => {
             serve_not_found(&mut stream);
             return;
         }
     };
+    let file_len = file.metadata().map(|m| m.len()).unwrap_or(0);
     let content_type = media_content_type(&candidate);
 
     let header = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         content_type,
-        data.len()
+        file_len
     );
-    let _ = stream.write_all(header.as_bytes());
-    let _ = stream.write_all(&data);
+    if stream.write_all(header.as_bytes()).is_err() {
+        return;
+    }
+
+    let mut reader = std::io::BufReader::new(file);
+    let mut buf = [0u8; 65_536];
+    loop {
+        let n = match std::io::Read::read(&mut reader, &mut buf) {
+            Ok(n) => n,
+            Err(_) => break,
+        };
+        if n == 0 {
+            break;
+        }
+        if stream.write_all(&buf[..n]).is_err() {
+            break;
+        }
+    }
     let _ = stream.flush();
 }
 

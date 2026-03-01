@@ -238,19 +238,29 @@ impl AudioPlayer {
     }
 
     fn estimate_mp3_duration_cbr(path: &str) -> Option<u64> {
-        let bytes = std::fs::read(path).ok()?;
-        if bytes.len() < 4 {
+        use std::io::Read;
+
+        // Read only the first 4 KB — enough to parse the ID3 header and find
+        // the first MPEG frame header. Using fs::read() previously loaded the
+        // entire MP3 (up to 50+ MB) just to inspect a few bytes at the start.
+        let file = std::fs::File::open(path).ok()?;
+        let file_len = file.metadata().ok()?.len() as usize;
+        if file_len < 4 {
             return None;
         }
+        let read_len = file_len.min(4096);
+        let mut reader = std::io::BufReader::new(file);
+        let mut buf = vec![0u8; read_len];
+        reader.read_exact(&mut buf).ok()?;
 
         let mut offset = 0usize;
-        if bytes.len() >= 10 && &bytes[0..3] == b"ID3" {
-            let id3_size = ((bytes[6] as usize & 0x7f) << 21)
-                | ((bytes[7] as usize & 0x7f) << 14)
-                | ((bytes[8] as usize & 0x7f) << 7)
-                | (bytes[9] as usize & 0x7f);
+        if buf.len() >= 10 && &buf[0..3] == b"ID3" {
+            let id3_size = ((buf[6] as usize & 0x7f) << 21)
+                | ((buf[7] as usize & 0x7f) << 14)
+                | ((buf[8] as usize & 0x7f) << 7)
+                | (buf[9] as usize & 0x7f);
             offset = 10usize.saturating_add(id3_size);
-            if offset >= bytes.len() {
+            if offset >= buf.len() {
                 return None;
             }
         }
@@ -263,12 +273,12 @@ impl AudioPlayer {
         ];
 
         let mut cursor = offset;
-        while cursor + 4 <= bytes.len() {
+        while cursor + 4 <= buf.len() {
             let header = u32::from_be_bytes([
-                bytes[cursor],
-                bytes[cursor + 1],
-                bytes[cursor + 2],
-                bytes[cursor + 3],
+                buf[cursor],
+                buf[cursor + 1],
+                buf[cursor + 2],
+                buf[cursor + 3],
             ]);
 
             let sync_word = (header >> 21) & 0x7ff;
@@ -302,7 +312,8 @@ impl AudioPlayer {
                 continue;
             }
 
-            let stream_bits = ((bytes.len() - offset) as u128) * 8u128;
+            // Use file_len (not buf.len()) for accurate duration estimate
+            let stream_bits = ((file_len - offset) as u128) * 8u128;
             let bitrate_bps = (bitrate_kbps as u128) * 1000u128;
             let duration_ms = (stream_bits * 1000u128) / bitrate_bps;
             if duration_ms == 0 {

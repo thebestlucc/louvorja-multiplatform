@@ -1,5 +1,5 @@
 import type { SlideContent } from "../types/presentation";
-import type { Settings } from "../types/settings";
+import type { Setting } from "../types/settings";
 import {
   formatUtilityTimer,
   localeFromLanguage,
@@ -47,7 +47,7 @@ export function isProjectorScreenDefaultContentType(
 }
 
 export function parseProjectorScreenDefaults(
-  settings: Settings[] | undefined,
+  settings: Setting[] | undefined,
 ): ProjectorScreenDefaults {
   const contentTypeRaw = getSettingValue(settings, PROJECTOR_SCREEN_CONTENT_TYPE_KEY);
   const contentType = contentTypeRaw && isProjectorScreenDefaultContentType(contentTypeRaw)
@@ -176,7 +176,7 @@ export function buildProjectorDefaultSlide({
   }
 }
 
-function getSettingValue(settings: Settings[] | undefined, key: string): string | undefined {
+function getSettingValue(settings: Setting[] | undefined, key: string): string | undefined {
   return settings?.find((setting) => setting.key === key)?.value;
 }
 

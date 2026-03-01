@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Hymn, Album, HymnWriteInput } from "../types/hymn";
 import type { MonitorInfo } from "../types/settings";
 import type { Presentation, SlideContentFlat, SlideContextFlat, OverlayState } from "../types/presentation";
@@ -14,13 +15,11 @@ import type {
   CollectionSongSyncStatus,
   CollectionWithSongs,
 } from "../types/collection";
-import type { Settings } from "../types/settings";
+import type { Setting } from "../types/settings";
 import type { StreamingInfo } from "../types/streaming";
 import type { TimerMode, TimerStateData, TextFormat } from "../types/utilities";
 import type { VideoMetadata } from "../types/video";
-import type {
-  UpdateInfo,
-} from "../types/migration";
+import type { UpdateInfo } from "../types/updater";
 import type {
   LegacyFetchOptions,
   LegacyFetchProgress,
@@ -33,10 +32,6 @@ export async function tauriInvoke<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   return invoke<T>(command, args);
-}
-
-export async function greet(name: string): Promise<string> {
-  return tauriInvoke<string>("greet", { name });
 }
 
 // Music
@@ -395,16 +390,16 @@ export async function updateServiceItem(id: number, title: string, notes: string
 }
 
 // Settings
-export async function getSetting(key: string): Promise<Settings> {
-  return tauriInvoke<Settings>("get_setting", { key });
+export async function getSetting(key: string): Promise<Setting> {
+  return tauriInvoke<Setting>("get_setting", { key });
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
   return tauriInvoke<void>("set_setting", { key, value });
 }
 
-export async function getAllSettings(): Promise<Settings[]> {
-  return tauriInvoke<Settings[]>("get_all_settings");
+export async function getAllSettings(): Promise<Setting[]> {
+  return tauriInvoke<Setting[]>("get_all_settings");
 }
 
 export async function clearDatabase(): Promise<{ success: boolean }> {
@@ -541,8 +536,49 @@ export async function setStreamingBroadcast(enabled: boolean): Promise<void> {
 }
 
 // Video
+/**
+ * Copy a video file to the managed media directory.
+ *
+ * The Rust command returns immediately (to avoid blocking the IPC bridge on
+ * Windows for large files). This wrapper sets up event listeners before
+ * invoking so the Promise resolves when the background copy finishes.
+ *
+ * Events emitted by Rust: `"video-copy-complete"` and `"video-copy-error"`,
+ * each carrying `[presentationId, payload]`.
+ */
 export async function copyVideoToMedia(videoPath: string, presentationId: number): Promise<string> {
-  return tauriInvoke<string>("copy_video_to_media", { videoPath, presentationId });
+  return new Promise(async (resolve, reject) => {
+    let unlistenComplete: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+
+    function cleanup() {
+      unlistenComplete?.();
+      unlistenError?.();
+    }
+
+    // Register listeners before invoking — the background thread could theoretically
+    // emit before an after-invoke listen() call has time to register.
+    unlistenComplete = await listen<[number, string]>("video-copy-complete", (event) => {
+      const [pid, relPath] = event.payload;
+      if (pid === presentationId) {
+        cleanup();
+        resolve(relPath);
+      }
+    });
+
+    unlistenError = await listen<[number, string]>("video-copy-error", (event) => {
+      const [pid, err] = event.payload;
+      if (pid === presentationId) {
+        cleanup();
+        reject(new Error(err));
+      }
+    });
+
+    tauriInvoke<void>("copy_video_to_media", { videoPath, presentationId }).catch((e) => {
+      cleanup();
+      reject(e as Error);
+    });
+  });
 }
 
 export async function copyImageToMedia(imagePath: string): Promise<string> {
