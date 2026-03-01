@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import {
+  SHORTCUT_DEFINITIONS,
+  SHORTCUT_CATEGORY_ORDER,
+  comboToDisplayKeys,
+} from "../../lib/shortcut-definitions";
+import { useSetting } from "../../lib/queries";
 
 export const SHORTCUTS_PANEL_OPEN_EVENT = "louvorja.shortcuts.open";
 
@@ -8,94 +14,34 @@ export function openKeyboardShortcutsPanel() {
   window.dispatchEvent(new Event(SHORTCUTS_PANEL_OPEN_EVENT));
 }
 
-interface ShortcutEntry {
-  id: string;
-  category: "app" | "slides" | "display" | "utilities";
-  keys: string[];
-  labelKey: string;
+function ShortcutRow({ def }: { def: (typeof SHORTCUT_DEFINITIONS)[number] }) {
+  const { t } = useTranslation();
+  const { data: localSetting } = useSetting(`shortcut.${def.id}.local`);
+  const { data: globalSetting } = useSetting(`shortcut.${def.id}.global`);
+
+  const localCombo = localSetting?.value ?? def.defaultLocal;
+  const globalCombo = globalSetting?.value ?? def.defaultGlobal;
+
+  const displayCombo = localCombo ?? globalCombo;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+      <span className="text-sm text-foreground">{t(def.labelKey)}</span>
+      <div className="flex flex-wrap gap-1">
+        {displayCombo
+          ? comboToDisplayKeys(displayCombo).map((keyPart) => (
+              <kbd
+                key={`${def.id}-${keyPart}`}
+                className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-muted-foreground"
+              >
+                {keyPart}
+              </kbd>
+            ))
+          : <span className="text-xs text-muted-foreground">---</span>}
+      </div>
+    </div>
+  );
 }
-
-const SHORTCUT_CATEGORY_ORDER: ShortcutEntry["category"][] = [
-  "app",
-  "slides",
-  "display",
-  "utilities",
-];
-
-const SHORTCUTS: ShortcutEntry[] = [
-  {
-    id: "global-command-palette",
-    category: "app",
-    keys: ["Cmd/Ctrl", "K"],
-    labelKey: "shortcuts.items.openCommandPalette",
-  },
-  {
-    id: "global-shortcuts-help",
-    category: "app",
-    keys: ["Cmd/Ctrl", "/"],
-    labelKey: "shortcuts.items.openShortcutsHelp",
-  },
-  {
-    id: "navigation-next-slide",
-    category: "slides",
-    keys: ["Arrow Right / Space / PageDown"],
-    labelKey: "shortcuts.items.nextSlide",
-  },
-  {
-    id: "navigation-prev-slide",
-    category: "slides",
-    keys: ["Arrow Left / PageUp"],
-    labelKey: "shortcuts.items.previousSlide",
-  },
-  {
-    id: "navigation-clear-slide",
-    category: "slides",
-    keys: ["Escape"],
-    labelKey: "shortcuts.items.clearProjection",
-  },
-  {
-    id: "display-toggle-projector",
-    category: "display",
-    keys: ["F5"],
-    labelKey: "shortcuts.items.toggleProjector",
-  },
-  {
-    id: "display-toggle-return",
-    category: "display",
-    keys: ["Shift", "F5"],
-    labelKey: "shortcuts.items.toggleReturn",
-  },
-  {
-    id: "display-toggle-black",
-    category: "display",
-    keys: ["B"],
-    labelKey: "shortcuts.items.toggleBlack",
-  },
-  {
-    id: "display-toggle-logo",
-    category: "display",
-    keys: ["L"],
-    labelKey: "shortcuts.items.toggleLogo",
-  },
-  {
-    id: "utilities-timer-project",
-    category: "utilities",
-    keys: ["Cmd/Ctrl", "K", "Timer"],
-    labelKey: "shortcuts.items.projectTimer",
-  },
-  {
-    id: "utilities-clock-project",
-    category: "utilities",
-    keys: ["Cmd/Ctrl", "K", "Clock"],
-    labelKey: "shortcuts.items.projectClock",
-  },
-  {
-    id: "utilities-lottery-project",
-    category: "utilities",
-    keys: ["Cmd/Ctrl", "K", "Lottery"],
-    labelKey: "shortcuts.items.projectLottery",
-  },
-];
 
 export function KeyboardShortcutsPanel() {
   const { t } = useTranslation();
@@ -115,29 +61,26 @@ export function KeyboardShortcutsPanel() {
   }, [open]);
 
   const normalizedQuery = query.trim().toLowerCase();
+
   const filtered = useMemo(
     () =>
-      SHORTCUTS.filter((entry) => {
-        if (!normalizedQuery) {
-          return true;
-        }
-
-        const label = t(entry.labelKey).toLowerCase();
-        const category = t(`shortcuts.categories.${entry.category}`).toLowerCase();
-        const keys = entry.keys.join(" ").toLowerCase();
-        return label.includes(normalizedQuery)
-          || category.includes(normalizedQuery)
-          || keys.includes(normalizedQuery);
+      SHORTCUT_DEFINITIONS.filter((def) => {
+        if (!normalizedQuery) return true;
+        const label = t(def.labelKey).toLowerCase();
+        const category = t(`shortcuts.categories.${def.category}`).toLowerCase();
+        return label.includes(normalizedQuery) || category.includes(normalizedQuery);
       }),
     [normalizedQuery, t],
   );
 
-  const grouped = useMemo(() => {
-    return SHORTCUT_CATEGORY_ORDER.map((category) => ({
-      category,
-      entries: filtered.filter((entry) => entry.category === category),
-    })).filter((group) => group.entries.length > 0);
-  }, [filtered]);
+  const grouped = useMemo(
+    () =>
+      SHORTCUT_CATEGORY_ORDER.map((category) => ({
+        category,
+        entries: filtered.filter((def) => def.category === category),
+      })).filter((g) => g.entries.length > 0),
+    [filtered],
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -164,23 +107,8 @@ export function KeyboardShortcutsPanel() {
                   {t(`shortcuts.categories.${group.category}`)}
                 </h3>
                 <div className="space-y-2">
-                  {group.entries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2"
-                    >
-                      <span className="text-sm text-foreground">{t(entry.labelKey)}</span>
-                      <div className="flex flex-wrap gap-1">
-                        {entry.keys.map((keyPart) => (
-                          <kbd
-                            key={`${entry.id}-${keyPart}`}
-                            className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                          >
-                            {keyPart}
-                          </kbd>
-                        ))}
-                      </div>
-                    </div>
+                  {group.entries.map((def) => (
+                    <ShortcutRow key={def.id} def={def} />
                   ))}
                 </div>
               </section>

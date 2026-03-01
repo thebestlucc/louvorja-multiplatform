@@ -592,3 +592,10 @@ export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
 export async function resolveMediaPath(path: string): Promise<string> {
   return tauriInvoke<string>("resolve_media_path", { path });
 }
+
+export async function updateGlobalShortcut(
+  action: string,
+  shortcutStr: string,
+): Promise<void> {
+  return tauriInvoke<void>("update_global_shortcut", { action, shortcutStr });
+}

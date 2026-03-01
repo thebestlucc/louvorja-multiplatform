@@ -18,6 +18,7 @@ import {
   restoreHymnFromApi,
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
+  updateGlobalShortcut,
 } from "./tauri";
 import type { SlideContentFlat } from "../types/presentation";
 import type { SyncPoint } from "../types/audio";
@@ -923,6 +924,24 @@ export function useSaveMonitorConfig() {
       setMonitorConfig(vars.monitorId, vars.role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
+    },
+  });
+}
+
+export function useSetShortcut() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { id: string; layer: "local" | "global"; value: string }) => {
+      const key = `shortcut.${vars.id}.${vars.layer}`;
+      await setSetting(key, vars.value);
+      if (vars.layer === "global") {
+        await updateGlobalShortcut(vars.id, vars.value);
+      }
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["setting", `shortcut.${vars.id}.${vars.layer}`],
+      });
     },
   });
 }
