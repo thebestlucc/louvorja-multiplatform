@@ -26,6 +26,8 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
             // AND above fullscreen apps — required for the FullScreenAuxiliary
             // behavior to actually float the window on top.
             ns_win.setLevel(NSStatusWindowLevel);
+            // Hide automatically when the app loses focus (no IPC round-trip needed)
+            ns_win.setHidesOnDeactivate(true);
         }
     }
 }
