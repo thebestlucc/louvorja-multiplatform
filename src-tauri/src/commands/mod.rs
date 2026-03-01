@@ -9,6 +9,7 @@ pub mod migration;
 pub mod music;
 pub mod settings;
 pub mod slides;
+pub mod spotlight;
 pub mod streaming;
 pub mod timer;
 pub mod updater;

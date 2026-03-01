@@ -101,6 +101,9 @@
     "bible": "Versículos Bíblicos",
     "searching": "Pesquisando..."
   },
+  "spotlight": {
+    "projectToScreen": "Projetar na tela"
+  },
   "shortcuts": {
     "title": "Atalhos de Teclado",
     "searchPlaceholder": "Pesquisar atalhos...",
