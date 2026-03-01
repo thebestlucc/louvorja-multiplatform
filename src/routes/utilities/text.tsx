@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useFormatText } from "../../lib/queries";
+import { copyToClipboard } from "../../lib/clipboard";
 import type { TextFormat } from "../../types/utilities";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -36,7 +37,7 @@ function UtilitiesTextPage() {
   const handleCopyOutput = async () => {
     if (!outputText) return;
     try {
-      await navigator.clipboard.writeText(outputText);
+      await copyToClipboard(outputText);
       toast.success(t("utilities.text.copied"));
     } catch (error) {
       toast.error(String(error));
