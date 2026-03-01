@@ -1,21 +1,9 @@
 use crate::error::AppError;
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Opens or focuses the spotlight window.
-/// Safe to call from the IPC thread — window creation is fast (no sleep/fullscreen retry).
-pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
-    // If window already exists, show and focus it
-    if let Some(win) = app.get_webview_window("spotlight") {
-        let _ = win.show();
-        let _ = win.set_focus();
-        return Ok(());
-    }
-
-    // Get primary monitor dimensions for centering
-    let monitor = app
-        .primary_monitor()
-        .map_err(|e| AppError::Internal(format!("Cannot get primary monitor: {e}")))?;
-
+/// Compute the centered position for the spotlight window on the primary monitor.
+fn spotlight_position(app: &AppHandle) -> (f64, f64) {
+    let monitor = app.primary_monitor().ok().flatten();
     let (screen_w, screen_x, screen_y) = if let Some(m) = monitor {
         let pos = m.position();
         let size = m.size();
@@ -23,11 +11,30 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     } else {
         (1440.0, 0.0, 0.0)
     };
+    let window_w = 640.0_f64;
+    let x = screen_x + (screen_w - window_w) / 2.0;
+    let y = screen_y + 120.0; // ~18% from top
+    (x, y)
+}
+
+/// Opens or shows the spotlight window, always recentering it on the primary monitor.
+/// Safe to call from the IPC thread — no blocking operations.
+pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
+    let (x, y) = spotlight_position(app);
+
+    // If window already exists, recenter, show, and focus it
+    if let Some(win) = app.get_webview_window("spotlight") {
+        let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+            x: x as i32,
+            y: y as i32,
+        }));
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
 
     let window_w = 640.0_f64;
     let window_h = 440.0_f64;
-    let x = screen_x + (screen_w - window_w) / 2.0;
-    let y = screen_y + 120.0; // ~18% from top
 
     tauri::WebviewWindowBuilder::new(
         app,
