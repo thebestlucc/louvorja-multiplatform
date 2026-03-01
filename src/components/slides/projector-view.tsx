@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { getCurrentSlide, getOverlayState } from "../../lib/tauri";
@@ -20,6 +20,13 @@ import { cn } from "../../lib/utils";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { useMediaSource } from "../../hooks/use-media-source";
 
+function getSlideBackgroundImage(slide: SlideContent): string {
+  if (slide.type === "lyrics" || slide.type === "cover" || slide.type === "text") {
+    return slide.backgroundImage ?? "";
+  }
+  return "";
+}
+
 export function ProjectorView() {
   const { t, i18n } = useTranslation();
   const [slide, setSlide] = useState<SlideContent | null>(null);
@@ -27,7 +34,10 @@ export function ProjectorView() {
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
   const [now, setNow] = useState(() => new Date());
-  const [slideKey, setSlideKey] = useState(0); // Key to trigger fade animation on slide change
+  // slideKey only changes when the slide's visual identity (type + background) changes.
+  // This prevents remounting the background image on every stanza change (which causes blinking).
+  const [slideKey, setSlideKey] = useState(0);
+  const prevSlideRef = useRef<SlideContent | null>(null);
   const { data: allSettings } = useAllSettings();
   const screenDefaults = useMemo(() => parseProjectorScreenDefaults(allSettings), [allSettings]);
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
@@ -36,13 +46,22 @@ export function ProjectorView() {
   // Listen to slide changes
   useEffect(() => {
     const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
-      setSlide(flatToSlideContent(event.payload));
-      setSlideKey((prev) => prev + 1); // Trigger fade animation
+      const newSlide = flatToSlideContent(event.payload);
+      const prev = prevSlideRef.current;
+      // Only remount the renderer when the slide identity changes (type or background image).
+      // Same-background stanza changes (e.g. next hymn lyric) only animate the text layer.
+      if (!prev || prev.type !== newSlide.type || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(newSlide)) {
+        setSlideKey((k) => k + 1);
+      }
+      prevSlideRef.current = newSlide;
+      setSlide(newSlide);
     });
 
     void getCurrentSlide()
       .then((data) => {
-        setSlide(data ? flatToSlideContent(data) : null);
+        const s = data ? flatToSlideContent(data) : null;
+        prevSlideRef.current = s;
+        setSlide(s);
         setSlideKey((prev) => prev + 1);
       })
       .catch(() => {});
@@ -74,9 +93,10 @@ export function ProjectorView() {
   // Listen to slide cleared — reset to logo
   useEffect(() => {
     const unlisten = listen("slide-cleared", () => {
+      prevSlideRef.current = null;
       setSlide(null);
       setUtilityProjection(null);
-      setSlideKey((prev) => prev + 1); // Trigger fade animation
+      setSlideKey((prev) => prev + 1);
     });
     return () => {
       unlisten.then((fn) => fn());

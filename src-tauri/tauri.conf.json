@@ -12,7 +12,8 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self' tauri: asset:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data: blob:; connect-src ipc: http://ipc.localhost; media-src asset: blob:",
+      "freezePrototype": true,
       "assetProtocol": {
         "enable": true,
         "scope": [

@@ -112,13 +112,14 @@ function renderSlide(
           </>
         ) : null}
         {slide.label && (
-          <p className="relative text-sm uppercase tracking-widest text-white/50" style={labelStyle}>
+          <p key={slide.label} className="relative text-sm uppercase tracking-widest text-white/50 animate-in fade-in duration-200" style={labelStyle}>
             {slide.label}
           </p>
         )}
         <p
+          key={slide.text}
           className={cn(
-            "relative whitespace-pre-line font-semibold leading-snug",
+            "relative whitespace-pre-line font-semibold leading-snug animate-in fade-in duration-300",
             showLyricTextPanel && [
               "max-w-[90%] rounded-md bg-black/68 px-8 py-6 shadow-2xl",
               "md:max-w-[82%] md:px-10 md:py-7",
