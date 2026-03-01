@@ -1,5 +1,5 @@
 ---
-name: ring:using-ring
+name: using-ring
 description: |
   Mandatory orchestrator protocol - establishes ORCHESTRATOR principle (dispatch agents,
   don't operate directly) and skill discovery workflow for every conversation.
