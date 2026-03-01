@@ -183,12 +183,14 @@ pub fn run() {
                                 shortcut,
                                 move |_app, _shortcut, event| {
                                     if event.state == ShortcutState::Pressed {
+                                        // Delegate to open_spotlight_window which handles
+                                        // both creation and recentered show/focus.
+                                        // If visible → hide (toggle off).
                                         if let Some(win) = app_clone.get_webview_window("spotlight") {
                                             if win.is_visible().unwrap_or(false) {
                                                 let _ = win.hide();
                                             } else {
-                                                let _ = win.show();
-                                                let _ = win.set_focus();
+                                                let _ = crate::commands::spotlight::open_spotlight_window(&app_clone);
                                             }
                                         } else {
                                             let _ = crate::commands::spotlight::open_spotlight_window(&app_clone);

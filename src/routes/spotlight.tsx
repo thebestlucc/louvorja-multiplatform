@@ -86,17 +86,14 @@ function SpotlightWindow() {
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Hide on blur — when the spotlight window loses OS focus
+  // Reset and refocus when the spotlight window regains OS focus (re-shown by Alt+K)
   useEffect(() => {
     const win = getCurrentWindow();
     let unlisten: (() => void) | undefined;
 
     win
       .onFocusChanged(({ payload: focused }) => {
-        if (!focused) {
-          void spotlightHide();
-        } else {
-          // Reset state when window regains focus (re-shown by shortcut)
+        if (focused) {
           setQuery("");
           setHymns([]);
           setBibleResults([]);
