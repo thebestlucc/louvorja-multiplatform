@@ -121,6 +121,10 @@
       "toggleReturn": "Toggle return window",
       "toggleBlack": "Toggle black screen",
       "toggleLogo": "Toggle logo screen",
+      "globalNextSlide": "Next slide (global)",
+      "globalPrevSlide": "Previous slide (global)",
+      "globalBlack": "Toggle black screen (global)",
+      "globalLogo": "Toggle logo screen (global)",
       "projectTimer": "Project timer from utilities",
       "projectClock": "Project clock from utilities",
       "projectLottery": "Project lottery result"
