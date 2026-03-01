@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Copy, ExternalLink, Play, Radio, Square, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { openUrl as tauriOpenUrl } from "@tauri-apps/plugin-opener";
+import { copyToClipboard } from "../../lib/clipboard";
 import { useStreamingStatus, useStartStreaming, useStopStreaming, useSetStreamingBroadcast } from "../../lib/queries";
 import { QrCodeDisplay } from "./qr-code-display";
 import { cn } from "../../lib/utils";
@@ -45,10 +46,7 @@ export function StreamingControls() {
 
   const copyUrl = async (url: string) => {
     try {
-      if (!navigator.clipboard) {
-        throw new Error("Clipboard API unavailable");
-      }
-      await navigator.clipboard.writeText(url);
+      await copyToClipboard(url);
       toast.success(t("streaming.urlCopied"));
     } catch {
       toast.error(t("streaming.copyFailed"));
