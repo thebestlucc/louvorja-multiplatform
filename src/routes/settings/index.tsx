@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2 } from "lucide-react";
@@ -80,6 +81,7 @@ function SettingsIndex() {
 
   const [port, setPort] = useState("7070");
   const [autoStart, setAutoStart] = useState(false);
+  const [launchAtStartup, setLaunchAtStartup] = useState(false);
   const [ffprobeEnabled, setFfprobeEnabled] = useState(false);
   const [ffprobePath, setFfprobePath] = useState("");
   const [autoCheckCollectionSource, setAutoCheckCollectionSource] = useState(true);
@@ -234,6 +236,24 @@ function SettingsIndex() {
     setProjectorMonitorId(existingProjectorValid ?? fallbackProjector);
     setReturnMonitorId(existingReturnValid ?? fallbackReturn);
   }, [monitorConfigs, monitorOptions, monitors]);
+
+  useEffect(() => {
+    autostartIsEnabled().then(setLaunchAtStartup).catch(() => {});
+  }, []);
+
+  const handleLaunchAtStartupToggle = async () => {
+    try {
+      if (launchAtStartup) {
+        await autostartDisable();
+        setLaunchAtStartup(false);
+      } else {
+        await autostartEnable();
+        setLaunchAtStartup(true);
+      }
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
 
   // No longer need local event listener for legacy fetch - it's handled globally in __root.tsx
 
@@ -570,6 +590,20 @@ function SettingsIndex() {
                 <SelectItem value="es">{t("settings.languageEs")}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">{t("settings.launchAtStartup")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.launchAtStartupDesc")}</p>
+            </div>
+            <Button
+              variant={launchAtStartup ? "default" : "outline"}
+              size="sm"
+              onClick={() => void handleLaunchAtStartupToggle()}
+            >
+              {launchAtStartup ? t("settings.autoStartOn") : t("settings.autoStartOff")}
+            </Button>
           </div>
         </div>
       </section>
