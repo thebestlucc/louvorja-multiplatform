@@ -80,4 +80,35 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [enabled, nextSlide, prevSlide, toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen, clearPresentation]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let unlisten: (() => void) | undefined;
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<string>("global-shortcut", (event) => {
+        switch (event.payload) {
+          case "next-slide":
+            nextSlide();
+            break;
+          case "prev-slide":
+            prevSlide();
+            break;
+          case "toggle-black":
+            toggleBlackScreen();
+            break;
+          case "toggle-logo":
+            toggleLogoScreen();
+            break;
+        }
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen]);
 }
