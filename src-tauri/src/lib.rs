@@ -19,21 +19,17 @@ use tauri::{Emitter, Manager};
 /// Create the main window dynamically
 fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::utils::config::BackgroundThrottlingPolicy;
-    
-    tauri::WebviewWindowBuilder::new(
-        app,
-        "main",
-        tauri::WebviewUrl::App("/".into()),
-    )
-    .title("LouvorJA")
-    .inner_size(1200.0, 800.0)
-    .min_inner_size(900.0, 600.0)
-    .background_throttling(BackgroundThrottlingPolicy::Disabled)
-    .resizable(true)
-    .fullscreen(false)
-    .build()
-    .map_err(|e| format!("Failed to create main window: {e}"))?;
-    
+
+    tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
+        .title("LouvorJA")
+        .inner_size(1200.0, 800.0)
+        .min_inner_size(900.0, 600.0)
+        .background_throttling(BackgroundThrottlingPolicy::Disabled)
+        .resizable(true)
+        .fullscreen(false)
+        .build()
+        .map_err(|e| format!("Failed to create main window: {e}"))?;
+
     Ok(())
 }
 
@@ -41,6 +37,11 @@ fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
     // Normal app initialization
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all())
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
