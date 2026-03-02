@@ -99,10 +99,14 @@
     },
     "hymns": "Himnos",
     "bible": "Versículos Bíblicos",
+    "collections": "Colecciones",
     "searching": "Buscando..."
   },
   "spotlight": {
-    "projectToScreen": "Proyectar en pantalla"
+    "projectToScreen": "Proyectar en pantalla",
+    "hintNavigate": "↑↓ Navegar",
+    "hintOpen": "↩ Abrir",
+    "hintClose": "⎋ Cerrar"
   },
   "shortcuts": {
     "title": "Atajos de Teclado",
