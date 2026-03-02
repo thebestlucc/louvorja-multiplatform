@@ -13,7 +13,7 @@ const SPOTLIGHT_H: f64 = 480.0;
 #[cfg(target_os = "macos")]
 fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
     use objc2::runtime::AnyObject;
-    use objc2_app_kit::{NSStatusWindowLevel, NSWindowCollectionBehavior};
+    use objc2_app_kit::{NSStatusWindowLevel, NSWindowCollectionBehavior, NSWindowStyleMask};
 
     if let Ok(ns_win_ptr) = win.ns_window() {
         // SAFETY: Tauri gives us the raw NSWindow pointer; we only call methods
@@ -31,6 +31,12 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
             ns_win.setLevel(NSStatusWindowLevel);
             // Hide automatically when the app loses focus (no IPC round-trip needed)
             ns_win.setHidesOnDeactivate(true);
+            // Non-activating: clicking the panel doesn't steal app-activation from
+            // whatever app the user was in (Word, browser, etc.)
+            let new_mask = NSWindowStyleMask::from_bits_truncate(
+                ns_win.styleMask().0 | NSWindowStyleMask::NonactivatingPanel.0,
+            );
+            ns_win.setStyleMask(new_mask);
         }
     }
 }
