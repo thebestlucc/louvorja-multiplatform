@@ -27,6 +27,7 @@ import {
   Search,
 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   spotlightSelect,
   spotlightHide,
@@ -147,6 +148,28 @@ function SpotlightWindow() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Close when the spotlight window loses focus (e.g. user clicks main app).
+  // Debounced 150ms so a drag that briefly blurs the window doesn't close it.
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let unlisten: (() => void) | undefined;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    win.onFocusChanged(({ payload: focused }) => {
+      clearTimeout(hideTimer);
+      if (!focused) {
+        hideTimer = setTimeout(() => void spotlightHide(), 150);
+      }
+    }).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); clearTimeout(hideTimer); };
+  }, []);
+
+  function handleSearchBarMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    if (!target.closest("input, button")) {
+      void getCurrentWindow().startDragging();
+    }
+  }
+
   const hasQuery = query.trim().length > 0;
 
   const navItems = [
@@ -199,7 +222,7 @@ function SpotlightWindow() {
 
           {/* ── Search bar ── */}
           <div
-            data-tauri-drag-region
+            onMouseDown={handleSearchBarMouseDown}
             className="flex cursor-grab items-center gap-2.5 px-4 py-3.5 active:cursor-grabbing"
           >
             {searching ? (
