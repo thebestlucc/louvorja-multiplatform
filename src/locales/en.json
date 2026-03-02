@@ -99,10 +99,14 @@
     },
     "hymns": "Hymns",
     "bible": "Bible Verses",
+    "collections": "Collections",
     "searching": "Searching..."
   },
   "spotlight": {
-    "projectToScreen": "Project to screen"
+    "projectToScreen": "Project to screen",
+    "hintNavigate": "↑↓ Navigate",
+    "hintOpen": "↩ Open",
+    "hintClose": "⎋ Close"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

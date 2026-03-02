@@ -195,7 +195,7 @@ function SpotlightWindow() {
     // appears centered. Transparent space below = shows desktop through.
     <div className="flex w-screen justify-center bg-transparent p-0">
       <div className="w-full overflow-hidden rounded-2xl border border-black/8 bg-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-        <Command shouldFilter={false} loop>
+        <Command shouldFilter={false}>
 
           {/* ── Search bar ── */}
           <div className="flex items-center gap-2.5 px-4 py-3.5">
@@ -233,9 +233,9 @@ function SpotlightWindow() {
                     key={id}
                     value={id}
                     onSelect={() => void spotlightSelect("navigate", to)}
-                    className="mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
-                    <Icon className="h-4 w-4 shrink-0 text-gray-400 aria-selected:text-blue-500" />
+                    <Icon className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
                     {label}
                   </Command.Item>
                 ))}
@@ -253,9 +253,9 @@ function SpotlightWindow() {
                     key={id}
                     value={id}
                     onSelect={() => void spotlightSelect("action", action)}
-                    className="mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
-                    <Icon className="h-4 w-4 shrink-0 text-gray-400" />
+                    <Icon className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
                     {label}
                   </Command.Item>
                 ))}
@@ -275,7 +275,7 @@ function SpotlightWindow() {
                     onSelect={() => void spotlightSelect("navigate", `/hymnal/${hymn.id}`)}
                     className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
-                    <Music className="h-4 w-4 shrink-0 text-gray-400" />
+                    <Music className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
                     <span className="flex-1 truncate">{hymn.title}</span>
                     {hymn.number && (
                       <span className="text-xs text-gray-400">#{hymn.number}</span>
@@ -313,7 +313,7 @@ function SpotlightWindow() {
                     }
                     className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
-                    <BookOpen className="h-4 w-4 shrink-0 text-gray-400" />
+                    <BookOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="text-[11px] text-gray-400">
                         {result.bookName} {result.verse.chapter}:{result.verse.verse}
@@ -338,7 +338,7 @@ function SpotlightWindow() {
             {/* ── Collections ── */}
             {collectionResults.length > 0 && (
               <Command.Group
-                heading={t("commandPalette.navigation")}
+                heading={t("commandPalette.collections")}
                 className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
               >
                 {collectionResults.map((col) => (
@@ -353,9 +353,9 @@ function SpotlightWindow() {
                           : `/collections/${col.collection_id}`,
                       )
                     }
-                    className="mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
-                    <FolderOpen className="h-4 w-4 shrink-0 text-gray-400" />
+                    <FolderOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="text-[11px] text-gray-400">{col.collection_name}</span>
                       <span className="truncate">{col.title}</span>
@@ -371,9 +371,9 @@ function SpotlightWindow() {
 
           {/* ── Footer ── */}
           <div className="flex items-center gap-4 border-t border-black/8 px-4 py-2.5 text-[11px] text-gray-400">
-            <span>↑↓ Navigate</span>
-            <span>↩ Open</span>
-            <span>⎋ Close</span>
+            <span>{t("spotlight.hintNavigate")}</span>
+            <span>{t("spotlight.hintOpen")}</span>
+            <span>{t("spotlight.hintClose")}</span>
           </div>
         </Command>
       </div>
