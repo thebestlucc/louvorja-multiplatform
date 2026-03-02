@@ -103,6 +103,7 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
         set_macos_collection_behavior(&win);
         let _ = win.show();
         let _ = win.set_focus();
+        let _ = win.emit("spotlight-shown", ());
         return Ok(());
     }
 
@@ -133,6 +134,9 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     #[cfg(target_os = "macos")]
     if let Some(win) = app.get_webview_window("spotlight") {
         set_macos_collection_behavior(&win);
+        let _ = win.show();
+        let _ = win.set_focus();
+        let _ = win.emit("spotlight-shown", ());
     }
 
     Ok(())
