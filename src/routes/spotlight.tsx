@@ -85,6 +85,7 @@ function SpotlightWindow() {
   >([]);
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Make the webview fully transparent so only the panel renders visually.
   // Without this, the html/body default background fills the entire window
@@ -100,6 +101,7 @@ function SpotlightWindow() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen("spotlight-shown", () => {
+      clearTimeout(hideTimerRef.current);   // cancel stale hide timer on rapid reopen
       setQuery("");
       setHymns([]);
       setBibleResults([]);
@@ -150,17 +152,26 @@ function SpotlightWindow() {
 
   // Close when the spotlight window loses focus (e.g. user clicks main app).
   // Debounced 150ms so a drag that briefly blurs the window doesn't close it.
+  // The `cancelled` flag guards against a listener leak if the component unmounts
+  // before the onFocusChanged Promise resolves.
   useEffect(() => {
     const win = getCurrentWindow();
     let unlisten: (() => void) | undefined;
-    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
     win.onFocusChanged(({ payload: focused }) => {
-      clearTimeout(hideTimer);
+      clearTimeout(hideTimerRef.current);
       if (!focused) {
-        hideTimer = setTimeout(() => void spotlightHide(), 150);
+        hideTimerRef.current = setTimeout(() => void spotlightHide(), 150);
       }
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); clearTimeout(hideTimer); };
+    }).then((fn) => {
+      if (cancelled) fn(); // already unmounted — unlisten immediately
+      else unlisten = fn;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      clearTimeout(hideTimerRef.current);
+    };
   }, []);
 
   function handleSearchBarMouseDown(e: React.MouseEvent<HTMLDivElement>) {
