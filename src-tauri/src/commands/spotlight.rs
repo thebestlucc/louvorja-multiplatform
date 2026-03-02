@@ -4,16 +4,19 @@ use tauri::{AppHandle, Emitter, Manager};
 const SPOTLIGHT_W: f64 = 680.0;
 const SPOTLIGHT_H: f64 = 480.0;
 
-/// On macOS, set NSWindowCollectionBehavior so the spotlight window appears above
-/// fullscreen apps on whichever Space is currently active.
+/// On macOS, configure the spotlight window so it:
+/// - appears on every Space (CanJoinAllSpaces)
+/// - floats above fullscreen apps (FullScreenAuxiliary + NSPopUpMenuWindowLevel)
+/// - hides automatically when the app loses focus (setHidesOnDeactivate)
+/// - survives Cmd+W without being deallocated (setReleasedWhenClosed)
 ///
-/// Flags used:
-///   CanJoinAllSpaces   (1 << 0) — visible on every Space
-///   FullScreenAuxiliary (1 << 8) — slides over fullscreen apps instead of hiding
+/// IMPORTANT: setLevel must be the LAST call. Changing the style mask or
+/// other properties before setLevel can cause macOS to internally reset the
+/// window level to its default, placing the spotlight behind fullscreen apps.
 #[cfg(target_os = "macos")]
 fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
     use objc2::runtime::AnyObject;
-    use objc2_app_kit::{NSStatusWindowLevel, NSWindowCollectionBehavior, NSWindowStyleMask};
+    use objc2_app_kit::{NSPopUpMenuWindowLevel, NSWindowCollectionBehavior};
 
     if let Ok(ns_win_ptr) = win.ns_window() {
         // SAFETY: Tauri gives us the raw NSWindow pointer; we only call methods
@@ -21,25 +24,17 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
         unsafe {
             let ns_win = &*(ns_win_ptr as *const AnyObject as *const objc2_app_kit::NSWindow);
             // CanJoinAllSpaces: visible on every Space
-            // FullScreenAuxiliary: slides over fullscreen apps instead of hiding
+            // FullScreenAuxiliary: allowed to enter a fullscreen Space
             let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
                 | NSWindowCollectionBehavior::FullScreenAuxiliary;
             ns_win.setCollectionBehavior(behavior);
-            // NSStatusWindowLevel (25) keeps the window above normal app windows
-            // AND above fullscreen apps — required for the FullScreenAuxiliary
-            // behavior to actually float the window on top.
-            ns_win.setLevel(NSStatusWindowLevel);
             // Hide automatically when the app loses focus (no IPC round-trip needed)
             ns_win.setHidesOnDeactivate(true);
-            // Non-activating: clicking the panel doesn't steal app-activation from
-            // whatever app the user was in (Word, browser, etc.)
-            let new_mask = NSWindowStyleMask::from_bits_truncate(
-                ns_win.styleMask().0 | NSWindowStyleMask::NonactivatingPanel.0,
-            );
-            ns_win.setStyleMask(new_mask);
-            // Prevent NSWindow deallocation on close — keep the window alive for
-            // hide/show cycling without full recreation cost.
+            // Prevent NSWindow deallocation on close — keep alive for hide/show cycling
             ns_win.setReleasedWhenClosed(false);
+            // NSPopUpMenuWindowLevel (101) floats above fullscreen app content.
+            // Must be set LAST — any setStyleMask call after this resets the level.
+            ns_win.setLevel(NSPopUpMenuWindowLevel);
         }
     }
 }
