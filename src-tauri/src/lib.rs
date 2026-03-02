@@ -154,7 +154,7 @@ pub fn run() {
                     ("slides-prev", "Alt+Left"),
                     ("display-black", "Alt+B"),
                     ("display-logo", "Alt+L"),
-                    ("app-command-palette", "Alt+K"),
+                    ("app-command-palette", "CmdOrCtrl+Shift+L"),
                     ("app-shortcuts-help", "Alt+H"),
                 ];
 
