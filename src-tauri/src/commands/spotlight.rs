@@ -129,10 +129,10 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     .build()
     .map_err(|e| AppError::Internal(format!("Failed to create spotlight window: {e}")))?;
 
-    // Apply macOS collection behavior after creation so the window floats
-    // above fullscreen apps on the currently active Space.
-    #[cfg(target_os = "macos")]
+    // Show/focus/emit on all platforms; macOS collection behavior is applied
+    // only on macOS so the window floats above fullscreen apps on the active Space.
     if let Some(win) = app.get_webview_window("spotlight") {
+        #[cfg(target_os = "macos")]
         set_macos_collection_behavior(&win);
         let _ = win.show();
         let _ = win.set_focus();
