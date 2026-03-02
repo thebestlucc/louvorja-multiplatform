@@ -37,6 +37,9 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
                 ns_win.styleMask().0 | NSWindowStyleMask::NonactivatingPanel.0,
             );
             ns_win.setStyleMask(new_mask);
+            // Prevent NSWindow deallocation on close — keep the window alive for
+            // hide/show cycling without full recreation cost.
+            ns_win.setReleasedWhenClosed(false);
         }
     }
 }
