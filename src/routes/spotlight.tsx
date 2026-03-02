@@ -193,12 +193,15 @@ function SpotlightWindow() {
     // No h-screen — the panel sizes to its content.
     // The Tauri window is already centered on screen (Rust), so the panel
     // appears centered. Transparent space below = shows desktop through.
-    <div className="flex w-screen justify-center bg-transparent p-0">
+    <div className="flex w-screen justify-center bg-transparent p-3">
       <div className="w-full overflow-hidden rounded-2xl border border-black/8 bg-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
         <Command shouldFilter={false}>
 
           {/* ── Search bar ── */}
-          <div className="flex items-center gap-2.5 px-4 py-3.5">
+          <div
+            data-tauri-drag-region
+            className="flex cursor-grab items-center gap-2.5 px-4 py-3.5 active:cursor-grabbing"
+          >
             {searching ? (
               <Loader2 className="h-5 w-5 shrink-0 animate-spin text-gray-400" />
             ) : (
@@ -210,7 +213,7 @@ function SpotlightWindow() {
               value={query}
               onValueChange={setQuery}
               placeholder={t("commandPalette.placeholder")}
-              className="flex-1 bg-transparent text-[17px] text-gray-900 outline-none placeholder:text-gray-400"
+              className="flex-1 cursor-text bg-transparent text-[17px] text-gray-900 outline-none placeholder:text-gray-400"
             />
           </div>
 
