@@ -193,7 +193,7 @@ function SpotlightWindow() {
     // No h-screen — the panel sizes to its content.
     // The Tauri window is already centered on screen (Rust), so the panel
     // appears centered. Transparent space below = shows desktop through.
-    <div className="flex w-screen justify-center bg-transparent p-3">
+    <div className="flex w-screen justify-center bg-transparent p-0">
       <div className="w-full overflow-hidden rounded-2xl border border-black/8 bg-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
         <Command shouldFilter={false}>
 
