@@ -355,6 +355,15 @@ pub fn run() {
             commands::spotlight::spotlight_hide,
         ])
         .on_window_event(|window, event| {
+            // Hide spotlight when it loses focus (user clicks main window or another app).
+            // Also revert activation policy so the Dock icon is restored.
+            if window.label() == "spotlight" {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    let _ = window.hide();
+                    #[cfg(target_os = "macos")]
+                    let _ = window.app_handle().set_activation_policy(tauri::ActivationPolicy::Regular);
+                }
+            }
             if let tauri::WindowEvent::Destroyed = event {
                 let label = window.label();
                 let app = window.app_handle();

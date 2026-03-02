@@ -39,31 +39,35 @@ fn set_macos_collection_behavior(win: &tauri::WebviewWindow) {
     }
 }
 
-/// Compute the centered position for the spotlight window.
+/// Compute the centered position for the spotlight window (in logical pixels).
 /// Targets the monitor whose bounds contain the current cursor position.
 /// Falls back to the primary monitor, then to a hardcoded default.
+///
+/// cursor_position() and monitor position/size are all in physical pixels.
+/// We compare in physical space, then convert the result to logical for use
+/// with Position::Logical and WebviewWindowBuilder::position().
 fn spotlight_position(app: &AppHandle) -> (f64, f64) {
-    // Try to find which monitor the cursor is on
+    // Try to find which monitor the cursor is on — compare in physical space.
     let cursor_monitor: Option<tauri::Monitor> = (|| {
-        let cursor = app.cursor_position().ok()?;
+        let cursor = app.cursor_position().ok()?; // physical pixels
         let monitors = app.available_monitors().ok()?;
         monitors.into_iter().find(|m| {
-            let pos = m.position();
-            let size = m.size();
-            let scale = m.scale_factor();
-            let lx = cursor.x;
-            let ly = cursor.y;
-            let mx = pos.x as f64 / scale;
-            let my = pos.y as f64 / scale;
-            let mw = size.width as f64 / scale;
-            let mh = size.height as f64 / scale;
-            lx >= mx && lx < mx + mw && ly >= my && ly < my + mh
+            let pos = m.position(); // physical pixels
+            let size = m.size(); // physical pixels
+            let px = cursor.x;
+            let py = cursor.y;
+            let mx = pos.x as f64;
+            let my = pos.y as f64;
+            let mw = size.width as f64;
+            let mh = size.height as f64;
+            px >= mx && px < mx + mw && py >= my && py < my + mh
         })
     })();
 
     let monitor = cursor_monitor
         .or_else(|| app.primary_monitor().ok().flatten());
 
+    // Convert monitor bounds to logical pixels for positioning.
     let (screen_w, screen_h, screen_x, screen_y) = if let Some(m) = monitor {
         let pos = m.position();
         let size = m.size();
@@ -78,22 +82,28 @@ fn spotlight_position(app: &AppHandle) -> (f64, f64) {
         (1440.0, 900.0, 0.0, 0.0)
     };
 
+    // Center of the monitor in logical pixels.
     let x = screen_x + (screen_w - SPOTLIGHT_W) / 2.0;
     let y = screen_y + (screen_h - SPOTLIGHT_H) / 2.0;
     (x, y)
 }
 
-/// Opens or shows the spotlight window, always recentering it on the primary monitor.
-/// Safe to call from the IPC thread — no blocking operations.
+/// Opens or shows the spotlight window, always recentering it on the monitor
+/// under the cursor. Safe to call from the IPC thread — no blocking operations.
+///
+/// On macOS, toggles ActivationPolicy to Accessory while the spotlight is
+/// visible so it can float above fullscreen spaces. Reverts to Regular on hide.
 pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     let (x, y) = spotlight_position(app);
 
-    // If window already exists, recenter, show, and focus it
+    // Switch to Accessory so the spotlight floats above fullscreen apps.
+    // The Dock icon disappears momentarily but returns when we revert on hide.
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    // If window already exists, recenter and show it.
     if let Some(win) = app.get_webview_window("spotlight") {
-        let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-            x: x as i32,
-            y: y as i32,
-        }));
+        let _ = win.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
         #[cfg(target_os = "macos")]
         set_macos_collection_behavior(&win);
         let _ = win.show();
@@ -102,6 +112,7 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
         return Ok(());
     }
 
+    // Position and inner_size both accept logical pixels.
     tauri::WebviewWindowBuilder::new(
         app,
         "spotlight",
@@ -137,16 +148,24 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Hides the spotlight window and reverts to Regular activation policy
+/// so the main app's Dock icon is restored.
+fn hide_spotlight(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("spotlight") {
+        let _ = win.hide();
+    }
+    // Restore Dock icon now that the spotlight is gone.
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+}
+
 /// Called from the spotlight window when the user selects a result.
 /// - kind = "navigate": focuses main window, emits spotlight-navigated event with route
 /// - kind = "action": emits spotlight-action to main window for execution
 /// - kind = "hide": just hides the spotlight window
 #[tauri::command]
 pub fn spotlight_select(kind: String, payload: String, app: AppHandle) -> Result<(), AppError> {
-    // Hide spotlight window
-    if let Some(win) = app.get_webview_window("spotlight") {
-        let _ = win.hide();
-    }
+    hide_spotlight(&app);
 
     match kind.as_str() {
         "navigate" => {
@@ -173,8 +192,6 @@ pub fn spotlight_select(kind: String, payload: String, app: AppHandle) -> Result
 /// Hides the spotlight window. Called when the spotlight loses focus.
 #[tauri::command]
 pub fn spotlight_hide(app: AppHandle) -> Result<(), AppError> {
-    if let Some(win) = app.get_webview_window("spotlight") {
-        let _ = win.hide();
-    }
+    hide_spotlight(&app);
     Ok(())
 }
