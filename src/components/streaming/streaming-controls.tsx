@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, ExternalLink, Play, Radio, Square, Wifi } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { openUrl as tauriOpenUrl } from "@tauri-apps/plugin-opener";
 import { copyToClipboard } from "../../lib/clipboard";
 import { useStreamingStatus, useStartStreaming, useStopStreaming, useSetStreamingBroadcast } from "../../lib/queries";
@@ -23,20 +23,20 @@ export function StreamingControls() {
 
   const handleStart = () => {
     if (!isValidPort) {
-      toast.error(t("streaming.invalidPort"));
+      notify.error(t("streaming.invalidPort"));
       return;
     }
 
     startMutation.mutate(portNumber, {
-      onSuccess: () => toast.success(t("streaming.started")),
-      onError: () => toast.error(t("streaming.startFailed")),
+      onSuccess: () => notify.success(t("streaming.started")),
+      onError: (error) => notify.tauriError(error, t("streaming.startFailed")),
     });
   };
 
   const handleStop = () => {
     stopMutation.mutate(undefined, {
-      onSuccess: () => toast.success(t("streaming.stopped")),
-      onError: () => toast.error(t("streaming.stopFailed")),
+      onSuccess: () => notify.success(t("streaming.stopped")),
+      onError: (error) => notify.tauriError(error, t("streaming.stopFailed")),
     });
   };
 
@@ -47,9 +47,9 @@ export function StreamingControls() {
   const copyUrl = async (url: string) => {
     try {
       await copyToClipboard(url);
-      toast.success(t("streaming.urlCopied"));
+      notify.success(t("streaming.urlCopied"));
     } catch {
-      toast.error(t("streaming.copyFailed"));
+      notify.error(t("streaming.copyFailed"));
     }
   };
 
@@ -57,7 +57,7 @@ export function StreamingControls() {
     try {
       await tauriOpenUrl(url);
     } catch {
-      toast.error(t("streaming.openFailed"));
+      notify.error(t("streaming.openFailed"));
     }
   };
 

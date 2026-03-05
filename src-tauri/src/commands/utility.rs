@@ -12,6 +12,7 @@ use tauri::{AppHandle, Emitter, Manager};
 const MAX_COVER_SIZE_BYTES: u64 = 8 * 1024 * 1024;
 
 #[tauri::command]
+#[specta::specta]
 pub fn run_lottery(names: Vec<String>) -> Result<String, AppError> {
     let sanitized = sanitize_lottery_names(names);
     if sanitized.is_empty() {
@@ -29,6 +30,7 @@ pub fn run_lottery(names: Vec<String>) -> Result<String, AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn format_text(text: String, format: String) -> Result<String, AppError> {
     let normalized = format.trim().to_ascii_lowercase();
     match normalized.as_str() {
@@ -53,6 +55,7 @@ pub fn format_text(text: String, format: String) -> Result<String, AppError> {
 /// - `"video-copy-complete"`: `(presentation_id: i64, rel_path: String)` on success
 /// - `"video-copy-error"`:    `(presentation_id: i64, error: String)` on failure
 #[tauri::command]
+#[specta::specta]
 pub fn copy_video_to_media(
     video_path: String,
     presentation_id: i64,
@@ -63,7 +66,7 @@ pub fn copy_video_to_media(
     {
         let conn = state
             .db
-            .lock()
+            .get()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         let exists: i64 = conn.query_row(
             "SELECT COUNT(*) FROM presentations WHERE id = ?1",
@@ -144,6 +147,7 @@ fn do_copy_video_work(video_path: &str, app: &AppHandle) -> Result<String, AppEr
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<String, AppError> {
     let source = PathBuf::from(&image_path);
     if !source.exists() {
@@ -204,6 +208,7 @@ pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<S
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppError> {
     let app_data_dir = app
         .path()
@@ -230,6 +235,7 @@ pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppErr
 /// offloaded to `tokio::task::spawn_blocking` so the IPC bridge stays
 /// responsive on Windows during the wait.
 #[tauri::command]
+#[specta::specta]
 pub async fn get_video_metadata(
     path: String,
     app: AppHandle,
@@ -357,7 +363,7 @@ fn load_ffprobe_settings(
 ) -> Result<(bool, Option<String>), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let enabled = crate::db::queries::settings::get_setting(&conn, "video.ffprobeEnabled")

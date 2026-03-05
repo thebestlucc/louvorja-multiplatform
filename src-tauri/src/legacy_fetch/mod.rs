@@ -4,6 +4,7 @@
 //! at api.louvorja.com.br
 
 use serde::{Deserialize, Deserializer, Serialize};
+use specta::Type;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -87,11 +88,39 @@ where
     deserializer.deserialize_any(FlexibleStringVisitor)
 }
 
+/// Deserialize a value that must be an integer (or a numeric string) into `i64`.
+fn deserialize_flexible_i64_mandatory<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de;
+    struct FlexibleI64MandatoryVisitor;
+    impl<'de> de::Visitor<'de> for FlexibleI64MandatoryVisitor {
+        type Value = i64;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("an integer or a numeric string")
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+            Ok(v)
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+            Ok(v as i64)
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
+            Ok(v as i64)
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            v.parse::<i64>().map_err(de::Error::custom)
+        }
+    }
+    deserializer.deserialize_any(FlexibleI64MandatoryVisitor)
+}
+
 /// Base API URL
 pub const API_BASE_URL: &str = "https://api.louvorja.com.br";
 
 /// Supported languages for the API
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum ApiLanguage {
     #[default]
@@ -108,34 +137,51 @@ impl ApiLanguage {
             ApiLanguage::Es => "es",
         }
     }
+
+    pub fn to_hymnal_name(&self) -> &'static str {
+        match self {
+            ApiLanguage::Pt => "Hinário Adventista",
+            ApiLanguage::En => "Adventist Hymnal",
+            ApiLanguage::Es => "Himnario Adventista",
+        }
+    }
 }
 
 /// Paginated response wrapper from the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaginatedResponse<T> {
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct PaginatedResponse<T: Type> {
+    #[specta(type = f64)]
     pub current_page: i64,
     pub data: Vec<T>,
     #[serde(default)]
+    #[specta(type = f64)]
     pub last_page: Option<i64>,
     #[serde(default)]
+    pub next_page_url: Option<String>,
+    #[serde(default)]
+    #[specta(type = f64)]
     pub per_page: Option<i64>,
     #[serde(default)]
+    #[specta(type = f64)]
     pub total: Option<i64>,
 }
 
 /// Single item response wrapper from the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SingleResponse<T> {
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SingleResponse<T: Type> {
     pub data: T,
 }
 
 /// Lyric entry from the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ApiLyric {
+    #[specta(type = f64)]
     pub id_lyric: i64,
+    #[specta(type = f64)]
     pub id_music: i64,
     pub lyric: String,
     #[serde(default)]
+    #[specta(type = f64)]
     pub order: i64,
     /// Sync time for sung version (format: "00:00:03")
     #[serde(default)]
@@ -144,21 +190,28 @@ pub struct ApiLyric {
     #[serde(default)]
     pub instrumental_time: Option<String>,
     #[serde(default)]
+    #[specta(type = f64)]
     pub show_slide: Option<i64>,
 }
 
 /// Music entry from the API (hymnal list format)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ApiMusic {
+    #[serde(deserialize_with = "deserialize_flexible_i64_mandatory")]
+    #[specta(type = f64)]
     pub id_music: i64,
     pub name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_i64")]
+    #[specta(type = f64)]
     pub track: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_i64")]
+    #[specta(type = f64)]
     pub id_file_image: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_i64")]
+    #[specta(type = f64)]
     pub id_file_music: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_i64")]
+    #[specta(type = f64)]
     pub id_file_instrumental_music: Option<i64>,
     #[serde(default)]
     pub url_image: Option<String>,
@@ -174,47 +227,53 @@ pub struct ApiMusic {
 }
 
 /// API error response (e.g., language not found)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ApiErrorResponse {
     pub error: String,
 }
 
 /// Album entry from the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ApiAlbum {
+    #[serde(deserialize_with = "deserialize_flexible_i64_mandatory")]
+    #[specta(type = f64)]
     pub id_album: i64,
     pub name: String,
     #[serde(default)]
     pub color: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_i64")]
+    #[specta(type = f64)]
     pub id_file_image: Option<i64>,
     #[serde(default)]
     pub url_image: Option<String>,
     #[serde(default)]
     pub subtitle: Option<String>,
     #[serde(default, deserialize_with = "deserialize_flexible_i64")]
+    #[specta(type = f64)]
     pub order: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_flexible_string")]
     pub image_version: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "music")]
     pub musics: Vec<ApiMusic>,
 }
 
 /// Category from the API
 /// Planned for album-import-collections feature (see docs/pre-dev/album-import-collections/)
 #[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ApiCategory {
+    #[specta(type = f64)]
     pub id_category: i64,
     pub name: String,
 }
 
 /// Params response from /params endpoint
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ApiParams {
     #[serde(default)]
     pub conn_ftp: Option<String>,
     #[serde(default)]
+    #[specta(type = f64)]
     pub db_version: Option<i64>,
     #[serde(default)]
     pub download_win: Option<String>,
@@ -237,24 +296,30 @@ pub struct ApiParams {
 }
 
 /// Options for starting a legacy fetch operation
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LegacyFetchOptions {
+    /// Language to fetch (pt, en, es)
     pub language: ApiLanguage,
-    /// Whether to fetch all hymns from the hymnal
-    pub include_hymnal: bool,
     /// Whether to replace existing hymns with the same title
     pub replace_existing: bool,
     /// Whether to download audio files (vs just metadata)
     pub download_audio: bool,
     /// Whether to download cover images
     pub download_images: bool,
-    /// Whether to import albums as collections
-    pub include_albums: bool,
+}
+
+/// Sub-task progress information
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyFetchSubTask {
+    pub id: String,
+    pub title: String,
+    pub percent: f64,
+    pub status: String,
 }
 
 /// Progress information for a legacy fetch operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyFetchProgress {
     pub run_id: String,
@@ -262,12 +327,15 @@ pub struct LegacyFetchProgress {
     pub status: LegacyFetchStatus,
     pub percent: f64,
     pub message: Option<String>,
+    #[specta(type = f64)]
     pub items_total: u64,
+    #[specta(type = f64)]
     pub items_processed: u64,
+    pub sub_tasks: Vec<LegacyFetchSubTask>,
 }
 
 /// Status of a legacy fetch operation
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum LegacyFetchStatus {
     Pending,
@@ -280,24 +348,33 @@ pub enum LegacyFetchStatus {
 }
 
 /// Final report after a legacy fetch operation
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyFetchReport {
     pub run_id: String,
+    #[specta(type = f64)]
     pub hymns_fetched: u64,
+    #[specta(type = f64)]
     pub hymns_imported: u64,
+    #[specta(type = f64)]
     pub hymns_skipped: u64,
+    #[specta(type = f64)]
     pub albums_fetched: u64,
+    #[specta(type = f64)]
     pub albums_created: u64,
+    #[specta(type = f64)]
     pub collection_hymns_linked: u64,
+    #[specta(type = f64)]
     pub audio_downloaded: u64,
+    #[specta(type = f64)]
     pub images_downloaded: u64,
     pub errors: Vec<LegacyFetchError>,
+    #[specta(type = f64)]
     pub duration_ms: u64,
 }
 
 /// Error during legacy fetch
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyFetchError {
     pub item_type: String,
@@ -333,6 +410,7 @@ pub mod fetcher {
     }
 
     /// Fetch all musics for a language - handles pagination
+    #[allow(dead_code)]
     pub async fn fetch_musics(lang: ApiLanguage) -> Result<Vec<ApiMusic>, AppError> {
         let mut all_musics = Vec::new();
         let mut page = 1;
@@ -379,121 +457,145 @@ pub mod fetcher {
         Ok(all_musics)
     }
 
-    /// Fetch all albums for a language — handles pagination
-    pub async fn fetch_albums(lang: ApiLanguage) -> Result<Vec<ApiAlbum>, AppError> {
-        let mut all_albums = Vec::new();
-        let mut page = 1;
-
-        loop {
-            let url = format!("{}/{}/albums?page={}", API_BASE_URL, lang.as_str(), page);
-            let response = reqwest::get(&url)
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to fetch albums page {}: {}", page, e)))?;
-
-            if !response.status().is_success() {
-                return Err(AppError::Internal(format!(
-                    "API returned error status: {}",
-                    response.status()
-                )));
-            }
-
-            let body = response.text().await
-                .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
-
-            // Check if response is an error
-            if let Ok(error_resp) = serde_json::from_str::<ApiErrorResponse>(&body) {
-                if error_resp.error.contains("não encontrado") || error_resp.error.contains("not found") {
-                    return Err(AppError::Internal(format!("NO_CONTENT_AVAILABLE:{}", lang.as_str())));
-                }
-                return Err(AppError::Internal(format!("API error: {}", error_resp.error)));
-            }
-
-            let paginated: PaginatedResponse<ApiAlbum> = serde_json::from_str(&body)
-                .map_err(|e| AppError::Internal(format!("Failed to parse albums response page {}: {}", page, e)))?;
-
-            let is_last = paginated.last_page.map(|lp| page >= lp).unwrap_or(true)
-                || paginated.data.is_empty();
-
-            all_albums.extend(paginated.data);
-
-            if is_last {
-                break;
-            }
-            page += 1;
-        }
-
-        Ok(all_albums)
-    }
-
-    /// Fetch a single album with nested musics list (no lyrics)
-    pub async fn fetch_album_detail(lang: ApiLanguage, album_id: i64) -> Result<ApiAlbum, AppError> {
-        let url = format!("{}/{}/albums/{}", API_BASE_URL, lang.as_str(), album_id);
+    /// Fetch all albums for a language — a single page
+    pub async fn fetch_albums_page(lang: ApiLanguage, page: i64) -> Result<PaginatedResponse<ApiAlbum>, AppError> {
+        let url = format!("{}/{}/albums?page={}", API_BASE_URL, lang.as_str(), page);
         let response = reqwest::get(&url)
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to fetch album {}: {}", album_id, e)))?;
+            .map_err(|e| AppError::Internal(format!("Failed to fetch albums page {}: {}", page, e)))?;
 
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
-                "API returned error status for album {}: {}",
-                album_id, response.status()
+                "API returned error status: {}",
+                response.status()
             )));
         }
 
-        let single: SingleResponse<ApiAlbum> = response
-            .json()
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to parse album {} response: {}", album_id, e)))?;
+        let body = response.text().await
+            .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
 
-        Ok(single.data)
-    }
-
-    /// Fetch hymnal musics (official hymnal collection) - handles pagination
-    pub async fn fetch_hymnal(lang: ApiLanguage) -> Result<Vec<ApiMusic>, AppError> {
-        let mut all_musics = Vec::new();
-        let mut page = 1;
-        
-        loop {
-            let url = format!("{}/{}/hymnal?page={}", API_BASE_URL, lang.as_str(), page);
-            let response = reqwest::get(&url)
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to fetch hymnal page {}: {}", page, e)))?;
-            
-            if !response.status().is_success() {
-                return Err(AppError::Internal(format!(
-                    "API returned error status: {}",
-                    response.status()
-                )));
+        // Check if response is an error
+        if let Ok(error_resp) = serde_json::from_str::<ApiErrorResponse>(&body) {
+            if error_resp.error.contains("não encontrado") || error_resp.error.contains("not found") {
+                return Err(AppError::Internal(format!("NO_CONTENT_AVAILABLE:{}", lang.as_str())));
             }
-
-            // Get response text to check for API error response
-            let body = response.text().await
-                .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
-
-            // Check if response is an error (e.g., language not found)
-            if let Ok(error_resp) = serde_json::from_str::<ApiErrorResponse>(&body) {
-                if error_resp.error.contains("não encontrado") || error_resp.error.contains("not found") {
-                    return Err(AppError::Internal(format!("NO_CONTENT_AVAILABLE:{}", lang.as_str())));
-                }
-                return Err(AppError::Internal(format!("API error: {}", error_resp.error)));
-            }
-
-            let paginated: PaginatedResponse<ApiMusic> = serde_json::from_str(&body)
-                .map_err(|e| AppError::Internal(format!("Failed to parse hymnal response page {}: {}", page, e)))?;
-            
-            let is_last = paginated.last_page.map(|lp| page >= lp).unwrap_or(true)
-                || paginated.data.is_empty();
-            
-            all_musics.extend(paginated.data);
-            
-            if is_last {
-                break;
-            }
-            page += 1;
+            return Err(AppError::Internal(format!("API error: {}", error_resp.error)));
         }
-        
-        Ok(all_musics)
+
+        let paginated: PaginatedResponse<ApiAlbum> = serde_json::from_str(&body)
+            .map_err(|e| AppError::Internal(format!("Failed to parse albums response page {}: {}", page, e)))?;
+
+        Ok(paginated)
     }
 
+    /// Fetch musics for a single album
+    pub async fn fetch_album_musics_page(lang: ApiLanguage, album_id: i64, page: i64) -> Result<PaginatedResponse<ApiMusic>, AppError> {
+        let url = format!("{}/{}/albums/{}?page={}", API_BASE_URL, lang.as_str(), album_id, page);
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch album {} musics page {}: {}", album_id, page, e)))?;
+
+        if !response.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "API returned error status for album {} page {}: {}",
+                album_id, page, response.status()
+            )));
+        }
+
+        let body = response.text().await
+            .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
+
+        // 1. Try to parse as a paginated response of musics
+        if let Ok(paginated) = serde_json::from_str::<PaginatedResponse<ApiMusic>>(&body) {
+            return Ok(paginated);
+        }
+
+        // 2. Try to parse as a single ApiAlbum (which contains the musics array)
+        if let Ok(album) = serde_json::from_str::<ApiAlbum>(&body) {
+            return Ok(PaginatedResponse {
+                current_page: 1,
+                data: album.musics,
+                last_page: Some(1),
+                next_page_url: None,
+                per_page: None,
+                total: None,
+            });
+        }
+
+        // 3. Try to parse as a raw array of musics
+        if let Ok(musics) = serde_json::from_str::<Vec<ApiMusic>>(&body) {
+            return Ok(PaginatedResponse {
+                current_page: 1,
+                data: musics,
+                last_page: Some(1),
+                next_page_url: None,
+                per_page: None,
+                total: None,
+            });
+        }
+
+        // 4. Try to parse as an object with a "data" field that is an array
+        #[derive(Deserialize)]
+        struct DataWrapper { data: Vec<ApiMusic> }
+        if let Ok(wrapper) = serde_json::from_str::<DataWrapper>(&body) {
+            return Ok(PaginatedResponse {
+                current_page: 1,
+                data: wrapper.data,
+                last_page: Some(1),
+                next_page_url: None,
+                per_page: None,
+                total: None,
+            });
+        }
+
+        // 5. Try to parse as an object with a "data" field that is an ApiAlbum
+        #[derive(Deserialize)]
+        struct AlbumDataWrapper { data: ApiAlbum }
+        if let Ok(wrapper) = serde_json::from_str::<AlbumDataWrapper>(&body) {
+            return Ok(PaginatedResponse {
+                current_page: 1,
+                data: wrapper.data.musics,
+                last_page: Some(1),
+                next_page_url: None,
+                per_page: None,
+                total: None,
+            });
+        }
+
+        Err(AppError::Internal(format!("Failed to parse album {} musics response (unknown format)", album_id)))
+    }
+
+    /// Fetch hymnal musics (official hymnal collection) - a single page
+    pub async fn fetch_hymnal_page(lang: ApiLanguage, page: i64) -> Result<PaginatedResponse<ApiMusic>, AppError> {
+        let url = format!("{}/{}/hymnal?page={}", API_BASE_URL, lang.as_str(), page);
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch hymnal page {}: {}", page, e)))?;
+
+        if !response.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "API returned error status: {}",
+                response.status()
+            )));
+        }
+
+        // Get response text to check for API error response
+        let body = response.text().await
+            .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
+
+        // Check if response is an error (e.g., language not found)
+        if let Ok(error_resp) = serde_json::from_str::<ApiErrorResponse>(&body) {
+            if error_resp.error.contains("não encontrado") || error_resp.error.contains("not found") {
+                return Err(AppError::Internal(format!("NO_CONTENT_AVAILABLE:{}", lang.as_str())));
+            }
+            return Err(AppError::Internal(format!("API error: {}", error_resp.error)));
+        }
+
+        let paginated: PaginatedResponse<ApiMusic> = serde_json::from_str(&body)
+            .map_err(|e| AppError::Internal(format!("Failed to parse hymnal response page {}: {}", page, e)))?;
+
+        Ok(paginated)
+    }
     /// Fetch a single music with lyrics
     pub async fn fetch_music_detail(lang: ApiLanguage, music_id: i64) -> Result<ApiMusic, AppError> {
         let url = format!("{}/{}/musics/{}", API_BASE_URL, lang.as_str(), music_id);
@@ -589,10 +691,11 @@ pub mod importer {
     }
 
     /// Synchronized lyric entry for JSON storage
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize, Type)]
     #[serde(rename_all = "camelCase")]
     pub struct SyncLyric {
         pub lyric: String,
+        #[specta(type = f64)]
         pub order: i64,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub time: Option<String>,
@@ -690,6 +793,7 @@ pub mod importer {
         replace_existing: bool,
         album_name: Option<&str>,
         api_music_id: Option<i64>,
+        category: Option<&str>,
     ) -> Result<(bool, Option<i64>), AppError> {
         let lyrics_text = lyrics_to_text(&music.lyrics);
         let lyrics_sync = lyrics_to_sync_json(&music.lyrics);
@@ -730,8 +834,9 @@ pub mod importer {
                         lyrics_sync = COALESCE(?6, lyrics_sync),
                         album = COALESCE(?7, album),
                         api_music_id = COALESCE(?8, api_music_id),
+                        category = COALESCE(?9, category),
                         updated_at = datetime('now')
-                    WHERE id = ?9
+                    WHERE id = ?10
                     "#,
                     rusqlite::params![
                         track_number,
@@ -742,17 +847,21 @@ pub mod importer {
                         lyrics_sync.as_ref(),
                         album_name,
                         api_music_id,
+                        category,
                         id,
                     ],
                 )?;
                 (true, Some(id))
             }
             Some(id) => {
-                // Exists but don't replace — still set api_music_id if missing
-                if api_music_id.is_some() {
+                // Exists but don't replace — still set api_music_id/category if missing
+                if api_music_id.is_some() || category.is_some() {
                     conn.execute(
-                        "UPDATE hymns SET api_music_id = COALESCE(api_music_id, ?1) WHERE id = ?2",
-                        rusqlite::params![api_music_id, id],
+                        "UPDATE hymns SET 
+                            api_music_id = COALESCE(api_music_id, ?1),
+                            category = COALESCE(category, ?2)
+                         WHERE id = ?3",
+                        rusqlite::params![api_music_id, category, id],
                     )?;
                 }
                 (false, Some(id))
@@ -760,8 +869,8 @@ pub mod importer {
             None => {
                 conn.execute(
                     r#"
-                    INSERT INTO hymns (number, title, album, lyrics, audio_path, playback_path, cover_path, lyrics_sync, api_music_id, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))
+                    INSERT INTO hymns (number, title, album, lyrics, audio_path, playback_path, cover_path, lyrics_sync, api_music_id, category, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'), datetime('now'))
                     "#,
                     rusqlite::params![
                         track_number,
@@ -773,6 +882,7 @@ pub mod importer {
                         cover_path,
                         lyrics_sync,
                         api_music_id,
+                        category,
                     ],
                 )?;
                 let new_id = conn.last_insert_rowid();
@@ -890,6 +1000,7 @@ mod tests {
             false,
             Some("Album A"),
             Some(42),
+            None,
         )
         .unwrap();
         assert!(was_imported);
@@ -911,6 +1022,7 @@ mod tests {
             true, // replace_existing
             Some("Album A"),
             Some(42),
+            None,
         )
         .unwrap();
         assert!(was_imported2);
@@ -939,6 +1051,7 @@ mod tests {
             false,
             Some("Album A"),
             Some(42),
+            None,
         )
         .unwrap();
 
@@ -952,6 +1065,7 @@ mod tests {
             false,
             Some("Album A"),
             Some(42),
+            None,
         )
         .unwrap();
         assert!(!was_imported, "should not flag as imported when not replacing");
@@ -963,4 +1077,3 @@ mod tests {
         assert_eq!(cover, Some("media/images/42/original.jpg".to_string()));
     }
 }
-

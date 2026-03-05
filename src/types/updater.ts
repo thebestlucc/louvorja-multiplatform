@@ -1,5 +1,3 @@
-export interface UpdateInfo {
-  version: string;
-  currentVersion: string;
-  notes: string | null;
-}
+import type { UpdateInfo } from "../lib/bindings";
+
+export type { UpdateInfo };

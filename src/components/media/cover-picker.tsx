@@ -1,6 +1,6 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Upload, X } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { Button } from "../ui/button";
 import { CoverImage } from "./cover-image";
 import { useCopyImageToMedia } from "../../lib/queries";
@@ -28,10 +28,9 @@ export function CoverPicker({ value, onChange, title }: CoverPickerProps) {
     try {
       const managed = await copyMutation.mutateAsync(selected);
       onChange(managed);
-      toast.success(t("collections.coverUpdated"));
+      notify.success(t("collections.coverUpdated"));
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("collections.coverUpdateFailed", { error: message }));
+      notify.tauriError(error, t("collections.coverUpdateFailed", { error: "" }));
     }
   };
 

@@ -33,8 +33,8 @@ test("prefers an external monitor as default projector even when primary is not 
 
 test("uses configured monitor IDs when available", () => {
   const resolved = resolveProjectionMonitorIndexes(monitors, [
-    { id: 1, monitor_id: "monitor-2", role: "projector", enabled: true },
-    { id: 2, monitor_id: "monitor-0", role: "return", enabled: true },
+    { id: 1, monitorId: "monitor-2", role: "projector", enabled: true },
+    { id: 2, monitorId: "monitor-0", role: "return", enabled: true },
   ]);
 
   assert.deepEqual(resolved, { projectorIndex: 2, returnIndex: 0 });
@@ -42,7 +42,7 @@ test("uses configured monitor IDs when available", () => {
 
 test("falls back when configured monitor IDs are not connected", () => {
   const resolved = resolveProjectionMonitorIndexes(monitors, [
-    { id: 1, monitor_id: "missing-monitor", role: "projector", enabled: true },
+    { id: 1, monitorId: "missing-monitor", role: "projector", enabled: true },
   ]);
 
   assert.deepEqual(resolved, { projectorIndex: 1, returnIndex: 2 });
@@ -55,8 +55,8 @@ test("supports legacy index-based monitor IDs for backward compatibility", () =>
     createMonitor("monitor-c"),
   ];
   const resolved = resolveProjectionMonitorIndexes(stableMonitors, [
-    { id: 1, monitor_id: "monitor-2", role: "projector", enabled: true },
-    { id: 2, monitor_id: "monitor-1", role: "return", enabled: true },
+    { id: 1, monitorId: "monitor-2", role: "projector", enabled: true },
+    { id: 2, monitorId: "monitor-1", role: "return", enabled: true },
   ]);
 
   assert.deepEqual(resolved, { projectorIndex: 2, returnIndex: 1 });
@@ -69,8 +69,8 @@ test("auto-assigns a newly connected monitor as projector", () => {
     createMonitor("monitor-external-b"),
   ];
   const configs: MonitorConfig[] = [
-    { id: 1, monitor_id: "monitor-external-a", role: "projector", enabled: true },
-    { id: 2, monitor_id: "monitor-primary", role: "return", enabled: true },
+    { id: 1, monitorId: "monitor-external-a", role: "projector", enabled: true },
+    { id: 2, monitorId: "monitor-primary", role: "return", enabled: true },
   ];
 
   const resolved = resolveAutomaticProjectionAssignments(
@@ -92,8 +92,8 @@ test("auto-assigns projector when OS primary monitor changes", () => {
     createMonitor("monitor-external", true),
   ];
   const configs: MonitorConfig[] = [
-    { id: 1, monitor_id: "monitor-external", role: "projector", enabled: true },
-    { id: 2, monitor_id: "monitor-integrated", role: "return", enabled: true },
+    { id: 1, monitorId: "monitor-external", role: "projector", enabled: true },
+    { id: 2, monitorId: "monitor-integrated", role: "return", enabled: true },
   ];
 
   const resolved = resolveAutomaticProjectionAssignments(
@@ -118,8 +118,8 @@ test("skips auto-assignment when monitor topology and primary monitor are unchan
   const resolved = resolveAutomaticProjectionAssignments(
     currentMonitors,
     [
-      { id: 1, monitor_id: "monitor-external", role: "projector", enabled: true },
-      { id: 2, monitor_id: "monitor-primary", role: "return", enabled: true },
+      { id: 1, monitorId: "monitor-external", role: "projector", enabled: true },
+      { id: 2, monitorId: "monitor-primary", role: "return", enabled: true },
     ],
     ["monitor-primary", "monitor-external"],
     "monitor-primary",
@@ -130,8 +130,8 @@ test("skips auto-assignment when monitor topology and primary monitor are unchan
 
 test("separates return monitor when projector and return resolve to the same index", () => {
   const resolved = resolveProjectionMonitorIndexes(monitors, [
-    { id: 1, monitor_id: "monitor-1", role: "projector", enabled: true },
-    { id: 2, monitor_id: "monitor-1", role: "return", enabled: true },
+    { id: 1, monitorId: "monitor-1", role: "projector", enabled: true },
+    { id: 2, monitorId: "monitor-1", role: "return", enabled: true },
   ]);
 
   assert.deepEqual(resolved, { projectorIndex: 1, returnIndex: 0 });
@@ -140,8 +140,8 @@ test("separates return monitor when projector and return resolve to the same ind
 test("keeps single-monitor setups safe", () => {
   const singleMonitor = [createMonitor("monitor-0", true)];
   const resolved = resolveProjectionMonitorIndexes(singleMonitor, [
-    { id: 1, monitor_id: "monitor-0", role: "projector", enabled: true },
-    { id: 2, monitor_id: "monitor-0", role: "return", enabled: true },
+    { id: 1, monitorId: "monitor-0", role: "projector", enabled: true },
+    { id: 2, monitorId: "monitor-0", role: "return", enabled: true },
   ]);
 
   assert.deepEqual(resolved, { projectorIndex: 0, returnIndex: 0 });
@@ -173,11 +173,15 @@ function createMonitor(id: string, isPrimary = false, name = id): MonitorInfo {
   return {
     id,
     name,
+    friendlyName: null,
+    manufacturer: null,
+    model: null,
+    connectionType: null,
     width: 1920,
     height: 1080,
-    is_primary: isPrimary,
+    isPrimary: isPrimary,
     x: 0,
     y: 0,
-    scale_factor: 1,
+    scaleFactor: 1,
   };
 }

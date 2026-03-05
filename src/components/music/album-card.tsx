@@ -1,6 +1,6 @@
 import { Music } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "../ui/card";
-import type { Album } from "../../types/hymn";
+import type { Album } from "../../lib/bindings";
 
 interface AlbumCardProps {
   album: Album;
@@ -21,7 +21,7 @@ export function AlbumCard({ album, onClick }: AlbumCardProps) {
           <div className="min-w-0">
             <CardTitle className="truncate text-sm">{album.name}</CardTitle>
             <CardDescription className="text-xs">
-              {album.hymn_count} {album.hymn_count === 1 ? "hymn" : "hymns"}
+              {album.hymnCount} {album.hymnCount === 1 ? "hymn" : "hymns"}
             </CardDescription>
           </div>
         </div>

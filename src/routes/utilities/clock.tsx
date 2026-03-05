@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { useUtilityProjection } from "../../hooks/use-utility-projection";
 import { createUtilityProjectionPayload } from "../../types/utilities";
 import {
@@ -67,7 +67,7 @@ function UtilitiesClockPage() {
     } catch (error) {
       await stopUtilityProjection().catch(() => {});
       await stopProjection().catch(() => {});
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   }, [projectClock, showDate, stopProjection, t, use24Hour]);
 

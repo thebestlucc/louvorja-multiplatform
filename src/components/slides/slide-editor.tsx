@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { SlideContent, SlideType, VideoSlideContent, VideoSlideMode } from "../../types/presentation";
+import type { SlideContent, SlideType } from "../../types/presentation";
 import { SlideRenderer } from "./slide-renderer";
 import { Input } from "../ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select";
@@ -14,6 +14,23 @@ interface SlideEditorProps {
 
 const SLIDE_TYPES: SlideType[] = ["cover", "lyrics", "pause", "text", "image", "video"];
 
+const EMPTY_SLIDE_PROPS = {
+  text: null,
+  title: null,
+  subtitle: null,
+  label: null,
+  videoPath: null,
+  backgroundImage: null,
+  backgroundColor: null,
+  audioPath: null,
+  autoPlay: null,
+  loop: null,
+  muted: null,
+  mode: null,
+  textColor: null,
+  textSize: null,
+};
+
 export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProps) {
   const { t } = useTranslation();
 
@@ -21,19 +38,19 @@ export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProp
     const type = newType as SlideType;
     switch (type) {
       case "cover":
-        onChange({ type: "cover", title: "", subtitle: "" });
+        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "cover", title: "", subtitle: "" });
         break;
       case "lyrics":
-        onChange({ type: "lyrics", text: "", label: "" });
+        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "lyrics", text: "", label: "" });
         break;
       case "pause":
-        onChange({ type: "pause" });
+        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "pause" });
         break;
       case "text":
-        onChange({ type: "text", text: "" });
+        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "text", text: "" });
         break;
       case "image":
-        onChange({ type: "image", src: "", alt: "" });
+        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "image", backgroundImage: "", label: "" });
         break;
       case "video":
         onChange(defaultVideoSlide());
@@ -57,7 +74,7 @@ export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProp
           <label className="text-sm font-medium text-muted-foreground w-24 shrink-0">
             {t("presentations.slideType")}
           </label>
-          <Select value={slide.type} onValueChange={handleTypeChange}>
+          <Select value={slide.slideType} onValueChange={handleTypeChange}>
             <SelectTrigger className="w-40">
               <SelectValue />
             </SelectTrigger>
@@ -72,38 +89,38 @@ export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProp
         </div>
 
         {/* Type-specific fields */}
-        {slide.type === "cover" && (
+        {slide.slideType === "cover" && (
           <CoverFields
-            title={slide.title}
-            subtitle={slide.subtitle}
-            onChange={(title, subtitle) => onChange({ ...slide, title, subtitle })}
+            title={slide.title ?? ""}
+            subtitle={slide.subtitle ?? ""}
+            onChange={(title, subtitle) => onChange({ ...slide, title, subtitle: subtitle || null })}
           />
         )}
 
-        {slide.type === "lyrics" && (
+        {slide.slideType === "lyrics" && (
           <LyricsFields
-            text={slide.text}
-            label={slide.label}
-            onChange={(text, label) => onChange({ ...slide, text, label })}
+            text={slide.text ?? ""}
+            label={slide.label ?? ""}
+            onChange={(text, label) => onChange({ ...slide, text, label: label || null })}
           />
         )}
 
-        {slide.type === "text" && (
+        {slide.slideType === "text" && (
           <TextFields
-            text={slide.text}
+            text={slide.text ?? ""}
             onChange={(text) => onChange({ ...slide, text })}
           />
         )}
 
-        {slide.type === "image" && (
+        {slide.slideType === "image" && (
           <ImageFields
-            src={slide.src}
-            alt={slide.alt}
-            onChange={(src, alt) => onChange({ ...slide, src, alt })}
+            src={slide.backgroundImage ?? ""}
+            alt={slide.label ?? ""}
+            onChange={(src, alt) => onChange({ ...slide, backgroundImage: src, label: alt || null })}
           />
         )}
 
-        {slide.type === "video" && (
+        {slide.slideType === "video" && (
           <VideoFields
             slide={slide}
             presentationId={presentationId}
@@ -245,13 +262,11 @@ function VideoFields({
   presentationId,
   onChange,
 }: {
-  slide: VideoSlideContent;
+  slide: SlideContent;
   presentationId: number;
-  onChange: (slide: VideoSlideContent) => void;
+  onChange: (slide: SlideContent) => void;
 }) {
   const { t } = useTranslation();
-
-  const updateMode = (mode: VideoSlideMode) => onChange({ ...slide, mode });
 
   return (
     <div className="space-y-4">
@@ -264,17 +279,17 @@ function VideoFields({
       <div className="grid grid-cols-2 gap-3">
         <ToggleField
           label={t("presentations.videoAutoPlay")}
-          checked={slide.autoPlay}
+          checked={slide.autoPlay ?? true}
           onToggle={() => onChange({ ...slide, autoPlay: !slide.autoPlay })}
         />
         <ToggleField
           label={t("presentations.videoLoop")}
-          checked={slide.loop}
+          checked={slide.loop ?? false}
           onToggle={() => onChange({ ...slide, loop: !slide.loop })}
         />
         <ToggleField
           label={t("presentations.videoMuted")}
-          checked={slide.muted}
+          checked={slide.muted ?? false}
           onToggle={() => onChange({ ...slide, muted: !slide.muted })}
         />
       </div>
@@ -283,7 +298,7 @@ function VideoFields({
         <label className="text-sm font-medium text-muted-foreground w-24 shrink-0">
           {t("presentations.videoMode")}
         </label>
-        <Select value={slide.mode} onValueChange={(value) => updateMode(value as VideoSlideMode)}>
+        <Select value={slide.mode ?? "fullscreen"} onValueChange={(value) => onChange({ ...slide, mode: value })}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
@@ -307,7 +322,7 @@ function VideoFields({
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               )}
               value={slide.text ?? ""}
-              onChange={(e) => onChange({ ...slide, text: e.target.value || undefined })}
+              onChange={(e) => onChange({ ...slide, text: e.target.value || null })}
               placeholder={t("presentations.videoOverlayPlaceholder")}
             />
           </div>
@@ -366,9 +381,10 @@ function ToggleField({
   );
 }
 
-function defaultVideoSlide(): VideoSlideContent {
+function defaultVideoSlide(): SlideContent {
   return {
-    type: "video",
+    ...EMPTY_SLIDE_PROPS,
+    slideType: "video",
     videoPath: "",
     autoPlay: true,
     loop: false,

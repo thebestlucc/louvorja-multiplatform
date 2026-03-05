@@ -13,11 +13,11 @@ export function useAudio() {
   const store = useAudioStore();
 
   const play = useCallback(
-    async (filePath: string) => {
+    async (filePath: string, positionMs?: number) => {
       // Start audio playback with sync point subscription.
       // Projection is NOT triggered here - caller must handle projection separately.
       store.startStatusSubscription();
-      await audioPlay(filePath);
+      await audioPlay(filePath, positionMs);
     },
     [store],
   );

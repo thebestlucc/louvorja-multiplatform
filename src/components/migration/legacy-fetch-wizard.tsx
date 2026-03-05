@@ -1,7 +1,7 @@
-import { Cloud, Download, Loader2, RefreshCw, CheckCircle2, AlertTriangle, StopCircle } from "lucide-react";
+import { Cloud, Download, RefreshCw, CheckCircle2, AlertTriangle, StopCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { LegacyFetchOptions, LegacyFetchProgress, LegacyFetchReport, ApiLanguage } from "../../types/legacy-fetch";
+import type { LegacyFetchOptions, LegacyFetchProgress, LegacyFetchReport, ApiLanguage } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
@@ -24,11 +24,9 @@ export function LegacyFetchWizard({
   const { t, i18n } = useTranslation();
   const [options, setOptions] = useState<LegacyFetchOptions>({
     language: (i18n.language as ApiLanguage) || "pt",
-    includeHymnal: true,
-    includeAlbums: true,
-    replaceExisting: false,
-    downloadAudio: true,
-    downloadImages: true,
+    replace_existing: false,
+    download_audio: true,
+    download_images: true,
   });
 
   return (
@@ -102,34 +100,22 @@ export function LegacyFetchWizard({
             {t("settings.legacyFetch.optionsTitle")}
           </legend>
           <OptionToggle
-            label={t("settings.legacyFetch.optionHymnal")}
-            hint={t("settings.legacyFetch.optionHymnalHint")}
-            checked={options.includeHymnal}
-            onChange={(checked) => setOptions({ ...options, includeHymnal: checked })}
-          />
-          <OptionToggle
-            label={t("settings.legacyFetch.optionAlbums")}
-            hint={t("settings.legacyFetch.optionAlbumsHint")}
-            checked={options.includeAlbums}
-            onChange={(checked) => setOptions({ ...options, includeAlbums: checked })}
-          />
-          <OptionToggle
             label={t("settings.legacyFetch.optionReplace")}
             hint={t("settings.legacyFetch.optionReplaceHint")}
-            checked={options.replaceExisting}
-            onChange={(checked) => setOptions({ ...options, replaceExisting: checked })}
+            checked={options.replace_existing}
+            onChange={(checked) => setOptions({ ...options, replace_existing: checked })}
           />
           <OptionToggle
             label={t("settings.legacyFetch.optionDownloadAudio")}
             hint={t("settings.legacyFetch.optionDownloadAudioHint")}
-            checked={options.downloadAudio}
-            onChange={(checked) => setOptions({ ...options, downloadAudio: checked })}
+            checked={options.download_audio}
+            onChange={(checked) => setOptions({ ...options, download_audio: checked })}
           />
           <OptionToggle
             label={t("settings.legacyFetch.optionDownloadImages")}
             hint={t("settings.legacyFetch.optionDownloadImagesHint")}
-            checked={options.downloadImages}
-            onChange={(checked) => setOptions({ ...options, downloadImages: checked })}
+            checked={options.download_images}
+            onChange={(checked) => setOptions({ ...options, download_images: checked })}
           />
         </fieldset>
 
@@ -273,6 +259,29 @@ export function LegacyFetchProgressCard({
                 total: progress.itemsTotal,
               })}
             </span>
+          </div>
+        )}
+
+        {/* Sub-tasks */}
+        {progress?.subTasks && progress.subTasks.length > 0 && (
+          <div className="space-y-3 border-t border-border pt-3">
+            {progress.subTasks.map((subTask) => (
+              <div key={subTask.id} className="space-y-1">
+                <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <span className="max-w-[70%] truncate">
+                    {subTask.id === "hymnal" && subTask.percent < 100 ? `${t("nav.hymnal")}: ` : ""}
+                    {subTask.title}
+                  </span>
+                  <span>{t(`settings.legacyFetch.${subTask.status}`)}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${subTask.percent}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

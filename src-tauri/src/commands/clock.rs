@@ -108,6 +108,7 @@ fn emit_clock_projection_phase(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn start_clock_projection(
     context_title: String,
     clock_title: String,

@@ -1,7 +1,3 @@
-export interface VideoMetadata {
-  durationMs: number;
-  width: number;
-  height: number;
-  fileSize: number;
-  format: string;
-}
+import type { VideoMetadata } from "../lib/bindings";
+
+export type { VideoMetadata };

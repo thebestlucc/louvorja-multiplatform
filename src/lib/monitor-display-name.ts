@@ -1,4 +1,4 @@
-import type { MonitorInfo } from "../types/settings";
+import type { MonitorInfo } from "./bindings";
 
 const KNOWN_BRANDS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\b(apple|retina|studio display|color lcd|built-?in)\b/i, label: "Apple" },
@@ -40,7 +40,7 @@ export function getPreferredMonitorName(monitor: MonitorInfo, fallbackIndex: num
     return monitor.manufacturer;
   }
 
-  const monitorName = (monitor.friendly_name || monitor.name).trim();
+  const monitorName = (monitor.friendlyName || monitor.name).trim();
   if (!looksLikeSyntheticName(monitorName)) {
     const brandModel = extractMonitorBrandModel(monitorName);
     if (brandModel) {

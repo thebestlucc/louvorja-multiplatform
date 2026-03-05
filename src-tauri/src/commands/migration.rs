@@ -39,6 +39,7 @@ struct FinalizeWithErrors<'a> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn start_migration(
     old_db_path: String,
     options: MigrationOptions,
@@ -127,6 +128,7 @@ pub fn start_migration(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_migration_progress(
     run_id: String,
     state: tauri::State<'_, AppState>,
@@ -144,6 +146,7 @@ pub fn get_migration_progress(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn cancel_migration(run_id: String, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut migration = state
         .migration
@@ -165,6 +168,7 @@ pub fn cancel_migration(run_id: String, state: tauri::State<'_, AppState>) -> Re
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_migration_report(
     run_id: String,
     state: tauri::State<'_, AppState>,
@@ -341,7 +345,7 @@ fn execute_domain_import(
     let app_state = app.state::<AppState>();
     let mut target_conn = app_state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     match domain {
@@ -532,7 +536,7 @@ fn persist_migration_metadata(
     let finished_at = report.finished_at.clone().unwrap_or_else(now_iso);
 
     let app_state = app.state::<AppState>();
-    let maybe_conn = app_state.db.lock();
+    let maybe_conn = app_state.db.get();
     if let Ok(conn) = maybe_conn {
         let _ = set_setting(&conn, "migration.lastSourcePath", source_path);
         let _ = set_setting(&conn, "migration.lastRunStatus", status);

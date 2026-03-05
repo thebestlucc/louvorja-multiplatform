@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Plus, Play, Square, SkipForward, SkipBack } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { setSlideContext } from "../../lib/tauri";
@@ -14,12 +14,28 @@ import { AddItemModal } from "../../components/services/add-item-modal";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { cn } from "../../lib/utils";
-import type { ServiceItem } from "../../types/service";
-import type { SlideContentFlat } from "../../types/presentation";
+import type { ServiceItem, SlideContent } from "../../lib/bindings";
 
 export const Route = createFileRoute("/services/$serviceId")({
   component: ServiceEditor,
 });
+
+const EMPTY_SLIDE_PROPS = {
+  text: null,
+  title: null,
+  subtitle: null,
+  label: null,
+  videoPath: null,
+  backgroundImage: null,
+  backgroundColor: null,
+  audioPath: null,
+  autoPlay: null,
+  loop: null,
+  muted: null,
+  mode: null,
+  textColor: null,
+  textSize: null,
+};
 
 function ServiceEditor() {
   const { serviceId } = Route.useParams();
@@ -125,23 +141,23 @@ function ServiceEditor() {
 
   // Project a single service item to the projector
   const projectItem = useCallback(async (item: ServiceItem) => {
-    let slideData: SlideContentFlat;
+    let slideData: SlideContent;
 
     switch (item.itemType) {
       case "hymn":
-        slideData = { slide_type: "lyrics", title: item.title, text: item.notes ?? "" };
+        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "lyrics", title: item.title, text: item.notes ?? "" };
         break;
       case "bible":
-        slideData = { slide_type: "bible", title: item.title, text: item.notes ?? "" };
+        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "bible", title: item.title, text: item.notes ?? "" };
         break;
       case "presentation":
-        slideData = { slide_type: "text", title: item.title, text: "" };
+        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: "" };
         break;
       case "annotation":
-        slideData = { slide_type: "text", title: item.title, text: item.notes ?? "" };
+        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
         break;
       default:
-        slideData = { slide_type: "text", title: item.title, text: item.notes ?? "" };
+        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
         break;
     }
 
@@ -152,14 +168,14 @@ function ServiceEditor() {
       const nextItem = itemIndex + 1 < items.length ? items[itemIndex + 1] : null;
       await setSlideContext({
         next: nextItem
-          ? { slide_type: "text", title: nextItem.title, text: nextItem.notes ?? "" }
+          ? { ...EMPTY_SLIDE_PROPS, slideType: "text", title: nextItem.title, text: nextItem.notes ?? "" }
           : null,
         index: itemIndex >= 0 ? itemIndex : 0,
         total: items.length,
         title: item.title,
       });
     } catch (err) {
-      toast.error(String(err));
+      notify.tauriError(err);
     }
   }, [items]);
 
@@ -188,7 +204,7 @@ function ServiceEditor() {
 
     // End of service timeline: stop playback and clear projection.
     setPlayingService(false);
-    void stopProjectionAndSongAudio().catch((err: unknown) => toast.error(String(err)));
+    void stopProjectionAndSongAudio().catch((err: unknown) => notify.tauriError(err));
   };
 
   const handlePrevItem = () => {
@@ -281,9 +297,9 @@ function ServiceEditor() {
       </div>
 
       {/* Two-panel layout */}
-      <div className="flex flex-1 gap-3 overflow-hidden">
+      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3">
         {/* Left panel — Items list */}
-        <div className="flex-1 overflow-auto rounded-lg border border-border">
+        <div className="overflow-auto rounded-lg border border-border">
           <ServiceItemList
             items={items}
             activeItemIndex={isPlayingService ? activeServiceItemIndex : -1}
@@ -295,7 +311,7 @@ function ServiceEditor() {
         </div>
 
         {/* Right panel — Notes / Timeline */}
-        <div className="hidden w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-border lg:flex">
+        <div className="hidden lg:flex flex-col overflow-hidden rounded-lg border border-border">
           {/* Tab switcher */}
           <div className="flex border-b border-border">
             <button

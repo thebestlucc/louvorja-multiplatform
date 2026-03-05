@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { useRunLottery } from "../../lib/queries";
 import { useUtilityProjection } from "../../hooks/use-utility-projection";
 import { createUtilityProjectionPayload } from "../../types/utilities";
@@ -103,11 +103,11 @@ function UtilitiesLotteryPage() {
     try {
       if (mode === "names") {
         if (names.length === 0) {
-          toast.error(t("utilities.lottery.invalidNames"));
+          notify.error(t("utilities.lottery.invalidNames"));
           return;
         }
         if (availableNames.length === 0) {
-          toast.error(t("utilities.lottery.allPicked"));
+          notify.error(t("utilities.lottery.allPicked"));
           return;
         }
 
@@ -129,11 +129,11 @@ function UtilitiesLotteryPage() {
       }
 
       if (!Number.isFinite(parsedMaxNumber) || parsedMaxNumber <= 0) {
-        toast.error(t("utilities.lottery.invalidMax"));
+        notify.error(t("utilities.lottery.invalidMax"));
         return;
       }
       if (availableNumbers.length === 0) {
-        toast.error(t("utilities.lottery.allPicked"));
+        notify.error(t("utilities.lottery.allPicked"));
         return;
       }
 
@@ -157,7 +157,7 @@ function UtilitiesLotteryPage() {
         drawTimerRef.current = null;
       }, 1800);
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
       setIsDrawing(false);
     }
   };

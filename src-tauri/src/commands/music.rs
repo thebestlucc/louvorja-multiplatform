@@ -3,48 +3,53 @@ use crate::error::AppError;
 use crate::state::AppState;
 
 #[tauri::command]
+#[specta::specta]
 pub fn search_hymns(
     query: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::search_hymns(&conn, &query)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<Hymn, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::get_hymn_by_id(&conn, id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_albums(state: tauri::State<'_, AppState>) -> Result<Vec<Album>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::get_albums(&conn)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_hymns_by_album(
     album: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::get_hymns_by_album(&conn, &album)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn create_hymn(
     input: HymnWriteInput,
     state: tauri::State<'_, AppState>,
@@ -52,7 +57,7 @@ pub fn create_hymn(
     validate_hymn_input(&input)?;
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     let hymn_id = crate::db::queries::music::insert_hymn(&tx, &input)?;
@@ -62,6 +67,7 @@ pub fn create_hymn(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_hymn(
     id: i64,
     input: HymnWriteInput,
@@ -70,7 +76,7 @@ pub fn update_hymn(
     validate_hymn_input(&input)?;
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::music::update_hymn(&tx, id, &input)?;
@@ -80,10 +86,11 @@ pub fn update_hymn(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::music::delete_hymn(&tx, id)?;
@@ -109,13 +116,14 @@ fn validate_hymn_input(input: &HymnWriteInput) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_hymn_audio_path(
     hymn_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<String>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::resolve_hymn_audio_path(&conn, hymn_id)
 }

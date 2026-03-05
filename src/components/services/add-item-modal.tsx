@@ -18,6 +18,7 @@ import { cn } from "../../lib/utils";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { ServiceItemType } from "../../types/service";
 import { CoverImage } from "../media/cover-image";
+import type { Hymn, Presentation as PresentationType, BibleVersion, Book, Verse } from "../../lib/bindings";
 
 interface AddItemModalProps {
   open: boolean;
@@ -124,14 +125,14 @@ function HymnForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
       />
       <ScrollArea className="h-56">
         <div className="flex flex-col gap-0.5">
-          {(hymns ?? []).map((hymn) => (
+          {(hymns ?? []).map((hymn: Hymn) => (
             <button
               key={hymn.id}
               className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
               onClick={() => onAdd("hymn", hymn.title, hymn.id, null)}
             >
               <CoverImage
-                path={hymn.cover_path}
+                path={hymn.coverPath}
                 title={hymn.title}
                 className="h-6 w-6 rounded"
               />
@@ -166,8 +167,8 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
     }
   }, [versions, versionId]);
 
-  const currentVersion = versions?.find((v) => v.id === versionId);
-  const currentBook = books?.find((b) => b.name === book);
+  const currentVersion = versions?.find((v: BibleVersion) => v.id === versionId);
+  const currentBook = books?.find((b: Book) => b.name === book);
 
   const toggleVerse = (v: number) => {
     setSelectedVerses((prev) =>
@@ -182,8 +183,8 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
     const title = `${book} ${chapter}:${range}${currentVersion ? ` (${currentVersion.abbreviation})` : ""}`;
     const verseSet = new Set(sorted);
     const verseTexts = (verses ?? [])
-      .filter((v) => verseSet.has(v.verse))
-      .map((v) => `${v.verse} ${v.text}`)
+      .filter((v: Verse) => verseSet.has(v.verse))
+      .map((v: Verse) => `${v.verse} ${v.text}`)
       .join("\n");
     onAdd("bible", title, null, verseTexts || null);
   };
@@ -198,7 +199,7 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
       {/* Version buttons */}
       {versions && versions.length > 1 && (
         <div className="flex gap-1.5">
-          {versions.map((v) => (
+          {versions.map((v: BibleVersion) => (
             <Button
               key={v.id}
               variant={v.id === versionId ? "default" : "outline"}
@@ -232,7 +233,7 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
       {!book && (
         <ScrollArea className="h-56">
           <div className="grid grid-cols-3 gap-1">
-            {(books ?? []).map((b) => (
+            {(books ?? []).map((b: Book) => (
               <button
                 key={b.name}
                 className="cursor-pointer truncate rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-hover"
@@ -270,7 +271,7 @@ function BibleForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
               const selectedVerseSet = new Set(selectedVerses);
               return (
             <div className="grid grid-cols-8 gap-1.5">
-              {(verses ?? []).map((v) => (
+              {(verses ?? []).map((v: Verse) => (
                 <button
                   key={v.verse}
                   className={cn(
@@ -303,7 +304,7 @@ function PresentationForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
   return (
     <ScrollArea className="h-56">
       <div className="flex flex-col gap-0.5">
-        {(presentations ?? []).map((pres) => (
+        {(presentations ?? []).map((pres: PresentationType) => (
           <button
             key={pres.id}
             className="cursor-pointer rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
@@ -381,7 +382,7 @@ function FileForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
 
   const handleBrowse = async () => {
     const selected = await openFileDialog({ multiple: false });
-    if (selected) setFilePath(selected);
+    if (selected && !Array.isArray(selected)) setFilePath(selected);
   };
 
   const fileName = filePath ? filePath.split(/[\\/]/).pop() ?? filePath : "";

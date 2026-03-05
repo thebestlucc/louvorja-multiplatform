@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { useFormatText } from "../../lib/queries";
 import { copyToClipboard } from "../../lib/clipboard";
 import type { TextFormat } from "../../types/utilities";
@@ -22,7 +22,7 @@ function UtilitiesTextPage() {
 
   const handleApplyFormat = async () => {
     if (inputText.trim().length === 0) {
-      toast.error(t("utilities.text.emptyInput"));
+      notify.error(t("utilities.text.emptyInput"));
       return;
     }
 
@@ -30,7 +30,7 @@ function UtilitiesTextPage() {
       const result = await formatText.mutateAsync({ text: inputText, format });
       setOutputText(result);
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -38,9 +38,9 @@ function UtilitiesTextPage() {
     if (!outputText) return;
     try {
       await copyToClipboard(outputText);
-      toast.success(t("utilities.text.copied"));
+      notify.success(t("utilities.text.copied"));
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 

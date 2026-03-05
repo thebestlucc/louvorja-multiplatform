@@ -22,7 +22,7 @@ import { useThemeStore } from "../stores/theme-store";
 import { useLegacyFetchStore } from "../stores/legacy-fetch-store";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
-import type { LegacyFetchProgress, LegacyFetchReport } from "../types/legacy-fetch";
+import type { LegacyFetchProgress, LegacyFetchReport } from "../lib/bindings";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -51,7 +51,7 @@ function RootLayout() {
   const previousPrimaryMonitorIdRef = useRef<string | null>(null);
   const syncingMonitorAssignmentsRef = useRef(false);
   useThemeStore((state) => state.theme);
-  useTimerAlerts({ enabled: !isBareRoute });
+  useTimerAlerts(!isBareRoute);
 
   useEffect(() => {
     const applyLanguage = (candidate: string | null | undefined) => {
@@ -90,6 +90,18 @@ function RootLayout() {
     const unlistenPromise = listen("monitors-changed", () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.monitors.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
+    }).catch(() => () => {});
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    const unlistenPromise = listen("data-changed", () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
     }).catch(() => () => {});
 
     return () => {
@@ -147,7 +159,7 @@ function RootLayout() {
     }
 
     const currentMonitorIds = monitors.map((monitor) => monitor.id);
-    const currentPrimaryMonitorId = monitors.find((monitor) => monitor.is_primary)?.id ?? null;
+    const currentPrimaryMonitorId = monitors.find((monitor) => monitor.isPrimary)?.id ?? null;
     const previousMonitorIds = previousMonitorIdsRef.current;
     const previousPrimaryMonitorId = previousPrimaryMonitorIdRef.current;
 
@@ -250,7 +262,7 @@ function RootLayout() {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-auto p-4">
+        <main id="main-scroll-area" className="flex-1 overflow-auto p-4">
           <Outlet />
         </main>
         <SlideNavBar />

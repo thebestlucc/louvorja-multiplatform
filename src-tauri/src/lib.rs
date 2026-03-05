@@ -12,214 +12,38 @@ mod streaming;
 mod video;
 
 use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
-use std::sync::{mpsc, Mutex};
-use std::time::Duration;
+use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 /// Create the main window dynamically
 fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::utils::config::BackgroundThrottlingPolicy;
 
-    tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-        .title("LouvorJA")
+    let window = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+        .title("LouvorJA Multiplatform")
         .inner_size(1200.0, 800.0)
-        .min_inner_size(900.0, 600.0)
+        .min_inner_size(1000.0, 700.0)
         .background_throttling(BackgroundThrottlingPolicy::Disabled)
         .resizable(true)
-        .fullscreen(false)
+        .visible(false) // Start invisible, show after setup
         .build()
         .map_err(|e| format!("Failed to create main window: {e}"))?;
 
+    // On macOS, we might want to hide the window title bar for a more modern look
+    #[cfg(target_os = "macos")]
+    {
+        // let _ = window.set_title_bar_style(tauri::TitleBarStyle::Overlay);
+    }
+
+    window.show().map_err(|e| format!("Failed to show main window: {e}"))?;
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Normal app initialization
-    tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.set_focus();
-                let _ = win.unminimize();
-            }
-        }))
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(
-            tauri_plugin_window_state::Builder::new()
-                .with_state_flags(tauri_plugin_window_state::StateFlags::all())
-                .build(),
-        )
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .setup(|app| {
-            let app_data_dir = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-
-            let conn = db::init_db(&app_data_dir)
-                .map_err(|e| format!("Failed to initialize database: {e}"))?;
-
-            app.manage(AppState {
-                db: Mutex::new(conn),
-                timer: Mutex::new(TimerRuntimeState::default()),
-                migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
-                legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
-                utility_projection_stop: Mutex::new(None),
-                current_slide: Mutex::new(None),
-                projector_open: Mutex::new(false),
-                overlay: Mutex::new(OverlayRuntimeState::default()),
-                return_open: Mutex::new(false),
-                slide_context: Mutex::new(None),
-                global_shortcuts: Mutex::new(std::collections::HashMap::new()),
-            });
-
-            // Initialize audio in a background thread with a timeout.
-            // On Windows, WASAPI (rodio's backend) can block the calling thread
-            // indefinitely when no audio device is available or a driver issue is
-            // present. Running in a background thread ensures setup() completes
-            // and the Tauri event loop is never blocked, preventing all invoke()
-            // calls from being stuck in pending status.
-            let audio_state = {
-                let (tx, rx) = mpsc::channel::<Result<AudioState, String>>();
-                std::thread::spawn(move || {
-                    let result = AudioState::new().map_err(|e| e.to_string());
-                    let _ = tx.send(result);
-                });
-                match rx.recv_timeout(Duration::from_secs(5)) {
-                    Ok(Ok(state)) => state,
-                    Ok(Err(e)) => {
-                        eprintln!("[louvorja] Audio device unavailable: {e}. Audio features disabled.");
-                        AudioState::disabled()
-                    }
-                    Err(_) => {
-                        eprintln!("[louvorja] Audio initialization timed out (WASAPI hang). Audio features disabled.");
-                        AudioState::disabled()
-                    }
-                }
-            };
-            app.manage(audio_state);
-
-            app.manage(StreamingState::new(7070));
-            commands::display::start_monitor_hotplug_watcher(app.handle().clone());
-
-            // Auto-start streaming server if configured
-            {
-                let db_state = app.state::<AppState>();
-                let conn = db_state.db.lock().map_err(|e| e.to_string())?;
-                let auto_start =
-                    crate::db::queries::settings::get_setting(&conn, "streaming.autoStart")
-                        .ok()
-                        .map(|s| s.value == "true")
-                        .unwrap_or(false);
-                let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
-                    .ok()
-                    .and_then(|s| s.value.parse::<u16>().ok())
-                    .unwrap_or(7070);
-                let language = crate::db::queries::settings::get_setting(&conn, "app.language")
-                    .ok()
-                    .map(|s| s.value)
-                    .unwrap_or_else(|| "pt".to_string());
-                drop(conn); // release db lock before locking streaming state
-
-                let streaming = app.state::<StreamingState>();
-                let server_result = streaming.server.lock();
-                if let Ok(mut server) = server_result {
-                    server.set_ui_language(&language);
-                    if auto_start {
-                        let _ = server.start(Some(port));
-                    }
-                }
-            }
-
-            // Create the main window dynamically for normal mode
-            create_main_window(app.handle())?;
-
-            // Register global shortcuts — reads custom values from DB, falls back to defaults.
-            // Action IDs match SHORTCUT_DEFINITIONS in the frontend shortcut-definitions.ts.
-            {
-                use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-
-                // (action_id, default_shortcut_str)
-                let global_defaults: &[(&str, &str)] = &[
-                    ("slides-next", "Alt+Right"),
-                    ("slides-prev", "Alt+Left"),
-                    ("display-black", "Alt+B"),
-                    ("display-logo", "Alt+L"),
-                    ("app-command-palette", "CmdOrCtrl+Shift+L"),
-                    ("app-shortcuts-help", "Alt+H"),
-                ];
-
-                let db_state = app.state::<AppState>();
-                let conn = db_state.db.lock().map_err(|e| e.to_string())?;
-                let mut shortcuts_map = db_state
-                    .global_shortcuts
-                    .lock()
-                    .map_err(|e| e.to_string())?;
-
-                for (action, default_str) in global_defaults {
-                    let key = format!("shortcut.{}.global", action);
-                    let combo_str = crate::db::queries::settings::get_setting(&conn, &key)
-                        .ok()
-                        .map(|s| s.value)
-                        .filter(|v| !v.is_empty())
-                        .unwrap_or_else(|| default_str.to_string());
-
-                    if let Ok(shortcut) = combo_str.parse::<Shortcut>() {
-                        let action_id = action.to_string();
-                        let app_clone = app.handle().clone();
-
-                        if action_id == "app-command-palette" {
-                            // Toggle detached spotlight window instead of emitting to frontend
-                            let _ = app.handle().global_shortcut().on_shortcut(
-                                shortcut,
-                                move |_app, _shortcut, event| {
-                                    if event.state == ShortcutState::Pressed {
-                                        // Delegate to open_spotlight_window which handles
-                                        // both creation and recentered show/focus.
-                                        // If visible → hide (toggle off).
-                                        if let Some(win) = app_clone.get_webview_window("spotlight") {
-                                            if win.is_visible().unwrap_or(false) {
-                                                let _ = win.hide();
-                                            } else {
-                                                let _ = crate::commands::spotlight::open_spotlight_window(&app_clone);
-                                            }
-                                        } else {
-                                            let _ = crate::commands::spotlight::open_spotlight_window(&app_clone);
-                                        }
-                                    }
-                                },
-                            );
-                        } else {
-                            let _ = app.handle().global_shortcut().on_shortcut(
-                                shortcut,
-                                move |_app, _shortcut, event| {
-                                    if event.state == ShortcutState::Pressed {
-                                        let _ = app_clone.emit("global-shortcut", &action_id);
-                                    }
-                                },
-                            );
-                        }
-
-                        shortcuts_map.insert(action.to_string(), combo_str);
-                    }
-                }
-
-                drop(conn);
-                drop(shortcuts_map);
-            }
-
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+    // Specta builder
+    let specta_builder = tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(tauri_specta::collect_commands![
             // Music
             commands::music::search_hymns,
             commands::music::get_hymn,
@@ -340,6 +164,7 @@ pub fn run() {
             commands::legacy_fetch::get_legacy_fetch_report,
             commands::legacy_fetch::fetch_legacy_params,
             commands::legacy_fetch::restore_hymn_from_api,
+            commands::legacy_fetch::restore_album_from_api,
             // Updater
             commands::updater::check_for_updates,
             commands::updater::install_update,
@@ -353,29 +178,164 @@ pub fn run() {
             // Spotlight
             commands::spotlight::spotlight_select,
             commands::spotlight::spotlight_hide,
-        ])
-        .on_window_event(|window, event| {
-            // Note: spotlight hide is owned entirely by the frontend (onFocusChanged debounce).
-            // No Rust hide path here — it would bypass the 150ms drag guard.
-            if let tauri::WindowEvent::Destroyed = event {
-                let label = window.label();
-                let app = window.app_handle();
-                match label {
-                    "projector" => {
-                        if let Some(state) = app.try_state::<AppState>() {
-                            if let Ok(mut open) = state.projector_open.lock() {
-                                *open = false;
-                            }
+        ]);
+
+    #[cfg(debug_assertions)]
+    specta_builder
+        .export(
+            specta_typescript::Typescript::default()
+                .bigint(specta_typescript::BigIntExportBehavior::Number),
+            "../src/lib/bindings.ts",
+        )
+        .expect("Failed to export specta bindings");
+
+    // Normal app initialization
+    tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(specta_builder.invoke_handler())
+        .setup(move |app| {
+            specta_builder.mount_events(app);
+
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+
+            let pool = db::init_db(&app_data_dir)
+                .map_err(|e| format!("Failed to initialize database: {e}"))?;
+
+            app.manage(AppState {
+                db: pool.clone(),
+                timer: Mutex::new(TimerRuntimeState::default()),
+                migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
+                legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
+                utility_projection_stop: Mutex::new(None),
+                current_slide: Mutex::new(None),
+                projector_open: Mutex::new(false),
+                overlay: Mutex::new(OverlayRuntimeState::default()),
+                return_open: Mutex::new(false),
+                slide_context: Mutex::new(None),
+                global_shortcuts: Mutex::new(std::collections::HashMap::new()),
+            });
+
+            app.manage(AudioState::default());
+
+            // Initialize Streaming Server State
+            app.manage(StreamingState::default());
+
+            commands::display::start_monitor_hotplug_watcher(app.handle().clone());
+
+            // Create main window after setup
+            create_main_window(app.handle())?;
+
+            // Auto-start streaming server if configured
+            {
+                let db_state = app.state::<AppState>();
+                let conn = db_state.db.get().map_err(|e| e.to_string())?;
+                let auto_start =
+                    crate::db::queries::settings::get_setting(&conn, "streaming.autoStart")
+                        .ok()
+                        .map(|s| s.value == "true")
+                        .unwrap_or(false);
+                let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
+                    .ok()
+                    .and_then(|s| s.value.parse::<u16>().ok())
+                    .unwrap_or(7070);
+                let language = crate::db::queries::settings::get_setting(&conn, "app.language")
+                    .ok()
+                    .map(|s| s.value)
+                    .unwrap_or_else(|| "pt".to_string());
+                drop(conn); // release connection back to pool before locking streaming state
+
+                if auto_start {
+                    let streaming = app.state::<StreamingState>();
+                    let server_result = streaming.server.lock();
+                    if let Ok(mut server) = server_result {
+                        server.set_ui_language(&language);
+                        if let Err(e) = server.start(Some(port)) {
+                            eprintln!("[streaming] Failed to auto-start: {e}");
+                        } else {
+                            println!("[streaming] Auto-started on port {port}");
                         }
-                        let _ = app.emit("projector-state-changed", false);
+                    }
+                }
+            }
+
+            // Register global shortcuts from settings
+            {
+                let global_defaults = [
+                    ("app-command-palette", "CmdOrCtrl+Shift+L"),
+                    ("app-shortcuts-help", "Alt+H"),
+                ];
+
+                let db_state = app.state::<AppState>();
+                let conn = db_state.db.get().map_err(|e| e.to_string())?;
+                let mut shortcuts_map = db_state
+                    .global_shortcuts
+                    .lock()
+                    .map_err(|e| e.to_string())?;
+
+                for (action, default_str) in global_defaults {
+                    let key = format!("shortcut.{}.global", action);
+                    let combo_str = crate::db::queries::settings::get_setting(&conn, &key)
+                        .ok()
+                        .map(|s| s.value)
+                        .filter(|v| !v.is_empty())
+                        .unwrap_or_else(|| default_str.to_string());
+
+                    if !combo_str.is_empty() {
+                        use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+                        if let Ok(shortcut) = combo_str.parse::<Shortcut>() {
+                            let action_clone = action.to_string();
+                            let app_handle = app.handle().clone();
+                            let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                                if event.state == ShortcutState::Pressed {
+                                    if action_clone == "app-command-palette" {
+                                        let _ = crate::commands::spotlight::open_spotlight_window(&app_handle);
+                                    } else {
+                                        let _ = app_handle.emit("global-shortcut", &action_clone);
+                                    }
+                                }
+                            });
+                            shortcuts_map.insert(action.to_string(), combo_str);
+                        }
+                    }
+                }
+                drop(conn);
+                drop(shortcuts_map);
+            }
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                match window.label() {
+                    "projector" => {
+                        let state = window.state::<AppState>();
+                        if let Ok(mut open) = state.projector_open.lock() {
+                            *open = false;
+                        }
+                        let _ = window.emit("projector-state-changed", false);
                     }
                     "return" => {
-                        if let Some(state) = app.try_state::<AppState>() {
-                            if let Ok(mut open) = state.return_open.lock() {
-                                *open = false;
-                            }
+                        let state = window.state::<AppState>();
+                        if let Ok(mut open) = state.return_open.lock() {
+                            *open = false;
                         }
-                        let _ = app.emit("return-state-changed", false);
+                        let _ = window.emit("return-state-changed", false);
                     }
                     _ => {}
                 }

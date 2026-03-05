@@ -1,18 +1,24 @@
-import { DragEvent, FormEvent, useDeferredValue, useMemo, useState } from "react";
+import { DragEvent, FormEvent, useDeferredValue, useMemo, useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, Loader2, Plus, Trash2, Upload } from "lucide-react";
-import { toast } from "sonner";
+import { FolderOpen, Loader2, Plus, Trash2, LayoutGrid, List as ListIcon, MoreVertical, Play, MonitorPlay, Music, Upload } from "lucide-react";
+import { notify } from "../../lib/notifications";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Card, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
 import {
   useCollections,
   useCreateCollection,
   useDeleteCollection,
   useImportCollectionSong,
 } from "../../lib/queries";
+import type { Collection } from "../../lib/bindings";
+import { getCollection, getCollectionHymns, getSlides } from "../../lib/tauri";
+import { parseSlideRow } from "../../types/presentation";
+import { usePresentationStore } from "../../stores/presentation-store";
+import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { CoverImage } from "../../components/media/cover-image";
 import {
   Dialog,
@@ -23,6 +29,8 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { cn } from "../../lib/utils";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useMedia } from "react-use";
 
 export const Route = createFileRoute("/collections/")({
   component: CollectionsIndex,
@@ -42,7 +50,12 @@ function CollectionsIndex() {
   const deleteMutation = useDeleteCollection();
   const importSongMutation = useImportCollectionSong();
 
+  const setPresentationSlides = usePresentationStore((state) => state.setSlides);
+  const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
+  const { bindHymnToPlaybackQueue, handleStartCantado, handleStartPlayback } = useHymnPlayback();
+
   const [tab, setTab] = useState<"albums" | "custom">("albums");
+  const [view, setView] = useState<"list" | "grid">("grid");
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -73,9 +86,8 @@ function CollectionsIndex() {
   const filtered = useMemo(() => {
     const value = deferredSearch.trim().toLowerCase();
     const all = data ?? [];
-    // Filter by tab: albums = api-sourced, custom = file-sourced
     const byTab = all.filter((entry) =>
-      tab === "albums" ? entry.source_type === "api" : entry.source_type !== "api"
+      tab === "albums" ? entry.sourceType === "api" : entry.sourceType !== "api"
     );
     if (!value) return byTab;
     return byTab.filter((entry) => {
@@ -122,10 +134,75 @@ function CollectionsIndex() {
       .map((file) => (file as File & { path?: string }).path)
       .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
     if (paths.length === 0) {
-      toast.error(t("collections.uploadDropUnsupported"));
+      notify.error(t("collections.uploadDropUnsupported"));
       return;
     }
     addUploadPaths(paths);
+  };
+
+  const handleProjectCollection = async (collection: Collection) => {
+    try {
+      const allSlides: any[] = [];
+      if (collection.sourceType === "api") {
+        const hymns = await getCollectionHymns(collection.id);
+        for (const hymn of hymns) {
+          const slides = (await bindHymnToPlaybackQueue(hymn, 0))?.generatedSlides || [];
+          allSlides.push(...slides);
+        }
+      } else {
+        const detail = await getCollection(collection.id);
+        for (const song of detail.songs) {
+          if (song.cachePresentationId) {
+            const rows = await getSlides(song.cachePresentationId);
+            const contents = rows.map((r) => parseSlideRow(r).content);
+            allSlides.push(...contents);
+          }
+        }
+      }
+      
+      if (allSlides.length > 0) {
+        setCurrentPresentation(null);
+        setPresentationSlides(allSlides);
+        notify.success(t("collections.projectedAll", { count: allSlides.length }));
+      }
+    } catch (e) {
+      notify.tauriError(e, t("collections.projectFailed"));
+    }
+  };
+
+  const handlePlayCollectionSongs = async (collection: Collection) => {
+    try {
+      if (collection.sourceType === "api") {
+        const hymns = await getCollectionHymns(collection.id);
+        if (hymns.length > 0) {
+          await handleStartCantado(hymns[0]);
+          notify.success(t("collections.playingHymn", { title: hymns[0].title }));
+        }
+      } else {
+        const detail = await getCollection(collection.id);
+        // Playing custom collection not yet fully supported as playlist, play first for now
+        if (detail.songs.length > 0) {
+          notify.info("Custom collection playlist not yet fully implemented. Playing first item...");
+          // handlePlaySong logic from detail page would be needed here, or similar hook
+        }
+      }
+    } catch (e) {
+      notify.tauriError(e, t("collections.playFailed"));
+    }
+  };
+
+  const handlePlayCollectionPlayback = async (collection: Collection) => {
+    try {
+      if (collection.sourceType === "api") {
+        const hymns = await getCollectionHymns(collection.id);
+        if (hymns.length > 0) {
+          await handleStartPlayback(hymns[0]);
+          notify.success(t("collections.playingHymn", { title: hymns[0].title }));
+        }
+      }
+    } catch (e) {
+      notify.tauriError(e, t("collections.playFailed"));
+    }
   };
 
   const handleCreate = async (event?: FormEvent<HTMLFormElement>) => {
@@ -146,19 +223,33 @@ function CollectionsIndex() {
       }
 
       if (importedCount > 0) {
-        toast.success(t("collections.uploadImported", { count: importedCount }));
+        notify.success(t("collections.uploadImported", { count: importedCount }));
       }
 
       resetCreateForm();
       setCreateOpen(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("collections.saveFailed", { error: message }));
+      notify.tauriError(error, t("collections.saveFailed", { error: "" }));
     }
   };
 
+  const isXl = useMedia("(min-width: 1280px)", false);
+  const isLg = useMedia("(min-width: 1024px)", false);
+  const isSm = useMedia("(min-width: 640px)", false);
+
+  const columns = view === "list" ? 1 : isXl ? 5 : isLg ? 4 : isSm ? 3 : 2;
+  const rowCount = Math.ceil(filtered.length / columns);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => document.getElementById("main-scroll-area"),
+    estimateSize: () => (view === "list" ? 64 : 280),
+    overscan: 5,
+  });
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6" ref={listRef}>
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("nav.collections")}</h1>
@@ -283,57 +374,50 @@ function CollectionsIndex() {
                 </div>
               )}
             </div>
-
             <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={resetCreateForm}
-                disabled={createMutation.isPending}
-              >
+              <Button type="button" variant="ghost" onClick={resetCreateForm} disabled={createMutation.isPending}>
                 {t("collections.resetForm")}
               </Button>
               <Button type="submit" disabled={!canSubmit}>
-                {createMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t("collections.creating")}
-                  </>
-                ) : (
-                  t("collections.create")
-                )}
+                {createMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {t("collections.create")}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Tab switcher */}
-      <div className="flex items-center gap-1 border-b border-border">
-        <button
-          type="button"
-          onClick={() => setTab("albums")}
-          className={cn(
-            "px-4 py-2 text-sm font-medium transition-colors",
-            tab === "albums"
-              ? "border-b-2 border-primary text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {t("collections.tabAlbums")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("custom")}
-          className={cn(
-            "px-4 py-2 text-sm font-medium transition-colors",
-            tab === "custom"
-              ? "border-b-2 border-primary text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {t("collections.tabCustom")}
-        </button>
+      <div className="flex items-center justify-between border-b border-border pb-2">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setTab("albums")}
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-colors border-b-2",
+              tab === "albums" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t("collections.tabAlbums")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("custom")}
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-colors border-b-2",
+              tab === "custom" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t("collections.tabCustom")}
+          </button>
+        </div>
+        <div className="flex items-center gap-2 bg-muted/20 p-1 rounded-md border">
+          <Button variant={view === "list" ? "outline" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setView("list")} title="List view">
+            <ListIcon className="h-4 w-4" />
+          </Button>
+          <Button variant={view === "grid" ? "outline" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setView("grid")} title="Grid view">
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Input
@@ -350,61 +434,189 @@ function CollectionsIndex() {
           <p className="text-sm text-muted-foreground">{t("collections.empty")}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {filtered.map((collection) => {
-            const cover = collection.cover_path ?? collection.auto_cover_path;
-            const creationYear = collection.year ?? getCreationYear(collection.created_at);
-            return (
-              <Card key={collection.id} className="overflow-hidden">
-                <CardHeader className="gap-3 p-3">
-                  <div className="relative">
-                    <Link
-                      to="/collections/$collectionId"
-                      params={{ collectionId: String(collection.id) }}
-                      className="block"
-                    >
-                      <CoverImage path={cover} title={collection.name} className="h-auto w-full aspect-square rounded-md" />
-                    </Link>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "absolute top-2 right-2 h-7 w-7 text-destructive hover:bg-destructive/10",
-                        collection.source_type === "api" && "hidden"
-                      )}
-                      onClick={async () => {
-                        try {
-                          await deleteMutation.mutateAsync(collection.id);
-                        } catch (error) {
-                          const message = error instanceof Error ? error.message : String(error);
-                          toast.error(t("collections.deleteFailed", { error: message }));
-                        }
-                      }}
-                      title={t("actions.delete")}
-                      aria-label={t("actions.delete")}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+        <div className={view === "list" ? "rounded-lg border border-border bg-card overflow-hidden" : ""}>
+          {view === "list" && (
+            <div className="grid grid-cols-[2fr_1fr_100px_160px] gap-4 px-4 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:grid">
+              <div className="pl-2">{t("collections.name", "Name")}</div>
+              <div>{t("collections.year", "Year")}</div>
+              <div>{t("collections.songs", "Songs")}</div>
+              <div className="text-right pr-2">{t("table.actions", "Actions")}</div>
+            </div>
+          )}
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const startIndex = virtualRow.index * columns;
+              const rowItems = filtered.slice(startIndex, startIndex + columns);
 
-                  <Link
-                    to="/collections/$collectionId"
-                    params={{ collectionId: String(collection.id) }}
-                    className="space-y-1"
+              return (
+                <div
+                  key={virtualRow.key}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                    paddingBottom: view === "grid" ? "16px" : "0",
+                  }}
+                >
+                  <div
+                    className={cn(
+                      view === "grid" 
+                        ? "grid gap-4 h-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" 
+                        : "flex flex-col h-full"
+                    )}
                   >
-                    <CardTitle className="line-clamp-2 text-sm leading-snug">{collection.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {creationYear ?? t("collections.yearUnknown")}
-                    </CardDescription>
-                    <p className="text-xs text-muted-foreground">
-                      {t("collections.songCount", { count: collection.song_count })}
-                    </p>
-                  </Link>
-                </CardHeader>
-              </Card>
+                    {rowItems.map((collection) => {
+                      const cover = collection.coverPath ?? collection.autoCoverPath;
+                      const creationYear = collection.year ?? getCreationYear(collection.createdAt);
+
+                      if (view === "list") {
+                        return (
+                          <div key={collection.id} className="group relative border-b border-border bg-card transition-colors hover:bg-muted/50 h-full">
+                            <Link to="/collections/$collectionId" params={{ collectionId: String(collection.id) }} className="absolute inset-0 z-0" />
+                            <div className="flex flex-col sm:grid sm:grid-cols-[2fr_1fr_100px_160px] items-start sm:items-center gap-2 sm:gap-4 px-4 py-3 text-sm relative z-10 pointer-events-none h-full">
+                              <div className="flex items-center gap-3 min-w-0 w-full pl-0 sm:pl-2">
+                                {cover ? (
+                                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border border-border">
+                                    <CoverImage path={cover} title={collection.name} className="h-full w-full object-cover" />
+                                  </div>
+                                ) : (
+                                  <div className="h-8 w-8 shrink-0 rounded-md border border-border bg-muted flex items-center justify-center">
+                                    <FolderOpen className="h-4 w-4 text-muted-foreground/50" />
+                                  </div>
+                                )}
+                                <span className="font-medium truncate">{collection.name}</span>
+                              </div>
+                              
+                              <div className="text-muted-foreground truncate hidden sm:block">
+                                {creationYear ?? <span className="text-muted-foreground/50">-</span>}
+                              </div>
+                              
+                              <div className="text-muted-foreground hidden sm:block">
+                                {collection.songCount}
+                              </div>
+  
+                              <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pr-0 sm:pr-2 pointer-events-auto w-full sm:w-auto mt-2 sm:mt-0 border-t sm:border-t-0 pt-2 sm:pt-0">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+                                  title="Project All"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleProjectCollection(collection); }}
+                                >
+                                  <MonitorPlay className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+                                  title="Play All Songs"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handlePlayCollectionSongs(collection); }}
+                                >
+                                  <Play className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+                                  title="Play All Playback"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handlePlayCollectionPlayback(collection); }}
+                                >
+                                  <Music className="h-4 w-4" />
+                                </Button>
+                                {collection.sourceType !== "api" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      try {
+                                        await deleteMutation.mutateAsync(collection.id);
+                                      } catch (error) {
+                                        notify.tauriError(error, t("collections.deleteFailed", { error: "" }));
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                    return (
+                      <Card key={collection.id} className="overflow-hidden flex flex-col h-full group">
+                        <CardHeader className="p-0 flex-1 relative">
+                          <Link to="/collections/$collectionId" params={{ collectionId: String(collection.id) }} className="block relative aspect-square">
+                            <CoverImage path={cover} title={collection.name} className="h-full w-full object-cover rounded-none" />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
+                              {/* Grid view actions hover */}
+                            </div>
+                          </Link>
+                          
+                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                <Button size="icon" variant="outline" className="h-7 w-7 rounded-full bg-background/80 backdrop-blur-md">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem onClick={() => void handleProjectCollection(collection)}>
+                                  <MonitorPlay className="mr-2 h-4 w-4" />
+                                  Project All
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void handlePlayCollectionSongs(collection)}>
+                                  <Play className="mr-2 h-4 w-4" />
+                                  Play All Songs
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void handlePlayCollectionPlayback(collection)}>
+                                  <Music className="mr-2 h-4 w-4" />
+                                  Play All Playback
+                                </DropdownMenuItem>
+                                {collection.sourceType !== "api" && (
+                                  <DropdownMenuItem 
+                                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      try {
+                                        await deleteMutation.mutateAsync(collection.id);
+                                      } catch (error) {
+                                        notify.tauriError(error, t("collections.deleteFailed", { error: "" }));
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          <Link to="/collections/$collectionId" params={{ collectionId: String(collection.id) }} className="p-3 block flex-1">
+                            <CardTitle className="line-clamp-2 text-sm leading-snug">{collection.name}</CardTitle>
+                            <CardDescription className="text-xs mt-1">
+                              {creationYear ?? t("collections.yearUnknown")}
+                            </CardDescription>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {t("collections.songCount", { count: collection.songCount })}
+                            </p>
+                          </Link>
+                        </CardHeader>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
+        </div>
         </div>
       )}
     </div>

@@ -1,10 +1,6 @@
 ---
 name: rust-microsoft-guidelines
-version: 1.0.0
 description: Microsoft Pragmatic Rust Guidelines - organized references for performance, safety, and documentation
-allowed-tools: ["Read", "Write", "Grep", "Bash"]
-source: https://microsoft.github.io/rust-guidelines/
-license: MIT © Microsoft Corporation
 ---
 
 # Rust Microsoft Guidelines Skill

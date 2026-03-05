@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Plus, GripVertical, Copy, Trash2 } from "lucide-react";
-import type { SlideContent } from "../../types/presentation";
+import type { SlideContent } from "../../lib/bindings";
 import { SlideThumbnail } from "./slide-thumbnail";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
@@ -36,6 +36,8 @@ interface SlideListProps {
   onDelete?: (index: number) => void;
   /** Unique IDs for sortable items (slide DB ids) */
   itemIds?: number[];
+  showNumbers?: boolean;
+  orientation?: "horizontal" | "vertical";
 }
 
 export function SlideList({

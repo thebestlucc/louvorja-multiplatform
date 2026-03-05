@@ -4,15 +4,17 @@ use crate::error::AppError;
 use crate::legacy_fetch::LegacyFetchRuntimeState;
 use crate::migration::MigrationRuntimeState;
 use crate::streaming::StreamingServer;
-use rusqlite::Connection;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use serde::Serialize;
-use std::sync::mpsc::Sender;
+use specta::Type;
 use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 use std::time::Instant;
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub enum TimerMode {
     Countdown,
     Stopwatch,
@@ -28,13 +30,16 @@ impl TimerMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TimerStateData {
     pub mode: TimerMode,
     pub is_running: bool,
+    #[specta(type = f64)]
     pub current_time_ms: u64,
+    #[specta(type = f64)]
     pub duration_ms: Option<u64>,
+    #[specta(type = Vec<f64>)]
     pub laps: Vec<u64>,
 }
 
@@ -169,7 +174,7 @@ pub struct OverlayRuntimeState {
 }
 
 pub struct AppState {
-    pub db: Mutex<Connection>,
+    pub db: Pool<SqliteConnectionManager>,
     pub timer: Mutex<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
@@ -189,8 +194,20 @@ pub struct AudioState {
     pub audio_status_stream_stop: Mutex<Option<Sender<()>>>,
 }
 
+impl Default for AudioState {
+    fn default() -> Self {
+        Self::new().unwrap_or_else(|_| Self::disabled())
+    }
+}
+
 pub struct StreamingState {
     pub server: Mutex<StreamingServer>,
+}
+
+impl Default for StreamingState {
+    fn default() -> Self {
+        Self::new(7070)
+    }
 }
 
 impl StreamingState {

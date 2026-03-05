@@ -1,6 +1,6 @@
 # LouvorJA Multiplatform — Central Delivery Tracker
 
-Last repository analysis: **2026-02-18**
+Last repository analysis: **2026-03-04**
 
 This is the single status tracker for implementation progress.
 
@@ -10,10 +10,10 @@ This is the single status tracker for implementation progress.
 2. `docs/phase-*/HANDOFF.md` files keep implementation details and closure evidence, but must not diverge from this file.
 3. Every status update requires repository evidence (code + verification command output).
 
-## Verification Snapshot (2026-02-18)
+## Verification Snapshot (2026-03-04)
 
 - `pnpm exec tsc --noEmit` -> pass
-- `pnpm test:unit` -> pass (27/27)
+- `pnpm lint:i18n` -> pass
 - `cargo check --manifest-path src-tauri/Cargo.toml` -> pass
 - `pnpm exec vite build` -> pass
 
@@ -31,50 +31,34 @@ This is the single status tracker for implementation progress.
 | 7 | 08 | HTTP Streaming Server | COMPLETE | historical baseline + commit history |
 | 8 | 09 | Video & Multimedia | COMPLETE | historical baseline + phase docs |
 | 9 | 10 | Utilities & Polish | COMPLETE | historical baseline + phase docs |
-| 10 | 11 | Migration Tools & Deployment | COMPLETE | `docs/phase-10-migration-tools-deployment/HANDOFF.md`, `docs/phase-10-migration-tools-deployment/SMOKE-2026-02-17.md` |
+| 10 | 11 | Migration Tools & Deployment | COMPLETE | `docs/phase-10-migration-tools-deployment/HANDOFF.md` |
 | 11 | 12 | Hymn CRUD + Collections + Hybrid Cache Covers | COMPLETE | `docs/phase-11-hymn-crud-collections/HANDOFF.md` |
 | 12 | - | Monitor Assignment in Settings | COMPLETE | `docs/phase-12-monitor-screen-assignment/HANDOFF.md` |
+| 13 | - | Architectural Improvement — Modernization | COMPLETE | `docs/plans/architectural-improvements-tasks.md` |
 
-**Progress:** 13 complete / 13 tracked phases
+**Progress:** 14 complete / 14 tracked phases
 
 ## Current Evidence (Audited in This Update)
 
-### Phase 11 (Complete)
+### Phase 13 (Complete)
 
-- Backend CRUD + collections domain implemented:
-  - `src-tauri/src/commands/music.rs`
-  - `src-tauri/src/commands/collections.rs`
-  - `src-tauri/src/db/queries/collections.rs`
-  - `src-tauri/src/db/migrations.rs`
-- Frontend collections module and covers implemented:
-  - `src/routes/collections/index.tsx`
-  - `src/routes/collections/$collectionId.tsx`
-  - `src/components/media/cover-picker.tsx`
-  - `src/components/media/cover-image.tsx`
-  - `src/lib/tauri.ts`
-  - `src/lib/queries.ts`
-- Settings toggle for auto-check implemented:
-  - `src/routes/settings/index.tsx`
-  - `src/locales/en.json`
-  - `src/locales/pt.json`
-  - `src/locales/es.json`
-
-### Phase 12 (Complete)
-
-- Shared monitor resolver and projection alignment implemented:
-  - `src/lib/monitor-resolution.ts`
-  - `src/lib/projection-playback.ts`
-  - `src/hooks/use-monitors.ts`
-- Settings/onboarding monitor assignment + test actions implemented:
-  - `src/routes/settings/index.tsx`
-  - `src/routes/onboarding/monitors.tsx`
-- Backend monitor identity hardening and hotplug eventing implemented:
-  - `src-tauri/src/commands/display.rs`
-  - `src-tauri/src/lib.rs`
-- Resolver tests implemented and passing:
-  - `tests/monitor-resolution.test.ts`
+- **Type Safety & IPC Modernization (Task 1):**
+  - Integrated `specta` and `tauri-specta` for automated TS binding generation.
+  - Migrated entire codebase (frontend/backend) from `snake_case` to `camelCase`.
+  - Unified `SlideContent` type across all projection modules.
+- **Backend Reliability & Performance (Task 2):**
+  - Replaced `Mutex<Connection>` with `r2d2` connection pooling for improved throughput.
+  - Refactored `AppError` to return structured JSON with error codes and details.
+  - Implemented standardized `notify` handler in frontend replacing manual `toast` calls.
+- **Frontend Refactoring & State Decoupling (Task 3):**
+  - Decoupled `audio-store` from `presentation-store` using event-based synchronization.
+  - Removed domain logic from stores to make them purely reactive state containers.
+- **Quality Control & Validation (Task 4):**
+  - Implemented `scripts/validate-i18n.mjs` and `pnpm lint:i18n` command.
+  - Replaced legacy manual interfaces in `src/types/` with imports from `src/lib/bindings.ts`.
 
 ## Closure Notes
 
 1. Phase 11 handoff finalized at `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-11-hymn-crud-collections/HANDOFF.md`.
 2. Phase 12 handoff finalized at `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/phase-12-monitor-screen-assignment/HANDOFF.md`.
+3. Phase 13 finalized at `docs/plans/architectural-improvements-tasks.md`.

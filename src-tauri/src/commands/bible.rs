@@ -38,29 +38,32 @@ fn broadcast_bible_stream_payloads(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_bible_versions(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<BibleVersion>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::bible::get_versions(&conn)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_books(
     version_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Book>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::bible::get_books(&conn, version_id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_verses(
     version_id: i64,
     book: String,
@@ -69,12 +72,13 @@ pub fn get_verses(
 ) -> Result<Vec<Verse>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::bible::get_verses(&conn, version_id, &book, chapter)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_verse_range(
     version_id: i64,
     book: String,
@@ -85,12 +89,13 @@ pub fn get_verse_range(
 ) -> Result<Vec<Verse>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::bible::get_verse_range(&conn, version_id, &book, chapter, start, end)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn search_bible(
     query: String,
     version_id: Option<i64>,
@@ -98,12 +103,13 @@ pub fn search_bible(
 ) -> Result<Vec<BibleSearchResult>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::bible::search_bible_text(&conn, &query, version_id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn project_bible_verse(
     version_id: i64,
     book: String,
@@ -115,7 +121,7 @@ pub fn project_bible_verse(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let verses =
@@ -195,6 +201,7 @@ pub fn project_bible_verse(
 /// - Right arrow: next verse; if last verse in chapter, go to next chapter; if last chapter, go to next book.
 /// - Left arrow: previous verse; if first verse in chapter, go to previous chapter's last verse; if first chapter, go to previous book's last chapter.
 #[tauri::command]
+#[specta::specta]
 pub fn navigate_bible_verse(
     direction: String, // "next" or "prev"
     app: AppHandle,
@@ -221,7 +228,7 @@ pub fn navigate_bible_verse(
 
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     // We need to figure out the version_id from the current verse
@@ -256,7 +263,7 @@ pub fn navigate_bible_verse(
         } else {
             // Try next chapter in same book
             let max_chapter = books[book_idx].chapter_count;
-            if chapter < max_chapter {
+            if chapter < max_chapter as i64 {
                 (book.clone(), chapter + 1, 1)
             } else {
                 // Try next book
@@ -294,7 +301,7 @@ pub fn navigate_bible_verse(
                             rusqlite::params![version_id, prev_book.name, prev_chapter],
                             |row| row.get(0),
                         )?;
-                    (prev_book.name.clone(), prev_chapter, max_verse)
+                    (prev_book.name.clone(), prev_chapter as i64, max_verse)
                 } else {
                     return Ok(()); // First verse of first book, do nothing
                 }
@@ -412,6 +419,7 @@ fn parse_bible_reference(reference: &str) -> Result<(String, i64, i64), AppError
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn import_bible_version(
     name: String,
     abbreviation: String,
@@ -422,7 +430,7 @@ pub fn import_bible_version(
     let verses: Vec<(String, i64, i64, String)> = serde_json::from_str(&verses_json)?;
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::bible::import_bible_version(&conn, &name, &abbreviation, &language, &verses)
 }

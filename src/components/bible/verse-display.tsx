@@ -7,7 +7,7 @@ import { Copy, Plus } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
 import { copyToClipboard } from "../../lib/clipboard";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { getLocalizedBookName } from "./book-catalog";
 
 interface VerseDisplayProps {
@@ -66,7 +66,7 @@ export function VerseDisplay({
       .map((v) => `${v.verse} ${v.text}`)
       .join("\n");
     await copyToClipboard(`${reference}\n${text}`);
-    toast.success(t("bible.verseCopied"));
+    notify.success(t("bible.verseCopied"));
   };
 
   const handleAddToService = () => {

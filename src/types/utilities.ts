@@ -1,16 +1,8 @@
-import type { SlideContentFlat, SlideContextFlat } from "./presentation";
+import type { SlideContent, SlideContext, TimerMode, TimerStateData } from "../lib/bindings";
 
-export type TimerMode = "countdown" | "stopwatch";
+export type { TimerMode, TimerStateData };
 export type UtilityLiveKind = "countdown" | "stopwatch" | "clock";
 export type UtilityProjectionPhase = "start" | "tick" | "stop";
-
-export interface TimerStateData {
-  mode: TimerMode;
-  isRunning: boolean;
-  currentTimeMs: number;
-  durationMs: number | null;
-  laps: number[];
-}
 
 export interface UtilityProjectionEventPayload {
   phase: UtilityProjectionPhase;
@@ -31,8 +23,8 @@ export interface UtilityProjectionState {
 }
 
 export interface UtilityProjectionPayload {
-  slide: SlideContentFlat;
-  context: SlideContextFlat;
+  slide: SlideContent;
+  context: SlideContext;
 }
 
 interface UtilityProjectionPayloadInput {
@@ -123,10 +115,21 @@ export function createUtilityProjectionPayload({
 
   return {
     slide: {
-      slide_type: "cover",
+      slideType: "cover",
       title: safeDisplayValue,
       subtitle: safeSubtitle,
       label: kind,
+      text: null,
+      videoPath: null,
+      backgroundImage: null,
+      backgroundColor: null,
+      audioPath: null,
+      autoPlay: null,
+      loop: null,
+      muted: null,
+      mode: null,
+      textColor: null,
+      textSize: null,
     },
     context: {
       next: null,

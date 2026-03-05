@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 // --- SSE Broadcaster ---
 
@@ -103,7 +104,7 @@ pub struct StreamingServer {
     port: u16,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingInfo {
     pub is_running: bool,
@@ -114,7 +115,7 @@ pub struct StreamingInfo {
     pub broadcast_enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingUrls {
     pub music: String,

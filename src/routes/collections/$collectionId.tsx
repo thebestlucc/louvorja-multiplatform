@@ -10,13 +10,15 @@ import {
   Music,
   Pencil,
   Play,
+  MonitorPlay,
   RefreshCcw,
   Save,
   Trash2,
   TriangleAlert,
   Upload,
+  Loader2,
 } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import {
   useCheckCollectionSongSync,
   useCollection,
@@ -27,17 +29,19 @@ import {
   useResyncCollectionSong,
   useSetting,
   useUpdateCollection,
+  useRestoreAlbumFromApi,
 } from "../../lib/queries";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
 import { CoverPicker } from "../../components/media/cover-picker";
 import { CoverImage } from "../../components/media/cover-image";
-import type { CollectionSong, CollectionSongSyncStatus } from "../../types/collection";
-import { audioPlay, getSlides } from "../../lib/tauri";
-import type { AudioStatusPayload } from "../../types/audio";
+import type { CollectionSong, CollectionSongSyncStatus, AudioStatusPayload } from "../../lib/bindings";
+import { getSlides } from "../../lib/tauri";
 import { parseSlideRow, type SlideRow } from "../../types/presentation";
 import { useSlides as useSlidesControl } from "../../hooks/use-slides";
+import { useAudio } from "../../hooks/use-audio";
+import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 
@@ -57,11 +61,11 @@ export const Route = createFileRoute("/collections/$collectionId")({
 
 function statusVariant(status: CollectionSongSyncStatus): "default" | "secondary" | "destructive" {
   switch (status) {
-    case "in_sync":
+    case "inSync":
       return "secondary";
     case "stale":
       return "default";
-    case "missing_source":
+    case "missingSource":
       return "destructive";
     case "error":
       return "destructive";
@@ -86,14 +90,17 @@ function CollectionDetail() {
   const resyncSong = resyncMutation.mutateAsync;
   const removeSong = removeMutation.mutateAsync;
   const reorderSongs = reorderMutation.mutateAsync;
+  const restoreAlbumFromApi = useRestoreAlbumFromApi();
   const { goToSlide } = useSlidesControl();
+  const { play, setPlaybackMode } = useAudio();
+  const { handleStartCantado, handleStartSlidesOnly } = useHymnPlayback();
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const setPresentationSlides = usePresentationStore((state) => state.setSlides);
   const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
   const startAudioStatusSubscription = useAudioStore((state) => state.startStatusSubscription);
   const stopAudioStatusSubscription = useAudioStore((state) => state.stopStatusSubscription);
   const { data: autoCheckSetting } = useSetting("collections.autoCheckSourceOnOpen");
-  const isApiCollection = data?.collection.source_type === "api";
+  const isApiCollection = data?.collection.sourceType === "api";
   const { data: collectionHymns } = useCollectionHymns(isApiCollection ? id : -1);
 
   const [name, setName] = useState("");
@@ -110,15 +117,15 @@ function CollectionDetail() {
     setName(data.collection.name);
     setDescription(data.collection.description ?? "");
     setYear(data.collection.year != null ? String(data.collection.year) : "");
-    setCoverPath(data.collection.cover_path ?? null);
+    setCoverPath(data.collection.coverPath ?? null);
   }, [data]);
 
-  const effectiveCover = coverPath ?? data?.collection.auto_cover_path ?? null;
+  const effectiveCover = coverPath ?? data?.collection.autoCoverPath ?? null;
 
   const syncKey = useMemo(() => {
     if (!data) return "";
     return data.songs
-      .map((song) => `${song.id}:${song.source_hash}:${song.source_mtime_ms}:${song.sync_status}`)
+      .map((song) => `${song.id}:${song.sourceHash}:${song.sourceMtimeMs}:${song.syncStatus}`)
       .join("|");
   }, [data]);
 
@@ -128,7 +135,7 @@ function CollectionDetail() {
 
     const runSyncChecks = async () => {
       for (const song of data.songs) {
-        if (cancelled || song.sync_status === "error") {
+        if (cancelled || song.syncStatus === "error") {
           continue;
         }
 
@@ -152,8 +159,7 @@ function CollectionDetail() {
           if (cancelled) {
             continue;
           }
-          const message = error instanceof Error ? error.message : String(error);
-          toast.error(t("collections.syncCheckFailed", { error: message }));
+          notify.tauriError(error, t("collections.syncCheckFailed", { error: "" }));
         }
       }
     };
@@ -189,8 +195,7 @@ function CollectionDetail() {
       });
       setEditOpen(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("collections.saveFailed", { error: message }));
+      notify.tauriError(error, t("collections.saveFailed", { error: "" }));
     }
   };
 
@@ -203,8 +208,7 @@ function CollectionDetail() {
     try {
       await importMutation.mutateAsync({ collectionId: id, path: selected });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("collections.importFailed", { error: message }));
+      notify.tauriError(error, t("collections.importFailed", { error: "" }));
     }
   };
 
@@ -217,34 +221,34 @@ function CollectionDetail() {
     try {
       await reorderSongs({ collectionId: id, songIds: ordered });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("collections.reorderFailed", { error: message }));
+      notify.tauriError(error, t("collections.reorderFailed", { error: "" }));
     }
   };
 
   const handlePlaySong = async (song: CollectionSong) => {
-    if (!song.cache_presentation_id) {
+    if (!song.cachePresentationId) {
       return;
     }
 
     try {
       stopAudioStatusSubscription();
       setAudioSyncPoints([]);
-      const slideRows = await getSlides(song.cache_presentation_id);
+      const slideRows = await getSlides(song.cachePresentationId);
       const slideContents = slideRows.map((row) => parseSlideRow(row).content);
       if (slideContents.length === 0) {
-        toast.error(t("collections.playEmpty"));
+        notify.error(t("collections.playEmpty"));
         return;
       }
 
-      setCurrentPresentation(song.cache_presentation_id);
+      setCurrentPresentation(song.cachePresentationId);
       setPresentationSlides(slideContents);
       await goToSlide(0);
 
       const { audioPath, syncPoints } = extractLegacyPlaybackMetadata(slideRows);
       if (audioPath) {
+        setPlaybackMode("sung");
         startAudioStatusSubscription();
-        await audioPlay(audioPath);
+        await play(audioPath);
         setAudioSyncPoints(syncPoints);
 
         void (async () => {
@@ -258,21 +262,31 @@ function CollectionDetail() {
             setAudioSyncPoints(calibrated);
           }
         })();
+      } else {
+        setPlaybackMode("silent");
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("collections.playFailed", { error: message }));
+      notify.tauriError(error, t("collections.playFailed", { error: "" }));
     }
   };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex items-center gap-3">
-        <Link to="/collections">
-          <Button variant="ghost" size="icon" aria-label={t("actions.close")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          aria-label={t("actions.close")}
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              navigate({ to: "/collections" });
+            }
+          }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <h1 className="text-xl font-semibold">{t("collections.detailTitle")}</h1>
       </div>
 
@@ -290,7 +304,7 @@ function CollectionDetail() {
                 {data.collection.year ?? t("collections.yearUnknown")}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t("collections.songCount", { count: data.collection.song_count })}
+                {t("collections.songCount", { count: data.collection.songCount })}
               </p>
             </div>
           </div>
@@ -309,6 +323,23 @@ function CollectionDetail() {
               <Button variant="outline" onClick={handleImport} disabled={importMutation.isPending}>
                 <Upload className="mr-2 h-4 w-4" />
                 {t("collections.importSong")}
+              </Button>
+            )}
+            {isApiCollection && (
+              <Button 
+                variant="outline" 
+                onClick={async () => {
+                  try {
+                    await restoreAlbumFromApi.mutateAsync({ collectionId: id, language: "pt" });
+                    notify.success(t("collections.syncSuccess"));
+                  } catch (e) {
+                    notify.tauriError(e, t("collections.syncFailed"));
+                  }
+                }}
+                disabled={restoreAlbumFromApi.isPending}
+              >
+                {restoreAlbumFromApi.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                Sync/Update Collection
               </Button>
             )}
           </div>
@@ -330,26 +361,49 @@ function CollectionDetail() {
           ) : (
             <div className="space-y-2">
               {collectionHymns.map((hymn, index) => (
-                <Link
+                <div
                   key={hymn.id}
-                  to="/hymnal/$hymnId"
-                  params={{ hymnId: String(hymn.id) }}
-                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:bg-surface-hover"
+                  className="group flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:bg-surface-hover relative"
                 >
-                  <span className="w-5 text-xs text-muted-foreground">{index + 1}</span>
-                  <Music className="h-4 w-4 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
+                  <Link
+                    to="/hymnal/$hymnId"
+                    params={{ hymnId: String(hymn.id) }}
+                    className="absolute inset-0 z-0"
+                  />
+                  <span className="w-5 text-xs text-muted-foreground relative z-10 pointer-events-none">{index + 1}</span>
+                  <Music className="h-4 w-4 text-muted-foreground relative z-10 pointer-events-none" />
+                  <div className="min-w-0 flex-1 relative z-10 pointer-events-none">
                     <p className="truncate text-sm font-medium">{hymn.title}</p>
                     {hymn.album && (
                       <p className="truncate text-xs text-muted-foreground">{hymn.album}</p>
                     )}
                   </div>
-                  {hymn.number != null && (
-                    <Badge variant="secondary" className="tabular-nums text-xs">
-                      #{hymn.number}
-                    </Badge>
-                  )}
-                </Link>
+                  <div className="flex items-center gap-1 relative z-10 pointer-events-auto">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartSlidesOnly(hymn); }}
+                      title={t("hymn.actionSlidesOnly")}
+                    >
+                      <MonitorPlay className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
+                      title={t("hymn.actionSung")}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    {hymn.number != null && (
+                      <Badge variant="secondary" className="tabular-nums text-xs ml-2">
+                        #{hymn.number}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -372,105 +426,118 @@ function CollectionDetail() {
             {data.songs.map((song, index) => (
               <div
                 key={song.id}
-                className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+                className="group relative flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted/50"
               >
-                <span className="w-5 text-xs text-muted-foreground">{index + 1}</span>
-                <div className="min-w-0 flex-1">
+                {song.cachePresentationId && (
+                  <Link
+                    to="/presentations/$presentationId"
+                    params={{ presentationId: String(song.cachePresentationId) }}
+                    className="absolute inset-0 z-0"
+                  />
+                )}
+                <span className="w-5 text-xs text-muted-foreground relative z-10 pointer-events-none">{index + 1}</span>
+                <div className="min-w-0 flex-1 relative z-10 pointer-events-none">
                   <p className="truncate text-sm font-medium">
-                    {song.cache_presentation_title || song.source_path.split(/[\\/]/).pop()}
+                    {song.cachePresentationTitle || song.sourcePath.split(/[\\/]/).pop()}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">{song.source_path}</p>
+                  <p className="truncate text-xs text-muted-foreground">{song.sourcePath}</p>
                 </div>
-                <Badge variant={statusVariant(song.sync_status)}>
-                  {t(`collections.sync.${song.sync_status}`)}
-                </Badge>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handlePlaySong(song)}
-                  disabled={!song.cache_presentation_id}
-                  aria-label={t("collections.playSong")}
-                  title={t("collections.playSong")}
-                >
-                  <Play className="mr-1 h-4 w-4" />
-                  {t("collections.playSong")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (song.cache_presentation_id) {
-                      navigate({
-                        to: "/presentations/$presentationId",
-                        params: { presentationId: String(song.cache_presentation_id) },
-                      });
-                    }
-                  }}
-                  disabled={!song.cache_presentation_id}
-                  aria-label={t("collections.openPresentation")}
-                  title={t("collections.openPresentation")}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await resyncSong(song.id);
-                    } catch (error) {
-                      const message = error instanceof Error ? error.message : String(error);
-                      toast.error(t("collections.resyncFailed", { error: message }));
-                    }
-                  }}
-                  aria-label={t("collections.resync")}
-                  title={t("collections.resync")}
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void moveSong(data.songs, index, -1)}
-                  disabled={index === 0}
-                  aria-label={t("collections.moveUp")}
-                  title={t("collections.moveUp")}
-                >
-                  ^
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void moveSong(data.songs, index, 1)}
-                  disabled={index === data.songs.length - 1}
-                  aria-label={t("collections.moveDown")}
-                  title={t("collections.moveDown")}
-                >
-                  v
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10"
-                  onClick={async () => {
-                    try {
-                      await removeSong({ songId: song.id, collectionId: id });
-                    } catch (error) {
-                      const message = error instanceof Error ? error.message : String(error);
-                      toast.error(t("collections.removeFailed", { error: message }));
-                    }
-                  }}
-                  aria-label={t("collections.removeSong")}
-                  title={t("collections.removeSong")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2 relative z-10 pointer-events-auto">
+                  <Badge variant={statusVariant(song.syncStatus)}>
+                    {t(`collections.sync.${song.syncStatus}`)}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handlePlaySong(song); }}
+                    disabled={!song.cachePresentationId}
+                    aria-label={t("collections.playSong")}
+                    title={t("collections.playSong")}
+                  >
+                    <Play className="mr-1 h-4 w-4" />
+                    {t("collections.playSong")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (song.cachePresentationId) {
+                        navigate({
+                          to: "/presentations/$presentationId",
+                          params: { presentationId: String(song.cachePresentationId) },
+                        });
+                      }
+                    }}
+                    disabled={!song.cachePresentationId}
+                    aria-label={t("collections.openPresentation")}
+                    title={t("collections.openPresentation")}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try {
+                        await resyncSong(song.id);
+                      } catch (error) {
+                        notify.tauriError(error, t("collections.resyncFailed", { error: "" }));
+                      }
+                    }}
+                    aria-label={t("collections.resync")}
+                    title={t("collections.resync")}
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void moveSong(data.songs, index, -1); }}
+                    disabled={index === 0}
+                    aria-label={t("collections.moveUp")}
+                    title={t("collections.moveUp")}
+                  >
+                    ^
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void moveSong(data.songs, index, 1); }}
+                    disabled={index === data.songs.length - 1}
+                    aria-label={t("collections.moveDown")}
+                    title={t("collections.moveDown")}
+                  >
+                    v
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try {
+                        await removeSong({ songId: song.id, collectionId: id });
+                      } catch (error) {
+                        notify.tauriError(error, t("collections.removeFailed", { error: "" }));
+                      }
+                    }}
+                    aria-label={t("collections.removeSong")}
+                    title={t("collections.removeSong")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

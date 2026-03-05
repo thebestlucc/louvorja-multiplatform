@@ -24,7 +24,7 @@ import {
   Keyboard,
   CircleHelp,
 } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { cn } from "../../lib/utils";
 import { useMonitorsControl } from "../../hooks/use-monitors";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
@@ -34,9 +34,7 @@ import {
   searchBible,
   searchCollections,
 } from "../../lib/tauri";
-import type { Hymn } from "../../types/hymn";
-import type { BibleSearchResult } from "../../types/bible";
-import type { CollectionSearchResult } from "../../types/collection";
+import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 
 type PaletteRouteCommand = {
@@ -409,12 +407,13 @@ export function CommandPalette() {
                 onSelect={() => {
                   Promise.resolve(action.onSelect())
                     .catch((error) => {
-                      toast.error(String(error));
+                      notify.tauriError(error);
                     })
                     .finally(() => {
                       setOpen(false);
                     });
                 }}
+
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
               >
                 <action.icon className="h-4 w-4 text-muted-foreground" />
@@ -441,7 +440,7 @@ export function CommandPalette() {
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
               >
                 <CoverImage
-                  path={hymn.cover_path}
+                  path={hymn.coverPath}
                   title={hymn.title}
                   className="h-5 w-5 rounded"
                 />
@@ -462,12 +461,12 @@ export function CommandPalette() {
           >
             {collectionResults.map((result, idx) => (
               <Command.Item
-                key={`collection-search-${result.kind}-${result.collection_id}-${result.song_id ?? "none"}-${idx}`}
-                value={`collection-${result.collection_id}-${result.song_id ?? "none"}-${result.title}-${result.collection_name}`}
+                key={`collection-search-${result.kind}-${result.collectionId}-${result.songId ?? "none"}-${idx}`}
+                value={`collection-${result.collectionId}-${result.songId ?? "none"}-${result.title}-${result.collectionName}`}
                 onSelect={() => {
                   navigate({
                     to: "/collections/$collectionId",
-                    params: { collectionId: String(result.collection_id) },
+                    params: { collectionId: String(result.collectionId) },
                   });
                   setOpen(false);
                 }}
@@ -482,8 +481,8 @@ export function CommandPalette() {
                   <span className="block truncate font-medium">{result.title}</span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {result.kind === "song"
-                      ? `${result.collection_name} · ${result.snippet || t("collections.songs")}`
-                      : result.snippet || result.collection_name}
+                      ? `${result.collectionName} · ${result.snippet || t("collections.songs")}`
+                      : result.snippet || result.collectionName}
                   </span>
                 </span>
               </Command.Item>

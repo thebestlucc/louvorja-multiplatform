@@ -81,7 +81,7 @@ impl AudioPlayer {
         self.stream_handle.is_some()
     }
 
-    pub fn play(&mut self, path: &str) -> Result<(), AppError> {
+    pub fn play(&mut self, path: &str, start_ms: Option<u64>) -> Result<(), AppError> {
         if !self.is_audio_available() {
             return Err(AppError::Internal("No audio output device available".into()));
         }
@@ -107,6 +107,12 @@ impl AudioPlayer {
 
         sink.set_volume(self.volume);
         sink.append(source);
+
+        if let Some(ms) = start_ms {
+            if let Err(e) = sink.try_seek(Duration::from_millis(ms)) {
+                eprintln!("[louvorja] Initial seek to {}ms failed: {}", ms, e);
+            }
+        }
 
         self.sink = Some(sink);
         self.current_file = Some(path_buf);

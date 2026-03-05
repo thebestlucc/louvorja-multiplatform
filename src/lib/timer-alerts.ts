@@ -1,4 +1,5 @@
 import { audioPlayAlert } from "./tauri";
+import type { Setting } from "./bindings";
 
 export interface TimerAlertRule {
   minuteMark: number;
@@ -32,7 +33,8 @@ export function normalizeAlertRules(rules: TimerAlertRule[]): TimerAlertRule[] {
     .sort((left, right) => right.minuteMark - left.minuteMark);
 }
 
-export function parseAlertRulesSetting(value: string | null): TimerAlertRule[] {
+export function parseAlertRulesSetting(settings: Setting[] | null | undefined): TimerAlertRule[] {
+  const value = settings?.find(s => s.key === TIMER_ALERTS_SETTING_KEY)?.value;
   if (!value) {
     return normalizeAlertRules([]);
   }
@@ -79,7 +81,8 @@ export function normalizeAlertVolume(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-export function parseAlertVolumeSetting(value: string | null | undefined): number {
+export function parseAlertVolumeSetting(settings: Setting[] | null | undefined): number {
+  const value = settings?.find(s => s.key === TIMER_ALERT_VOLUME_SETTING_KEY)?.value;
   if (typeof value !== "string") {
     return DEFAULT_TIMER_ALERT_VOLUME;
   }

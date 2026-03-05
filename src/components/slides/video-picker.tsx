@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
-import type { VideoSlideContent } from "../../types/presentation";
-import type { VideoMetadata } from "../../types/video";
+import { notify } from "../../lib/notifications";
+import type { SlideContent, VideoMetadata } from "../../lib/bindings";
 import { useCopyVideoToMedia } from "../../lib/queries";
 import { getVideoMetadata } from "../../lib/tauri";
 import { getConversionRecommendation, isVideoFormatSupported } from "../../lib/utils";
@@ -12,8 +11,8 @@ import { Button } from "../ui/button";
 
 interface VideoPickerProps {
   presentationId: number;
-  value: VideoSlideContent;
-  onChange: (next: VideoSlideContent) => void;
+  value: SlideContent;
+  onChange: (next: SlideContent) => void;
 }
 
 export function VideoPicker({ presentationId, value, onChange }: VideoPickerProps) {
@@ -36,7 +35,7 @@ export function VideoPicker({ presentationId, value, onChange }: VideoPickerProp
     setSourcePath(selected);
 
     if (!isVideoFormatSupported(selected)) {
-      toast.error(
+      notify.error(
         t("presentations.videoUnsupported", {
           recommendation: getConversionRecommendation(selected.split(".").pop() ?? ""),
         }),
@@ -60,10 +59,11 @@ export function VideoPicker({ presentationId, value, onChange }: VideoPickerProp
         videoPath: managedPath,
       });
 
-      toast.success(t("presentations.videoImported"));
+      notify.success(t("presentations.videoImported"));
     } catch (err) {
-      toast.error(
-        t("presentations.videoImportFailed", { error: String(err) }),
+      notify.tauriError(
+        err,
+        t("presentations.videoImportFailed", { error: "" }),
       );
     } finally {
       setLoading(false);
@@ -75,7 +75,7 @@ export function VideoPicker({ presentationId, value, onChange }: VideoPickerProp
       <div className="flex items-center gap-2">
         <Input
           readOnly
-          value={sourcePath || value.videoPath}
+          value={sourcePath || value.videoPath || ""}
           placeholder={t("presentations.videoPathPlaceholder")}
           className="flex-1"
         />

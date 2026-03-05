@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SlideContent } from "../types/presentation";
+import type { SlideContent } from "../lib/bindings";
 
 interface PresentationState {
   currentPresentationId: number | null;
@@ -16,11 +16,9 @@ interface PresentationState {
   setActiveService: (id: number | null) => void;
   setPlayingService: (playing: boolean) => void;
   setActiveServiceItemIndex: (index: number) => void;
-  nextSlide: () => void;
-  prevSlide: () => void;
 }
 
-export const usePresentationStore = create<PresentationState>((set, get) => ({
+export const usePresentationStore = create<PresentationState>((set) => ({
   currentPresentationId: null,
   activeSlideIndex: 0,
   isProjectorOpen: false,
@@ -35,16 +33,4 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   setActiveSlideIndex: (index) => set({ activeSlideIndex: index }),
   setProjectorOpen: (open) => set({ isProjectorOpen: open }),
   setSlides: (slides) => set({ slides, activeSlideIndex: 0 }),
-  nextSlide: () => {
-    const { activeSlideIndex, slides } = get();
-    if (activeSlideIndex < slides.length - 1) {
-      set({ activeSlideIndex: activeSlideIndex + 1 });
-    }
-  },
-  prevSlide: () => {
-    const { activeSlideIndex } = get();
-    if (activeSlideIndex > 0) {
-      set({ activeSlideIndex: activeSlideIndex - 1 });
-    }
-  },
 }));

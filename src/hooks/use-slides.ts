@@ -4,9 +4,7 @@ import { setSlideContext } from "../lib/tauri";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useAudioStore } from "../stores/audio-store";
 
-import type { SlideContent } from "../types/presentation";
-import { slideContentToFlat } from "../types/presentation";
-import type { SyncPoint } from "../types/audio";
+import type { SlideContent, SyncPoint } from "../lib/bindings";
 import { projectSlideWithType } from "../lib/projection-playback";
 
 export function useSlides() {
@@ -29,7 +27,7 @@ export function useSlides() {
   const projectSlide = useCallback(
     async (slide: SlideContent) => {
       const projectionType = getProjectionType();
-      await projectSlideWithType(slideContentToFlat(slide), projectionType);
+      await projectSlideWithType(slide, projectionType);
     },
     [getProjectionType],
   );
@@ -43,9 +41,9 @@ export function useSlides() {
       title: string,
     ) => {
       const projectionType = getProjectionType();
-      await projectSlideWithType(slideContentToFlat(slide), projectionType);
+      await projectSlideWithType(slide, projectionType);
       await setSlideContext({
-        next: next ? slideContentToFlat(next) : null,
+        next,
         index,
         total,
         title,
@@ -161,20 +159,22 @@ function resolveSlideSeekTimestamp(syncPoints: SyncPoint[], slideIndex: number):
 
 /** Extract a display title from a slide for the return monitor */
 function getSlideTitle(slide: SlideContent): string {
-  switch (slide.type) {
+  switch (slide.slideType) {
     case "cover":
-      return slide.title;
+      return slide.title ?? "Cover";
     case "lyrics":
       return slide.label ?? "Lyrics";
     case "bible":
-      return `${slide.book} ${slide.chapter}:${slide.verseStart}-${slide.verseEnd}`;
+      return `${slide.label ?? "Bible"}`;
     case "text":
-      return slide.text.substring(0, 40);
+      return slide.text?.substring(0, 40) ?? "Text";
     case "pause":
       return "Pause";
     case "image":
-      return slide.alt ?? "Image";
+      return slide.label ?? "Image";
     case "video":
-      return "Video";
+      return slide.label ?? "Video";
+    default:
+      return "Slide";
   }
 }

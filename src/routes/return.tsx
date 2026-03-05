@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import type { SlideContentFlat, SlideContent, SlideContextFlat, OverlayState } from "../types/presentation";
-import { flatToSlideContent } from "../types/presentation";
+import type { SlideContent, SlideContext, OverlayState } from "../lib/bindings";
 import { getCurrentSlide, getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
 import { SlideRenderer } from "../components/slides/slide-renderer";
 import { useAllSettings, useTimerState } from "../lib/queries";
@@ -71,13 +70,13 @@ function ReturnPage() {
 
   // Listen to slide changes
   useEffect(() => {
-    const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
-      setCurrentSlide(flatToSlideContent(event.payload));
+    const unlisten = listen<SlideContent>("slide-changed", (event) => {
+      setCurrentSlide(event.payload);
     });
 
     void getCurrentSlide()
       .then((data) => {
-        setCurrentSlide(data ? flatToSlideContent(data) : null);
+        setCurrentSlide(data);
       })
       .catch(() => {});
 
@@ -86,9 +85,9 @@ function ReturnPage() {
 
   // Listen to slide context
   useEffect(() => {
-    const unlisten = listen<SlideContextFlat>("slide-context", (event) => {
+    const unlisten = listen<SlideContext>("slide-context", (event) => {
       const ctx = event.payload;
-      setNextSlide(ctx.next ? flatToSlideContent(ctx.next) : null);
+      setNextSlide(ctx.next);
       setSlideIndex(ctx.index);
       setSlideTotal(ctx.total);
       setSlideTitle(ctx.title);
@@ -97,7 +96,7 @@ function ReturnPage() {
     void getSlideContext()
       .then((ctx) => {
         if (ctx) {
-          setNextSlide(ctx.next ? flatToSlideContent(ctx.next) : null);
+          setNextSlide(ctx.next);
           setSlideIndex(ctx.index);
           setSlideTotal(ctx.total);
           setSlideTitle(ctx.title);
@@ -181,9 +180,21 @@ function ReturnPage() {
           : t("utilities.clock.title");
 
     return {
-      type: "cover",
+      slideType: "cover",
       title: formatUtilityProjectionValue(utilityProjection, i18n.language),
       subtitle,
+      text: null,
+      label: null,
+      videoPath: null,
+      backgroundImage: null,
+      backgroundColor: null,
+      audioPath: null,
+      autoPlay: null,
+      loop: null,
+      muted: null,
+      mode: null,
+      textColor: null,
+      textSize: null,
     } satisfies SlideContent;
   }, [currentSlide, defaultSlide, i18n.language, t, utilityProjection]);
 

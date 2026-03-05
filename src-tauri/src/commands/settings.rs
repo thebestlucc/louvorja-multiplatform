@@ -4,6 +4,8 @@ use crate::state::{AppState, StreamingState};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use specta::Type;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SettingChangedPayload {
@@ -11,22 +13,24 @@ struct SettingChangedPayload {
     value: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ClearDatabaseResult {
     pub success: bool,
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_setting(key: String, state: tauri::State<'_, AppState>) -> Result<Setting, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::get_setting(&conn, &key)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_setting(
     key: String,
     value: String,
@@ -36,7 +40,7 @@ pub fn set_setting(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::set_setting(&conn, &key, &value)?;
     drop(conn);
@@ -58,15 +62,17 @@ pub fn set_setting(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_all_settings(state: tauri::State<'_, AppState>) -> Result<Vec<Setting>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::get_all_settings(&conn)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_global_shortcut(
     action: String,
     shortcut_str: String,
@@ -112,10 +118,11 @@ pub fn update_global_shortcut(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn clear_database(state: tauri::State<'_, AppState>) -> Result<ClearDatabaseResult, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::clear_database(&conn)?;
     Ok(ClearDatabaseResult { success: true })

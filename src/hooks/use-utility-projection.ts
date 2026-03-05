@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   clearCurrentSlide,
   getCurrentSlide,
@@ -7,120 +7,60 @@ import {
   setSlideContext,
 } from "../lib/tauri";
 import { useDisplayStore } from "../stores/display-store";
-import type {
-  UtilityProjectionKind,
-  UtilityProjectionPayload,
-  UtilityProjectionState,
-} from "../types/utilities";
-import type { SlideContentFlat, SlideContextFlat } from "../types/presentation";
+import type { UtilityProjectionPayload, UtilityProjectionKind } from "../types/utilities";
+import type { SlideContent, SlideContext } from "../lib/bindings";
 
-interface ProjectionSnapshot {
-  slide: SlideContentFlat | null;
-  context: SlideContextFlat | null;
-  projectionType: "bible" | "hymn" | "presentation" | "utility" | "service" | null;
-}
-
-export function useUtilityProjection(kind: UtilityProjectionKind) {
-  const snapshotRef = useRef<ProjectionSnapshot | null>(null);
-  const restoreInFlightRef = useRef(false);
+export function useUtilityProjection(_kind: UtilityProjectionKind) {
+  const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
+  const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
   const isMountedRef = useRef(true);
-  const [state, setState] = useState<UtilityProjectionState>({
-    isProjecting: false,
-    projectedKind: null,
-  });
 
-  const captureSnapshot = useCallback(async () => {
-    if (snapshotRef.current) {
-      return;
-    }
+  // Take a snapshot of whatever was on the screen before we started projecting
+  const snapshotRef = useRef<{
+    slide: SlideContent | null;
+    context: SlideContext | null;
+  } | null>(null);
 
-    const [slide, context] = await Promise.all([
-      getCurrentSlide(),
-      getSlideContext(),
-    ]);
+  const isProjecting = currentProjectionType === "utility";
 
-    const displayState = useDisplayStore.getState();
-    snapshotRef.current = {
-      slide,
-      context,
-      projectionType: displayState.currentProjectionType,
-    };
-  }, []);
-
-  const project = useCallback(async (payload: UtilityProjectionPayload) => {
-    await captureSnapshot();
-    await setCurrentSlide(payload.slide);
-    await setSlideContext(payload.context);
-    useDisplayStore.getState().setCurrentProjectionType("utility");
-
-    if (!isMountedRef.current) {
-      return;
-    }
-
-    setState((current) => {
-      if (current.isProjecting && current.projectedKind === kind) {
-        return current;
+  const project = useCallback(
+    async (payload: UtilityProjectionPayload) => {
+      if (!isProjecting) {
+        const [slide, context] = await Promise.all([
+          getCurrentSlide(),
+          getSlideContext(),
+        ]);
+        snapshotRef.current = { slide, context };
+        setCurrentProjectionType("utility");
       }
-      return {
-        isProjecting: true,
-        projectedKind: kind,
-      };
-    });
-  }, [captureSnapshot, kind]);
 
-  const restoreSnapshot = useCallback(async () => {
-    const snapshot = snapshotRef.current;
-    snapshotRef.current = null;
-
-    if (!snapshot) {
-      await clearCurrentSlide();
-      useDisplayStore.getState().setCurrentProjectionType(null);
-      return;
-    }
-
-    if (!snapshot.slide) {
-      await clearCurrentSlide();
-      useDisplayStore.getState().setCurrentProjectionType(null);
-      return;
-    }
-
-    if (!snapshot.context) {
-      await clearCurrentSlide();
-      await setCurrentSlide(snapshot.slide);
-      useDisplayStore.getState().setCurrentProjectionType(snapshot.projectionType);
-      return;
-    }
-
-    await Promise.all([
-      setCurrentSlide(snapshot.slide),
-      setSlideContext(snapshot.context),
-    ]);
-    useDisplayStore.getState().setCurrentProjectionType(snapshot.projectionType);
-  }, []);
+      await Promise.all([
+        setCurrentSlide(payload.slide),
+        setSlideContext(payload.context),
+      ]);
+    },
+    [isProjecting, setCurrentProjectionType],
+  );
 
   const stopProjection = useCallback(async () => {
-    if (restoreInFlightRef.current) {
-      return;
-    }
+    if (!isProjecting) return;
 
-    restoreInFlightRef.current = true;
     try {
-      await restoreSnapshot();
-    } finally {
-      if (isMountedRef.current) {
-        setState((current) => {
-          if (!current.isProjecting && current.projectedKind == null) {
-            return current;
-          }
-          return {
-            isProjecting: false,
-            projectedKind: null,
-          };
-        });
+      if (snapshotRef.current?.slide) {
+        await setCurrentSlide(snapshotRef.current.slide);
+        if (snapshotRef.current.context) {
+          await setSlideContext(snapshotRef.current.context);
+        }
+      } else {
+        await clearCurrentSlide();
       }
-      restoreInFlightRef.current = false;
+    } finally {
+      snapshotRef.current = null;
+      if (isMountedRef.current) {
+        setCurrentProjectionType(null);
+      }
     }
-  }, [restoreSnapshot]);
+  }, [isProjecting, setCurrentProjectionType]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -133,7 +73,7 @@ export function useUtilityProjection(kind: UtilityProjectionKind) {
   }, [stopProjection]);
 
   return {
-    ...state,
+    isProjecting,
     startProjection: project,
     stopProjection,
   };

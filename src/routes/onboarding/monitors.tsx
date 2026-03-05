@@ -34,7 +34,7 @@ function OnboardingMonitorsPage() {
       monitors.map((monitor, index) => ({
         id: monitor.id,
         label:
-          `${getPreferredMonitorName(monitor, index)} (${monitor.width}x${monitor.height})${monitor.is_primary ? ` • ${t("onboarding.monitors.primary")}` : ""}`,
+          `${getPreferredMonitorName(monitor, index)} (${monitor.width}x${monitor.height})${monitor.isPrimary ? ` • ${t("onboarding.monitors.primary")}` : ""}`,
       })),
     [monitors, t],
   );
@@ -51,8 +51,8 @@ function OnboardingMonitorsPage() {
       return;
     }
 
-    const existingProjector = monitorConfigs.find((config) => config.role === "projector")?.monitor_id;
-    const existingReturn = monitorConfigs.find((config) => config.role === "return")?.monitor_id;
+    const existingProjector = monitorConfigs.find((config) => config.role === "projector")?.monitorId;
+    const existingReturn = monitorConfigs.find((config) => config.role === "return")?.monitorId;
     const existingProjectorValid = existingProjector && monitorOptions.some((option) => option.id === existingProjector)
       ? existingProjector
       : undefined;

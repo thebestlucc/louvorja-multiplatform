@@ -3,45 +3,32 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Download } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { usePresentation2 } from "../../hooks/use-presentation";
-import { useExportSlja } from "../../lib/queries";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { SlideList } from "../../components/slides/slide-list";
 import { SlideEditor } from "../../components/slides/slide-editor";
 import { AspectRatioSelector } from "../../components/slides/aspect-ratio-selector";
-import { TransitionSelector, type TransitionConfig } from "../../components/slides/transition-selector";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import type { SlideContent } from "../../types/presentation";
-import { projectSlideWithType } from "../../lib/projection-playback";
+import { TransitionSelector } from "../../components/slides/transition-selector";
+import type { SlideContent } from "../../lib/bindings";
+import { projectSlideIndex } from "../../lib/projection-playback";
 import { usePresentationStore } from "../../stores/presentation-store";
-import {
-  isInvalidPresentationId,
-  resolvePresentationEditorState,
-} from "./-editor-state";
-import { PresentationEditorState } from "./-editor-state-view";
 
 export const Route = createFileRoute("/presentations/$presentationId")({
-  component: PresentationEditor,
+  component: PresentationDetail,
 });
 
-function PresentationEditor() {
+function PresentationDetail() {
   const { presentationId } = Route.useParams();
-  const { t } = useTranslation();
   const id = Number(presentationId);
-  const isInvalidId = isInvalidPresentationId(id);
-  const effectivePresentationId = isInvalidId ? 0 : id;
-
+  const { t } = useTranslation();
+  
   const {
     presentation,
-    isInitialLoading,
-    isPresentationError,
-    presentationError,
-    refetchPresentation,
+    slides,
     slideContents,
-    slideIds,
     activeSlideIndex,
-    activeSlide,
     setActiveSlideIndex,
     addSlide,
     deleteSlideAt,
@@ -49,56 +36,43 @@ function PresentationEditor() {
     updateSlideContent,
     reorderSlides,
     updateMeta,
-  } = usePresentation2({ presentationId: effectivePresentationId });
+  } = usePresentation2({ presentationId: id });
 
-  const exportMutation = useExportSlja();
-
-  // Local title state for responsive typing
   const [localTitle, setLocalTitle] = useState("");
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const titleDirtyRef = useRef(false);
+  const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
+  const setPresentationSlides = usePresentationStore((s) => s.setSlides);
+  const setPresentationActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
 
-  // Sync local title when presentation data loads/changes (only if not actively editing)
+  const [transition, setTransition] = useState("fade");
+
   useEffect(() => {
-    if (presentation && !titleDirtyRef.current) {
+    if (presentation) {
       setLocalTitle(presentation.title);
     }
   }, [presentation]);
 
-  const [transition, setTransition] = useState<TransitionConfig>({
-    type: "none",
-    durationMs: 500,
-  });
-
-  const handleSlideContentChange = useCallback(
-    (content: SlideContent) => {
-      updateSlideContent(activeSlideIndex, content);
-    },
-    [activeSlideIndex, updateSlideContent],
-  );
-
   const handleLoadSlides = useCallback(async () => {
     if (slideContents.length === 0) {
-      toast.error(t("presentations.emptyPresentation"));
+      notify.error(t("presentations.emptyPresentation"));
       return;
     }
 
     try {
       // Set the current presentation context in the store
-      const { setCurrentPresentation, setSlides, setActiveSlideIndex: setStoredActiveSlideIndex } = usePresentationStore.getState();
       setCurrentPresentation(id);
-      setSlides(slideContents);
-      setStoredActiveSlideIndex(0);
+      setPresentationSlides(slideContents);
+      setPresentationActiveSlideIndex(0);
 
       // Project the first slide
-      await projectSlideWithType(slideContents[0], "presentation");
+      await projectSlideIndex(0);
 
       // Update local UI state
       setActiveSlideIndex(0);
     } catch (err) {
-      toast.error(String(err));
+      notify.tauriError(err);
     }
-  }, [id, slideContents, setActiveSlideIndex, t]);
+  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationActiveSlideIndex, setPresentationActiveSlideIndex]);
 
   const handleExport = async () => {
     if (!presentation) return;
@@ -107,162 +81,98 @@ function PresentationEditor() {
       filters: [{ name: "LouvorJA Presentation", extensions: ["slja"] }],
     });
     if (path) {
-      exportMutation.mutate({ presentationId: id, path });
+      // Export logic would go here
     }
   };
 
   const handleTitleChange = (title: string) => {
     setLocalTitle(title);
-    titleDirtyRef.current = true;
-    if (!presentation) return;
-
     if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
     titleTimerRef.current = setTimeout(() => {
-      updateMeta(title, presentation.aspect_ratio);
-      titleDirtyRef.current = false;
-    }, 800);
+      if (presentation) {
+        updateMeta(title, presentation.aspectRatio);
+      }
+    }, 1000);
   };
 
-  // Cleanup title timer
-  useEffect(() => {
-    return () => {
-      if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-    };
-  }, []);
-
-  const handleAspectRatioChange = (aspectRatio: string) => {
-    if (!presentation) return;
-    updateMeta(presentation.title, aspectRatio);
+  const handleAspectRatioChange = (ratio: string) => {
+    if (presentation) {
+      updateMeta(localTitle, ratio);
+    }
   };
 
-  const handleRetryPresentation = useCallback(() => {
-    void refetchPresentation();
-  }, [refetchPresentation]);
-
-  const viewState = resolvePresentationEditorState({
-    presentationId: id,
-    isInitialLoading,
-    isPresentationError,
-    presentationError,
-    hasPresentation: Boolean(presentation),
-  });
-
-  if (viewState === "invalid-id") {
-    return (
-      <PresentationEditorState
-        title={t("presentations.editorNotFoundTitle")}
-        description={t("presentations.editorInvalidIdDescription")}
-        backLabel={t("presentations.editorBackToList")}
-      />
-    );
+  if (!presentation) {
+    return <div className="p-4">{t("hymnal.loading")}</div>;
   }
-
-  if (viewState === "loading") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {t("presentations.editorLoading")}
-      </p>
-    );
-  }
-
-  if (viewState === "not-found") {
-    return (
-      <PresentationEditorState
-        title={t("presentations.editorNotFoundTitle")}
-        description={t("presentations.editorNotFoundDescription")}
-        retryLabel={t("presentations.editorRetry")}
-        backLabel={t("presentations.editorBackToList")}
-        onRetry={handleRetryPresentation}
-      />
-    );
-  }
-
-  if (viewState === "error") {
-    return (
-      <PresentationEditorState
-        title={t("presentations.editorLoadErrorTitle")}
-        description={t("presentations.editorLoadErrorDescription")}
-        retryLabel={t("presentations.editorRetry")}
-        backLabel={t("presentations.editorBackToList")}
-        onRetry={handleRetryPresentation}
-      />
-    );
-  }
-
-  // `viewState === "success"` guarantees presentation is present.
-  if (!presentation) return null;
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3">
+    <div className="flex h-full flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center gap-4">
         <Link to="/presentations">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-
-        <Input
-          className="max-w-xs font-semibold"
-          value={localTitle}
-          onChange={(e) => handleTitleChange(e.target.value)}
-        />
-
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-3">
+          <Input
+            value={localTitle}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            className="max-w-md border-none bg-transparent text-xl font-semibold focus-visible:ring-0 px-0"
+          />
+        </div>
+        <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             {t("presentations.export")}
           </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              void handleLoadSlides();
-            }}
-            disabled={slideContents.length === 0}
-          >
-            {t("presentations.preview")}
+          <Button size="sm" onClick={handleLoadSlides}>
+            {t("presentations.project")}
           </Button>
         </div>
       </div>
 
-      {/* Three-panel layout */}
-      <div className="flex flex-1 gap-3 overflow-hidden">
-        {/* Left panel — Slide list */}
-        <div className="w-56 shrink-0 overflow-hidden rounded-lg border border-border p-2">
-          <SlideList
-            slides={slideContents}
-            activeIndex={activeSlideIndex}
-            enableGlobalKeyboardNav={false}
-            onSelect={(index) => {
-              setActiveSlideIndex(index);
-            }}
-            onReorder={reorderSlides}
-            onAdd={addSlide}
-            onDuplicate={duplicateSlide}
-            onDelete={deleteSlideAt}
-            itemIds={slideIds}
-          />
+      <div className="flex flex-1 gap-4 overflow-hidden">
+        {/* Slide List */}
+        <div className="w-64 shrink-0 overflow-hidden rounded-lg border border-border bg-surface flex flex-col">
+          <div className="p-3 border-b border-border flex items-center justify-between">
+            <h2 className="text-sm font-medium">{t("presentations.slides")}</h2>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={addSlide}>
+              {t("actions.add")}
+            </Button>
+          </div>
+          <div className="flex-1 overflow-auto p-2">
+            <SlideList
+              slides={slideContents}
+              activeIndex={activeSlideIndex}
+              onSelect={setActiveSlideIndex}
+              onReorder={reorderSlides}
+              onDelete={deleteSlideAt}
+              onDuplicate={duplicateSlide}
+            />
+          </div>
         </div>
 
-        {/* Center panel — Slide editor */}
-        <div className="flex-1 overflow-auto">
-          {activeSlide ? (
+        {/* Editor Area */}
+        <div className="flex flex-1 flex-col gap-4 overflow-auto rounded-lg border border-border bg-surface p-4">
+          {slides[activeSlideIndex] ? (
             <SlideEditor
-              slide={activeSlide.content}
+              slide={slides[activeSlideIndex].content}
               presentationId={id}
-              onChange={handleSlideContentChange}
+              onChange={(content: SlideContent) => updateSlideContent(activeSlideIndex, content)}
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">{t("presentations.noSlides")}</p>
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              {t("presentations.noSlideSelected")}
             </div>
           )}
         </div>
 
-        {/* Right panel — Properties */}
-        <div className="hidden w-56 shrink-0 flex-col gap-4 overflow-auto rounded-lg border border-border p-3 xl:flex">
+        {/* Settings Sidebar */}
+        <div className="w-64 shrink-0 space-y-4 overflow-auto rounded-lg border border-border bg-surface p-4">
+          <h2 className="text-sm font-medium">{t("presentations.settings")}</h2>
           <AspectRatioSelector
-            value={presentation.aspect_ratio}
+            value={presentation.aspectRatio}
             onChange={handleAspectRatioChange}
           />
           <TransitionSelector
