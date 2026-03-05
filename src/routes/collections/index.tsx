@@ -3,10 +3,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, Loader2, Plus, Trash2, LayoutGrid, List as ListIcon, MoreVertical, Play, MonitorPlay, Music, Upload } from "lucide-react";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { Card, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
 import {
   useCollections,
@@ -141,7 +141,7 @@ function CollectionsIndex() {
   };
 
   const handleProjectCollection = async (collection: Collection) => {
-    try {
+    await catcher(async () => {
       const allSlides: any[] = [];
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
@@ -165,13 +165,11 @@ function CollectionsIndex() {
         setPresentationSlides(allSlides);
         notify.success(t("collections.projectedAll", { count: allSlides.length }));
       }
-    } catch (e) {
-      notify.tauriError(e, t("collections.projectFailed"));
-    }
+    }, { notify: true, fallbackMessage: t("collections.projectFailed") });
   };
 
   const handlePlayCollectionSongs = async (collection: Collection) => {
-    try {
+    await catcher(async () => {
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
         if (hymns.length > 0) {
@@ -186,13 +184,11 @@ function CollectionsIndex() {
           // handlePlaySong logic from detail page would be needed here, or similar hook
         }
       }
-    } catch (e) {
-      notify.tauriError(e, t("collections.playFailed"));
-    }
+    }, { notify: true, fallbackMessage: t("collections.playFailed") });
   };
 
   const handlePlayCollectionPlayback = async (collection: Collection) => {
-    try {
+    await catcher(async () => {
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
         if (hymns.length > 0) {
@@ -200,15 +196,14 @@ function CollectionsIndex() {
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
         }
       }
-    } catch (e) {
-      notify.tauriError(e, t("collections.playFailed"));
-    }
+    }, { notify: true, fallbackMessage: t("collections.playFailed") });
   };
 
   const handleCreate = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     if (!canSubmit) return;
-    try {
+    
+    await catcher(async () => {
       const collection = await createMutation.mutateAsync({
         name: normalizedName,
         description: normalizedDescription || null,
@@ -228,16 +223,15 @@ function CollectionsIndex() {
 
       resetCreateForm();
       setCreateOpen(false);
-    } catch (error) {
-      notify.tauriError(error, t("collections.saveFailed", { error: "" }));
-    }
+    }, { notify: true, fallbackMessage: t("collections.saveFailed", { error: "" }) });
   };
 
   const isXl = useMedia("(min-width: 1280px)", false);
   const isLg = useMedia("(min-width: 1024px)", false);
+  const isMd = useMedia("(min-width: 768px)", false);
   const isSm = useMedia("(min-width: 640px)", false);
 
-  const columns = view === "list" ? 1 : isXl ? 5 : isLg ? 4 : isSm ? 3 : 2;
+  const columns = view === "list" ? 1 : isXl ? 6 : isLg ? 5 : isMd ? 4 : isSm ? 3 : 2;
   const rowCount = Math.ceil(filtered.length / columns);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -246,6 +240,7 @@ function CollectionsIndex() {
     getScrollElement: () => document.getElementById("main-scroll-area"),
     estimateSize: () => (view === "list" ? 64 : 280),
     overscan: 5,
+    gap: 16,
   });
 
   return (
@@ -451,21 +446,21 @@ function CollectionsIndex() {
               return (
                 <div
                   key={virtualRow.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
                   style={{
                     position: "absolute",
                     top: 0,
                     left: 0,
                     width: "100%",
-                    height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
-                    paddingBottom: view === "grid" ? "16px" : "0",
                   }}
                 >
                   <div
                     className={cn(
                       view === "grid" 
-                        ? "grid gap-4 h-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" 
-                        : "flex flex-col h-full"
+                        ? "grid gap-4 h-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" 
+                        : "flex flex-col"
                     )}
                   >
                     {rowItems.map((collection) => {
@@ -533,11 +528,10 @@ function CollectionsIndex() {
                                     className="h-8 w-8 text-destructive hover:bg-destructive/10"
                                     onClick={async (e) => {
                                       e.preventDefault();
-                                      try {
-                                        await deleteMutation.mutateAsync(collection.id);
-                                      } catch (error) {
-                                        notify.tauriError(error, t("collections.deleteFailed", { error: "" }));
-                                      }
+                                      await catcher(deleteMutation.mutateAsync(collection.id), {
+                                        notify: true,
+                                        fallbackMessage: t("collections.deleteFailed", { error: "" }),
+                                      });
                                     }}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -550,19 +544,48 @@ function CollectionsIndex() {
                       }
 
                     return (
-                      <Card key={collection.id} className="overflow-hidden flex flex-col h-full group">
-                        <CardHeader className="p-0 flex-1 relative">
-                          <Link to="/collections/$collectionId" params={{ collectionId: String(collection.id) }} className="block relative aspect-square">
-                            <CoverImage path={cover} title={collection.name} className="h-full w-full object-cover rounded-none" />
-                            <div className="absolute inset-0 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
-                              {/* Grid view actions hover */}
+                      <Link key={collection.id} to="/collections/$collectionId" params={{ collectionId: String(collection.id) }} className="flex flex-col gap-3 group cursor-pointer h-full">
+                        <div className="relative aspect-square w-full rounded-md overflow-hidden bg-muted/30 shadow-sm">
+                          <CoverImage
+                            path={cover}
+                            title={collection.name}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex flex-col justify-end p-3">
+                            <div className="flex items-center justify-center gap-1.5 translate-y-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleProjectCollection(collection); }}
+                                title="Project All"
+                              >
+                                <MonitorPlay className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handlePlayCollectionSongs(collection); }}
+                                title="Play All Songs"
+                              >
+                                <Play className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handlePlayCollectionPlayback(collection); }}
+                                title="Play All Playback"
+                              >
+                                <Music className="h-4 w-4" />
+                              </Button>
                             </div>
-                          </Link>
-                          
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          </div>
+                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                                <Button size="icon" variant="outline" className="h-7 w-7 rounded-full bg-background/80 backdrop-blur-md">
+                                <Button size="icon" variant="outline" className="h-7 w-7 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -584,11 +607,10 @@ function CollectionsIndex() {
                                     className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                                     onClick={async (e) => {
                                       e.preventDefault();
-                                      try {
-                                        await deleteMutation.mutateAsync(collection.id);
-                                      } catch (error) {
-                                        notify.tauriError(error, t("collections.deleteFailed", { error: "" }));
-                                      }
+                                      await catcher(deleteMutation.mutateAsync(collection.id), {
+                                        notify: true,
+                                        fallbackMessage: t("collections.deleteFailed", { error: "" }),
+                                      });
                                     }}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" />
@@ -598,18 +620,17 @@ function CollectionsIndex() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
-
-                          <Link to="/collections/$collectionId" params={{ collectionId: String(collection.id) }} className="p-3 block flex-1">
-                            <CardTitle className="line-clamp-2 text-sm leading-snug">{collection.name}</CardTitle>
-                            <CardDescription className="text-xs mt-1">
-                              {creationYear ?? t("collections.yearUnknown")}
-                            </CardDescription>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {t("collections.songCount", { count: collection.songCount })}
-                            </p>
-                          </Link>
-                        </CardHeader>
-                      </Card>
+                        </div>
+                        <div className="px-1 flex-1 flex flex-col">
+                          <p className="line-clamp-2 font-medium text-sm leading-tight text-foreground" title={collection.name}>
+                            {collection.name}
+                          </p>
+                          <div className="mt-0.5 flex items-center justify-between text-xs text-muted-foreground gap-2">
+                            <span className="truncate">{creationYear ?? t("collections.yearUnknown")}</span>
+                            <span className="shrink-0">{t("collections.songCount", { count: collection.songCount })}</span>
+                          </div>
+                        </div>
+                      </Link>
                     );
                   })}
                 </div>

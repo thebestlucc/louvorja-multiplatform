@@ -23,7 +23,9 @@
     "prevSlide": "Slide anterior",
     "nextSlide": "Próximo slide",
     "play": "Reproduzir",
-    "pause": "Pausar"
+    "pause": "Pausar",
+    "playingQueue": "Fila de Reprodução",
+    "queueEmpty": "Fila vazia"
   },
   "table": {
     "actions": "Ações"

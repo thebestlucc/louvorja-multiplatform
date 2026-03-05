@@ -23,7 +23,9 @@
     "prevSlide": "Previous slide",
     "nextSlide": "Next slide",
     "play": "Play",
-    "pause": "Pause"
+    "pause": "Pause",
+    "playingQueue": "Playing Queue",
+    "queueEmpty": "Queue is empty"
   },
   "table": {
     "actions": "Actions"

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { catcher } from "../../lib/catcher";
 import { resolveMediaPath } from "../../lib/tauri";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
@@ -31,15 +32,16 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
         return;
       }
 
-      try {
-        const absolutePath = await resolveMediaPath(slide.videoPath);
-        if (!cancelled) {
-          setResolvedSrc(convertFileSrc(absolutePath));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(String(err));
-        }
+      const [absolutePath, catcherError] = await catcher(resolveMediaPath(slide.videoPath));
+      if (cancelled) return;
+
+      if (catcherError) {
+        setError(catcherError.message);
+        return;
+      }
+
+      if (absolutePath) {
+        setResolvedSrc(convertFileSrc(absolutePath));
       }
     };
 

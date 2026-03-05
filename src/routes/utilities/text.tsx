@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { useFormatText } from "../../lib/queries";
 import { copyToClipboard } from "../../lib/clipboard";
 import type { TextFormat } from "../../types/utilities";
@@ -26,21 +27,25 @@ function UtilitiesTextPage() {
       return;
     }
 
-    try {
-      const result = await formatText.mutateAsync({ text: inputText, format });
+    const [result] = await catcher(
+      formatText.mutateAsync({ text: inputText, format }),
+      { notify: true },
+    );
+
+    if (result) {
       setOutputText(result);
-    } catch (error) {
-      notify.tauriError(error);
     }
   };
 
   const handleCopyOutput = async () => {
     if (!outputText) return;
-    try {
-      await copyToClipboard(outputText);
+    const [, error] = await catcher(
+      copyToClipboard(outputText),
+      { notify: true },
+    );
+
+    if (!error) {
       notify.success(t("utilities.text.copied"));
-    } catch (error) {
-      notify.tauriError(error);
     }
   };
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { catcher } from "../lib/catcher";
 
 const mediaSourceCache = new Map<string, string>();
 
@@ -52,8 +53,8 @@ export function useMediaSource(path: string | null | undefined): string | null {
       }
 
       if (trimmed.startsWith("media/")) {
-        try {
-          const appDir = await appDataDir();
+        const [appDir, error] = await catcher(appDataDir(), { notify: false });
+        if (!error && appDir) {
           const absolutePath = await join(appDir, trimmed);
           const fileUrl = convertFileSrc(absolutePath);
           mediaSourceCache.set(trimmed, fileUrl);
@@ -61,12 +62,12 @@ export function useMediaSource(path: string | null | undefined): string | null {
             setResolvedPath(fileUrl);
           }
           return;
-        } catch {
-          if (!cancelled) {
-            setResolvedPath(trimmed);
-          }
-          return;
         }
+
+        if (!cancelled) {
+          setResolvedPath(trimmed);
+        }
+        return;
       }
 
       if (!cancelled) {

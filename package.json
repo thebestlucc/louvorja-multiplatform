@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "pnpm test:unit",
-    "test:unit": "pnpm exec node -e \"require('node:fs').rmSync('.tmp-test-dist', { recursive: true, force: true })\" && pnpm exec tsc -p tsconfig.unit-tests.json && pnpm exec node -e \"require('node:fs').writeFileSync('.tmp-test-dist/package.json', JSON.stringify({ type: 'commonjs' }))\" && pnpm exec node --test .tmp-test-dist/tests/media-path.test.js .tmp-test-dist/tests/monitor-resolution.test.js .tmp-test-dist/tests/presentations/editor-state.test.js .tmp-test-dist/tests/presentations/editor-state-view.test.js",
+    "test:unit": "pnpm exec node -e \"require('node:fs').rmSync('.tmp-test-dist', { recursive: true, force: true })\" && pnpm exec tsc -p tsconfig.unit-tests.json && pnpm exec node -e \"require('node:fs').writeFileSync('.tmp-test-dist/package.json', JSON.stringify({ type: 'commonjs' }))\" && pnpm exec node --test .tmp-test-dist/tests/media-path.test.js .tmp-test-dist/tests/monitor-resolution.test.js .tmp-test-dist/tests/presentations/editor-state.test.js .tmp-test-dist/tests/presentations/editor-state-view.test.js .tmp-test-dist/tests/stores/queue-store.test.js .tmp-test-dist/tests/components/playing-queue.test.js",
     "lint:i18n": "node scripts/validate-i18n.mjs",
     "preview": "vite preview",
     "tauri": "tauri"

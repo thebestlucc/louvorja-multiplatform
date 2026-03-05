@@ -2,6 +2,7 @@ import { useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import type { SlideContent, VideoMetadata } from "../../lib/bindings";
 import { useCopyVideoToMedia } from "../../lib/queries";
 import { getVideoMetadata } from "../../lib/tauri";
@@ -45,29 +46,44 @@ export function VideoPicker({ presentationId, value, onChange }: VideoPickerProp
 
     setLoading(true);
 
-    try {
-      const parsedMetadata = await getVideoMetadata(selected);
-      setMetadata(parsedMetadata);
+    const [parsedMetadata, metaError] = await catcher(getVideoMetadata(selected), {
+      notify: true,
+      fallbackMessage: t("presentations.videoImportFailed", { error: "" }),
+    });
 
-      const managedPath = await copyMutation.mutateAsync({
+    if (metaError) {
+      setLoading(false);
+      return;
+    }
+
+    setMetadata(parsedMetadata);
+
+    const [managedPath, copyError] = await catcher(
+      copyMutation.mutateAsync({
         videoPath: selected,
         presentationId,
-      });
+      }),
+      {
+        notify: true,
+        fallbackMessage: t("presentations.videoImportFailed", { error: "" }),
+      },
+    );
 
+    if (copyError) {
+      setLoading(false);
+      return;
+    }
+
+    if (managedPath) {
       onChange({
         ...value,
         videoPath: managedPath,
       });
 
       notify.success(t("presentations.videoImported"));
-    } catch (err) {
-      notify.tauriError(
-        err,
-        t("presentations.videoImportFailed", { error: "" }),
-      );
-    } finally {
-      setLoading(false);
     }
+
+    setLoading(false);
   };
 
   return (

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSlides, useCreateSlide, useUpdateSlide, useDeleteSlide, useReorderSlides, useUpdatePresentation, usePresentation } from "../lib/queries";
+import { catcherSync } from "../lib/catcher";
 import type { SlideContent, Slide } from "../lib/bindings";
 
 interface UsePresentationOptions {
@@ -11,11 +12,14 @@ interface SlideWithParsedContent extends Omit<Slide, "content"> {
 }
 
 function parseSlideRow(row: Slide): SlideWithParsedContent {
-  let content: SlideContent;
-  try {
-    content = JSON.parse(row.content) as SlideContent;
-  } catch {
-    content = {
+  const [content, error] = catcherSync(
+    () => JSON.parse(row.content) as SlideContent,
+    { notify: false },
+  );
+
+  return {
+    ...row,
+    content: !error && content ? content : {
       slideType: "text",
       text: row.content,
       title: null,
@@ -31,11 +35,7 @@ function parseSlideRow(row: Slide): SlideWithParsedContent {
       mode: null,
       textColor: null,
       textSize: null,
-    };
-  }
-  return {
-    ...row,
-    content,
+    },
   };
 }
 

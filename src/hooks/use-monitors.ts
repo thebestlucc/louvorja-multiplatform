@@ -9,7 +9,7 @@ import {
   toggleBlackScreen as tauriToggleBlack,
   toggleLogoScreen as tauriToggleLogo,
 } from "../lib/tauri";
-import { notify } from "../lib/notifications";
+import { catcher, thrower } from "../lib/catcher";
 import { useDisplayStore } from "../stores/display-store";
 import type { OverlayState } from "../types/presentation";
 import { resolveProjectionMonitorIndexes } from "../lib/monitor-resolution";
@@ -62,25 +62,18 @@ export function useMonitorsControl() {
   // Projector
   const openProjector = useCallback(
     async (monitorId: string) => {
-      try {
-        await openProjectorWindow(monitorId);
-      } catch (err) {
-        console.error("Window operation failed:", err);
-        notify.tauriError(err);
-        throw err;
+      const [, error] = await catcher(openProjectorWindow(monitorId), { notify: true });
+      if (error) {
+        thrower(error);
       }
-
     },
     [],
   );
 
   const closeProjector = useCallback(async () => {
-    try {
-      await closeProjectorWindow();
-    } catch (err) {
-      console.error("Window operation failed:", err);
-      notify.tauriError(err);
-      throw err;
+    const [, error] = await catcher(closeProjectorWindow(), { notify: true });
+    if (error) {
+      thrower(error);
     }
   }, []);
 
@@ -104,25 +97,18 @@ export function useMonitorsControl() {
   // Return window
   const openReturn = useCallback(
     async (monitorId: string) => {
-      try {
-        await openReturnWindow(monitorId);
-      } catch (err) {
-        console.error("Window operation failed:", err);
-        notify.tauriError(err);
-        throw err;
+      const [, error] = await catcher(openReturnWindow(monitorId), { notify: true });
+      if (error) {
+        thrower(error);
       }
-
     },
     [],
   );
 
   const closeReturn = useCallback(async () => {
-    try {
-      await closeReturnWindow();
-    } catch (err) {
-      console.error("Window operation failed:", err);
-      notify.tauriError(err);
-      throw err;
+    const [, error] = await catcher(closeReturnWindow(), { notify: true });
+    if (error) {
+      thrower(error);
     }
   }, []);
 
@@ -145,22 +131,16 @@ export function useMonitorsControl() {
 
   // Overlays
   const toggleBlackScreen = useCallback(async () => {
-    try {
-      await tauriToggleBlack();
-    } catch (err) {
-      console.error("Overlay operation failed:", err);
-      notify.tauriError(err);
-      throw err;
+    const [, error] = await catcher(tauriToggleBlack(), { notify: true });
+    if (error) {
+      thrower(error);
     }
   }, []);
 
   const toggleLogoScreen = useCallback(async () => {
-    try {
-      await tauriToggleLogo();
-    } catch (err) {
-      console.error("Overlay operation failed:", err);
-      notify.tauriError(err);
-      throw err;
+    const [, error] = await catcher(tauriToggleLogo(), { notify: true });
+    if (error) {
+      thrower(error);
     }
   }, []);
 

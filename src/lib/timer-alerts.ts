@@ -1,5 +1,6 @@
 import { audioPlayAlert } from "./tauri";
 import type { Setting } from "./bindings";
+import { catcherSync } from "./catcher";
 
 export interface TimerAlertRule {
   minuteMark: number;
@@ -34,40 +35,37 @@ export function normalizeAlertRules(rules: TimerAlertRule[]): TimerAlertRule[] {
 }
 
 export function parseAlertRulesSetting(settings: Setting[] | null | undefined): TimerAlertRule[] {
-  const value = settings?.find(s => s.key === TIMER_ALERTS_SETTING_KEY)?.value;
+  const value = settings?.find((s) => s.key === TIMER_ALERTS_SETTING_KEY)?.value;
   if (!value) {
     return normalizeAlertRules([]);
   }
 
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) {
-      return normalizeAlertRules([]);
-    }
+  const [parsed, error] = catcherSync(() => JSON.parse(value), { notify: false });
 
-    const rules = parsed
-      .map((item): TimerAlertRule | null => {
-        if (typeof item !== "object" || item == null) {
-          return null;
-        }
-
-        const rawMinuteMark = (item as { minuteMark?: unknown }).minuteMark;
-        const rawAudioPath = (item as { audioPath?: unknown }).audioPath;
-        if (typeof rawMinuteMark !== "number") {
-          return null;
-        }
-
-        return {
-          minuteMark: rawMinuteMark,
-          audioPath: typeof rawAudioPath === "string" ? rawAudioPath : null,
-        };
-      })
-      .filter((rule): rule is TimerAlertRule => rule != null);
-
-    return normalizeAlertRules(rules);
-  } catch {
+  if (error || !Array.isArray(parsed)) {
     return normalizeAlertRules([]);
   }
+
+  const rules = parsed
+    .map((item): TimerAlertRule | null => {
+      if (typeof item !== "object" || item == null) {
+        return null;
+      }
+
+      const rawMinuteMark = (item as { minuteMark?: unknown }).minuteMark;
+      const rawAudioPath = (item as { audioPath?: unknown }).audioPath;
+      if (typeof rawMinuteMark !== "number") {
+        return null;
+      }
+
+      return {
+        minuteMark: rawMinuteMark,
+        audioPath: typeof rawAudioPath === "string" ? rawAudioPath : null,
+      };
+    })
+    .filter((rule): rule is TimerAlertRule => rule != null);
+
+  return normalizeAlertRules(rules);
 }
 
 export function isMandatoryAlertMinute(minuteMark: number): boolean {
@@ -82,7 +80,7 @@ export function normalizeAlertVolume(value: number): number {
 }
 
 export function parseAlertVolumeSetting(settings: Setting[] | null | undefined): number {
-  const value = settings?.find(s => s.key === TIMER_ALERT_VOLUME_SETTING_KEY)?.value;
+  const value = settings?.find((s) => s.key === TIMER_ALERT_VOLUME_SETTING_KEY)?.value;
   if (typeof value !== "string") {
     return DEFAULT_TIMER_ALERT_VOLUME;
   }

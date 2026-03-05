@@ -4,7 +4,8 @@ import { useAudioStore } from "../stores/audio-store";
 import { useSlides } from "./use-slides";
 import { useAudio } from "./use-audio";
 import { getSyncPoints as fetchSyncPoints } from "../lib/tauri";
-import type { Hymn, SlideContent, SyncPoint } from "../lib/bindings";
+import { catcher } from "../lib/catcher";
+import type { Hymn, SlideContent } from "../lib/bindings";
 
 export function hymnToSlides(title: string, lyrics: string | null, album: string | null, coverPath?: string | null): SlideContent[] {
   const slides: SlideContent[] = [];
@@ -86,52 +87,41 @@ export function useHymnPlayback() {
     if (generatedSlides.length === 0) return;
 
     const clampedIndex = Math.max(0, Math.min(startIndex, generatedSlides.length - 1));
-    let points: SyncPoint[] = [];
-    try {
-      points = await fetchSyncPoints(hymn.id);
-    } catch (e) {
-      console.warn("Failed to load sync points for hymn", e);
-    }
+    const [points] = await catcher(fetchSyncPoints(hymn.id), { notify: false });
 
     setCurrentPresentation(null);
     setPresentationSlides(generatedSlides);
     setPresentationActiveSlideIndex(clampedIndex);
-    setAudioSyncPoints(points);
+    setAudioSyncPoints(points ?? []);
 
     return { generatedSlides, clampedIndex };
   }, [setAudioSyncPoints, setCurrentPresentation, setPresentationActiveSlideIndex, setPresentationSlides]);
 
   const handleStartCantado = useCallback(async (hymn: Hymn) => {
-    try {
+    await catcher(async () => {
       setPlaybackMode("sung");
       await bindHymnToPlaybackQueue(hymn, 0);
       await goToSlide(0);
       if (hymn.audioPath) await play(hymn.audioPath);
-    } catch (e) {
-      console.error("[hymn] Failed to start cantado projection:", e);
-    }
+    }, { notify: false });
   }, [bindHymnToPlaybackQueue, goToSlide, play, setPlaybackMode]);
 
   const handleStartPlayback = useCallback(async (hymn: Hymn) => {
-    try {
+    await catcher(async () => {
       setPlaybackMode("karaoke");
       await bindHymnToPlaybackQueue(hymn, 0);
       await goToSlide(0);
       const audioPath = hymn.playbackPath || hymn.audioPath;
       if (audioPath) await play(audioPath);
-    } catch (e) {
-      console.error("[hymn] Failed to start playback projection:", e);
-    }
+    }, { notify: false });
   }, [bindHymnToPlaybackQueue, goToSlide, play, setPlaybackMode]);
 
   const handleStartSlidesOnly = useCallback(async (hymn: Hymn) => {
-    try {
+    await catcher(async () => {
       setPlaybackMode("silent");
       await bindHymnToPlaybackQueue(hymn, 0);
       await goToSlide(0);
-    } catch (e) {
-      console.error("[hymn] Failed to start slides-only projection:", e);
-    }
+    }, { notify: false });
   }, [bindHymnToPlaybackQueue, goToSlide, setPlaybackMode]);
 
   return {

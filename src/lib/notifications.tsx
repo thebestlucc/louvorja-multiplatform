@@ -1,13 +1,5 @@
 import { toast } from "sonner";
-
-/**
- * Standard backend error response structure (matches Rust AppErrorResponse)
- */
-export interface AppErrorResponse {
-  code: string;
-  message: string;
-  details?: string;
-}
+import type { AppErrorResponse } from "./bindings";
 
 /**
  * Type guard to check if an object is an AppErrorResponse

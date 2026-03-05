@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
+import { catcher, catcherSync } from "../lib/catcher";
 import type { AudioStatusPayload, SyncPoint } from "../lib/bindings";
 import type { PlaybackStatus, PlaybackMode } from "../types/audio";
 import { usePresentationStore } from "./presentation-store";
@@ -138,11 +139,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
           console.log("[audio-store] Syncing slide:", nextSlide, "shouldProject:", shouldProject);
           usePresentationStore.getState().setActiveSlideIndex(nextSlide);
           if (shouldProject) {
-            try {
-              await projectSlideIndex(nextSlide);
-            } catch {
-              // Ignore transient projection update errors.
-            }
+            await catcher(projectSlideIndex(nextSlide), { notify: false });
           }
         }
         projectedSlideInFlight = false;
@@ -220,11 +217,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   stopStatusSubscription: () => {
     const { statusSubscription, subscriptionToken } = get();
     if (statusSubscription) {
-      try {
-        statusSubscription();
-      } catch {
-        // Ignore unlisten errors during teardown.
-      }
+      catcherSync(statusSubscription, { notify: false });
     }
     set({
       statusSubscription: null,
@@ -236,11 +229,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   reset: () => {
     const { statusSubscription, subscriptionToken } = get();
     if (statusSubscription) {
-      try {
-        statusSubscription();
-      } catch {
-        // Ignore unlisten errors during reset.
-      }
+      catcherSync(statusSubscription, { notify: false });
     }
     set({
       status: "idle",

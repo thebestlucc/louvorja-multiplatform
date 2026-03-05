@@ -19,6 +19,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { ServiceItemType } from "../../types/service";
 import { CoverImage } from "../media/cover-image";
 import type { Hymn, Presentation as PresentationType, BibleVersion, Book, Verse } from "../../lib/bindings";
+import { catcherSync } from "../../lib/catcher";
 
 interface AddItemModalProps {
   open: boolean;
@@ -350,7 +351,8 @@ function UrlForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
 
-  const isValidUrl = (() => { try { new URL(url); return true; } catch { return false; } })();
+  const [validUrlData, urlError] = catcherSync(() => new URL(url));
+  const isValidUrl = !urlError && !!validUrlData;
 
   return (
     <div className="flex flex-col gap-3">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { catcher } from "../../lib/catcher";
 import { completeOnboarding, invalidateOnboardingCache } from "../../lib/onboarding";
 import { useOnboardingStore } from "../../stores/onboarding-store";
 
@@ -21,16 +22,17 @@ function OnboardingCompletePage() {
   const handleFinish = async () => {
     setSaving(true);
     setError(null);
-    try {
-      await completeOnboarding();
-      invalidateOnboardingCache();
-      reset();
-      navigate({ to: "/" });
-    } catch (err) {
-      setError(String(err));
-    } finally {
+    const [_, err] = await catcher(completeOnboarding());
+    if (err) {
+      setError(err.message);
       setSaving(false);
+      return;
     }
+
+    invalidateOnboardingCache();
+    reset();
+    setSaving(false);
+    navigate({ to: "/" });
   };
 
   return (

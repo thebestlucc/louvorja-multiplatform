@@ -20,6 +20,7 @@ import { setMonitorConfig } from "../lib/tauri";
 import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
 import { useLegacyFetchStore } from "../stores/legacy-fetch-store";
+import { catcher } from "../lib/catcher";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
 import type { LegacyFetchProgress, LegacyFetchReport } from "../lib/bindings";
@@ -182,13 +183,12 @@ function RootLayout() {
 
     syncingMonitorAssignmentsRef.current = true;
     void (async () => {
-      try {
+      await catcher(async () => {
         await setMonitorConfig(assignments.projectorMonitorId, "projector");
         await setMonitorConfig(assignments.returnMonitorId, "return");
         await queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
-      } finally {
-        syncingMonitorAssignmentsRef.current = false;
-      }
+      });
+      syncingMonitorAssignmentsRef.current = false;
     })();
   }, [isBareRoute, monitorConfigs, monitorConfigsLoaded, monitors, monitorsLoaded, queryClient]);
 

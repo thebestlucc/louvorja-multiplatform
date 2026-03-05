@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { useRunLottery } from "../../lib/queries";
 import { useUtilityProjection } from "../../hooks/use-utility-projection";
 import { createUtilityProjectionPayload } from "../../types/utilities";
@@ -100,47 +101,24 @@ function UtilitiesLotteryPage() {
       return;
     }
 
-    try {
-      if (mode === "names") {
-        if (names.length === 0) {
-          notify.error(t("utilities.lottery.invalidNames"));
-          return;
-        }
-        if (availableNames.length === 0) {
-          notify.error(t("utilities.lottery.allPicked"));
-          return;
-        }
-
-        const selected = await runLottery.mutateAsync(availableNames);
-        setIsDrawing(true);
-        setWinner(null);
-        setDrawingDisplayValue(null);
-        if (drawTimerRef.current != null) {
-          window.clearTimeout(drawTimerRef.current);
-        }
-        drawTimerRef.current = window.setTimeout(() => {
-          setPickedNames((prev) => (prev.includes(selected) ? prev : [...prev, selected]));
-          setHistory((prev) => [...prev, { id: prev.length + 1, mode: "names", value: selected }]);
-          setWinner(selected);
-          setIsDrawing(false);
-          drawTimerRef.current = null;
-        }, 1800);
+    if (mode === "names") {
+      if (names.length === 0) {
+        notify.error(t("utilities.lottery.invalidNames"));
         return;
       }
-
-      if (!Number.isFinite(parsedMaxNumber) || parsedMaxNumber <= 0) {
-        notify.error(t("utilities.lottery.invalidMax"));
-        return;
-      }
-      if (availableNumbers.length === 0) {
+      if (availableNames.length === 0) {
         notify.error(t("utilities.lottery.allPicked"));
         return;
       }
 
-      const selected = await runLottery.mutateAsync(availableNumbers.map(String));
-      const selectedNumber = Number.parseInt(selected, 10);
-      if (!Number.isFinite(selectedNumber)) {
-        throw new Error("Invalid lottery result");
+      const [selected, error] = await catcher(
+        runLottery.mutateAsync(availableNames),
+        { notify: true },
+      );
+
+      if (error) {
+        setIsDrawing(false);
+        return;
       }
 
       setIsDrawing(true);
@@ -150,16 +128,56 @@ function UtilitiesLotteryPage() {
         window.clearTimeout(drawTimerRef.current);
       }
       drawTimerRef.current = window.setTimeout(() => {
-        setPickedNumbers((prev) => (prev.includes(selectedNumber) ? prev : [...prev, selectedNumber]));
-        setHistory((prev) => [...prev, { id: prev.length + 1, mode: "numbers", value: String(selectedNumber) }]);
-        setWinner(String(selectedNumber));
+        setPickedNames((prev) => (prev.includes(selected) ? prev : [...prev, selected]));
+        setHistory((prev) => [...prev, { id: prev.length + 1, mode: "names", value: selected }]);
+        setWinner(selected);
         setIsDrawing(false);
         drawTimerRef.current = null;
       }, 1800);
-    } catch (error) {
-      notify.tauriError(error);
-      setIsDrawing(false);
+      return;
     }
+
+    if (!Number.isFinite(parsedMaxNumber) || parsedMaxNumber <= 0) {
+      notify.error(t("utilities.lottery.invalidMax"));
+      return;
+    }
+    if (availableNumbers.length === 0) {
+      notify.error(t("utilities.lottery.allPicked"));
+      return;
+    }
+
+    const [selected, error] = await catcher(
+      (async () => {
+        const sel = await runLottery.mutateAsync(availableNumbers.map(String));
+        const selNumber = Number.parseInt(sel, 10);
+        if (!Number.isFinite(selNumber)) {
+          throw new Error("Invalid lottery result");
+        }
+        return sel;
+      })(),
+      { notify: true },
+    );
+
+    if (error) {
+      setIsDrawing(false);
+      return;
+    }
+
+    const selectedNumber = Number.parseInt(selected, 10);
+
+    setIsDrawing(true);
+    setWinner(null);
+    setDrawingDisplayValue(null);
+    if (drawTimerRef.current != null) {
+      window.clearTimeout(drawTimerRef.current);
+    }
+    drawTimerRef.current = window.setTimeout(() => {
+      setPickedNumbers((prev) => (prev.includes(selectedNumber) ? prev : [...prev, selectedNumber]));
+      setHistory((prev) => [...prev, { id: prev.length + 1, mode: "numbers", value: String(selectedNumber) }]);
+      setWinner(String(selectedNumber));
+      setIsDrawing(false);
+      drawTimerRef.current = null;
+    }, 1800);
   };
 
   const handleResetCurrentMode = () => {

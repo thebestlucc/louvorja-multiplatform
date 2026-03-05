@@ -5,6 +5,7 @@ import { Button } from "../ui/button";
 import { CoverImage } from "./cover-image";
 import { useCopyImageToMedia } from "../../lib/queries";
 import { useTranslation } from "react-i18next";
+import { catcher } from "../../lib/catcher";
 
 interface CoverPickerProps {
   value: string | null;
@@ -25,13 +26,15 @@ export function CoverPicker({ value, onChange, title }: CoverPickerProps) {
       return;
     }
 
-    try {
-      const managed = await copyMutation.mutateAsync(selected);
-      onChange(managed);
-      notify.success(t("collections.coverUpdated"));
-    } catch (error) {
-      notify.tauriError(error, t("collections.coverUpdateFailed", { error: "" }));
-    }
+    const [managed, error] = await catcher(copyMutation.mutateAsync(selected), {
+      notify: true,
+      fallbackMessage: t("collections.coverUpdateFailed", { error: "" }),
+    });
+
+    if (error) return;
+
+    onChange(managed);
+    notify.success(t("collections.coverUpdated"));
   };
 
   return (

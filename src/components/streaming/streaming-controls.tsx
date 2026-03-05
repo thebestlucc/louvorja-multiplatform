@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, ExternalLink, Play, Radio, Square, Wifi } from "lucide-react";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { openUrl as tauriOpenUrl } from "@tauri-apps/plugin-opener";
 import { copyToClipboard } from "../../lib/clipboard";
 import { useStreamingStatus, useStartStreaming, useStopStreaming, useSetStreamingBroadcast } from "../../lib/queries";
@@ -45,18 +46,17 @@ export function StreamingControls() {
   };
 
   const copyUrl = async (url: string) => {
-    try {
-      await copyToClipboard(url);
-      notify.success(t("streaming.urlCopied"));
-    } catch {
+    const [, error] = await catcher(copyToClipboard(url), { notify: false });
+    if (error) {
       notify.error(t("streaming.copyFailed"));
+      return;
     }
+    notify.success(t("streaming.urlCopied"));
   };
 
   const openUrl = async (url: string) => {
-    try {
-      await tauriOpenUrl(url);
-    } catch {
+    const [, error] = await catcher(tauriOpenUrl(url), { notify: false });
+    if (error) {
       notify.error(t("streaming.openFailed"));
     }
   };

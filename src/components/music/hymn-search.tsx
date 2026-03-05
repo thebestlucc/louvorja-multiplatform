@@ -22,9 +22,11 @@ export function HymnSearch() {
   const { data: hymns, isLoading } = useHymns(debouncedQuery);
 
   // Responsive columns for grid view
-  const isSm = useMedia("(min-width: 640px)", false);
+  const isXl = useMedia("(min-width: 1280px)", false);
   const isLg = useMedia("(min-width: 1024px)", false);
-  const columns = view === "list" ? 1 : isLg ? 3 : isSm ? 2 : 1;
+  const isMd = useMedia("(min-width: 768px)", false);
+  const isSm = useMedia("(min-width: 640px)", false);
+  const columns = view === "list" ? 1 : isXl ? 6 : isLg ? 5 : isMd ? 4 : isSm ? 3 : 2;
 
   const items = hymns || [];
   const rowCount = Math.ceil(items.length / columns);
@@ -34,8 +36,9 @@ export function HymnSearch() {
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => document.getElementById("main-scroll-area"),
-    estimateSize: () => (view === "list" ? 60 : 260), // approximate heights
+    estimateSize: () => (view === "list" ? 60 : 280),
     overscan: 5,
+    gap: 16,
   });
 
   return (
@@ -104,21 +107,21 @@ export function HymnSearch() {
               return (
                 <div
                   key={virtualRow.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
                   style={{
                     position: "absolute",
                     top: 0,
                     left: 0,
                     width: "100%",
-                    height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
-                    paddingBottom: view === "grid" ? "12px" : "0",
                   }}
                 >
                   <div
                     className={
                       view === "grid"
-                        ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 h-full"
-                        : "flex flex-col h-full"
+                        ? "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                        : "flex flex-col"
                     }
                   >
                     {rowItems.map((hymn) => (
