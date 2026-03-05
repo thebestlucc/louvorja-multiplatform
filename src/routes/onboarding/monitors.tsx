@@ -11,6 +11,7 @@ import {
 import { resolveProjectionMonitorIndexes } from "../../lib/monitor-resolution";
 import { useMonitorConfigs, useMonitors, useSaveMonitorConfig } from "../../lib/queries";
 import { getPreferredMonitorName } from "../../lib/monitor-display-name";
+import { catcher } from "../../lib/catcher";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 
@@ -80,19 +81,23 @@ function OnboardingMonitorsPage() {
 
     setFeedback(null);
     setSaving(true);
-    try {
+    const [_, err] = await catcher(async () => {
       if (projectorId) {
         await saveConfig.mutateAsync({ monitorId: projectorId, role: "projector" });
       }
       if (returnId) {
         await saveConfig.mutateAsync({ monitorId: returnId, role: "return" });
       }
-      navigate({ to: "/onboarding/complete" });
-    } catch (error) {
-      setFeedback(String(error));
-    } finally {
+    });
+
+    if (err) {
+      setFeedback(err.message);
       setSaving(false);
+      return;
     }
+
+    setSaving(false);
+    navigate({ to: "/onboarding/complete" });
   };
 
   const openWindowTemporarily = async (type: "projector" | "return") => {

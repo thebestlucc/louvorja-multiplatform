@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoverPicker } from "../../components/media/cover-picker";
 
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import {
   Dialog,
   DialogContent,
@@ -139,27 +140,27 @@ function HymnDetail() {
     const title = form.title.trim();
     if (!title) return;
     const number = form.number.trim().length > 0 ? Number(form.number) : null;
-    try {
-      await updateMutation.mutateAsync({
-        id,
-        input: {
-          number: Number.isFinite(number) ? number : null,
-          title,
-          author: form.author.trim() || null,
-          album: form.album.trim() || null,
-          lyrics: form.lyrics.trim() || null,
-          chords: form.chords.trim() || null,
-          audioPath: form.audioPath.trim() || null,
-          playbackPath: hymn.playbackPath,
-          category: form.category.trim() || null,
-          notes: form.notes.trim() || null,
-          coverPath: form.coverPath,
-          lyricsSync: hymn.lyricsSync,
-        },
-      });
+    
+    const [_, error] = await catcher(updateMutation.mutateAsync({
+      id,
+      input: {
+        number: Number.isFinite(number) ? number : null,
+        title,
+        author: form.author.trim() || null,
+        album: form.album.trim() || null,
+        lyrics: form.lyrics.trim() || null,
+        chords: form.chords.trim() || null,
+        audioPath: form.audioPath.trim() || null,
+        playbackPath: hymn.playbackPath,
+        category: form.category.trim() || null,
+        notes: form.notes.trim() || null,
+        coverPath: form.coverPath,
+        lyricsSync: hymn.lyricsSync,
+      },
+    }), { notify: true, fallbackMessage: t("hymnal.saveFailed", { error: "" }) });
+
+    if (!error) {
       setEditOpen(false);
-    } catch (error) {
-      notify.tauriError(error, t("hymnal.saveFailed", { error: "" }));
     }
   };
 
@@ -218,12 +219,13 @@ function HymnDetail() {
                 size="sm"
                 disabled={restoreMutation.isPending}
                 onClick={async () => {
-                  try {
-                    const lang = (i18n.language as "pt" | "en" | "es") || "pt";
-                    await restoreMutation.mutateAsync({ hymnId: id, language: lang });
+                  const lang = (i18n.language as "pt" | "en" | "es") || "pt";
+                  const [_, error] = await catcher(
+                    restoreMutation.mutateAsync({ hymnId: id, language: lang }),
+                    { notify: true, fallbackMessage: t("hymn.restoreFailed", { error: "" }) }
+                  );
+                  if (!error) {
                     notify.success(t("hymn.restoreSuccess"));
-                  } catch (error) {
-                    notify.tauriError(error, t("hymn.restoreFailed", { error: "" }));
                   }
                 }}
               >
@@ -383,11 +385,12 @@ function HymnDetail() {
               className="w-full"
               onClick={async () => {
                 if (confirm(t("hymn.deleteConfirm"))) {
-                  try {
-                    await deleteMutation.mutateAsync(id);
+                  const [_, error] = await catcher(deleteMutation.mutateAsync(id), {
+                    notify: true,
+                    fallbackMessage: t("hymnal.deleteFailed", { error: "" }),
+                  });
+                  if (!error) {
                     void navigate({ to: "/hymnal" });
-                  } catch (error) {
-                    notify.tauriError(error, t("hymnal.deleteFailed", { error: "" }));
                   }
                 }
               }}

@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { usePresentation2 } from "../../hooks/use-presentation";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -58,7 +59,7 @@ function PresentationDetail() {
       return;
     }
 
-    try {
+    await catcher(async () => {
       // Set the current presentation context in the store
       setCurrentPresentation(id);
       setPresentationSlides(slideContents);
@@ -69,10 +70,8 @@ function PresentationDetail() {
 
       // Update local UI state
       setActiveSlideIndex(0);
-    } catch (err) {
-      notify.tauriError(err);
-    }
-  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationActiveSlideIndex, setPresentationActiveSlideIndex]);
+    }, { notify: true });
+  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationSlides, setPresentationActiveSlideIndex]);
 
   const handleExport = async () => {
     if (!presentation) return;

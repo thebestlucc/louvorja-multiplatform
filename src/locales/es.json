@@ -23,7 +23,9 @@
     "prevSlide": "Diapositiva anterior",
     "nextSlide": "Diapositiva siguiente",
     "play": "Reproducir",
-    "pause": "Pausar"
+    "pause": "Pausar",
+    "playingQueue": "Cola de Reproducción",
+    "queueEmpty": "Cola vacía"
   },
   "table": {
     "actions": "Acciones"

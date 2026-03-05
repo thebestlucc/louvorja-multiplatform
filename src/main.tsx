@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { routeTree } from "./routeTree.gen";
 import "./lib/i18n";
+import { catcherSync } from "./lib/catcher";
 
 type AppRouter = ReturnType<typeof createRouter<typeof routeTree>>;
 declare module "@tanstack/react-router" {
@@ -14,12 +15,11 @@ declare module "@tanstack/react-router" {
 }
 
 function getTauriWindowLabel(): string {
-  try {
+  const [label] = catcherSync(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label ?? "";
-  } catch {
-    return "";
-  }
+    () => (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label,
+  );
+  return label ?? "";
 }
 
 const windowLabel = getTauriWindowLabel();

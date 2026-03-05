@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { catcher } from "../../lib/catcher";
 
 interface CoverImageProps {
   path?: string | null;
@@ -46,15 +47,21 @@ export function CoverImage({ path, title, className }: CoverImageProps) {
       }
 
       if (trimmed.startsWith("media/")) {
-        try {
-          const appDir = await appDataDir();
-          const absolute = await join(appDir, trimmed);
-          if (!cancelled) setSrc(convertFileSrc(absolute));
-          return;
-        } catch {
+        const [absolute, error] = await catcher(
+          async () => {
+            const appDir = await appDataDir();
+            return await join(appDir, trimmed);
+          },
+          { notify: false },
+        );
+
+        if (error) {
           if (!cancelled) setSrc(null);
           return;
         }
+
+        if (!cancelled) setSrc(convertFileSrc(absolute));
+        return;
       }
 
       if (!cancelled) setSrc(trimmed);

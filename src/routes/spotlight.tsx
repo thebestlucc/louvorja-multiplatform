@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { catcher } from "../lib/catcher";
 import {
   spotlightSelect,
   spotlightHide,
@@ -149,20 +150,23 @@ function SpotlightWindow() {
     }
     setSearching(true);
     const timer = setTimeout(async () => {
-      try {
-        const [h, b, c] = await Promise.all([
+      const [results] = await catcher(
+        Promise.all([
           searchHymns(query),
           query.trim().length >= 2 ? searchBible(query, null) : Promise.resolve([]),
           query.trim().length >= 2 ? searchCollections(query) : Promise.resolve([]),
-        ]);
+        ]),
+        { notify: false },
+      );
+
+      if (results) {
+        const [h, b, c] = results;
         setHymns(h.slice(0, 5));
         setBibleResults(b.slice(0, 5));
         setCollectionResults(c.slice(0, 5));
-      } catch {
-        // silently fail
-      } finally {
-        setSearching(false);
       }
+
+      setSearching(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);

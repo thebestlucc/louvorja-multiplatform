@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Plus, Play, Square, SkipForward, SkipBack } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { setSlideContext } from "../../lib/tauri";
@@ -161,7 +161,7 @@ function ServiceEditor() {
         break;
     }
 
-    try {
+    await catcher(async () => {
       await projectSlideWithType(slideData, "service");
       // Find the item index in the list for return monitor context
       const itemIndex = items.findIndex((i) => i.id === item.id);
@@ -174,9 +174,7 @@ function ServiceEditor() {
         total: items.length,
         title: item.title,
       });
-    } catch (err) {
-      notify.tauriError(err);
-    }
+    }, { notify: true });
   }, [items]);
 
   // Play Service: project the active item whenever the index changes
@@ -204,7 +202,7 @@ function ServiceEditor() {
 
     // End of service timeline: stop playback and clear projection.
     setPlayingService(false);
-    void stopProjectionAndSongAudio().catch((err: unknown) => notify.tauriError(err));
+    void catcher(stopProjectionAndSongAudio(), { notify: true });
   };
 
   const handlePrevItem = () => {

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { notify } from "../lib/notifications";
+import { catcher } from "../lib/catcher";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContent } from "../lib/bindings";
@@ -99,7 +99,7 @@ export function useBible() {
     setPresentationSlides(slides);
     setActiveSlideIndex(0);
 
-    try {
+    await catcher(async () => {
       await projectSlideWithType(slides[0], "bible");
       await setSlideContext({
         next: slides.length > 1 ? slides[1] : null,
@@ -107,9 +107,7 @@ export function useBible() {
         total: slides.length,
         title,
       });
-    } catch (err) {
-      notify.tauriError(err);
-    }
+    }, { notify: true });
   }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides]);
 
   const startBibleProjection = useCallback(async () => {
@@ -123,11 +121,9 @@ export function useBible() {
   }, [isProjecting, projectSelectedVersesRange]);
 
   const stopBibleProjection = useCallback(async () => {
-    try {
-      await clearCurrentSlide();
+    const [, error] = await catcher(clearCurrentSlide(), { notify: true });
+    if (!error) {
       setCurrentProjectionType(null);
-    } catch (err) {
-      notify.tauriError(err);
     }
   }, [setCurrentProjectionType]);
 

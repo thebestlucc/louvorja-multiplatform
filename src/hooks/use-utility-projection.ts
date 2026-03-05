@@ -9,6 +9,7 @@ import {
 import { useDisplayStore } from "../stores/display-store";
 import type { UtilityProjectionPayload, UtilityProjectionKind } from "../types/utilities";
 import type { SlideContent, SlideContext } from "../lib/bindings";
+import { catcher } from "../lib/catcher";
 
 export function useUtilityProjection(_kind: UtilityProjectionKind) {
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
@@ -45,7 +46,7 @@ export function useUtilityProjection(_kind: UtilityProjectionKind) {
   const stopProjection = useCallback(async () => {
     if (!isProjecting) return;
 
-    try {
+    await catcher(async () => {
       if (snapshotRef.current?.slide) {
         await setCurrentSlide(snapshotRef.current.slide);
         if (snapshotRef.current.context) {
@@ -54,11 +55,11 @@ export function useUtilityProjection(_kind: UtilityProjectionKind) {
       } else {
         await clearCurrentSlide();
       }
-    } finally {
-      snapshotRef.current = null;
-      if (isMountedRef.current) {
-        setCurrentProjectionType(null);
-      }
+    });
+
+    snapshotRef.current = null;
+    if (isMountedRef.current) {
+      setCurrentProjectionType(null);
     }
   }, [isProjecting, setCurrentProjectionType]);
 

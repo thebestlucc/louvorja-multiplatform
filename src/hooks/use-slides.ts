@@ -3,6 +3,7 @@ import { usePresentationStore } from "../stores/presentation-store";
 import { setSlideContext } from "../lib/tauri";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useAudioStore } from "../stores/audio-store";
+import { catcher } from "../lib/catcher";
 
 import type { SlideContent, SyncPoint } from "../lib/bindings";
 import { projectSlideWithType } from "../lib/projection-playback";
@@ -68,12 +69,17 @@ export function useSlides() {
       return;
     }
 
-    try {
-      const { audioSeek } = await import("../lib/tauri");
-      audioState.setManualSyncLock(index, timestampMs);
-      await audioSeek(timestampMs);
-      audioState.setPosition(timestampMs);
-    } catch (error) {
+    const [_, error] = await catcher(
+      async () => {
+        const { audioSeek } = await import("../lib/tauri");
+        audioState.setManualSyncLock(index, timestampMs);
+        await audioSeek(timestampMs);
+        audioState.setPosition(timestampMs);
+      },
+      { notify: false },
+    );
+
+    if (error) {
       audioState.clearManualSyncLock();
       console.warn("Failed to seek audio on manual slide navigation:", error);
     }

@@ -32,6 +32,10 @@ This file provides comprehensive repository-level guidance for Gemini Code Assis
 - **Serde:** Use `#[serde(rename_all = "camelCase")]` on all structs sent to the frontend.
 
 ### Frontend (React 19)
+- **Error Handling:** **ALWAYS use `catcher`** (`src/lib/catcher.ts`) to wrap async or sync operations instead of using manual `try-catch` blocks.
+  - Example: `const [data, error] = await catcher(promise, { notify: true });`
+  - Use the `{ notify: true }` option to automatically show error toasts.
+  - **Exceptions:** Auto-generated files (e.g., `bindings.ts`), Node.js scripts (e.g., `scripts/*.mjs`), and standalone SSE HTML templates (`src-tauri/src/streaming/templates/*.html`) are exempt as they cannot access the React `catcher` utility.
 - **Types:** **ALWAYS** import domain types (Hymn, Slide, etc.) from `@/lib/bindings`. Do not define manual interfaces for backend-provided data.
 - **Refs:** Use `useRef<T>(undefined)` — React 19 requires an explicit initial value.
 - **Navigation:** Use TanStack Router `<Link to="...">`. Never use `<a href>` or `window.location`.

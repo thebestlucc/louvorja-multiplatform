@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
-import { ChevronLeft, ChevronRight, Play, Pause } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Pause, List } from "lucide-react";
 import { getCurrentSlide, getOverlayState, getSlideContext } from "../../lib/tauri";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
+import { PlayingQueue } from "../../components/operator/playing-queue";
 import { useDisplayStore } from "../../stores/display-store";
 import { useSlides } from "../../hooks/use-slides";
 import { useAudio } from "../../hooks/use-audio";
@@ -81,87 +82,102 @@ function OperatorScreen() {
   const isPlaying = audioStatus === "playing";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          {t("nav.operator")}
-        </h1>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "h-2.5 w-2.5 rounded-full",
-              projectorWindowOpen ? "bg-green-500" : "bg-muted-foreground/40",
-            )}
-          />
-          <span className="text-xs text-muted-foreground">
-            {projectorWindowOpen ? t("operator.projectorActive") : t("operator.projectorInactive")}
-          </span>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_300px]">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            {t("nav.operator")}
+          </h1>
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "h-2.5 w-2.5 rounded-full",
+                projectorWindowOpen ? "bg-green-500" : "bg-muted-foreground/40",
+              )}
+            />
+            <span className="text-xs text-muted-foreground">
+              {projectorWindowOpen ? t("operator.projectorActive") : t("operator.projectorInactive")}
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* Slide preview */}
-      <div className="overflow-hidden rounded-lg border border-border bg-black" style={{ aspectRatio: "16/9" }}>
-        {currentSlide ? (
-          <SlideRenderer slide={currentSlide} renderMode="thumbnail" className="h-full w-full" />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <span className="text-sm text-muted-foreground">{t("operator.noSlide")}</span>
+        {/* Slide preview */}
+        <div className="overflow-hidden rounded-lg border border-border bg-black" style={{ aspectRatio: "16/9" }}>
+          {currentSlide ? (
+            <SlideRenderer slide={currentSlide} renderMode="thumbnail" className="h-full w-full" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <span className="text-sm text-muted-foreground">{t("operator.noSlide")}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Overlay indicators */}
+        {(overlay.blackScreen || overlay.logoScreen) && (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-yellow-500" />
+            {overlay.blackScreen && <span>{t("operator.blackScreenActive")}</span>}
+            {overlay.logoScreen && <span>{t("operator.logoScreenActive")}</span>}
           </div>
         )}
+
+        {/* Navigation controls */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void prevSlide()}
+              disabled={slideIndex <= 0}
+              aria-label={t("operator.prevSlide")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <span className="min-w-20 text-center text-sm text-muted-foreground">
+              {slideTotal > 0
+                ? `${slideIndex + 1} / ${slideTotal}`
+                : "—"}
+            </span>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void nextSlide()}
+              disabled={slideIndex >= slideTotal - 1}
+              aria-label={t("operator.nextSlide")}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void togglePlayPause()}
+            disabled={!isAudioControllable}
+            aria-label={isPlaying ? t("operator.pause") : t("operator.play")}
+          >
+            {isPlaying ? (
+              <Pause className="h-4 w-4" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </div>
 
-      {/* Overlay indicators */}
-      {(overlay.blackScreen || overlay.logoScreen) && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
-          <span className="h-2 w-2 rounded-full bg-yellow-500" />
-          {overlay.blackScreen && <span>{t("operator.blackScreenActive")}</span>}
-          {overlay.logoScreen && <span>{t("operator.logoScreenActive")}</span>}
+      {/* Playing Queue Sidebar */}
+      <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface">
+        <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2">
+          <List className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">
+            {t("operator.playingQueue")}
+          </h2>
         </div>
-      )}
-
-      {/* Navigation controls */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => void prevSlide()}
-            disabled={slideIndex <= 0}
-            aria-label={t("operator.prevSlide")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          <span className="min-w-20 text-center text-sm text-muted-foreground">
-            {slideTotal > 0
-              ? `${slideIndex + 1} / ${slideTotal}`
-              : "—"}
-          </span>
-
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => void nextSlide()}
-            disabled={slideIndex >= slideTotal - 1}
-            aria-label={t("operator.nextSlide")}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="flex-1 overflow-y-auto min-h-[300px] xl:min-h-0">
+          <PlayingQueue />
         </div>
-
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => void togglePlayPause()}
-          disabled={!isAudioControllable}
-          aria-label={isPlaying ? t("operator.pause") : t("operator.play")}
-        >
-          {isPlaying ? (
-            <Pause className="h-4 w-4" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-        </Button>
       </div>
     </div>
   );

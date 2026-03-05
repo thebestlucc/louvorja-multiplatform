@@ -5,6 +5,10 @@
     "outDir": ".tmp-test-dist",
     "module": "CommonJS",
     "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "allowImportingTsExtensions": false,
     "types": ["node"],
     "sourceMap": false
@@ -14,10 +18,14 @@
     "tests/monitor-resolution.test.ts",
     "tests/presentations/editor-state.test.ts",
     "tests/presentations/editor-state-view.test.ts",
+    "tests/stores/queue-store.test.ts",
+    "tests/components/playing-queue.test.tsx",
     "src/lib/media-path.ts",
     "src/lib/monitor-resolution.ts",
     "src/routes/presentations/-editor-state.ts",
     "src/routes/presentations/-editor-state-view.tsx",
+    "src/stores/queue-store.ts",
+    "src/components/operator/playing-queue.tsx",
     "src/components/ui/button.tsx",
     "src/lib/utils.ts"
   ]

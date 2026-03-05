@@ -3,6 +3,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { Pause, Play, RotateCcw, TimerReset } from "lucide-react";
 import {
   useAddLap,
@@ -109,14 +110,13 @@ function UtilitiesTimerPage() {
   }, [stoppedCountdownRuntimeMs]);
 
   const persistAlertRules = async (nextRules: TimerAlertRule[]) => {
-    try {
-      await setSettingMutation.mutateAsync({
+    await catcher(
+      setSettingMutation.mutateAsync({
         key: TIMER_ALERTS_SETTING_KEY,
         value: JSON.stringify(nextRules),
-      });
-    } catch (error) {
-      notify.tauriError(error);
-    }
+      }),
+      { notify: true },
+    );
   };
 
   const updateAlertRules = async (updater: (rules: TimerAlertRule[]) => TimerAlertRule[]) => {
@@ -126,63 +126,48 @@ function UtilitiesTimerPage() {
   };
 
   const persistAlertVolume = async (nextVolume: number) => {
-    try {
-      await setSettingMutation.mutateAsync({
+    await catcher(
+      setSettingMutation.mutateAsync({
         key: TIMER_ALERT_VOLUME_SETTING_KEY,
         value: String(normalizeAlertVolume(nextVolume)),
-      });
-    } catch (error) {
-      notify.tauriError(error);
-    }
+      }),
+      { notify: true },
+    );
   };
 
   const handleStart = async () => {
-    try {
-      if (mode === "countdown") {
-        const totalSeconds = Math.floor(Math.max(0, countdownValueMs) / 1000);
-        if (totalSeconds <= 0) {
-          notify.error(t("utilities.timer.durationRequired"));
-          return;
-        }
-        await startTimer.mutateAsync({ mode, durationMs: totalSeconds * 1000 });
-      } else {
-        await startTimer.mutateAsync({ mode, durationMs: null });
+    if (mode === "countdown") {
+      const totalSeconds = Math.floor(Math.max(0, countdownValueMs) / 1000);
+      if (totalSeconds <= 0) {
+        notify.error(t("utilities.timer.durationRequired"));
+        return;
       }
-    } catch (error) {
-      notify.tauriError(error);
+      await catcher(
+        startTimer.mutateAsync({ mode, durationMs: totalSeconds * 1000 }),
+        { notify: true },
+      );
+    } else {
+      await catcher(
+        startTimer.mutateAsync({ mode, durationMs: null }),
+        { notify: true },
+      );
     }
   };
 
   const handlePause = async () => {
-    try {
-      await pauseTimer.mutateAsync();
-    } catch (error) {
-      notify.tauriError(error);
-    }
+    await catcher(pauseTimer.mutateAsync(), { notify: true });
   };
 
   const handleResume = async () => {
-    try {
-      await resumeTimer.mutateAsync();
-    } catch (error) {
-      notify.tauriError(error);
-    }
+    await catcher(resumeTimer.mutateAsync(), { notify: true });
   };
 
   const handleReset = async () => {
-    try {
-      await resetTimer.mutateAsync();
-    } catch (error) {
-      notify.tauriError(error);
-    }
+    await catcher(resetTimer.mutateAsync(), { notify: true });
   };
 
   const handleLap = async () => {
-    try {
-      await addLap.mutateAsync();
-    } catch (error) {
-      notify.tauriError(error);
-    }
+    await catcher(addLap.mutateAsync(), { notify: true });
   };
 
   const handleAdjustCountdownMinutes = async (deltaMinutes: number) => {
@@ -192,11 +177,13 @@ function UtilitiesTimerPage() {
     const nextValueMs = Math.max(0, baseValueMs + deltaMs);
 
     if (hasCountdownRuntime) {
-      try {
-        await adjustCountdownTimer.mutateAsync({ deltaMs });
+      const [, error] = await catcher(
+        adjustCountdownTimer.mutateAsync({ deltaMs }),
+        { notify: true },
+      );
+
+      if (!error) {
         setCountdownValueMs(nextValueMs);
-      } catch (error) {
-        notify.tauriError(error);
       }
       return;
     }
@@ -241,17 +228,13 @@ function UtilitiesTimerPage() {
   };
 
   const handleTestAlert = async (rule: TimerAlertRule) => {
-    try {
-      await playTimerAlertRule(rule, alertVolume);
-    } catch (error) {
-      notify.tauriError(
-        error,
-        t("utilities.timer.alertPlaybackFailed", {
-          minute: rule.minuteMark,
-          error: "",
-        }),
-      );
-    }
+    await catcher(playTimerAlertRule(rule, alertVolume), {
+      notify: true,
+      fallbackMessage: t("utilities.timer.alertPlaybackFailed", {
+        minute: rule.minuteMark,
+        error: "",
+      }),
+    });
   };
 
   const handleAddAlertMinute = async () => {
@@ -325,26 +308,30 @@ function UtilitiesTimerPage() {
   ]);
 
   const startTimerProjectionFlow = useCallback(async () => {
-    try {
-      const projectedTimeMs = normalizeProjectedTimerValue(displayMode, displayTimeMs);
-      await projectTimer();
-      if (displayMode === "countdown") {
-        await startCountdownProjection(
-          projectionContextTitle,
-          projectionCountdownLabel,
-          projectedTimeMs,
-        );
-      } else {
-        await startStopwatchProjection(
-          projectionContextTitle,
-          projectionStopwatchLabel,
-          projectedTimeMs,
-        );
-      }
-    } catch (error) {
+    const projectedTimeMs = normalizeProjectedTimerValue(displayMode, displayTimeMs);
+    const [, error] = await catcher(
+      (async () => {
+        await projectTimer();
+        if (displayMode === "countdown") {
+          await startCountdownProjection(
+            projectionContextTitle,
+            projectionCountdownLabel,
+            projectedTimeMs,
+          );
+        } else {
+          await startStopwatchProjection(
+            projectionContextTitle,
+            projectionStopwatchLabel,
+            projectedTimeMs,
+          );
+        }
+      })(),
+      { notify: true },
+    );
+
+    if (error) {
       await stopUtilityProjection().catch(() => {});
       await stopProjection().catch(() => {});
-      notify.tauriError(error);
     }
   }, [
     displayMode,
@@ -357,12 +344,13 @@ function UtilitiesTimerPage() {
   ]);
 
   const stopTimerProjectionFlow = useCallback(async () => {
-    try {
-      await stopUtilityProjection();
-      await stopProjection();
-    } catch (error) {
-      notify.tauriError(error);
-    }
+    await catcher(
+      (async () => {
+        await stopUtilityProjection();
+        await stopProjection();
+      })(),
+      { notify: true },
+    );
   }, [stopProjection]);
 
   useEffect(() => {

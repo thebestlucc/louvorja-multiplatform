@@ -10,6 +10,7 @@ import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import type { SlideContent } from "./bindings";
 import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
+import { catcher } from "./catcher";
 
 let ensureProjectionPromise: Promise<void> | null = null;
 
@@ -24,7 +25,7 @@ export async function ensureProjectionScreensStarted(): Promise<void> {
   }
 
   ensureProjectionPromise = (async () => {
-    try {
+    const [_, error] = await catcher(async () => {
       const [monitors, monitorConfigs] = await Promise.all([
         getAvailableMonitors(),
         getMonitorConfigs(),
@@ -56,7 +57,9 @@ export async function ensureProjectionScreensStarted(): Promise<void> {
         await openReturnWindow(returnMonitor.id);
         useDisplayStore.getState().setReturnWindowOpen(true);
       }
-    } catch (error) {
+    }, { notify: false });
+
+    if (error) {
       console.warn("Failed to ensure projection windows are open:", error);
     }
   })().finally(() => {

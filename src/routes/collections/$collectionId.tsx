@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { notify } from "../../lib/notifications";
+import { catcher, catcherSync } from "../../lib/catcher";
 import {
   useCheckCollectionSongSync,
   useCollection,
@@ -139,27 +140,27 @@ function CollectionDetail() {
           continue;
         }
 
-        try {
-          const status = await checkSongSync(song.id);
-          if (cancelled || status !== "stale" || promptedSongIdsRef.current.has(song.id)) {
-            continue;
-          }
+        const [status, error] = await catcher(checkSongSync(song.id), {
+          notify: !cancelled,
+          fallbackMessage: t("collections.syncCheckFailed", { error: "" }),
+        });
 
-          promptedSongIdsRef.current.add(song.id);
-          const shouldResync = await confirmDialog(t("collections.syncPromptMessage"), {
-            title: t("collections.syncPromptTitle"),
-            okLabel: t("collections.syncPromptConfirm"),
-            cancelLabel: t("collections.syncPromptCancel"),
+        if (error || cancelled || status !== "stale" || promptedSongIdsRef.current.has(song.id)) {
+          continue;
+        }
+
+        promptedSongIdsRef.current.add(song.id);
+        const shouldResync = await confirmDialog(t("collections.syncPromptMessage"), {
+          title: t("collections.syncPromptTitle"),
+          okLabel: t("collections.syncPromptConfirm"),
+          cancelLabel: t("collections.syncPromptCancel"),
+        });
+
+        if (shouldResync) {
+          await catcher(resyncSong(song.id), {
+            notify: true,
+            fallbackMessage: t("collections.resyncFailed", { error: "" }),
           });
-
-          if (shouldResync) {
-            await resyncSong(song.id);
-          }
-        } catch (error) {
-          if (cancelled) {
-            continue;
-          }
-          notify.tauriError(error, t("collections.syncCheckFailed", { error: "" }));
         }
       }
     };
@@ -185,17 +186,19 @@ function CollectionDetail() {
     (!Number.isInteger(parsedYear) || (parsedYear != null && (parsedYear < 1900 || parsedYear > currentYear)));
 
   const handleSave = async () => {
-    try {
-      await updateMutation.mutateAsync({
+    const [_, error] = await catcher(
+      updateMutation.mutateAsync({
         id,
         name: name.trim(),
         description: description.trim() || null,
         year: parsedYear,
         coverPath,
-      });
+      }),
+      { notify: true, fallbackMessage: t("collections.saveFailed", { error: "" }) },
+    );
+
+    if (!error) {
       setEditOpen(false);
-    } catch (error) {
-      notify.tauriError(error, t("collections.saveFailed", { error: "" }));
     }
   };
 
@@ -205,11 +208,11 @@ function CollectionDetail() {
       filters: [{ name: "Song Files", extensions: ["slja", "pptx"] }],
     });
     if (!selected || Array.isArray(selected)) return;
-    try {
-      await importMutation.mutateAsync({ collectionId: id, path: selected });
-    } catch (error) {
-      notify.tauriError(error, t("collections.importFailed", { error: "" }));
-    }
+
+    await catcher(importMutation.mutateAsync({ collectionId: id, path: selected }), {
+      notify: true,
+      fallbackMessage: t("collections.importFailed", { error: "" }),
+    });
   };
 
   const moveSong = async (songs: CollectionSong[], index: number, delta: number) => {
@@ -218,11 +221,11 @@ function CollectionDetail() {
     const ordered = songs.map((song) => song.id);
     const [moved] = ordered.splice(index, 1);
     ordered.splice(target, 0, moved);
-    try {
-      await reorderSongs({ collectionId: id, songIds: ordered });
-    } catch (error) {
-      notify.tauriError(error, t("collections.reorderFailed", { error: "" }));
-    }
+
+    await catcher(reorderSongs({ collectionId: id, songIds: ordered }), {
+      notify: true,
+      fallbackMessage: t("collections.reorderFailed", { error: "" }),
+    });
   };
 
   const handlePlaySong = async (song: CollectionSong) => {
@@ -230,43 +233,47 @@ function CollectionDetail() {
       return;
     }
 
-    try {
-      stopAudioStatusSubscription();
-      setAudioSyncPoints([]);
-      const slideRows = await getSlides(song.cachePresentationId);
-      const slideContents = slideRows.map((row) => parseSlideRow(row).content);
-      if (slideContents.length === 0) {
-        notify.error(t("collections.playEmpty"));
-        return;
-      }
+    const [slideRows, error] = await catcher(getSlides(song.cachePresentationId), {
+      notify: true,
+      fallbackMessage: t("collections.playFailed", { error: "" }),
+    });
 
-      setCurrentPresentation(song.cachePresentationId);
-      setPresentationSlides(slideContents);
-      await goToSlide(0);
+    if (error || !slideRows) {
+      return;
+    }
 
-      const { audioPath, syncPoints } = extractLegacyPlaybackMetadata(slideRows);
-      if (audioPath) {
-        setPlaybackMode("sung");
-        startAudioStatusSubscription();
-        await play(audioPath);
-        setAudioSyncPoints(syncPoints);
+    stopAudioStatusSubscription();
+    setAudioSyncPoints([]);
+    const slideContents = slideRows.map((row) => parseSlideRow(row).content);
+    if (slideContents.length === 0) {
+      notify.error(t("collections.playEmpty"));
+      return;
+    }
 
-        void (async () => {
-          const durationMs = await resolveAudioDurationMs();
-          const calibrated = calibrateSyncPointsToDuration(
-            syncPoints,
-            durationMs,
-            slideContents.length,
-          );
-          if (calibrated !== syncPoints) {
-            setAudioSyncPoints(calibrated);
-          }
-        })();
-      } else {
-        setPlaybackMode("silent");
-      }
-    } catch (error) {
-      notify.tauriError(error, t("collections.playFailed", { error: "" }));
+    setCurrentPresentation(song.cachePresentationId);
+    setPresentationSlides(slideContents);
+    await goToSlide(0);
+
+    const { audioPath, syncPoints } = extractLegacyPlaybackMetadata(slideRows);
+    if (audioPath) {
+      setPlaybackMode("sung");
+      startAudioStatusSubscription();
+      await play(audioPath);
+      setAudioSyncPoints(syncPoints);
+
+      void (async () => {
+        const durationMs = await resolveAudioDurationMs();
+        const calibrated = calibrateSyncPointsToDuration(
+          syncPoints,
+          durationMs,
+          slideContents.length,
+        );
+        if (calibrated !== syncPoints) {
+          setAudioSyncPoints(calibrated);
+        }
+      })();
+    } else {
+      setPlaybackMode("silent");
     }
   };
 
@@ -329,11 +336,12 @@ function CollectionDetail() {
               <Button 
                 variant="outline" 
                 onClick={async () => {
-                  try {
-                    await restoreAlbumFromApi.mutateAsync({ collectionId: id, language: "pt" });
+                  const [_, error] = await catcher(
+                    restoreAlbumFromApi.mutateAsync({ collectionId: id, language: "pt" }),
+                    { notify: true, fallbackMessage: t("collections.syncFailed") }
+                  );
+                  if (!error) {
                     notify.success(t("collections.syncSuccess"));
-                  } catch (e) {
-                    notify.tauriError(e, t("collections.syncFailed"));
                   }
                 }}
                 disabled={restoreAlbumFromApi.isPending}
@@ -485,11 +493,10 @@ function CollectionDetail() {
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      try {
-                        await resyncSong(song.id);
-                      } catch (error) {
-                        notify.tauriError(error, t("collections.resyncFailed", { error: "" }));
-                      }
+                      await catcher(resyncSong(song.id), {
+                        notify: true,
+                        fallbackMessage: t("collections.resyncFailed", { error: "" }),
+                      });
                     }}
                     aria-label={t("collections.resync")}
                     title={t("collections.resync")}
@@ -526,11 +533,10 @@ function CollectionDetail() {
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      try {
-                        await removeSong({ songId: song.id, collectionId: id });
-                      } catch (error) {
-                        notify.tauriError(error, t("collections.removeFailed", { error: "" }));
-                      }
+                      await catcher(removeSong({ songId: song.id, collectionId: id }), {
+                        notify: true,
+                        fallbackMessage: t("collections.removeFailed", { error: "" }),
+                      });
                     }}
                     aria-label={t("collections.removeSong")}
                     title={t("collections.removeSong")}
@@ -630,18 +636,14 @@ function extractLegacyPlaybackMetadata(rows: SlideRow[]): {
   const syncPoints: Array<LegacySyncPoint & { source: LegacySyncPointSource }> = [];
 
   rows.forEach((row, index) => {
-    try {
-      const parsed = JSON.parse(row.content) as {
-        audioPath?: unknown;
-        audio_path?: unknown;
-      };
-      if (audioPath == null && typeof parsed.audioPath === "string" && parsed.audioPath.trim().length > 0) {
-        audioPath = normalizeMediaPath(parsed.audioPath);
-      } else if (audioPath == null && typeof parsed.audio_path === "string" && parsed.audio_path.trim().length > 0) {
-        audioPath = normalizeMediaPath(parsed.audio_path);
+    const [parsed] = catcherSync(() => JSON.parse(row.content), { notify: false });
+    if (parsed) {
+      const typedParsed = parsed as { audioPath?: unknown; audio_path?: unknown };
+      if (audioPath == null && typeof typedParsed.audioPath === "string" && typedParsed.audioPath.trim().length > 0) {
+        audioPath = normalizeMediaPath(typedParsed.audioPath);
+      } else if (audioPath == null && typeof typedParsed.audio_path === "string" && typedParsed.audio_path.trim().length > 0) {
+        audioPath = normalizeMediaPath(typedParsed.audio_path);
       }
-    } catch {
-      // Keep parsing notes fallback.
     }
 
     const notes = row.notes ?? "";

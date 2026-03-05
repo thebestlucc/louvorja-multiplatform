@@ -1,4 +1,5 @@
 import { getAllSettings, setSetting } from "./tauri";
+import { catcher } from "./catcher";
 
 export const FIRST_RUN_KEY = "app.firstRunCompleted";
 
@@ -12,19 +13,20 @@ export async function isOnboardingRequired(): Promise<boolean> {
     return cachedNeedsOnboarding;
   }
 
-  try {
-    const settings = await getAllSettings();
-    const firstRun = settings.find((item) => item.key === FIRST_RUN_KEY)?.value;
-    const needsOnboarding = firstRun !== "true";
-    cachedNeedsOnboarding = needsOnboarding;
-    cachedAt = now;
-    return needsOnboarding;
-  } catch {
+  const [settings, error] = await catcher(getAllSettings(), { notify: false });
+
+  if (error || !settings) {
     // Keep startup non-blocking on environments where Tauri commands are unavailable.
     cachedNeedsOnboarding = false;
     cachedAt = now;
     return false;
   }
+
+  const firstRun = settings.find((item) => item.key === FIRST_RUN_KEY)?.value;
+  const needsOnboarding = firstRun !== "true";
+  cachedNeedsOnboarding = needsOnboarding;
+  cachedAt = now;
+  return needsOnboarding;
 }
 
 export async function completeOnboarding(): Promise<void> {

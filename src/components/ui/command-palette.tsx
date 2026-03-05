@@ -24,7 +24,7 @@ import {
   Keyboard,
   CircleHelp,
 } from "lucide-react";
-import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { cn } from "../../lib/utils";
 import { useMonitorsControl } from "../../hooks/use-monitors";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
@@ -93,8 +93,8 @@ export function CommandPalette() {
     }
     setSearching(true);
     const timer = setTimeout(async () => {
-      try {
-        const [h, b, c] = await Promise.all([
+      const [results] = await catcher(
+        Promise.all([
           searchHymns(query),
           query.trim().length >= 2
             ? searchBible(query, null)
@@ -102,15 +102,16 @@ export function CommandPalette() {
           query.trim().length >= 2
             ? searchCollections(query)
             : Promise.resolve([]),
-        ]);
+        ]),
+      );
+
+      if (results) {
+        const [h, b, c] = results;
         setHymns(h.slice(0, 5));
         setBibleResults(b.slice(0, 5));
         setCollectionResults(c.slice(0, 5));
-      } catch {
-        // silently fail — transient UI search
-      } finally {
-        setSearching(false);
       }
+      setSearching(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
@@ -404,16 +405,10 @@ export function CommandPalette() {
               <Command.Item
                 key={action.id}
                 value={action.value}
-                onSelect={() => {
-                  Promise.resolve(action.onSelect())
-                    .catch((error) => {
-                      notify.tauriError(error);
-                    })
-                    .finally(() => {
-                      setOpen(false);
-                    });
+                onSelect={async () => {
+                  await catcher(Promise.resolve(action.onSelect()), { notify: true });
+                  setOpen(false);
                 }}
-
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
               >
                 <action.icon className="h-4 w-4 text-muted-foreground" />

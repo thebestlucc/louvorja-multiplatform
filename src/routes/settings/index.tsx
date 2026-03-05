@@ -4,6 +4,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database } from "lucide-react";
 import {
   useCancelLegacyFetch,
@@ -170,7 +171,10 @@ function GeneralSection() {
   }, [autoCheckCollectionSetting]);
 
   useEffect(() => {
-    autostartIsEnabled().then(setLaunchAtStartup).catch(() => {});
+    void (async () => {
+      const [isEnabled] = await catcher(autostartIsEnabled(), { notify: false });
+      if (isEnabled !== null) setLaunchAtStartup(isEnabled);
+    })();
   }, []);
 
   const handleLanguageChange = (value: string) => {
@@ -180,7 +184,7 @@ function GeneralSection() {
   };
 
   const handleLaunchAtStartupToggle = async () => {
-    try {
+    await catcher(async () => {
       if (launchAtStartup) {
         await autostartDisable();
         setLaunchAtStartup(false);
@@ -188,9 +192,7 @@ function GeneralSection() {
         await autostartEnable();
         setLaunchAtStartup(true);
       }
-    } catch (err) {
-      notify.tauriError(err);
-    }
+    }, { notify: true });
   };
 
   const handleFfprobeEnabledChange = (checked: boolean) => {
@@ -401,12 +403,10 @@ function AppearanceSection() {
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
     });
     if (!selected || Array.isArray(selected)) return;
-    try {
-      const managedPath = await copyImageMutation.mutateAsync(selected);
+    const [managedPath] = await catcher(copyImageMutation.mutateAsync(selected), { notify: true });
+    if (managedPath) {
       persistProjectorDefaultMediaPath(managedPath);
       notify.success(t("settings.projectorMediaUpdated"));
-    } catch (error) {
-      notify.tauriError(error);
     }
   };
 
@@ -439,12 +439,10 @@ function AppearanceSection() {
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
     });
     if (!selected || Array.isArray(selected)) return;
-    try {
-      const managedPath = await copyImageMutation.mutateAsync(selected);
+    const [managedPath] = await catcher(copyImageMutation.mutateAsync(selected), { notify: true });
+    if (managedPath) {
       persistProjectorLogoImagePath(managedPath);
       notify.success(t("settings.projectorLogoUpdated"));
-    } catch (error) {
-      notify.tauriError(error);
     }
   };
 
@@ -736,16 +734,20 @@ function MonitorSection() {
     }
     if (!canSaveMonitorAssignments) return;
     setMonitorFeedback(null);
-    try {
+
+    const [_, error] = await catcher(async () => {
       await saveMonitorConfigMutation.mutateAsync({ monitorId: projectorMonitorId, role: "projector" });
       await saveMonitorConfigMutation.mutateAsync({ monitorId: returnMonitorId, role: "return" });
+    }, { notify: false });
+
+    if (error) {
+      const message = t("settings.monitorAssignmentSaveFailed", { error: error.message });
+      setMonitorFeedback({ type: "error", message });
+      notify.error(message);
+    } else {
       const successMessage = t("settings.monitorAssignmentSaved");
       setMonitorFeedback({ type: "success", message: successMessage });
       notify.success(successMessage);
-    } catch (error) {
-      const message = t("settings.monitorAssignmentSaveFailed", { error: String(error) });
-      setMonitorFeedback({ type: "error", message });
-      notify.error(message);
     }
   };
 
@@ -753,7 +755,8 @@ function MonitorSection() {
     const monitorId = role === "projector" ? projectorResolvedMonitorId : returnResolvedMonitorId;
     if (!monitorId) return;
     setTestingMonitorRole(role);
-    try {
+
+    const [_, error] = await catcher(async () => {
       if (role === "projector") {
         await openProjectorWindow(monitorId);
         window.setTimeout(() => { void closeProjectorWindow(); }, 2500);
@@ -764,9 +767,11 @@ function MonitorSection() {
       window.setTimeout(() => {
         setTestingMonitorRole((currentRole) => currentRole === role ? null : currentRole);
       }, 2600);
-    } catch (error) {
+    }, { notify: false });
+
+    if (error) {
       setTestingMonitorRole((currentRole) => currentRole === role ? null : currentRole);
-      notify.error(t("settings.monitorAssignmentTestFailed", { error: String(error) }));
+      notify.error(t("settings.monitorAssignmentTestFailed", { error: error.message }));
     }
   };
 
@@ -1036,22 +1041,22 @@ function MigrationSection() {
   const handleTestConnection = async () => {
     setConnectionStatus("connecting");
     setConnectionError(null);
-    try {
-      await fetchLegacyParamsMutation.refetch();
-      setConnectionStatus("connected");
-    } catch (error) {
+    const [_, error] = await catcher(fetchLegacyParamsMutation.refetch(), { notify: false });
+    if (error) {
       setConnectionStatus("failed");
-      setConnectionError(String(error));
+      setConnectionError(error.message);
+    } else {
+      setConnectionStatus("connected");
     }
   };
 
   const handleStartLegacyFetch = async (options: LegacyFetchOptions) => {
     setConnectionError(null);
-    try {
-      const runId = await startLegacyFetchMutation.mutateAsync(options);
+    const [runId, error] = await catcher(startLegacyFetchMutation.mutateAsync(options), { notify: false });
+    if (error) {
+      setConnectionError(error.message);
+    } else if (runId) {
       setLegacyFetchRunId(runId);
-    } catch (error) {
-      setConnectionError(String(error));
     }
   };
 
@@ -1112,12 +1117,16 @@ function DataSection() {
   const [showClearDbConfirm, setShowClearDbConfirm] = useState(false);
 
   const handleClearDatabase = async () => {
-    try {
-      await clearDatabaseMutation.mutateAsync();
+    const [_, error] = await catcher(clearDatabaseMutation.mutateAsync(), {
+      notify: true,
+      fallbackMessage: t("settings.dangerZone.clearDatabaseError", { error: "" }),
+    });
+
+    if (error) {
+      // Notification handled by catcher
+    } else {
       setShowClearDbConfirm(false);
       notify.success(t("settings.dangerZone.clearDatabaseSuccess"));
-    } catch (error) {
-      notify.tauriError(error, t("settings.dangerZone.clearDatabaseError", { error: "" }));
     }
   };
 

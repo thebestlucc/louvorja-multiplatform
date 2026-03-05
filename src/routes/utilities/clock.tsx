@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
 import { useUtilityProjection } from "../../hooks/use-utility-projection";
 import { createUtilityProjectionPayload } from "../../types/utilities";
 import {
@@ -56,18 +56,22 @@ function UtilitiesClockPage() {
   }, [displayDate, displayTime, showDate, startProjection, t]);
 
   const startClockProjectionFlow = useCallback(async () => {
-    try {
-      await projectClock();
-      await startClockProjection(
-        t("utilities.projection.context.clock"),
-        t("utilities.clock.title"),
-        use24Hour,
-        showDate,
-      );
-    } catch (error) {
+    const [, error] = await catcher(
+      (async () => {
+        await projectClock();
+        await startClockProjection(
+          t("utilities.projection.context.clock"),
+          t("utilities.clock.title"),
+          use24Hour,
+          showDate,
+        );
+      })(),
+      { notify: true },
+    );
+
+    if (error) {
       await stopUtilityProjection().catch(() => {});
       await stopProjection().catch(() => {});
-      notify.tauriError(error);
     }
   }, [projectClock, showDate, stopProjection, t, use24Hour]);
 
