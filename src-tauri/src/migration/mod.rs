@@ -4,6 +4,7 @@ pub mod service_importer;
 use crate::error::AppError;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -26,7 +27,7 @@ const SETTINGS_EXCLUDE_KEYS: [&str; 6] = [
     "schema.version",
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationOptions {
     #[serde(default = "default_true")]
@@ -56,7 +57,7 @@ impl Default for MigrationOptions {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationRunInfo {
     pub run_id: String,
@@ -64,7 +65,7 @@ pub struct MigrationRunInfo {
     pub source_path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationProgress {
     pub run_id: String,
@@ -72,13 +73,14 @@ pub struct MigrationProgress {
     pub completed: u32,
     pub total: u32,
     pub percent: f64,
+    #[specta(type = f64)]
     pub eta_seconds: Option<u64>,
     pub message: String,
     pub status: String,
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationProgressEvent {
     pub run_id: String,
@@ -86,6 +88,7 @@ pub struct MigrationProgressEvent {
     pub completed: u32,
     pub total: u32,
     pub percent: f64,
+    #[specta(type = f64)]
     pub eta_seconds: Option<u64>,
     pub message: String,
 }
@@ -104,7 +107,7 @@ impl From<&MigrationProgress> for MigrationProgressEvent {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationErrorItem {
     pub domain: String,
@@ -114,7 +117,7 @@ pub struct MigrationErrorItem {
     pub context: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationDomainReport {
     pub domain: String,
@@ -122,7 +125,7 @@ pub struct MigrationDomainReport {
     pub skipped: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationReport {
     pub run_id: String,

@@ -1,9 +1,10 @@
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
     pub version: String,
@@ -12,6 +13,7 @@ pub struct UpdateInfo {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, AppError> {
     let updater = match app.updater() {
         Ok(instance) => instance,
@@ -31,6 +33,7 @@ pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, App
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn install_update(app: AppHandle) -> Result<(), AppError> {
     let updater = app
         .updater()

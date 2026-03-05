@@ -27,7 +27,8 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
   const {
     play,
     stop,
-    togglePlayPause,
+    resume,
+    pause,
     seek,
     setVolume,
     status,
@@ -44,21 +45,21 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
     ? (playbackPath ?? filePath) 
     : filePath;
 
-  // Check if THIS hymn's audio is currently playing/paused
-  const isThisHymnPlaying = currentFile === targetFile || currentFile === filePath || currentFile === playbackPath;
-  const isPlaying = status === "playing" && isThisHymnPlaying;
-  const isPaused = status === "paused" && isThisHymnPlaying;
-  const isActive = isPlaying || isPaused;
+  // Check if THIS hymn's audio is currently active (playing or paused)
+  const isThisHymnActive = currentFile === filePath || currentFile === playbackPath;
+  const isPlaying = status === "playing" && isThisHymnActive;
+  const isPaused = status === "paused" && isThisHymnActive;
   const isMuted = volume === 0;
 
   // Show position/duration only for this hymn's audio, otherwise show 0
-  const displayPosition = isThisHymnPlaying ? positionMs : 0;
-  const displayDuration = isThisHymnPlaying ? durationMs : 0;
+  const displayPosition = isThisHymnActive ? positionMs : 0;
+  const displayDuration = isThisHymnActive ? durationMs : 0;
 
   const handlePlay = async () => {
-    if (isActive) {
-      // This hymn is already playing/paused, toggle
-      await togglePlayPause();
+    if (isPaused) {
+      await resume();
+    } else if (isPlaying) {
+      await pause();
     } else {
       // Stop any currently playing audio before starting this one
       if (status === "playing" || status === "paused") {
@@ -74,7 +75,7 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
   };
 
   const handleSeek = (value: number[]) => {
-    if (value[0] != null && isThisHymnPlaying) {
+    if (value[0] != null && isThisHymnActive) {
       seek(value[0]);
     }
   };
@@ -87,6 +88,27 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
 
   const handleMuteToggle = () => {
     setVolume(isMuted ? 1 : 0);
+  };
+
+  const changePlaybackMode = async (mode: PlaybackMode) => {
+    if (playbackMode === mode) return;
+    
+    setPlaybackMode(mode);
+    
+    // If THIS hymn is currently playing/paused, switch the file while preserving timestamp
+    if (isThisHymnActive) {
+      const nextFile = mode === "karaoke" ? (playbackPath ?? filePath) : filePath;
+      if (nextFile !== currentFile) {
+        // Capture current position before switching
+        const currentPos = positionMs;
+        await play(nextFile, currentPos);
+        
+        // If it was paused, pause the new one too (play() starts playing)
+        if (isPaused) {
+          await pause();
+        }
+      }
+    }
   };
 
   return (
@@ -102,7 +124,7 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
           max={displayDuration || 1}
           step={100}
           onValueChange={handleSeek}
-          disabled={!isThisHymnPlaying}
+          disabled={!isThisHymnActive}
           className="flex-1"
         />
         <span className="w-10 text-xs tabular-nums text-muted-foreground">
@@ -123,7 +145,7 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
           variant="ghost"
           size="icon"
           onClick={handleStop}
-          disabled={!isActive}
+          disabled={!isThisHymnActive}
         >
           <Square className="h-4 w-4" />
         </Button>
@@ -149,19 +171,23 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
 
         {/* Playback mode selector */}
         <div className="flex items-center gap-1 rounded-md border border-border">
-          {PLAYBACK_MODES.map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setPlaybackMode(mode)}
-              className={`px-2 py-1 text-xs transition-colors ${
-                playbackMode === mode
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              } ${mode === "sung" ? "rounded-l-md" : ""} ${mode === "karaoke" ? "rounded-r-md" : ""}`}
-            >
-              {t(`audio.${mode}`)}
-            </button>
-          ))}
+          {PLAYBACK_MODES.map((mode) => {
+            const isAvailable = mode === "sung" ? !!filePath : !!playbackPath;
+            return (
+              <button
+                key={mode}
+                disabled={!isAvailable}
+                onClick={() => changePlaybackMode(mode)}
+                className={`px-2 py-1 text-xs transition-colors disabled:opacity-30 ${
+                  playbackMode === mode
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                } ${mode === "sung" ? "rounded-l-md" : ""} ${mode === "karaoke" ? "rounded-r-md" : ""}`}
+              >
+                {t(`audio.${mode}`)}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

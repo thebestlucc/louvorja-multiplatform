@@ -12,39 +12,43 @@ use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<Collection>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::collections::get_collections(&conn)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn search_collections(
     query: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<CollectionSearchResult>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::collections::search_collections(&conn, &query, 8)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_collection(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionWithSongs, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::collections::get_collection_with_songs(&conn, id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn create_collection(
     name: String,
     description: Option<String>,
@@ -62,7 +66,7 @@ pub fn create_collection(
 
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     let id = crate::db::queries::collections::insert_collection(
@@ -80,6 +84,7 @@ pub fn create_collection(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_collection(
     id: i64,
     name: String,
@@ -98,7 +103,7 @@ pub fn update_collection(
 
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::update_collection(
@@ -115,10 +120,11 @@ pub fn update_collection(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_collection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     let collection = crate::db::queries::collections::get_collection_with_songs(&tx, id)?;
@@ -133,6 +139,7 @@ pub fn delete_collection(id: i64, state: tauri::State<'_, AppState>) -> Result<(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn import_collection_song(
     collection_id: i64,
     path: String,
@@ -143,13 +150,14 @@ pub fn import_collection_song(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn check_collection_song_sync(
     song_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionSongSyncStatus, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     let song = crate::db::queries::collections::get_collection_song_by_id(&tx, song_id)?;
@@ -175,6 +183,7 @@ pub fn check_collection_song_sync(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn resync_collection_song(
     song_id: i64,
     app: AppHandle,
@@ -182,7 +191,7 @@ pub fn resync_collection_song(
 ) -> Result<CollectionSong, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let existing = crate::db::queries::collections::get_collection_song_by_id(&conn, song_id)?;
     drop(conn);
@@ -196,13 +205,14 @@ pub fn resync_collection_song(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn remove_collection_song(
     song_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     let existing = crate::db::queries::collections::get_collection_song_by_id(&tx, song_id)?;
@@ -216,6 +226,7 @@ pub fn remove_collection_song(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn reorder_collection_songs(
     collection_id: i64,
     song_ids: Vec<i64>,
@@ -223,7 +234,7 @@ pub fn reorder_collection_songs(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::reorder_collection_songs(&tx, collection_id, &song_ids)?;
@@ -278,7 +289,7 @@ fn import_or_resync_collection_song(
 
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::get_collection_by_id(&tx, collection_id)?;
@@ -629,18 +640,20 @@ fn uniquify_relative_path(media_root: &Path, original: &Path) -> PathBuf {
 // --- Collection-Hymn commands (for API-imported album collections) ---
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_collection_hymns(
     collection_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::collections::get_collection_hymns(&conn, collection_id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn add_hymn_to_collection(
     collection_id: i64,
     hymn_id: i64,
@@ -649,12 +662,13 @@ pub fn add_hymn_to_collection(
 ) -> Result<bool, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::collections::insert_collection_hymn(&conn, collection_id, hymn_id, item_order)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn remove_hymn_from_collection(
     collection_id: i64,
     hymn_id: i64,
@@ -662,7 +676,7 @@ pub fn remove_hymn_from_collection(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::collections::delete_collection_hymn(&conn, collection_id, hymn_id)
 }

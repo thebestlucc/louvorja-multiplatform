@@ -5,7 +5,7 @@ import { useAudio } from "../../hooks/use-audio";
 import { useSaveSyncPoints } from "../../lib/queries";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
-import type { SyncPoint } from "../../types/audio";
+import type { SyncPoint } from "../../lib/bindings";
 
 function formatTime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { SlideContent, VideoSlideContent } from "../../types/presentation";
+import type { SlideContent } from "../../lib/bindings";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { useMediaSource } from "../../hooks/use-media-source";
@@ -16,16 +16,19 @@ interface SlideRendererProps {
 export function SlideRenderer({ slide, className, renderMode = "projector" }: SlideRendererProps) {
   const { t } = useTranslation();
   const backgroundPath = useMemo(() => {
-    if (!slide || (slide.type !== "cover" && slide.type !== "lyrics" && slide.type !== "text")) {
+    if (!slide || (slide.slideType !== "cover" && slide.slideType !== "lyrics" && slide.slideType !== "text")) {
       return null;
     }
     return slide.backgroundImage ?? null;
   }, [slide]);
   const imagePath = useMemo(() => {
-    if (!slide || slide.type !== "image") {
+    if (!slide || slide.slideType !== "image") {
       return null;
     }
-    return slide.src ?? null;
+    // Note: old 'src' field was renamed to 'backgroundImage' in unified SlideContent for simple cases,
+    // or we use 'backgroundImage' for standard backgrounds. For image slides specifically, 
+    // we use backgroundImage as the main image source.
+    return slide.backgroundImage ?? null;
   }, [slide]);
   const resolvedBackgroundPath = useMediaSource(backgroundPath);
   const resolvedImagePath = useMediaSource(imagePath);
@@ -49,11 +52,11 @@ function renderSlide(
   resolvedBackgroundPath: string | null,
   resolvedImagePath: string | null,
 ) {
-  if (!slide || slide.type === "pause") {
+  if (!slide || slide.slideType === "pause") {
     return <div />;
   }
 
-  if (slide.type === "cover") {
+  if (slide.slideType === "cover") {
     const titleStyle = textStyle(slide, 48, renderMode, "cover-title");
     const subtitleStyle = secondaryTextStyle(slide, 28, renderMode);
     const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
@@ -91,7 +94,7 @@ function renderSlide(
     );
   }
 
-  if (slide.type === "lyrics") {
+  if (slide.slideType === "lyrics") {
     const textLineStyle = textStyle(slide, 36, renderMode, "lyrics");
     const labelStyle = secondaryTextStyle(slide, 13, renderMode);
     const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
@@ -117,7 +120,7 @@ function renderSlide(
           </p>
         )}
         <p
-          key={slide.text}
+          key={slide.text ?? ""}
           className={cn(
             "relative whitespace-pre-line font-semibold leading-snug animate-in fade-in duration-300",
             showLyricTextPanel && [
@@ -133,7 +136,7 @@ function renderSlide(
     );
   }
 
-  if (slide.type === "text") {
+  if (slide.slideType === "text") {
     const textLineStyle = textStyle(slide, 28, renderMode, "text");
     const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
     return (
@@ -156,24 +159,24 @@ function renderSlide(
     );
   }
 
-  if (slide.type === "image") {
+  if (slide.slideType === "image") {
     return (
       <img
-        src={resolvedImagePath ?? slide.src}
-        alt={slide.alt ?? ""}
+        src={resolvedImagePath ?? slide.backgroundImage ?? ""}
+        alt={slide.label ?? ""}
         className="h-full w-full object-contain"
       />
     );
   }
 
-  if (slide.type === "bible") {
+  if (slide.slideType === "bible") {
     return (
       <div className="flex flex-col items-center gap-6 px-12 text-center">
         <p className="text-sm uppercase tracking-[0.25em] text-white/50 font-serif">
-          {`${slide.book} ${slide.chapter}:${slide.verseStart}${slide.verseEnd !== slide.verseStart ? `-${slide.verseEnd}` : ""}`}
+          {slide.label}
         </p>
         <div className="flex flex-col gap-3">
-          {slide.text.split("\n").map((line, i) => (
+          {(slide.text ?? "").split("\n").map((line, i) => (
             <p key={i} className="text-2xl font-serif leading-relaxed">
               {line}
             </p>
@@ -183,9 +186,9 @@ function renderSlide(
     );
   }
 
-  if (slide.type === "video") {
+  if (slide.slideType === "video") {
     if (renderMode === "thumbnail") {
-      const videoLabel = getVideoLabel(slide.videoPath);
+      const videoLabel = getVideoLabel(slide.videoPath ?? "");
       return (
         <div className="flex h-full w-full min-w-0 max-w-full flex-col items-stretch justify-center gap-1 overflow-hidden px-2 text-center">
           <span className="self-center rounded bg-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-white/80">
@@ -202,7 +205,7 @@ function renderSlide(
     }
 
     if (renderMode === "return-next") {
-      const videoLabel = getVideoLabel(slide.videoPath);
+      const videoLabel = getVideoLabel(slide.videoPath ?? "");
       return (
         <div className="flex h-full w-full min-w-0 max-w-full flex-col items-stretch justify-center gap-2 px-3 text-center">
           <span className="self-center rounded bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.3em] text-white/80">
@@ -222,7 +225,7 @@ function renderSlide(
 
     return (
       <VideoSlide
-        slide={slide as VideoSlideContent}
+        slide={slide}
         renderMode={mapRenderMode(renderMode)}
         className="h-full w-full"
       />
@@ -250,7 +253,7 @@ function getVideoLabel(path: string): string {
 }
 
 function backgroundStyle(slide: {
-  backgroundColor?: string;
+  backgroundColor?: string | null;
 }) {
   if (!slide.backgroundColor) {
     return undefined;
@@ -261,7 +264,7 @@ function backgroundStyle(slide: {
 }
 
 function textStyle(
-  slide: { textColor?: string; fontSize?: number },
+  slide: { textColor?: string | null; textSize?: number | null },
   fallbackSize: number,
   renderMode: SlideRenderMode,
   variant: "cover-title" | "lyrics" | "text",
@@ -270,16 +273,16 @@ function textStyle(
   if (slide.textColor) {
     style.color = slide.textColor;
   }
-  const baseSize = typeof slide.fontSize === "number" && Number.isFinite(slide.fontSize)
-    ? Math.max(12, Math.min(120, slide.fontSize))
+  const baseSize = typeof slide.textSize === "number" && Number.isFinite(slide.textSize)
+    ? Math.max(12, Math.min(120, slide.textSize))
     : fallbackSize;
-  const size = resolveRenderFontSize(baseSize, slide.fontSize, renderMode, variant);
+  const size = resolveRenderFontSize(baseSize, slide.textSize ?? undefined, renderMode, variant);
   style.fontSize = `${size}px`;
   return style;
 }
 
 function secondaryTextStyle(
-  slide: { textColor?: string; fontSize?: number },
+  slide: { textColor?: string | null; textSize?: number | null },
   fallbackSize: number,
   renderMode: SlideRenderMode,
 ) {
@@ -288,14 +291,10 @@ function secondaryTextStyle(
     style.color = slide.textColor;
     style.opacity = "0.8";
   }
-  const baseSize = typeof slide.fontSize === "number" && Number.isFinite(slide.fontSize)
-    ? Math.max(12, Math.min(120, slide.fontSize)) * 0.55
+  const baseSize = typeof slide.textSize === "number" && Number.isFinite(slide.textSize)
+    ? Math.max(12, Math.min(120, slide.textSize)) * 0.55
     : fallbackSize;
-  const size = resolveRenderFontSize(baseSize, slide.fontSize, renderMode, "text");
-  if (typeof slide.fontSize === "number" && Number.isFinite(slide.fontSize)) {
-    style.fontSize = `${Math.max(10, Math.round(size))}px`;
-    return style;
-  }
+  const size = resolveRenderFontSize(baseSize, slide.textSize ?? undefined, renderMode, "text");
   style.fontSize = `${Math.max(10, Math.round(size))}px`;
   return style;
 }

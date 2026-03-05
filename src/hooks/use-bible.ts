@@ -1,144 +1,154 @@
-import { useCallback } from "react";
-import { toast } from "sonner";
+import { useCallback, useState } from "react";
+import { notify } from "../lib/notifications";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
-import type { SlideContentFlat } from "../types/presentation";
+import type { SlideContent } from "../lib/bindings";
 import { projectSlideWithType } from "../lib/projection-playback";
 import { useDisplayStore } from "../stores/display-store";
-import { useBibleStore } from "../stores/bible-store";
+import { usePresentationStore } from "../stores/presentation-store";
+
+const EMPTY_SLIDE_PROPS = {
+  text: null,
+  title: null,
+  subtitle: null,
+  label: null,
+  videoPath: null,
+  backgroundImage: null,
+  backgroundColor: null,
+  audioPath: null,
+  autoPlay: null,
+  loop: null,
+  muted: null,
+  mode: null,
+  textColor: null,
+  textSize: null,
+};
 
 export function useBible() {
-  const currentVersionId = useBibleStore((s) => s.currentVersionId);
-  const currentBook = useBibleStore((s) => s.currentBook);
-  const currentChapter = useBibleStore((s) => s.currentChapter);
-  const selectedVerses = useBibleStore((s) => s.selectedVerses);
-  const lastSelectedVerse = useBibleStore((s) => s.lastSelectedVerse);
-  const storeSetVersion = useBibleStore((s) => s.setVersion);
-  const storeSetBook = useBibleStore((s) => s.setBook);
-  const storeSetChapter = useBibleStore((s) => s.setChapter);
-  const storeSetSelectedVerses = useBibleStore((s) => s.setSelectedVerses);
-  const storeSetLastSelectedVerse = useBibleStore((s) => s.setLastSelectedVerse);
+  const [currentVersionId, setCurrentVersionId] = useState(0);
+  const [currentBook, setCurrentBook] = useState("");
+  const [currentChapter, setCurrentChapter] = useState(0);
+  const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
+  const [lastSelectedVerse, setLastSelectedVerse] = useState<number | null>(null);
+
+  const { data: versions = [], isLoading: isLoadingVersions } = useBibleVersions();
+  const { data: books = [], isLoading: isLoadingBooks } = useBooks(currentVersionId);
+  const { data: verses = [], isLoading: isLoadingVerses } = useVerses(currentVersionId, currentBook, currentChapter);
 
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
   const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
-
-  const versionsQuery = useBibleVersions();
-  const booksQuery = useBooks(currentVersionId);
-  const versesQuery = useVerses(currentVersionId, currentBook, currentChapter);
+  const setPresentationSlides = usePresentationStore((s) => s.setSlides);
+  const setActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
+  const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
 
   const isProjecting = currentProjectionType === "bible";
 
-  const setVersion = storeSetVersion;
-  const setBook = storeSetBook;
-  const setChapter = storeSetChapter;
+  const setVersion = (id: number) => {
+    setCurrentVersionId(id);
+    setCurrentBook("");
+    setCurrentChapter(0);
+    setSelectedVerses([]);
+    setLastSelectedVerse(null);
+  };
 
-  const selectVerse = useCallback((verse: number) => {
-    const prev = useBibleStore.getState().selectedVerses;
-    const next = prev.includes(verse)
-      ? prev.filter((v) => v !== verse)
-      : [...prev, verse].sort((a, b) => a - b);
-    storeSetSelectedVerses(next);
-    storeSetLastSelectedVerse(verse);
-  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
+  const setBook = (name: string) => {
+    setCurrentBook(name);
+    setCurrentChapter(0);
+    setSelectedVerses([]);
+    setLastSelectedVerse(null);
+  };
 
-  const selectSingleVerse = useCallback((verse: number) => {
-    storeSetSelectedVerses([verse]);
-    storeSetLastSelectedVerse(verse);
-  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
+  const setChapter = (chapter: number) => {
+    setCurrentChapter(chapter);
+    setSelectedVerses([]);
+    setLastSelectedVerse(null);
+  };
 
-  const selectVerseRange = useCallback((start: number, end: number) => {
-    const range: number[] = [];
-    for (let i = start; i <= end; i++) {
-      range.push(i);
-    }
-    storeSetSelectedVerses(range);
-    storeSetLastSelectedVerse(start);
-  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
+  const selectVerse = (verse: number) => {
+    setSelectedVerses((prev) => {
+      const next = prev.includes(verse)
+        ? prev.filter((v) => v !== verse)
+        : [...prev, verse].sort((a, b) => a - b);
+      setLastSelectedVerse(verse);
+      return next;
+    });
+  };
 
-  const clearSelection = useCallback(() => {
-    storeSetSelectedVerses([]);
-    storeSetLastSelectedVerse(null);
-  }, [storeSetSelectedVerses, storeSetLastSelectedVerse]);
+  const selectSingleVerse = (verse: number) => {
+    setSelectedVerses([verse]);
+    setLastSelectedVerse(verse);
+  };
 
   const projectSelectedVersesRange = useCallback(async () => {
-    if (selectedVerses.length === 0 || !currentVersionId || !currentBook || !currentChapter) return;
+    if (selectedVerses.length === 0) return;
+
     const sorted = [...selectedVerses].sort((a, b) => a - b);
-    const start = sorted[0];
-    const end = sorted[sorted.length - 1];
-
+    const range = sorted.length === 1 ? String(sorted[0]) : `${sorted[0]}-${sorted[sorted.length - 1]}`;
+    const title = `${currentBook} ${currentChapter}:${range}`;
     const verseSet = new Set(sorted);
-    const selectedTexts = (versesQuery.data ?? [])
-      .filter((v) => verseSet.has(v.verse))
-      .map((v) => `${v.verse} ${v.text}`)
-      .join("\n");
+    const versesToProject = verses.filter((v) => verseSet.has(v.verse));
 
-    const reference =
-      start === end
-        ? `${currentBook} ${currentChapter}:${start}`
-        : `${currentBook} ${currentChapter}:${start}-${end}`;
+    const slides: SlideContent[] = versesToProject.map((v) => ({
+      ...EMPTY_SLIDE_PROPS,
+      slideType: "bible",
+      text: v.text,
+      label: `${currentBook} ${currentChapter}:${v.verse}`,
+    }));
 
-    const slideData: SlideContentFlat = {
-      slide_type: "bible",
-      text: selectedTexts,
-      title: reference,
-    };
+    setCurrentPresentation(null);
+    setPresentationSlides(slides);
+    setActiveSlideIndex(0);
 
     try {
-      await projectSlideWithType(slideData, "bible");
-      await setSlideContext({ next: null, index: 0, total: 1, title: reference });
+      await projectSlideWithType(slides[0], "bible");
+      await setSlideContext({
+        next: slides.length > 1 ? slides[1] : null,
+        index: 0,
+        total: slides.length,
+        title,
+      });
     } catch (err) {
-      toast.error(String(err));
+      notify.tauriError(err);
     }
-  }, [selectedVerses, currentVersionId, currentBook, currentChapter, versesQuery.data]);
+  }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides]);
 
   const startBibleProjection = useCallback(async () => {
-    setCurrentProjectionType("bible");
-    // Project the selected verses if any
-    if (selectedVerses.length > 0) {
+    await projectSelectedVersesRange();
+  }, [projectSelectedVersesRange]);
+
+  const updateBibleProjection = useCallback(async () => {
+    if (isProjecting) {
       await projectSelectedVersesRange();
     }
-  }, [selectedVerses, setCurrentProjectionType, projectSelectedVersesRange]);
+  }, [isProjecting, projectSelectedVersesRange]);
 
   const stopBibleProjection = useCallback(async () => {
     try {
       await clearCurrentSlide();
       setCurrentProjectionType(null);
     } catch (err) {
-      toast.error(String(err));
+      notify.tauriError(err);
     }
   }, [setCurrentProjectionType]);
 
-  const updateBibleProjection = useCallback(async () => {
-    if (!isProjecting) return;
-    if (selectedVerses.length > 0) {
-      await projectSelectedVersesRange();
-    } else {
-      // If no verses selected while projecting, clear the projection
-      await stopBibleProjection();
-    }
-  }, [isProjecting, selectedVerses, projectSelectedVersesRange, stopBibleProjection]);
-
   return {
+    versions,
+    isLoadingVersions,
     currentVersionId,
-    currentBook,
-    currentChapter,
-    selectedVerses,
-    lastSelectedVerse,
-    isProjecting,
-    versions: versionsQuery.data ?? [],
-    books: booksQuery.data ?? [],
-    verses: versesQuery.data ?? [],
-    isLoadingVersions: versionsQuery.isLoading,
-    isLoadingBooks: booksQuery.isLoading,
-    isLoadingVerses: versesQuery.isLoading,
     setVersion,
+    books,
+    isLoadingBooks,
+    currentBook,
     setBook,
+    currentChapter,
     setChapter,
+    verses,
+    isLoadingVerses,
+    selectedVerses,
     selectVerse,
     selectSingleVerse,
-    selectVerseRange,
-    clearSelection,
-    projectSelectedVersesRange,
+    lastSelectedVerse,
+    isProjecting,
     startBibleProjection,
     stopBibleProjection,
     updateBibleProjection,

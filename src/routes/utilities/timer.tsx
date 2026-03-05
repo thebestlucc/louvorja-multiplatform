@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { Pause, Play, RotateCcw, TimerReset } from "lucide-react";
 import {
   useAddLap,
@@ -19,8 +19,8 @@ import { useUtilityProjection } from "../../hooks/use-utility-projection";
 import {
   createUtilityProjectionPayload,
   formatUtilityTimer,
-  type TimerMode,
 } from "../../types/utilities";
+import type { TimerMode } from "../../lib/bindings";
 import {
   startCountdownProjection,
   startStopwatchProjection,
@@ -77,14 +77,6 @@ function UtilitiesTimerPage() {
   const countdownTotalSeconds = Math.floor(Math.max(0, countdownValueMs) / 1000);
   const countdownMinutesValue = String(Math.floor(countdownTotalSeconds / 60));
   const countdownSecondsValue = String(countdownTotalSeconds % 60);
-  const timerAlertSettingValue = useMemo(
-    () => allSettings?.find((setting) => setting.key === TIMER_ALERTS_SETTING_KEY)?.value ?? null,
-    [allSettings],
-  );
-  const timerAlertVolumeSettingValue = useMemo(
-    () => allSettings?.find((setting) => setting.key === TIMER_ALERT_VOLUME_SETTING_KEY)?.value,
-    [allSettings],
-  );
   const stoppedCountdownRuntimeMs = timerState?.mode === "countdown"
     && timerState.durationMs != null
     && !timerState.isRunning
@@ -102,12 +94,12 @@ function UtilitiesTimerPage() {
   );
 
   useEffect(() => {
-    setAlertRules(parseAlertRulesSetting(timerAlertSettingValue));
-  }, [timerAlertSettingValue]);
+    setAlertRules(parseAlertRulesSetting(allSettings));
+  }, [allSettings]);
 
   useEffect(() => {
-    setAlertVolume(parseAlertVolumeSetting(timerAlertVolumeSettingValue));
-  }, [timerAlertVolumeSettingValue]);
+    setAlertVolume(parseAlertVolumeSetting(allSettings));
+  }, [allSettings]);
 
   useEffect(() => {
     if (stoppedCountdownRuntimeMs == null) {
@@ -123,7 +115,7 @@ function UtilitiesTimerPage() {
         value: JSON.stringify(nextRules),
       });
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -140,7 +132,7 @@ function UtilitiesTimerPage() {
         value: String(normalizeAlertVolume(nextVolume)),
       });
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -149,7 +141,7 @@ function UtilitiesTimerPage() {
       if (mode === "countdown") {
         const totalSeconds = Math.floor(Math.max(0, countdownValueMs) / 1000);
         if (totalSeconds <= 0) {
-          toast.error(t("utilities.timer.durationRequired"));
+          notify.error(t("utilities.timer.durationRequired"));
           return;
         }
         await startTimer.mutateAsync({ mode, durationMs: totalSeconds * 1000 });
@@ -157,7 +149,7 @@ function UtilitiesTimerPage() {
         await startTimer.mutateAsync({ mode, durationMs: null });
       }
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -165,7 +157,7 @@ function UtilitiesTimerPage() {
     try {
       await pauseTimer.mutateAsync();
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -173,7 +165,7 @@ function UtilitiesTimerPage() {
     try {
       await resumeTimer.mutateAsync();
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -181,7 +173,7 @@ function UtilitiesTimerPage() {
     try {
       await resetTimer.mutateAsync();
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -189,7 +181,7 @@ function UtilitiesTimerPage() {
     try {
       await addLap.mutateAsync();
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -204,7 +196,7 @@ function UtilitiesTimerPage() {
         await adjustCountdownTimer.mutateAsync({ deltaMs });
         setCountdownValueMs(nextValueMs);
       } catch (error) {
-        toast.error(String(error));
+        notify.tauriError(error);
       }
       return;
     }
@@ -252,10 +244,11 @@ function UtilitiesTimerPage() {
     try {
       await playTimerAlertRule(rule, alertVolume);
     } catch (error) {
-      toast.error(
+      notify.tauriError(
+        error,
         t("utilities.timer.alertPlaybackFailed", {
           minute: rule.minuteMark,
-          error: String(error),
+          error: "",
         }),
       );
     }
@@ -264,12 +257,12 @@ function UtilitiesTimerPage() {
   const handleAddAlertMinute = async () => {
     const parsedMinute = Number.parseInt(newAlertMinute, 10);
     if (!Number.isFinite(parsedMinute) || parsedMinute <= 0) {
-      toast.error(t("utilities.timer.invalidAlertMinute"));
+      notify.error(t("utilities.timer.invalidAlertMinute"));
       return;
     }
 
     if (alertRules.some((rule) => rule.minuteMark === parsedMinute)) {
-      toast.error(t("utilities.timer.duplicateAlertMinute"));
+      notify.error(t("utilities.timer.duplicateAlertMinute"));
       return;
     }
 
@@ -351,7 +344,7 @@ function UtilitiesTimerPage() {
     } catch (error) {
       await stopUtilityProjection().catch(() => {});
       await stopProjection().catch(() => {});
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   }, [
     displayMode,
@@ -368,7 +361,7 @@ function UtilitiesTimerPage() {
       await stopUtilityProjection();
       await stopProjection();
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   }, [stopProjection]);
 

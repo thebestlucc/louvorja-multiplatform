@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "../../lib/notifications";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database } from "lucide-react";
 import {
   useCancelLegacyFetch,
@@ -23,7 +23,8 @@ import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/mig
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import type {
   LegacyFetchOptions,
-} from "../../types/legacy-fetch";
+  MonitorConfig,
+} from "../../lib/bindings";
 import { StreamingControls } from "../../components/streaming/streaming-controls";
 import { ShortcutsTab } from "../../components/settings/shortcuts-tab";
 import { Input } from "../../components/ui/input";
@@ -51,14 +52,22 @@ import {
 import { useMediaSource } from "../../hooks/use-media-source";
 import { closeProjectorWindow, closeReturnWindow, openProjectorWindow, openReturnWindow } from "../../lib/tauri";
 import { resolveProjectionMonitorIndexes } from "../../lib/monitor-resolution";
-import type { MonitorConfig } from "../../types/settings";
 import { getPreferredMonitorName } from "../../lib/monitor-display-name";
 
+type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "migration" | "data";
+
+interface SettingsSearch {
+  tab?: SettingsTab;
+}
+
 export const Route = createFileRoute("/settings/")({
+  validateSearch: (search: Record<string, unknown>): SettingsSearch => {
+    return {
+      tab: search.tab as SettingsTab | undefined,
+    };
+  },
   component: SettingsIndex,
 });
-
-type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "migration" | "data";
 
 const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: Sliders },
@@ -72,7 +81,17 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentT
 
 function SettingsIndex() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const navigate = useNavigate();
+  const search = Route.useSearch();
+  const activeTab = search.tab ?? "general";
+
+  const setActiveTab = (tab: SettingsTab) => {
+    navigate({
+      to: "/settings",
+      search: { tab },
+      replace: true,
+    });
+  };
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -170,7 +189,7 @@ function GeneralSection() {
         setLaunchAtStartup(true);
       }
     } catch (err) {
-      toast.error(String(err));
+      notify.tauriError(err);
     }
   };
 
@@ -385,9 +404,9 @@ function AppearanceSection() {
     try {
       const managedPath = await copyImageMutation.mutateAsync(selected);
       persistProjectorDefaultMediaPath(managedPath);
-      toast.success(t("settings.projectorMediaUpdated"));
+      notify.success(t("settings.projectorMediaUpdated"));
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -398,7 +417,7 @@ function AppearanceSection() {
     });
     if (!selected || Array.isArray(selected)) return;
     persistProjectorDefaultMediaPath(selected);
-    toast.success(t("settings.projectorMediaUpdated"));
+    notify.success(t("settings.projectorMediaUpdated"));
   };
 
   const handleClearProjectorDefaultMediaPath = () => {
@@ -423,9 +442,9 @@ function AppearanceSection() {
     try {
       const managedPath = await copyImageMutation.mutateAsync(selected);
       persistProjectorLogoImagePath(managedPath);
-      toast.success(t("settings.projectorLogoUpdated"));
+      notify.success(t("settings.projectorLogoUpdated"));
     } catch (error) {
-      toast.error(String(error));
+      notify.tauriError(error);
     }
   };
 
@@ -632,8 +651,8 @@ function MonitorSection() {
         id: monitor.id,
         name: getPreferredMonitorName(monitor, index),
         resolution: `${monitor.width}x${monitor.height}`,
-        isPrimary: monitor.is_primary,
-        connectionType: monitor.connection_type ?? "unknown",
+        isPrimary: monitor.isPrimary,
+        connectionType: monitor.connectionType ?? "unknown",
       })),
     [monitors],
   );
@@ -656,8 +675,8 @@ function MonitorSection() {
       return;
     }
 
-    const existingProjector = monitorConfigs.find((config) => config.role === "projector")?.monitor_id;
-    const existingReturn = monitorConfigs.find((config) => config.role === "return")?.monitor_id;
+    const existingProjector = monitorConfigs.find((config) => config.role === "projector")?.monitorId;
+    const existingReturn = monitorConfigs.find((config) => config.role === "return")?.monitorId;
     const existingProjectorValid = existingProjector && monitorOptions.some((option) => option.id === existingProjector)
       ? existingProjector
       : undefined;
@@ -681,10 +700,10 @@ function MonitorSection() {
   const monitorSelectionConfigs = useMemo<MonitorConfig[]>(() => {
     const configs: MonitorConfig[] = [];
     if (projectorMonitorId) {
-      configs.push({ id: 0, monitor_id: projectorMonitorId, role: "projector", enabled: true });
+      configs.push({ id: 0, monitorId: projectorMonitorId, role: "projector", enabled: true });
     }
     if (returnMonitorId) {
-      configs.push({ id: 0, monitor_id: returnMonitorId, role: "return", enabled: true });
+      configs.push({ id: 0, monitorId: returnMonitorId, role: "return", enabled: true });
     }
     return configs;
   }, [projectorMonitorId, returnMonitorId]);
@@ -712,7 +731,7 @@ function MonitorSection() {
     if (hasMonitorSelectionConflict) {
       const message = t("settings.monitorAssignmentDistinctRequired");
       setMonitorFeedback({ type: "error", message });
-      toast.error(message);
+      notify.error(message);
       return;
     }
     if (!canSaveMonitorAssignments) return;
@@ -722,11 +741,11 @@ function MonitorSection() {
       await saveMonitorConfigMutation.mutateAsync({ monitorId: returnMonitorId, role: "return" });
       const successMessage = t("settings.monitorAssignmentSaved");
       setMonitorFeedback({ type: "success", message: successMessage });
-      toast.success(successMessage);
+      notify.success(successMessage);
     } catch (error) {
       const message = t("settings.monitorAssignmentSaveFailed", { error: String(error) });
       setMonitorFeedback({ type: "error", message });
-      toast.error(message);
+      notify.error(message);
     }
   };
 
@@ -747,7 +766,7 @@ function MonitorSection() {
       }, 2600);
     } catch (error) {
       setTestingMonitorRole((currentRole) => currentRole === role ? null : currentRole);
-      toast.error(t("settings.monitorAssignmentTestFailed", { error: String(error) }));
+      notify.error(t("settings.monitorAssignmentTestFailed", { error: String(error) }));
     }
   };
 
@@ -791,7 +810,7 @@ function MonitorSection() {
                               : "bg-muted text-muted-foreground",
                           )}
                         >
-                          {getConnectionTypeLabel(option.connectionType)}
+                          {getConnectionTypeLabel(option.connectionType as any)}
                         </span>
                       </div>
                     </div>
@@ -814,7 +833,7 @@ function MonitorSection() {
                       <SelectContent>
                         {monitorOptions.map((option) => (
                           <SelectItem key={option.id} value={option.id}>
-                            {option.name} ({option.resolution}) • {getConnectionTypeLabel(option.connectionType)}
+                            {option.name} ({option.resolution}) • {getConnectionTypeLabel(option.connectionType as any)}
                             {option.isPrimary ? ` • ${t("settings.monitorAssignmentPrimary")}` : ""}
                           </SelectItem>
                         ))}
@@ -837,7 +856,7 @@ function MonitorSection() {
                       <SelectContent>
                         {monitorOptions.map((option) => (
                           <SelectItem key={option.id} value={option.id}>
-                            {option.name} ({option.resolution}) • {getConnectionTypeLabel(option.connectionType)}
+                            {option.name} ({option.resolution}) • {getConnectionTypeLabel(option.connectionType as any)}
                             {option.isPrimary ? ` • ${t("settings.monitorAssignmentPrimary")}` : ""}
                           </SelectItem>
                         ))}
@@ -1096,9 +1115,9 @@ function DataSection() {
     try {
       await clearDatabaseMutation.mutateAsync();
       setShowClearDbConfirm(false);
-      toast.success(t("settings.dangerZone.clearDatabaseSuccess"));
+      notify.success(t("settings.dangerZone.clearDatabaseSuccess"));
     } catch (error) {
-      toast.error(t("settings.dangerZone.clearDatabaseError", { error: String(error) }));
+      notify.tauriError(error, t("settings.dangerZone.clearDatabaseError", { error: "" }));
     }
   };
 

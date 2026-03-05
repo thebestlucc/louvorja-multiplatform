@@ -15,18 +15,20 @@ import {
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings, clearDatabase,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
-  restoreHymnFromApi,
+  restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
   updateGlobalShortcut,
 } from "./tauri";
-import type { SlideContentFlat } from "../types/presentation";
-import type { SyncPoint } from "../types/audio";
-import type { HymnWriteInput } from "../types/hymn";
-import type { TimerMode, TextFormat } from "../types/utilities";
-import type { CollectionSongSyncStatus } from "../types/collection";
-import type { UpdateInfo } from "../types/updater";
-import type { LegacyFetchOptions } from "../types/legacy-fetch";
+import type {
+  HymnWriteInput,
+  CollectionSongSyncStatus,
+  TimerMode,
+  LegacyFetchOptions,
+  SyncPoint,
+  SlideContent,
+} from "./bindings";
+import type { TextFormat } from "../types/utilities";
 
 export const queryKeys = {
   hymns: {
@@ -169,7 +171,7 @@ export function useMonitors() {
 
 export function useProjectSlide() {
   return useMutation({
-    mutationFn: (slideData: SlideContentFlat) => setCurrentSlide(slideData),
+    mutationFn: (slideData: SlideContent) => setCurrentSlide(slideData),
   });
 }
 
@@ -286,7 +288,7 @@ export function useResyncCollectionSong() {
   return useMutation({
     mutationFn: (songId: number) => resyncCollectionSong(songId),
     onSuccess: (song) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(song.collection_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(song.collectionId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
     },
   });
@@ -356,6 +358,20 @@ export function useRestoreHymnFromApi() {
       restoreHymnFromApi(vars.hymnId, vars.language),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(vars.hymnId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
+    },
+  });
+}
+
+export function useRestoreAlbumFromApi() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { collectionId: number; language: string }) =>
+      restoreAlbumFromApi(vars.collectionId, vars.language),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
     },
   });
@@ -748,7 +764,7 @@ export function useInstallUpdate() {
   return useMutation({
     mutationFn: () => installUpdate(),
     onSuccess: () => {
-      queryClient.setQueryData(queryKeys.updater.info, null as UpdateInfo | null);
+      queryClient.setQueryData(queryKeys.updater.info, null);
     },
   });
 }

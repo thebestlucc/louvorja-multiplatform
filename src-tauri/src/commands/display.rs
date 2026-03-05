@@ -114,7 +114,6 @@ fn build_return_stream_payload(
 pub fn stable_monitor_id(monitor: &tauri::Monitor) -> String {
     let size = monitor.size();
     let position = monitor.position();
-    let scale_factor = (monitor.scale_factor() * 1000.0).round() as i64;
     let name = monitor
         .name()
         .map(|value| value.to_string())
@@ -122,17 +121,43 @@ pub fn stable_monitor_id(monitor: &tauri::Monitor) -> String {
 
     let mut hasher = DefaultHasher::new();
     name.hash(&mut hasher);
-    position.x.hash(&mut hasher);
-    position.y.hash(&mut hasher);
-    size.width.hash(&mut hasher);
-    size.height.hash(&mut hasher);
-    scale_factor.hash(&mut hasher);
+    let name_hash = hasher.finish();
 
-    format!("monitor-{:016x}", hasher.finish())
+    // v2 format: monitor-v2|name_hash|width|height|x|y
+    // This allows parsing the original properties back for fuzzy matching if position changes.
+    format!(
+        "monitor-v2|{:016x}|{}|{}|{}|{}",
+        name_hash, size.width, size.height, position.x, position.y
+    )
+}
+
+pub struct ParsedMonitorId {
+    pub name_hash: u64,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+}
+
+pub fn parse_monitor_id(id: &str) -> Option<ParsedMonitorId> {
+    let parts: Vec<&str> = id.strip_prefix("monitor-v2|")?.split('|').collect();
+    if parts.len() != 5 {
+        return None;
+    }
+
+    Some(ParsedMonitorId {
+        name_hash: u64::from_str_radix(parts[0], 16).ok()?,
+        width: parts[1].parse().ok()?,
+        height: parts[2].parse().ok()?,
+        x: parts[3].parse().ok()?,
+        y: parts[4].parse().ok()?,
+    })
 }
 
 pub fn parse_legacy_monitor_index(monitor_id: &str) -> Option<usize> {
     let value = monitor_id.strip_prefix("monitor-")?;
+    // Only accept pure digits (0, 1, 2...) for legacy index.
+    // Modern v2 IDs and hex hashes are ignored by this parser.
     if !value.chars().all(|char| char.is_ascii_digit()) {
         return None;
     }
@@ -384,6 +409,7 @@ pub fn start_monitor_hotplug_watcher(app: AppHandle) {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppError> {
     let monitors = app
         .available_monitors()
@@ -477,67 +503,136 @@ fn open_fullscreen_window(
     title: &str,
     target_monitor_id: &str,
 ) -> Result<(), AppError> {
+    eprintln!("[display] Seeking monitor for label {label}: {target_monitor_id}");
     let monitors = app
         .available_monitors()
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    for (i, m) in monitors.iter().enumerate() {
+        eprintln!(
+            "[display] Seen monitor {}: id={} name={:?} pos={:?} size={:?} scale={}",
+            i,
+            stable_monitor_id(m),
+            m.name(),
+            m.position(),
+            m.size(),
+            m.scale_factor()
+        );
+    }
 
     let monitor = monitors
         .iter()
         .find(|m| stable_monitor_id(m) == target_monitor_id)
         .or_else(|| {
-            parse_legacy_monitor_index(target_monitor_id)
-                .and_then(|i| monitors.get(i))
+            eprintln!("[display] Exact match failed for {target_monitor_id}, trying fuzzy...");
+            // Fuzzy match for structured IDs (v2) if exact match fails (e.g. position changed)
+            if let Some(parsed) = parse_monitor_id(target_monitor_id) {
+                let candidates: Vec<_> = monitors
+                    .iter()
+                    .filter(|m| {
+                        let m_size = m.size();
+                        let m_name = m.name().map(|v| v.as_str()).unwrap_or("");
+                        let mut h = DefaultHasher::new();
+                        m_name.hash(&mut h);
+                        let matched = h.finish() == parsed.name_hash
+                            && m_size.width == parsed.width
+                            && m_size.height == parsed.height;
+                        if matched {
+                             eprintln!("[display] Fuzzy candidate match: {:?}", m.name());
+                        }
+                        matched
+                    })
+                    .collect();
+
+                if !candidates.is_empty() {
+                    // Pick the one closest to original position
+                    return candidates
+                        .into_iter()
+                        .min_by_key(|m| {
+                            let p = m.position();
+                            (p.x - parsed.x).abs() + (p.y - parsed.y).abs()
+                        });
+                }
+            }
+            None
         })
-        .ok_or_else(|| AppError::NotFound(
-            format!("Monitor {} not found", target_monitor_id)
-        ))?;
+        .or_else(|| {
+            eprintln!("[display] Fuzzy match failed, trying legacy index...");
+            parse_legacy_monitor_index(target_monitor_id).and_then(|i| monitors.get(i))
+        })
+        .ok_or_else(|| {
+            eprintln!("[display] CRITICAL: No matching monitor found for {target_monitor_id}");
+            AppError::NotFound(format!("Monitor {} not found", target_monitor_id))
+        })?;
 
     let position = monitor.position();
     let size = monitor.size();
+    let scale = monitor.scale_factor();
 
-    let window = tauri::WebviewWindowBuilder::new(
-        app,
-        label,
-        tauri::WebviewUrl::App(url.into()),
-    )
-    .title(title)
-    .visible(false)
-    .background_throttling(BackgroundThrottlingPolicy::Disabled)
-    .fullscreen(true)
-    .decorations(false)
-    .resizable(false)
-    .always_on_top(true)
-    .skip_taskbar(false)
-    .build()
-    .map_err(|e| AppError::Tauri(e.to_string()))?;
+    // Use logical coordinates in the builder to ensure creation on the target monitor
+    let logical_x = position.x as f64 / scale;
+    let logical_y = position.y as f64 / scale;
+    let logical_w = size.width as f64 / scale;
+    let logical_h = size.height as f64 / scale;
 
-    window.set_size(tauri::Size::Physical(*size))
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    window.set_position(tauri::Position::Physical(*position))
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    eprintln!(
+        "[display] Creating window {label} on monitor {:?}: Physical pos={:?} size={:?}, Logical pos=({},{}), size=({},{})",
+        monitor.name(), position, size, logical_x, logical_y, logical_w, logical_h
+    );
 
-    std::thread::sleep(std::time::Duration::from_millis(150));
-    window.show().map_err(|e| AppError::Tauri(e.to_string()))?;
+    let window = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App(url.into()))
+        .title(title)
+        .visible(false)
+        .background_throttling(BackgroundThrottlingPolicy::Disabled)
+        .fullscreen(false)
+        .decorations(false)
+        .resizable(false)
+        .always_on_top(true)
+        .skip_taskbar(false)
+        .position(logical_x, logical_y)
+        .inner_size(logical_w, logical_h)
+        .build()
+        .map_err(|e| {
+            eprintln!("[display] WebviewWindowBuilder::build failed: {e}");
+            AppError::Tauri(e.to_string())
+        })?;
 
-    for _ in 0..6 {
+    // Still call set_size/position in physical just in case of rounding errors
+    let _ = window.set_size(tauri::Size::Physical(*size));
+    let _ = window.set_position(tauri::Position::Physical(*position));
+
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    window.show().map_err(|e| {
+        eprintln!("[display] window.show failed: {e}");
+        AppError::Tauri(e.to_string())
+    })?;
+
+    // On some OSes, setting fullscreen ONLY works reliably after show()
+    eprintln!("[display] Attempting fullscreen for {label}...");
+    for i in 0..8 {
         let _ = window.set_fullscreen(true);
-        std::thread::sleep(std::time::Duration::from_millis(120));
+        std::thread::sleep(std::time::Duration::from_millis(150));
         if window.is_fullscreen().unwrap_or(false) {
+            eprintln!("[display] Window {label} entered fullscreen on attempt {}.", i + 1);
             return Ok(());
         }
     }
+    eprintln!("[display] Fullscreen failed for {label} after 8 attempts, maximizing as fallback.");
     let _ = window.maximize();
     Ok(())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn open_projector_window(
     monitor_id: String,
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), AppError> {
+    eprintln!("[display] Command open_projector_window called with id: {monitor_id}");
     // If window already exists, just show and focus it
     if let Some(win) = app.get_webview_window("projector") {
+        eprintln!("[display] Projector window already exists, showing.");
         let _ = win.show();
         let _ = win.set_focus();
         return Ok(());
@@ -549,8 +644,65 @@ pub fn open_projector_window(
     let _ = app.emit("projector-state-changed", true);
     // Spawn on background thread — window creation with sleep/retries blocks
     std::thread::spawn(move || {
+        // Retry loop for monitor detection (helpful for wireless/slow monitors)
+        let mut final_target_id = monitor_id.clone();
+        let mut target_monitor_found = false;
+        for i in 0..10 {
+            eprintln!("[display] Monitor detection attempt {} for projector...", i + 1);
+            if let Ok(monitors) = app.available_monitors() {
+                if monitors.iter().any(|m| stable_monitor_id(m) == final_target_id) {
+                    eprintln!("[display] Exact monitor found: {final_target_id}");
+                    target_monitor_found = true;
+                    break;
+                }
+                // Try fuzzy matching
+                if let Some(parsed) = parse_monitor_id(&final_target_id) {
+                    if let Some(m) = monitors.iter().find(|m| {
+                        let m_size = m.size();
+                        let m_name = m.name().map(|v| v.as_str()).unwrap_or("");
+                        let mut h = DefaultHasher::new();
+                        m_name.hash(&mut h);
+                        h.finish() == parsed.name_hash
+                            && m_size.width == parsed.width
+                            && m_size.height == parsed.height
+                    }) {
+                        eprintln!("[display] Fuzzy monitor found: {:?}", m.name());
+                        final_target_id = stable_monitor_id(m);
+                        target_monitor_found = true;
+                        break;
+                    }
+                }
+                
+                // Special fallback for wireless displays: if no match found but exactly ONE external display exists,
+                // and we are seeking an external display (not primary), use it.
+                let external_monitors: Vec<_> = monitors.iter().filter(|m| {
+                     let primary_id = app.primary_monitor().ok().flatten().map(|pm| stable_monitor_id(&pm));
+                     primary_id.as_ref() != Some(&stable_monitor_id(m))
+                }).collect();
+
+                if !target_monitor_found && external_monitors.len() == 1 {
+                    eprintln!("[display] FALLBACK: Only one external monitor found, using it: {:?}", external_monitors[0].name());
+                    final_target_id = stable_monitor_id(external_monitors[0]);
+                    target_monitor_found = true;
+                    break;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(600));
+        }
+
+        if !target_monitor_found {
+            eprintln!("[display] Projector monitor {} not found after 10 retries.", monitor_id);
+            let _ = app.emit("projector-state-changed", false);
+            if let Some(state) = app.try_state::<crate::state::AppState>() {
+                if let Ok(mut open) = state.projector_open.lock() {
+                    *open = false;
+                }
+            }
+            return;
+        }
+
         if let Err(e) = open_fullscreen_window(
-            &app, "projector", "/projector", "LouvorJA - Projector", &monitor_id,
+            &app, "projector", "/projector", "LouvorJA - Projector", &final_target_id,
         ) {
             eprintln!("[display] Failed to open projector window: {e}");
             // Roll back optimistic state
@@ -566,10 +718,12 @@ pub fn open_projector_window(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn close_projector_window(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), AppError> {
+    eprintln!("[display] Command close_projector_window called.");
     if let Some(win) = app.get_webview_window("projector") {
         win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
     }
@@ -581,12 +735,15 @@ pub fn close_projector_window(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn open_return_window(
     monitor_id: String,
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), AppError> {
+    eprintln!("[display] Command open_return_window called with id: {monitor_id}");
     if let Some(win) = app.get_webview_window("return") {
+        eprintln!("[display] Return window already exists, showing.");
         let _ = win.show();
         let _ = win.set_focus();
         return Ok(());
@@ -596,8 +753,50 @@ pub fn open_return_window(
     }
     let _ = app.emit("return-state-changed", true);
     std::thread::spawn(move || {
+        // Retry loop for monitor detection
+        let mut final_target_id = monitor_id.clone();
+        let mut target_monitor_found = false;
+        for i in 0..10 {
+            eprintln!("[display] Monitor detection attempt {} for return...", i + 1);
+            if let Ok(monitors) = app.available_monitors() {
+                if monitors.iter().any(|m| stable_monitor_id(m) == final_target_id) {
+                    target_monitor_found = true;
+                    break;
+                }
+                // Try fuzzy matching
+                if let Some(parsed) = parse_monitor_id(&final_target_id) {
+                    if let Some(m) = monitors.iter().find(|m| {
+                        let m_size = m.size();
+                        let m_name = m.name().map(|v| v.as_str()).unwrap_or("");
+                        let mut h = DefaultHasher::new();
+                        m_name.hash(&mut h);
+                        h.finish() == parsed.name_hash
+                            && m_size.width == parsed.width
+                            && m_size.height == parsed.height
+                    }) {
+                        eprintln!("[display] Fuzzy monitor found: {:?}", m.name());
+                        final_target_id = stable_monitor_id(m);
+                        target_monitor_found = true;
+                        break;
+                    }
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(600));
+        }
+
+        if !target_monitor_found {
+            eprintln!("[display] Return monitor {} not found after 10 retries.", monitor_id);
+            let _ = app.emit("return-state-changed", false);
+            if let Some(state) = app.try_state::<crate::state::AppState>() {
+                if let Ok(mut open) = state.return_open.lock() {
+                    *open = false;
+                }
+            }
+            return;
+        }
+
         if let Err(e) = open_fullscreen_window(
-            &app, "return", "/return", "LouvorJA - Return Monitor", &monitor_id,
+            &app, "return", "/return", "LouvorJA - Return Monitor", &final_target_id,
         ) {
             eprintln!("[display] Failed to open return window: {e}");
             // Roll back optimistic state
@@ -613,6 +812,7 @@ pub fn open_return_window(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn close_return_window(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
@@ -630,6 +830,7 @@ pub fn close_return_window(
 // Slide projection
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_current_slide(
     slide_data: SlideContent,
     app: AppHandle,
@@ -707,6 +908,7 @@ pub fn set_current_slide(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_current_slide(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<SlideContent>, AppError> {
@@ -718,6 +920,7 @@ pub fn get_current_slide(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn clear_current_slide(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
@@ -768,6 +971,7 @@ pub fn clear_current_slide(
 // Slide context (for return monitor)
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_slide_context(
     context_data: SlideContext,
     app: AppHandle,
@@ -803,6 +1007,7 @@ pub fn set_slide_context(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_slide_context(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<SlideContext>, AppError> {
@@ -819,6 +1024,7 @@ pub fn get_slide_context(
 // toggle_logo_screen acquired them in reverse order.
 
 #[tauri::command]
+#[specta::specta]
 pub fn toggle_black_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
@@ -840,6 +1046,7 @@ pub fn toggle_black_screen(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn toggle_logo_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
@@ -861,6 +1068,7 @@ pub fn toggle_logo_screen(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
     let overlay = state
         .overlay
@@ -875,6 +1083,7 @@ pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlaySta
 // Monitor config persistence
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_monitor_config(
     monitor_id: String,
     role: String,
@@ -882,7 +1091,7 @@ pub fn set_monitor_config(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::set_monitor_config(
         &conn,
@@ -896,12 +1105,13 @@ pub fn set_monitor_config(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_monitor_configs(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<MonitorConfig>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::get_monitor_configs(&conn)
 }

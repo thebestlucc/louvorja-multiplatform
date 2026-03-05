@@ -1,17 +1,17 @@
 use crate::error::AppError;
 use crate::legacy_fetch::{
     fetcher, importer, new_run_id, LegacyFetchError, LegacyFetchOptions,
-    LegacyFetchProgress, LegacyFetchReport, LegacyFetchRunState, LegacyFetchStatus,
+    LegacyFetchProgress, LegacyFetchReport, LegacyFetchRunState, LegacyFetchStatus, LegacyFetchSubTask,
 };
 use crate::state::AppState;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Event payload for legacy fetch progress
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyFetchProgressEvent {
     pub run_id: String,
@@ -21,6 +21,7 @@ pub struct LegacyFetchProgressEvent {
     pub message: Option<String>,
     pub items_total: u64,
     pub items_processed: u64,
+    pub sub_tasks: Vec<LegacyFetchSubTask>,
 }
 
 impl From<&LegacyFetchProgress> for LegacyFetchProgressEvent {
@@ -33,12 +34,14 @@ impl From<&LegacyFetchProgress> for LegacyFetchProgressEvent {
             message: p.message.clone(),
             items_total: p.items_total,
             items_processed: p.items_processed,
+            sub_tasks: p.sub_tasks.clone(),
         }
     }
 }
 
 /// Start a legacy fetch operation
 #[tauri::command]
+#[specta::specta]
 pub fn start_legacy_fetch(
     options: LegacyFetchOptions,
     app: AppHandle,
@@ -78,6 +81,7 @@ pub fn start_legacy_fetch(
         message: Some("Connecting to LouvorJA server...".to_string()),
         items_total: 0,
         items_processed: 0,
+        sub_tasks: Vec::new(),
     };
 
     {
@@ -131,6 +135,7 @@ pub fn start_legacy_fetch(
 
 /// Get the current progress of a legacy fetch operation
 #[tauri::command]
+#[specta::specta]
 pub fn get_legacy_fetch_progress(
     run_id: String,
     state: tauri::State<'_, AppState>,
@@ -148,6 +153,7 @@ pub fn get_legacy_fetch_progress(
 
 /// Cancel a running legacy fetch operation
 #[tauri::command]
+#[specta::specta]
 pub fn cancel_legacy_fetch(
     run_id: String,
     state: tauri::State<'_, AppState>,
@@ -167,6 +173,7 @@ pub fn cancel_legacy_fetch(
 
 /// Get the final report of a completed legacy fetch operation
 #[tauri::command]
+#[specta::specta]
 pub fn get_legacy_fetch_report(
     run_id: String,
     state: tauri::State<'_, AppState>,
@@ -185,8 +192,83 @@ pub fn get_legacy_fetch_report(
 
 /// Fetch params from the API (for checking connectivity)
 #[tauri::command]
+#[specta::specta]
 pub async fn fetch_legacy_params() -> Result<crate::legacy_fetch::ApiParams, AppError> {
     fetcher::fetch_params().await
+}
+
+fn update_sub_task(
+    app: &AppHandle, 
+    run_id: &str, 
+    id: &str, 
+    title: &str, 
+    percent: f64, 
+    status: &str, 
+    processed_count: u64,
+    total_items: u64,
+) {
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
+            if let Some(run) = fetch_state.runs.get_mut(run_id) {
+                if let Some(st) = run.progress.sub_tasks.iter_mut().find(|s| s.id == id) {
+                    st.title = title.to_string();
+                    st.percent = percent;
+                    st.status = status.to_string();
+                } else {
+                    run.progress.sub_tasks.push(LegacyFetchSubTask {
+                        id: id.to_string(),
+                        title: title.to_string(),
+                        percent,
+                        status: status.to_string(),
+                    });
+                }
+                
+                run.progress.items_total = total_items;
+                run.progress.items_processed = processed_count;
+                if total_items > 0 {
+                    run.progress.percent = 30.0 + (70.0 * processed_count as f64 / total_items as f64);
+                }
+
+                let _ = app.emit("legacy-fetch-progress", LegacyFetchProgressEvent::from(&run.progress));
+            }
+        }
+    }
+}
+
+fn update_global_progress(
+    app: &AppHandle,
+    run_id: &str,
+    step: &str,
+    status: LegacyFetchStatus,
+    percent: f64,
+    message: &str,
+    items_total: u64,
+    items_processed: u64,
+) {
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
+            if let Some(run) = fetch_state.runs.get_mut(run_id) {
+                run.progress.step = step.to_string();
+                run.progress.status = status;
+                run.progress.percent = percent;
+                run.progress.message = Some(message.to_string());
+                run.progress.items_total = items_total;
+                run.progress.items_processed = items_processed;
+                
+                let _ = app.emit("legacy-fetch-progress", LegacyFetchProgressEvent::from(&run.progress));
+            }
+        }
+    }
+}
+
+fn extract_year_from_url(url: &str) -> Option<i32> {
+    let filename = url.split('/').last()?.split('.').next()?;
+    // Check if filename is exactly 4 digits
+    if filename.len() == 4 && filename.chars().all(|c| c.is_ascii_digit()) {
+        filename.parse::<i32>().ok()
+    } else {
+        None
+    }
 }
 
 /// Background async function that runs the fetch operation
@@ -197,681 +279,436 @@ async fn run_legacy_fetch_background(
     cancel_flag: Arc<AtomicBool>,
 ) {
     let started = Instant::now();
-    let mut errors: Vec<LegacyFetchError> = Vec::new();
-    let mut hymns_fetched = 0u64;
-    let mut hymns_imported = 0u64;
-    let mut hymns_skipped = 0u64;
-    let mut albums_fetched = 0u64;
-    let mut albums_created = 0u64;
-    let mut collection_hymns_linked = 0u64;
-
-    // Helper to update progress
-    let update_progress = |step: &str,
-                           status: LegacyFetchStatus,
-                           percent: f64,
-                           message: &str,
-                           items_total: u64,
-                           items_processed: u64| {
-        let progress = LegacyFetchProgress {
-            run_id: run_id.clone(),
-            step: step.to_string(),
-            status: status.clone(),
-            percent,
-            message: Some(message.to_string()),
-            items_total,
-            items_processed,
-        };
-
-        // Update state
-        if let Some(state) = app.try_state::<AppState>() {
-            if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
-                if let Some(run) = fetch_state.runs.get_mut(&run_id) {
-                    run.progress = progress.clone();
-                }
-            }
-        }
-
-        // Emit event
-        let _ = app.emit(
-            "legacy-fetch-progress",
-            LegacyFetchProgressEvent::from(&progress),
-        );
-    };
+    let hymns_fetched = Arc::new(AtomicU64::new(0));
+    let hymns_imported = Arc::new(AtomicU64::new(0));
+    let hymns_skipped = Arc::new(AtomicU64::new(0));
+    let albums_fetched = Arc::new(AtomicU64::new(0));
+    let albums_created = Arc::new(AtomicU64::new(0));
+    let collection_hymns_linked = Arc::new(AtomicU64::new(0));
+    let audio_downloaded = Arc::new(AtomicU64::new(0));
+    let images_downloaded = Arc::new(AtomicU64::new(0));
+    let processed_count = Arc::new(AtomicU64::new(0));
+    
+    let errors = Arc::new(std::sync::Mutex::new(Vec::<LegacyFetchError>::new()));
 
     // Check cancellation
     let check_cancelled = || cancel_flag.load(Ordering::SeqCst);
 
-    // Step 1: Fetch hymns from API
-    update_progress(
-        "fetching",
-        LegacyFetchStatus::Fetching,
-        10.0,
-        "Fetching hymns from LouvorJA server...",
-        0,
-        0,
-    );
+    // Semaphore to limit concurrent network requests (API detail + Media downloads)
+    // 6 permits allows both Hymnal and Albums to progress in parallel more effectively.
+    let api_semaphore = Arc::new(tokio::sync::Semaphore::new(6));
 
-    if check_cancelled() {
-        finalize_fetch(
-            &app,
-            &run_id,
-            LegacyFetchStatus::Cancelled,
-            errors,
-            hymns_fetched,
-            hymns_imported,
-            hymns_skipped,
-            albums_fetched,
-            albums_created,
-            collection_hymns_linked,
-            0,
-            0,
-            started,
-        );
-        return;
-    }
+    // Semaphore to serialize database writes. SQLite handles concurrency best when writes are serial.
+    let db_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
 
-    // Fetch hymnal or all musics based on option
-    let musics_result = if options.include_hymnal {
-        fetcher::fetch_hymnal(options.language).await
-    } else {
-        fetcher::fetch_musics(options.language).await
-    };
+    update_global_progress(&app, &run_id, "fetching", LegacyFetchStatus::Fetching, 10.0, "Fetching metadata...", 0, 0);
 
-    let musics = match musics_result {
-        Ok(m) => m,
-        Err(e) => {
-            errors.push(LegacyFetchError {
-                item_type: "fetch".to_string(),
-                item_id: None,
-                message: e.to_string(),
-            });
-            finalize_fetch(
-                &app,
-                &run_id,
-                LegacyFetchStatus::Failed,
-                errors,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                started,
-            );
-            return;
-        }
-    };
-
-    // Check if no content is available for the selected language
-    if musics.is_empty() {
-        errors.push(LegacyFetchError {
-            item_type: "fetch".to_string(),
-            item_id: None,
-            message: format!("NO_CONTENT_AVAILABLE:{}", options.language.as_str()),
-        });
-        finalize_fetch(
-            &app,
-            &run_id,
-            LegacyFetchStatus::Failed,
-            errors,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            started,
-        );
-        return;
-    }
-
-    hymns_fetched = musics.len() as u64;
-
-    update_progress(
-        "fetching",
-        LegacyFetchStatus::Fetching,
-        30.0,
-        &format!("Fetched {} hymns from server", hymns_fetched),
-        hymns_fetched,
-        0,
-    );
-
-    if check_cancelled() {
-        finalize_fetch(
-            &app,
-            &run_id,
-            LegacyFetchStatus::Cancelled,
-            errors,
-            hymns_fetched,
-            hymns_imported,
-            hymns_skipped,
-            albums_fetched,
-            albums_created,
-            collection_hymns_linked,
-            0,
-            0,
-            started,
-        );
-        return;
-    }
-
-    // Get media directory for file downloads
     let media_dir: PathBuf = match app.path().app_data_dir() {
         Ok(dir) => dir.join("media"),
-        Err(e) => {
-            errors.push(LegacyFetchError {
-                item_type: "setup".to_string(),
-                item_id: None,
-                message: format!("Could not get app data directory: {}", e),
-            });
-            finalize_fetch(
-                &app,
-                &run_id,
-                LegacyFetchStatus::Failed,
-                errors,
-                hymns_fetched,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                started,
-            );
-            return;
-        }
+        Err(_) => return,
     };
+    let _ = std::fs::create_dir_all(&media_dir);
 
-    // Create media directory if needed
-    if let Err(e) = std::fs::create_dir_all(&media_dir) {
-        errors.push(LegacyFetchError {
-            item_type: "setup".to_string(),
-            item_id: None,
-            message: format!("Could not create media directory: {}", e),
-        });
-        finalize_fetch(
-            &app,
-            &run_id,
-            LegacyFetchStatus::Failed,
-            errors,
-            hymns_fetched,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            started,
-        );
-        return;
-    }
+    // --- Task 1: Process Hymnal ---
+    let app_h = app.clone();
+    let run_id_h = run_id.clone();
+    let options_h = options.clone();
+    let cancel_h = cancel_flag.clone();
+    let media_dir_h = media_dir.clone();
+    let hymns_fetched_h = hymns_fetched.clone();
+    let hymns_imported_h = hymns_imported.clone();
+    let hymns_skipped_h = hymns_skipped.clone();
+    let processed_h = processed_count.clone();
+    let audio_h = audio_downloaded.clone();
+    let images_h = images_downloaded.clone();
+    let errors_h = errors.clone();
+    let albums_fetched_h = albums_fetched.clone();
+    let sem_h = api_semaphore.clone();
+    let dsem_h = db_semaphore.clone();
 
-    // Step 2: Import into local database with file downloads
-    update_progress(
-        "importing",
-        LegacyFetchStatus::Importing,
-        40.0,
-        "Importing hymns and downloading media files...",
-        hymns_fetched,
-        0,
-    );
-
-    // Get app state for database access
-    let state = match app.try_state::<AppState>() {
-        Some(s) => s,
-        None => {
-            errors.push(LegacyFetchError {
-                item_type: "import".to_string(),
-                item_id: None,
-                message: "Could not access application state".to_string(),
-            });
-            finalize_fetch(
-                &app,
-                &run_id,
-                LegacyFetchStatus::Failed,
-                errors,
-                hymns_fetched,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                started,
-            );
-            return;
-        }
-    };
-
-    // Import musics with file downloads
-    let total = musics.len();
-    let mut audio_downloaded = 0u64;
-    let mut images_downloaded = 0u64;
-
-    for (i, music) in musics.iter().enumerate() {
-        if check_cancelled() {
-            finalize_fetch(
-                &app,
-                &run_id,
-                LegacyFetchStatus::Cancelled,
-                errors,
-                hymns_fetched,
-                hymns_imported,
-                hymns_skipped,
-                albums_fetched,
-                albums_created,
-                collection_hymns_linked,
-                audio_downloaded,
-                images_downloaded,
-                started,
-            );
-            return;
-        }
-
-        // Step 1: Fetch detailed music info with lyrics
-        let music_with_lyrics = match fetcher::fetch_music_detail(options.language, music.id_music).await {
-            Ok(mut detailed) => {
-                // Preserve track number from hymnal list (detail endpoint may not include it)
-                if detailed.track.is_none() && music.track.is_some() {
-                    detailed.track = music.track;
-                }
-                detailed
-            }
-            Err(e) => {
-                log::warn!("Failed to fetch lyrics for '{}': {}", music.name, e);
-                // Fall back to music without lyrics
-                music.clone()
-            }
-        };
-
-        // Step 2: Download media files (async, outside db lock)
-        let audio_path = if options.download_audio {
-            importer::download_media_file(
-                music_with_lyrics.url_music.as_ref(),
-                &media_dir,
-                "audio",
-                music_with_lyrics.id_music,
-                "mp3",
-            ).await
-        } else {
-            None
-        };
-
-        // Check cancellation between downloads
-        if check_cancelled() {
-            finalize_fetch(
-                &app, &run_id, LegacyFetchStatus::Cancelled, errors,
-                hymns_fetched, hymns_imported, hymns_skipped,
-                albums_fetched, albums_created, collection_hymns_linked,
-                audio_downloaded, images_downloaded, started,
-            );
-            return;
-        }
-
-        // Download playback/instrumental version
-        let playback_path = if options.download_audio {
-            importer::download_media_file(
-                music_with_lyrics.url_instrumental_music.as_ref(),
-                &media_dir,
-                "playback",
-                music_with_lyrics.id_music,
-                "mp3",
-            ).await
-        } else {
-            None
-        };
-
-        // Check cancellation between downloads
-        if check_cancelled() {
-            finalize_fetch(
-                &app, &run_id, LegacyFetchStatus::Cancelled, errors,
-                hymns_fetched, hymns_imported, hymns_skipped,
-                albums_fetched, albums_created, collection_hymns_linked,
-                audio_downloaded, images_downloaded, started,
-            );
-            return;
-        }
-
-        let cover_path = if options.download_images {
-            importer::download_media_file(
-                music_with_lyrics.url_image.as_ref(),
-                &media_dir,
-                "images",
-                music_with_lyrics.id_music,
-                "jpg",
-            ).await
-        } else {
-            None
-        };
-
-        if audio_path.is_some() { audio_downloaded += 1; }
-        if playback_path.is_some() { audio_downloaded += 1; }
-        if cover_path.is_some() { images_downloaded += 1; }
-
-        // Step 3: Insert/update in database (with db lock)
-        let db_result = {
-            let db_guard = match state.db.lock() {
-                Ok(g) => g,
-                Err(e) => {
-                    errors.push(LegacyFetchError {
-                        item_type: "import".to_string(),
-                        item_id: None,
-                        message: format!("Could not lock database: {}", e),
-                    });
-                    continue;
-                }
-            };
-
-            importer::import_music_to_db(
-                &db_guard,
-                &music_with_lyrics,
-                audio_path.as_deref(),
-                playback_path.as_deref(),
-                cover_path.as_deref(),
-                options.replace_existing,
-                None,
-                Some(music_with_lyrics.id_music),
-            )
-        };
-
-        match db_result {
-            Ok((true, _)) => hymns_imported += 1,
-            Ok((false, _)) => hymns_skipped += 1,
-            Err(e) => {
-                log::warn!("Failed to import hymn '{}': {}", music_with_lyrics.name, e);
-                errors.push(LegacyFetchError {
-                    item_type: "hymn".to_string(),
-                    item_id: Some(music_with_lyrics.id_music.to_string()),
-                    message: e.to_string(),
-                });
-                hymns_skipped += 1;
+    let hymnal_task = tokio::spawn(async move {
+        let db_state = app_h.state::<AppState>();
+        let mut last_hymn_number: i64 = 0;
+        if !options_h.replace_existing {
+            if let Ok(db) = db_state.db.get() {
+                last_hymn_number = db.query_row(
+                    "SELECT MAX(number) FROM hymns WHERE category = 'hymnal'",
+                    [],
+                    |row| row.get::<_, Option<i64>>(0)
+                ).unwrap_or(Some(0)).unwrap_or(0);
             }
         }
 
-        // Update progress every 10 items or at the end
-        if (i + 1) % 10 == 0 || i + 1 == total {
-            let percent = 40.0 + (50.0 * (i + 1) as f64 / total as f64);
-            update_progress(
-                "importing",
-                LegacyFetchStatus::Importing,
-                percent,
-                &format!("Importing hymn {} of {} - {}", i + 1, total, music_with_lyrics.name),
-                hymns_fetched,
-                (i + 1) as u64,
-            );
-        }
-    }
+        let mut page = 1;
+        let mut queue = Vec::new();
+        let mut current_index = 0;
+        let mut last_page_num;
+        let total_hymns;
 
-    // --- Album import (additive; does not touch hymnal flow) ---
-    if options.include_albums {
-        update_progress(
-            "fetching_albums",
-            LegacyFetchStatus::Fetching,
-            91.0,
-            "Fetching album list from server...",
-            0,
-            0,
-        );
-
-        if !check_cancelled() {
-            match fetcher::fetch_albums(options.language).await {
-                Ok(albums) => {
-                    albums_fetched = albums.len() as u64;
-                    let album_total = albums.len();
-
-                    for (ai, album) in albums.iter().enumerate() {
-                        if check_cancelled() {
-                            break;
-                        }
-
-                        update_progress(
-                            "importing_album",
-                            LegacyFetchStatus::Importing,
-                            91.0 + (8.0 * (ai + 1) as f64 / album_total as f64),
-                            &format!("Importing album '{}' ({} of {})", album.name, ai + 1, album_total),
-                            albums_fetched,
-                            (ai + 1) as u64,
-                        );
-
-                        // Dedup check for collection
-                        let existing_collection_id = {
-                            let db_guard = match state.db.lock() {
-                                Ok(g) => g,
-                                Err(_) => continue,
-                            };
-                            crate::db::queries::collections::find_collection_by_api_album_id(&db_guard, album.id_album)
-                        };
-
-                        let collection_id = if let Some(cid) = existing_collection_id {
-                            cid
-                        } else {
-                            // Download album cover
-                            let album_cover_path = if options.download_images {
-                                importer::download_media_file(
-                                    album.url_image.as_ref(),
-                                    &media_dir,
-                                    "album_covers",
-                                    album.id_album,
-                                    "jpg",
-                                ).await
-                            } else {
-                                None
-                            };
-
-                            // Create collection
-                            let db_guard = match state.db.lock() {
-                                Ok(g) => g,
-                                Err(_) => continue,
-                            };
-                            match crate::db::queries::collections::insert_collection(
-                                &db_guard,
-                                &album.name,
-                                None,
-                                None,
-                                album_cover_path.as_deref(),
-                                "api",
-                                Some(album.id_album),
-                            ) {
-                                Ok(cid) => {
-                                    albums_created += 1;
-                                    cid
-                                }
-                                Err(e) => {
-                                    errors.push(LegacyFetchError {
-                                        item_type: "album".to_string(),
-                                        item_id: Some(album.id_album.to_string()),
-                                        message: e.to_string(),
-                                    });
-                                    continue;
-                                }
+        match fetcher::fetch_hymnal_page(options_h.language, 1).await {
+            Ok(resp) => {
+                total_hymns = resp.total.unwrap_or(resp.data.len() as i64);
+                last_page_num = resp.last_page;
+                
+                if !options_h.replace_existing && last_hymn_number > 0 && last_hymn_number < total_hymns {
+                    page = (last_hymn_number / 15) + 1;
+                    
+                    if page > 1 && page <= last_page_num.unwrap_or(page) {
+                        match fetcher::fetch_hymnal_page(options_h.language, page).await {
+                            Ok(p_resp) => {
+                                let new_items: Vec<_> = p_resp.data.into_iter()
+                                    .filter(|m| m.track.unwrap_or(0) > last_hymn_number || m.id_music > last_hymn_number)
+                                    .collect();
+                                queue.extend(new_items);
+                                hymns_fetched_h.store(total_hymns as u64, Ordering::Relaxed);
                             }
-                        };
-
-                        // Fetch album detail with nested musics
-                        let album_detail = match fetcher::fetch_album_detail(options.language, album.id_album).await {
-                            Ok(ad) => ad,
                             Err(e) => {
-                                errors.push(LegacyFetchError {
-                                    item_type: "album_detail".to_string(),
-                                    item_id: Some(album.id_album.to_string()),
-                                    message: e.to_string(),
-                                });
-                                continue;
+                                let mut errs = errors_h.lock().unwrap();
+                                errs.push(LegacyFetchError { item_type: "fetch_hymns_page".to_string(), item_id: None, message: e.to_string() });
+                                return;
                             }
-                        };
+                        }
+                    } else {
+                        queue.extend(resp.data);
+                        hymns_fetched_h.store(total_hymns as u64, Ordering::Relaxed);
+                    }
+                } else {
+                    queue.extend(resp.data);
+                    hymns_fetched_h.store(total_hymns as u64, Ordering::Relaxed);
+                }
+            }
+            Err(e) => {
+                let mut errs = errors_h.lock().unwrap();
+                errs.push(LegacyFetchError { item_type: "fetch_hymns".to_string(), item_id: None, message: e.to_string() });
+                return;
+            }
+        }
 
-                        let music_total = album_detail.musics.len();
-                        for (mi, music) in album_detail.musics.iter().enumerate() {
-                            if check_cancelled() {
-                                break;
-                            }
+        while current_index < queue.len() {
+            if cancel_h.load(Ordering::SeqCst) { break; }
 
-                            if (mi + 1) % 5 == 0 || mi + 1 == music_total {
-                                update_progress(
-                                    "importing_album_music",
-                                    LegacyFetchStatus::Importing,
-                                    91.0 + (8.0 * (ai + 1) as f64 / album_total as f64),
-                                    &format!("Importing hymn '{}' ({} of {} in album)", music.name, mi + 1, music_total),
-                                    albums_fetched,
-                                    (ai + 1) as u64,
-                                );
-                            }
-
-                            // Check if hymn already exists by api_music_id
-                            let existing_hymn_id = {
-                                let db_guard = match state.db.lock() {
-                                    Ok(g) => g,
-                                    Err(_) => continue,
-                                };
-                                crate::db::queries::music::find_hymn_by_api_music_id(&db_guard, music.id_music)
-                            };
-
-                            let hymn_id = if existing_hymn_id.is_some() && !options.replace_existing {
-                                existing_hymn_id.unwrap()
-                            } else {
-                                // Fetch music detail with lyrics
-                                let music_with_lyrics = match fetcher::fetch_music_detail(options.language, music.id_music).await {
-                                    Ok(mut detailed) => {
-                                        if detailed.track.is_none() && music.track.is_some() {
-                                            detailed.track = music.track;
-                                        }
-                                        detailed
-                                    }
-                                    Err(e) => {
-                                        log::warn!("Failed to fetch lyrics for '{}': {}", music.name, e);
-                                        music.clone()
-                                    }
-                                };
-
-                                // Download music cover
-                                let music_cover = if options.download_images {
-                                    importer::download_media_file(
-                                        music_with_lyrics.url_image.as_ref(),
-                                        &media_dir,
-                                        "images",
-                                        music_with_lyrics.id_music,
-                                        "jpg",
-                                    ).await
-                                } else {
-                                    None
-                                };
-
-                                if check_cancelled() { break; }
-
-                                // Download audio if requested
-                                let music_audio = if options.download_audio {
-                                    importer::download_media_file(
-                                        music_with_lyrics.url_music.as_ref(),
-                                        &media_dir,
-                                        "audio",
-                                        music_with_lyrics.id_music,
-                                        "mp3",
-                                    ).await
-                                } else {
-                                    None
-                                };
-
-                                if check_cancelled() { break; }
-
-                                let music_playback = if options.download_audio {
-                                    importer::download_media_file(
-                                        music_with_lyrics.url_instrumental_music.as_ref(),
-                                        &media_dir,
-                                        "playback",
-                                        music_with_lyrics.id_music,
-                                        "mp3",
-                                    ).await
-                                } else {
-                                    None
-                                };
-
-                                if music_audio.is_some() { audio_downloaded += 1; }
-                                if music_playback.is_some() { audio_downloaded += 1; }
-                                if music_cover.is_some() { images_downloaded += 1; }
-
-                                let db_guard = match state.db.lock() {
-                                    Ok(g) => g,
-                                    Err(_) => continue,
-                                };
-                                match importer::import_music_to_db(
-                                    &db_guard,
-                                    &music_with_lyrics,
-                                    music_audio.as_deref(),
-                                    music_playback.as_deref(),
-                                    music_cover.as_deref(),
-                                    options.replace_existing,
-                                    Some(&album.name),
-                                    Some(music_with_lyrics.id_music),
-                                ) {
-                                    Ok((_, Some(id))) => id,
-                                    Ok((_, None)) => continue,
-                                    Err(e) => {
-                                        errors.push(LegacyFetchError {
-                                            item_type: "album_music".to_string(),
-                                            item_id: Some(music.id_music.to_string()),
-                                            message: e.to_string(),
-                                        });
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            // Link hymn to collection
-                            let track_order = music.track.unwrap_or(mi as i64);
-                            let db_guard = match state.db.lock() {
-                                Ok(g) => g,
-                                Err(_) => continue,
-                            };
-                            if let Ok(true) = crate::db::queries::collections::insert_collection_hymn(
-                                &db_guard, collection_id, hymn_id, track_order,
-                            ) {
-                                collection_hymns_linked += 1;
-                            }
+            // "Last - 5" rule to pre-fetch next page
+            if queue.len() - current_index <= 5 {
+                if let Some(lp) = last_page_num {
+                    if page < lp {
+                        page += 1;
+                        if let Ok(next_resp) = fetcher::fetch_hymnal_page(options_h.language, page).await {
+                            queue.extend(next_resp.data);
+                            last_page_num = next_resp.last_page;
+                            hymns_fetched_h.store(next_resp.total.unwrap_or(queue.len() as i64) as u64, Ordering::Relaxed);
                         }
                     }
                 }
+            }
+
+            let music = queue[current_index].clone();
+            let music_name = music.name.clone();
+            // Recalculate total_items every time to account for parallel album discovery
+            let total_items = hymns_fetched_h.load(Ordering::Relaxed) + albums_fetched_h.load(Ordering::Relaxed);
+            update_sub_task(&app_h, &run_id_h, "hymnal", &music_name, (current_index as f64 / queue.len() as f64) * 100.0, "subtaskDownloading", processed_h.load(Ordering::Relaxed), total_items);
+
+            // Use semaphore for detail fetch and downloads
+            let detailed_item = {
+                let _permit = sem_h.acquire().await.ok();
+                let mut d = fetcher::fetch_music_detail(options_h.language, music.id_music).await.unwrap_or_else(|_| music.clone());
+                if d.track.is_none() && music.track.is_some() {
+                    d.track = music.track;
+                }
+                d
+            };
+
+            let (audio_res, playback_res, cover_res) = {
+                let _permit = sem_h.acquire().await.ok();
+                tokio::join!(
+                    async { if options_h.download_audio { importer::download_media_file(detailed_item.url_music.as_ref(), &media_dir_h, "audio", detailed_item.id_music, "mp3").await } else { None } },
+                    async { if options_h.download_audio { importer::download_media_file(detailed_item.url_instrumental_music.as_ref(), &media_dir_h, "playback", detailed_item.id_music, "mp3").await } else { None } },
+                    async { if options_h.download_images { importer::download_media_file(detailed_item.url_image.as_ref(), &media_dir_h, "images", detailed_item.id_music, "jpg").await } else { None } }
+                )
+            };
+
+            if audio_res.is_some() { audio_h.fetch_add(1, Ordering::Relaxed); }
+            if playback_res.is_some() { audio_h.fetch_add(1, Ordering::Relaxed); }
+            if cover_res.is_some() { images_h.fetch_add(1, Ordering::Relaxed); }
+
+            let state = app_h.state::<AppState>();
+            let db_res = {
+                let _d_permit = dsem_h.acquire().await.ok();
+                if let Ok(db) = state.db.get() {
+                    importer::import_music_to_db(
+                        &db, &detailed_item, audio_res.as_deref(), playback_res.as_deref(), cover_res.as_deref(),
+                        options_h.replace_existing, Some(options_h.language.to_hymnal_name()), Some(detailed_item.id_music), Some("hymnal")
+                    )
+                } else { Err(AppError::Internal("DB Lock failed".into())) }
+            };
+
+            match db_res {
+                Ok((imported, _)) => {
+                    if imported {
+                        hymns_imported_h.fetch_add(1, Ordering::Relaxed);
+                        let _ = app_h.emit("data-changed", ());
+                    } else {
+                        hymns_skipped_h.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
                 Err(e) => {
-                    errors.push(LegacyFetchError {
-                        item_type: "fetch_albums".to_string(),
-                        item_id: None,
-                        message: e.to_string(),
-                    });
+                    log::error!("Failed to import hymn {}: {}", detailed_item.id_music, e);
+                    let mut errs = errors_h.lock().unwrap();
+                    errs.push(LegacyFetchError { item_type: "hymn".to_string(), item_id: Some(detailed_item.id_music.to_string()), message: e.to_string() });
                 }
             }
+            processed_h.fetch_add(1, Ordering::Relaxed);
+            current_index += 1;
         }
-    }
+        let total_items = hymns_fetched_h.load(Ordering::Relaxed) + albums_fetched_h.load(Ordering::Relaxed);
+        update_sub_task(&app_h, &run_id_h, "hymnal", "Hinário", 100.0, "subtaskDone", processed_h.load(Ordering::Relaxed), total_items);
+        let _ = app_h.emit("data-changed", ());
+    });
 
-    // Finalize — check if cancelled before marking as completed
-    let final_status = if check_cancelled() {
-        LegacyFetchStatus::Cancelled
-    } else {
-        LegacyFetchStatus::Completed
-    };
-    finalize_fetch(
-        &app,
-        &run_id,
-        final_status,
-        errors,
-        hymns_fetched,
-        hymns_imported,
-        hymns_skipped,
-        albums_fetched,
-        albums_created,
-        collection_hymns_linked,
-        audio_downloaded,
-        images_downloaded,
-        started,
+    // --- Task 2: Process Albums ---
+    let app_a = app.clone();
+    let run_id_a = run_id.clone();
+    let options_a = options.clone();
+    let cancel_a = cancel_flag.clone();
+    let media_dir_a = media_dir.clone();
+    let albums_fetched_a = albums_fetched.clone();
+    let albums_created_a = albums_created.clone();
+    let linked_a = collection_hymns_linked.clone();
+    let processed_a = processed_count.clone();
+    let audio_a = audio_downloaded.clone();
+    let images_a = images_downloaded.clone();
+    let errors_a = errors.clone();
+    let hymns_fetched_a = hymns_fetched.clone();
+    let sem_a = api_semaphore.clone();
+    let dsem_a = db_semaphore.clone();
+
+    let albums_task = tokio::spawn(async move {
+        let mut page = 1;
+        let mut queue = Vec::new();
+        let mut current_index = 0;
+        let mut last_page_num;
+
+        match fetcher::fetch_albums_page(options_a.language, page).await {
+            Ok(resp) => {
+                queue.extend(resp.data);
+                last_page_num = resp.last_page;
+                albums_fetched_a.store(resp.total.unwrap_or(queue.len() as i64) as u64, Ordering::Relaxed);
+            }
+            Err(e) => {
+                let mut errs = errors_a.lock().unwrap();
+                errs.push(LegacyFetchError { item_type: "fetch_albums".to_string(), item_id: None, message: e.to_string() });
+                return;
+            }
+        }
+
+        while current_index < queue.len() {
+            if cancel_a.load(Ordering::SeqCst) { break; }
+
+            // Pre-fetch next page
+            if queue.len() - current_index <= 5 {
+                if let Some(lp) = last_page_num {
+                    if page < lp {
+                        page += 1;
+                        if let Ok(next_resp) = fetcher::fetch_albums_page(options_a.language, page).await {
+                            queue.extend(next_resp.data);
+                            last_page_num = next_resp.last_page;
+                            albums_fetched_a.store(next_resp.total.unwrap_or(queue.len() as i64) as u64, Ordering::Relaxed);
+                        }
+                    }
+                }
+            }
+
+            let album = queue[current_index].clone();
+            let total_items = hymns_fetched_a.load(Ordering::Relaxed) + albums_fetched_a.load(Ordering::Relaxed);
+            update_sub_task(&app_a, &run_id_a, "albums", &album.name, (current_index as f64 / queue.len() as f64) * 100.0, "subtaskProcessing", processed_a.load(Ordering::Relaxed), total_items);
+
+            let state = app_a.state::<AppState>();
+            let mut collection_id_opt = None;
+
+            if let Ok(g) = state.db.get() {
+                if let Some(cid) = crate::db::queries::collections::find_collection_by_api_album_id(&g, album.id_album) {
+                    collection_id_opt = Some(cid);
+                } else {
+                    let cover = if options_a.download_images { 
+                        let _permit = sem_a.acquire().await.ok();
+                        importer::download_media_file(album.url_image.as_ref(), &media_dir_a, "album_covers", album.id_album, "jpg").await 
+                    } else { None };
+                    let release_year = extract_year_from_url(album.url_image.as_deref().unwrap_or(""));
+                    let _d_permit = dsem_a.acquire().await.ok();
+                    if let Ok(cid) = crate::db::queries::collections::insert_collection(&g, &album.name, None, release_year, cover.as_deref(), "api", Some(album.id_album)) {
+                        albums_created_a.fetch_add(1, Ordering::Relaxed);
+                        let _ = app_a.emit("data-changed", ());
+                        collection_id_opt = Some(cid);
+                    }
+                }
+            }
+
+            if let Some(collection_id) = collection_id_opt {
+                let mut m_page = 1;
+                let mut m_queue = Vec::new();
+                let mut m_last_page_num = None;
+
+                // 1. Check if musics are already in the album object from the list endpoint
+                if !album.musics.is_empty() {
+                    m_queue.extend(album.musics.clone());
+                    m_last_page_num = Some(1); 
+                } else {
+                    // 2. Otherwise fetch from the album detail/musics endpoint
+                    let initial_m_res = {
+                        let _permit = sem_a.acquire().await.ok();
+                        fetcher::fetch_album_musics_page(options_a.language, album.id_album, m_page).await
+                    };
+
+                    match initial_m_res {
+                        Ok(resp) => {
+                            m_queue.extend(resp.data);
+                            m_last_page_num = resp.last_page;
+                        }
+                        Err(e) => {
+                            let mut errs = errors_a.lock().unwrap();
+                            errs.push(LegacyFetchError { 
+                                item_type: "fetch_album_songs".to_string(), 
+                                item_id: Some(album.id_album.to_string()), 
+                                message: format!("Failed to fetch songs: {}", e) 
+                            });
+                        }
+                    }
+                }
+
+                // Add discovered songs to global total to keep progress bar consistent
+                if !m_queue.is_empty() {
+                    albums_fetched_a.fetch_add(m_queue.len() as u64, Ordering::Relaxed);
+                }
+
+                let mut m_current_index = 0;
+                let mut song_tasks = tokio::task::JoinSet::new();
+
+                while m_current_index < m_queue.len() {
+                    if cancel_a.load(Ordering::SeqCst) { break; }
+
+                    // Pre-fetch next page if using pagination
+                    if m_queue.len() - m_current_index <= 5 {
+                        if let Some(lp) = m_last_page_num {
+                            if m_page < lp {
+                                m_page += 1;
+                                let next_m_res = {
+                                    let _permit = sem_a.acquire().await.ok();
+                                    fetcher::fetch_album_musics_page(options_a.language, album.id_album, m_page).await
+                                };
+                                if let Ok(next_resp) = next_m_res {
+                                    albums_fetched_a.fetch_add(next_resp.data.len() as u64, Ordering::Relaxed);
+                                    m_queue.extend(next_resp.data);
+                                    m_last_page_num = next_resp.last_page;
+                                }
+                            }
+                        }
+                    }
+
+                    let music = m_queue[m_current_index].clone();
+                    let mi = m_current_index;
+                    let m_queue_len = m_queue.len();
+                    let album_name = album.name.clone();
+                    let app_clone = app_a.clone();
+                    let run_id_clone = run_id_a.clone();
+                    let options_clone = options_a.clone();
+                    let media_dir_clone = media_dir_a.clone();
+                    let processed_clone = processed_a.clone();
+                    let audio_clone = audio_a.clone();
+                    let images_clone = images_a.clone();
+                    let linked_clone = linked_a.clone();
+                    let errors_clone = errors_a.clone();
+                    let sem_clone = sem_a.clone();
+                    let dsem_clone = dsem_a.clone();
+                    let hymns_total_clone = hymns_fetched_a.clone();
+                    let albums_total_clone = albums_fetched_a.clone();
+
+                    // Process each song in parallel (the semaphore will limit concurrency)
+                    song_tasks.spawn(async move {
+                        let total_items = hymns_total_clone.load(Ordering::Relaxed) + albums_total_clone.load(Ordering::Relaxed);
+                        update_sub_task(&app_clone, &run_id_clone, "albums", &format!("{}: {}", album_name, music.name), mi as f64 / m_queue_len as f64 * 100.0, "subtaskDownloading", processed_clone.load(Ordering::Relaxed), total_items);
+
+                        // Sync single music detail (lyrics, etc)
+                        let detailed_item = {
+                            let _permit = sem_clone.acquire().await.ok();
+                            let mut d = fetcher::fetch_music_detail(options_clone.language, music.id_music).await.unwrap_or_else(|_| music.clone());
+                            if d.track.is_none() && music.track.is_some() {
+                                d.track = music.track;
+                            }
+                            d
+                        };
+
+                        let (audio_res, playback_res, cover_res) = {
+                            let _permit = sem_clone.acquire().await.ok();
+                            tokio::join!(
+                                async { if options_clone.download_audio { importer::download_media_file(detailed_item.url_music.as_ref(), &media_dir_clone, "audio", detailed_item.id_music, "mp3").await } else { None } },
+                                async { if options_clone.download_audio { importer::download_media_file(detailed_item.url_instrumental_music.as_ref(), &media_dir_clone, "playback", detailed_item.id_music, "mp3").await } else { None } },
+                                async { if options_clone.download_images { importer::download_media_file(detailed_item.url_image.as_ref(), &media_dir_clone, "images", detailed_item.id_music, "jpg").await } else { None } }
+                            )
+                        };
+
+                        if audio_res.is_some() { audio_clone.fetch_add(1, Ordering::Relaxed); }
+                        if playback_res.is_some() { audio_clone.fetch_add(1, Ordering::Relaxed); }
+                        if cover_res.is_some() { images_clone.fetch_add(1, Ordering::Relaxed); }
+
+                        let db_state = app_clone.state::<AppState>();
+                        let db_res = {
+                            let _d_permit = dsem_clone.acquire().await.ok();
+                            if let Ok(g) = db_state.db.get() {
+                                let hymn_id_res = importer::import_music_to_db(&g, &detailed_item, audio_res.as_deref(), playback_res.as_deref(), cover_res.as_deref(), options_clone.replace_existing, Some(&album_name), Some(detailed_item.id_music), Some("album"));
+                                match hymn_id_res {
+                                    Ok((imported, Some(hymn_id))) => {
+                                        if imported { let _ = app_clone.emit("data-changed", ()); }
+                                        let track_order = detailed_item.track.unwrap_or(mi as i64);
+                                        if let Ok(true) = crate::db::queries::collections::insert_collection_hymn(&g, collection_id, hymn_id, track_order) {
+                                            linked_clone.fetch_add(1, Ordering::Relaxed);
+                                            let _ = app_clone.emit("data-changed", ());
+                                        }
+                                        Ok(())
+                                    }
+                                    Ok((_, None)) => Err(AppError::Internal("Import failed to return ID".into())),
+                                    Err(e) => Err(e)
+                                }
+                            } else { Err(AppError::Internal("DB Lock failed".into())) }
+                        };
+
+                        if let Err(e) = db_res {
+                            log::error!("Failed to import album song {}: {}", detailed_item.id_music, e);
+                            let mut errs = errors_clone.lock().unwrap();
+                            errs.push(LegacyFetchError { 
+                                item_type: "album_song".to_string(), 
+                                item_id: Some(detailed_item.id_music.to_string()), 
+                                message: e.to_string() 
+                            });
+                        }
+                        processed_clone.fetch_add(1, Ordering::Relaxed);
+                    });
+
+                    m_current_index += 1;
+                }
+
+                // Wait for all songs in this album to finish
+                while let Some(_) = song_tasks.join_next().await {}
+            }
+            processed_a.fetch_add(1, Ordering::Relaxed);
+            current_index += 1;
+        }
+        let total_items = hymns_fetched_a.load(Ordering::Relaxed) + albums_fetched_a.load(Ordering::Relaxed);
+        update_sub_task(&app_a, &run_id_a, "albums", "Coletâneas", 100.0, "subtaskDone", processed_a.load(Ordering::Relaxed), total_items);
+        let _ = app_a.emit("data-changed", ());
+    });
+    let _ = tokio::join!(hymnal_task, albums_task);
+
+    let final_status = if check_cancelled() { LegacyFetchStatus::Cancelled } else { LegacyFetchStatus::Completed };
+    let total_items = hymns_fetched.load(Ordering::Relaxed) + albums_fetched.load(Ordering::Relaxed);
+    finalize_fetch_sync(
+        &app, &run_id, final_status, errors.lock().unwrap().clone(),
+        hymns_fetched.load(Ordering::Relaxed), hymns_imported.load(Ordering::Relaxed), hymns_skipped.load(Ordering::Relaxed),
+        albums_fetched.load(Ordering::Relaxed), albums_created.load(Ordering::Relaxed), collection_hymns_linked.load(Ordering::Relaxed),
+        audio_downloaded.load(Ordering::Relaxed), images_downloaded.load(Ordering::Relaxed), started, 
+        total_items, processed_count.load(Ordering::Relaxed)
     );
 }
 
-fn finalize_fetch(
+fn finalize_fetch_sync(
     app: &AppHandle,
     run_id: &str,
     status: LegacyFetchStatus,
@@ -885,69 +722,59 @@ fn finalize_fetch(
     audio_downloaded: u64,
     images_downloaded: u64,
     started: Instant,
+    items_total: u64,
+    items_processed: u64,
 ) {
     let duration_ms = started.elapsed().as_millis() as u64;
     let report = LegacyFetchReport {
         run_id: run_id.to_string(),
-        hymns_fetched,
-        hymns_imported,
-        hymns_skipped,
-        albums_fetched,
-        albums_created,
-        collection_hymns_linked,
-        audio_downloaded,
-        images_downloaded,
-        errors,
-        duration_ms,
+        hymns_fetched, hymns_imported, hymns_skipped,
+        albums_fetched, albums_created, collection_hymns_linked,
+        audio_downloaded, images_downloaded,
+        errors, duration_ms,
     };
 
     let final_message = match status {
-        LegacyFetchStatus::Completed => format!(
-            "Completed! Imported {} hymns ({} skipped)",
-            hymns_imported, hymns_skipped
-        ),
+        LegacyFetchStatus::Completed => "Completed successfully!".to_string(),
         LegacyFetchStatus::Cancelled => "Operation cancelled by user".to_string(),
-        LegacyFetchStatus::Failed => "Operation failed".to_string(),
-        _ => "Unknown status".to_string(),
+        _ => "Operation failed".to_string(),
     };
 
-    let progress = LegacyFetchProgress {
-        run_id: run_id.to_string(),
-        step: "done".to_string(),
-        status: status.clone(),
-        percent: 100.0,
-        message: Some(final_message),
-        items_total: hymns_fetched,
-        items_processed: hymns_imported + hymns_skipped,
-    };
-
-    // Update state with final progress and report, clear active_run_id
     if let Some(state) = app.try_state::<AppState>() {
         if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
             if let Some(run) = fetch_state.runs.get_mut(run_id) {
-                run.progress = progress.clone();
+                run.progress.status = status.clone();
+                run.progress.percent = 100.0;
+                run.progress.message = Some(final_message);
+                run.progress.items_total = items_total;
+                run.progress.items_processed = items_processed;
                 run.report = Some(report.clone());
             }
-            // Clear active run so new runs can start
             if fetch_state.active_run_id.as_deref() == Some(run_id) {
                 fetch_state.active_run_id = None;
             }
         }
     }
 
-    // Emit final progress
-    let _ = app.emit(
-        "legacy-fetch-progress",
-        LegacyFetchProgressEvent::from(&progress),
-    );
+    let progress = LegacyFetchProgress {
+        run_id: run_id.to_string(),
+        step: "done".to_string(),
+        status: status.clone(),
+        percent: 100.0,
+        message: None,
+        items_total,
+        items_processed,
+        sub_tasks: Vec::new(),
+    };
 
-    // Emit report
+    let _ = app.emit("legacy-fetch-progress", LegacyFetchProgressEvent::from(&progress));
     let _ = app.emit("legacy-fetch-report", &report);
 }
 
 /// Re-fetch a single hymn from the API and update its DB row + re-download cover.
 /// Requires the hymn to have an `api_music_id`.
 #[tauri::command]
+#[specta::specta]
 pub async fn restore_hymn_from_api(
     hymn_id: i64,
     language: crate::legacy_fetch::ApiLanguage,
@@ -961,7 +788,7 @@ pub async fn restore_hymn_from_api(
     let (api_music_id, album_name): (i64, Option<String>) = {
         let conn = state
             .db
-            .lock()
+            .get()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         let row = conn.query_row(
             "SELECT api_music_id, album FROM hymns WHERE id = ?1",
@@ -1001,7 +828,7 @@ pub async fn restore_hymn_from_api(
     // 5. Re-import with replace_existing = true
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     import_music_to_db(
         &conn,
@@ -1012,7 +839,87 @@ pub async fn restore_hymn_from_api(
         true, // replace_existing
         album_name.as_deref(),
         Some(api_music_id),
+        Some("hymnal"), // Defaulting to hymnal for restored items from this command
     )?;
 
+    Ok(())
+}
+
+/// Re-fetch a single album from the API and update its musics.
+/// Requires the collection to have an `api_album_id`.
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_album_from_api(
+    collection_id: i64,
+    language: crate::legacy_fetch::ApiLanguage,
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), AppError> {
+    use crate::legacy_fetch::fetcher::{fetch_album_musics_page, fetch_music_detail};
+    use crate::legacy_fetch::importer::import_music_to_db;
+
+    let (api_album_id, album_name): (i64, String) = {
+        let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+        let row = conn.query_row(
+            "SELECT api_album_id, name FROM collections WHERE id = ?1",
+            rusqlite::params![collection_id],
+            |row| Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, String>(1)?)),
+        ).map_err(|e| AppError::Internal(format!("DB query failed: {}", e)))?;
+        let aid = row.0.ok_or_else(|| {
+            AppError::Internal("Collection has no api_album_id — cannot restore from API".into())
+        })?;
+        (aid, row.1)
+    };
+
+    let mut m_page = 1;
+    let mut m_queue = Vec::new();
+    let mut m_last_page_num;
+
+    match fetch_album_musics_page(language, api_album_id, m_page).await {
+        Ok(resp) => {
+            m_queue.extend(resp.data);
+            m_last_page_num = resp.last_page;
+        }
+        Err(e) => return Err(AppError::Internal(format!("API fetch failed: {}", e))),
+    }
+
+    let mut current_index = 0;
+    while current_index < m_queue.len() {
+        if m_queue.len() - current_index <= 5 {
+            if let Some(lp) = m_last_page_num {
+                if m_page < lp {
+                    m_page += 1;
+                    if let Ok(next_resp) = fetch_album_musics_page(language, api_album_id, m_page).await {
+                        m_queue.extend(next_resp.data);
+                        m_last_page_num = next_resp.last_page;
+                    }
+                }
+            }
+        }
+        current_index += 1;
+    }
+
+    let data_dir: PathBuf = app.path().app_data_dir().map_err(|e| AppError::Internal(e.to_string()))?.join("media");
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+
+    for (mi, music) in m_queue.into_iter().enumerate() {
+        let mut detailed_item = fetch_music_detail(language, music.id_music).await.unwrap_or_else(|_| music.clone());
+        if detailed_item.track.is_none() && music.track.is_some() {
+            detailed_item.track = music.track;
+        }
+
+        let audio_path = crate::legacy_fetch::importer::download_media_file(detailed_item.url_music.as_ref(), &data_dir, "audio", detailed_item.id_music, "mp3").await;
+        let playback_path = crate::legacy_fetch::importer::download_media_file(detailed_item.url_instrumental_music.as_ref(), &data_dir, "playback", detailed_item.id_music, "mp3").await;
+        let cover_path = crate::legacy_fetch::importer::download_media_file(detailed_item.url_image.as_ref(), &data_dir, "images", detailed_item.id_music, "jpg").await;
+
+        let hymn_id_res = import_music_to_db(&conn, &detailed_item, audio_path.as_deref(), playback_path.as_deref(), cover_path.as_deref(), true, Some(&album_name), Some(detailed_item.id_music), Some("album"));
+        
+        if let Ok((_, Some(hymn_id))) = hymn_id_res {
+            let track_order = detailed_item.track.unwrap_or(mi as i64);
+            let _ = crate::db::queries::collections::insert_collection_hymn(&conn, collection_id, hymn_id, track_order);
+        }
+    }
+
+    let _ = app.emit("data-changed", ());
     Ok(())
 }

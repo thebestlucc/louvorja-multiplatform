@@ -8,7 +8,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
 import { cn } from "../../lib/utils";
-import type { Presentation } from "../../types/presentation";
+import type { Presentation } from "../../lib/bindings";
 
 export const Route = createFileRoute("/presentations/")({
   component: PresentationsIndex,
@@ -43,7 +43,7 @@ function PresentationsIndex() {
         { name: "Presentations", extensions: ["slja", "pptx"] },
       ],
     });
-    if (selected) {
+    if (selected && !Array.isArray(selected)) {
       const result = await importMutation.mutateAsync(selected);
       navigate({ to: "/presentations/$presentationId", params: { presentationId: String(result.id) } });
     }
@@ -125,7 +125,7 @@ function PresentationCard({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const updatedDate = new Date(presentation.updated_at).toLocaleDateString();
+  const updatedDate = new Date(presentation.updatedAt).toLocaleDateString();
 
   return (
     <Link
@@ -145,7 +145,7 @@ function PresentationCard({
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-medium">{presentation.title}</h3>
           <p className="text-xs text-muted-foreground">
-            {presentation.aspect_ratio} &middot; {updatedDate}
+            {presentation.aspectRatio} &middot; {updatedDate}
           </p>
         </div>
 

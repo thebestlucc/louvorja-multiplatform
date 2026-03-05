@@ -135,6 +135,7 @@ fn emit_projection_phase(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn start_timer(
     mode: String,
     duration_ms: Option<u64>,
@@ -166,6 +167,7 @@ pub fn start_timer(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut timer = state
         .timer
@@ -176,6 +178,7 @@ pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut timer = state
         .timer
@@ -186,6 +189,7 @@ pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn reset_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut timer = state
         .timer
@@ -196,6 +200,7 @@ pub fn reset_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn adjust_countdown_timer(
     delta_ms: i64,
     state: tauri::State<'_, AppState>,
@@ -211,6 +216,7 @@ pub fn adjust_countdown_timer(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_timer_state(state: tauri::State<'_, AppState>) -> Result<TimerStateData, AppError> {
     let mut timer = state
         .timer
@@ -222,6 +228,7 @@ pub fn get_timer_state(state: tauri::State<'_, AppState>) -> Result<TimerStateDa
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn add_lap(state: tauri::State<'_, AppState>) -> Result<u64, AppError> {
     let mut timer = state
         .timer
@@ -246,6 +253,7 @@ pub fn add_lap(state: tauri::State<'_, AppState>) -> Result<u64, AppError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn start_countdown_projection(
     context_title: String,
     countdown_title: String,
@@ -331,6 +339,7 @@ pub fn start_countdown_projection(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn start_stopwatch_projection(
     context_title: String,
     stopwatch_title: String,
@@ -416,6 +425,7 @@ pub fn start_stopwatch_projection(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn stop_utility_projection(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     stop_live_utility_projection(&state)
 }

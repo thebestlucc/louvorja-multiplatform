@@ -8,8 +8,7 @@ import {
 } from "./tauri";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
-import type { SlideContent, SlideContentFlat } from "../types/presentation";
-import { slideContentToFlat } from "../types/presentation";
+import type { SlideContent } from "./bindings";
 import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
 
 let ensureProjectionPromise: Promise<void> | null = null;
@@ -83,9 +82,9 @@ export async function projectSlideIndex(index: number): Promise<void> {
   const currentPresentationId = presentationState.currentPresentationId;
   const projectionType: "hymn" | "presentation" = currentPresentationId ? "presentation" : "hymn";
 
-  await projectSlideWithType(slideContentToFlat(currentSlide), projectionType);
+  await projectSlideWithType(currentSlide, projectionType);
   await setSlideContext({
-    next: nextSlide ? slideContentToFlat(nextSlide) : null,
+    next: nextSlide,
     index,
     total: presentationState.slides.length,
     title: getSlideTitle(currentSlide),
@@ -109,21 +108,23 @@ function sleep(ms: number): Promise<void> {
 }
 
 function getSlideTitle(slide: SlideContent): string {
-  switch (slide.type) {
+  switch (slide.slideType) {
     case "cover":
-      return slide.title;
+      return slide.title ?? "Cover";
     case "lyrics":
       return slide.label ?? "Lyrics";
     case "bible":
-      return `${slide.book} ${slide.chapter}:${slide.verseStart}-${slide.verseEnd}`;
+      return `${slide.label ?? "Bible"}`;
     case "text":
-      return slide.text.substring(0, 40);
+      return slide.text?.substring(0, 40) ?? "Text";
     case "pause":
       return "Pause";
     case "image":
-      return slide.alt ?? "Image";
+      return slide.label ?? "Image";
     case "video":
-      return "Video";
+      return slide.label ?? "Video";
+    default:
+      return "Slide";
   }
 }
 
@@ -142,18 +143,14 @@ function isProjectionActive(): boolean {
  * while keeping the windows open.
  */
 export async function projectSlideWithType(
-  slideData: SlideContent | SlideContentFlat,
+  slideData: SlideContent,
   projectionType: "bible" | "hymn" | "presentation" | "utility" | "service",
 ): Promise<void> {
-  const flat = slideData instanceof Object && (slideData as any).slide_type
-    ? (slideData as SlideContentFlat)
-    : slideContentToFlat(slideData as SlideContent);
-  
   // If projection is already active, atomically switch content
   // This ensures the new content appears immediately without interruption
   const wasActive = isProjectionActive();
   
-  await setCurrentSlide(flat);
+  await setCurrentSlide(slideData);
   useDisplayStore.getState().setCurrentProjectionType(projectionType);
   
   // Log content switch in active projection for debugging

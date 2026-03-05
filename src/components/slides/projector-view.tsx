@@ -2,10 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { getCurrentSlide, getOverlayState } from "../../lib/tauri";
-import type { SlideContentFlat, OverlayState } from "../../types/presentation";
-import { flatToSlideContent } from "../../types/presentation";
+import type { OverlayState, SlideContent } from "../../lib/bindings";
 import { SlideRenderer } from "./slide-renderer";
-import type { SlideContent } from "../../types/presentation";
 import { useAllSettings, useTimerState } from "../../lib/queries";
 import {
   buildProjectorDefaultSlide,
@@ -21,7 +19,7 @@ import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { useMediaSource } from "../../hooks/use-media-source";
 
 function getSlideBackgroundImage(slide: SlideContent): string {
-  if (slide.type === "lyrics" || slide.type === "cover" || slide.type === "text") {
+  if (slide.slideType === "lyrics" || slide.slideType === "cover" || slide.slideType === "text") {
     return slide.backgroundImage ?? "";
   }
   return "";
@@ -45,12 +43,12 @@ export function ProjectorView() {
 
   // Listen to slide changes
   useEffect(() => {
-    const unlisten = listen<SlideContentFlat>("slide-changed", (event) => {
-      const newSlide = flatToSlideContent(event.payload);
+    const unlisten = listen<SlideContent>("slide-changed", (event) => {
+      const newSlide = event.payload;
       const prev = prevSlideRef.current;
       // Only remount the renderer when the slide identity changes (type or background image).
       // Same-background stanza changes (e.g. next hymn lyric) only animate the text layer.
-      if (!prev || prev.type !== newSlide.type || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(newSlide)) {
+      if (!prev || prev.slideType !== newSlide.slideType || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(newSlide)) {
         setSlideKey((k) => k + 1);
       }
       prevSlideRef.current = newSlide;
@@ -59,7 +57,7 @@ export function ProjectorView() {
 
     void getCurrentSlide()
       .then((data) => {
-        const s = data ? flatToSlideContent(data) : null;
+        const s = data;
         prevSlideRef.current = s;
         setSlide(s);
         setSlideKey((prev) => prev + 1);
@@ -169,9 +167,21 @@ export function ProjectorView() {
           : t("utilities.clock.title");
 
     return {
-      type: "cover",
+      slideType: "cover",
       title: formatUtilityProjectionValue(utilityProjection, i18n.language),
       subtitle,
+      text: null,
+      label: null,
+      videoPath: null,
+      backgroundImage: null,
+      backgroundColor: null,
+      audioPath: null,
+      autoPlay: null,
+      loop: null,
+      muted: null,
+      mode: null,
+      textColor: null,
+      textSize: null,
     } satisfies SlideContent;
   }, [defaultSlide, i18n.language, slide, t, utilityProjection]);
 

@@ -1,4 +1,4 @@
-import type { SlideContent } from "../../types/presentation";
+import type { SlideContent } from "../../lib/bindings";
 import { SlideRenderer } from "./slide-renderer";
 import { cn } from "../../lib/utils";
 

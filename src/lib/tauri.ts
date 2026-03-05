@@ -1,31 +1,42 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Hymn, Album, HymnWriteInput } from "../types/hymn";
-import type { MonitorInfo } from "../types/settings";
-import type { Presentation, SlideContentFlat, SlideContextFlat, OverlayState } from "../types/presentation";
-import type { SlideRow } from "../types/presentation";
-import type { MonitorConfig } from "../types/settings";
-import type { AudioStatusPayload, SyncPoint } from "../types/audio";
-import type { BibleVersion, Book, Verse, BibleSearchResult } from "../types/bible";
-import type { Service, ServiceItem, ServiceWithItems } from "../types/service";
 import type {
+  Hymn,
+  Album,
+  HymnWriteInput,
+  MonitorInfo,
+  Presentation,
+  Slide,
+  SlideContent,
+  SlideContext,
+  OverlayState,
+  MonitorConfig,
+  AudioStatusPayload,
+  SyncPoint,
+  BibleVersion,
+  Book,
+  Verse,
+  BibleSearchResult,
+  Service,
+  ServiceItem,
+  ServiceWithItems,
   Collection,
   CollectionSearchResult,
   CollectionSong,
   CollectionSongSyncStatus,
   CollectionWithSongs,
-} from "../types/collection";
-import type { Setting } from "../types/settings";
-import type { StreamingInfo } from "../types/streaming";
-import type { TimerMode, TimerStateData, TextFormat } from "../types/utilities";
-import type { VideoMetadata } from "../types/video";
-import type { UpdateInfo } from "../types/updater";
-import type {
+  Setting,
+  StreamingInfo,
+  TimerMode,
+  TimerStateData,
+  VideoMetadata,
+  UpdateInfo,
   LegacyFetchOptions,
   LegacyFetchProgress,
   LegacyFetchReport,
   ApiParams,
-} from "../types/legacy-fetch";
+} from "./bindings";
+import type { TextFormat } from "../types/utilities";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -49,6 +60,10 @@ export async function getAlbums(): Promise<Album[]> {
 
 export async function getHymnsByAlbum(album: string): Promise<Hymn[]> {
   return tauriInvoke<Hymn[]>("get_hymns_by_album", { album });
+}
+
+export async function createHymn(input: HymnWriteInput): Promise<Hymn> {
+  return tauriInvoke<Hymn>("create_hymn", { input });
 }
 
 export async function updateHymn(id: number, input: HymnWriteInput): Promise<Hymn> {
@@ -181,12 +196,12 @@ export async function closeProjectorWindow(): Promise<void> {
   return tauriInvoke<void>("close_projector_window");
 }
 
-export async function setCurrentSlide(slideData: SlideContentFlat): Promise<void> {
+export async function setCurrentSlide(slideData: SlideContent): Promise<void> {
   return tauriInvoke<void>("set_current_slide", { slideData });
 }
 
-export async function getCurrentSlide(): Promise<SlideContentFlat | null> {
-  return tauriInvoke<SlideContentFlat | null>("get_current_slide");
+export async function getCurrentSlide(): Promise<SlideContent | null> {
+  return tauriInvoke<SlideContent | null>("get_current_slide");
 }
 
 export async function clearCurrentSlide(): Promise<void> {
@@ -213,12 +228,12 @@ export async function getOverlayState(): Promise<OverlayState> {
   return tauriInvoke<OverlayState>("get_overlay_state");
 }
 
-export async function setSlideContext(contextData: SlideContextFlat): Promise<void> {
+export async function setSlideContext(contextData: SlideContext): Promise<void> {
   return tauriInvoke<void>("set_slide_context", { contextData });
 }
 
-export async function getSlideContext(): Promise<SlideContextFlat | null> {
-  return tauriInvoke<SlideContextFlat | null>("get_slide_context");
+export async function getSlideContext(): Promise<SlideContext | null> {
+  return tauriInvoke<SlideContext | null>("get_slide_context");
 }
 
 export async function setMonitorConfig(monitorId: string, role: string): Promise<void> {
@@ -230,8 +245,8 @@ export async function getMonitorConfigs(): Promise<MonitorConfig[]> {
 }
 
 // Audio
-export async function audioPlay(filePath: string): Promise<void> {
-  return tauriInvoke<void>("audio_play", { filePath });
+export async function audioPlay(filePath: string, positionMs?: number | null): Promise<void> {
+  return tauriInvoke<void>("audio_play", { filePath, positionMs: positionMs ?? null });
 }
 
 export async function audioPlayAlert(filePath?: string | null, volume?: number | null): Promise<void> {
@@ -300,12 +315,12 @@ export async function deletePresentation(id: number): Promise<void> {
 }
 
 // Slides
-export async function getSlides(presentationId: number): Promise<SlideRow[]> {
-  return tauriInvoke<SlideRow[]>("get_slides", { presentationId });
+export async function getSlides(presentationId: number): Promise<Slide[]> {
+  return tauriInvoke<Slide[]>("get_slides", { presentationId });
 }
 
-export async function createSlide(presentationId: number, contentJson: string, sortOrder: number): Promise<SlideRow> {
-  return tauriInvoke<SlideRow>("create_slide", { presentationId, contentJson, sortOrder });
+export async function createSlide(presentationId: number, contentJson: string, sortOrder: number): Promise<Slide> {
+  return tauriInvoke<Slide>("create_slide", { presentationId, contentJson, sortOrder });
 }
 
 export async function updateSlide(id: number, contentJson: string): Promise<void> {
@@ -429,6 +444,10 @@ export async function fetchLegacyParams(): Promise<ApiParams> {
 
 export async function restoreHymnFromApi(hymnId: number, language: string): Promise<void> {
   return tauriInvoke<void>("restore_hymn_from_api", { hymnId, language });
+}
+
+export async function restoreAlbumFromApi(collectionId: number, language: string): Promise<void> {
+  return tauriInvoke<void>("restore_album_from_api", { collectionId, language });
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
@@ -574,7 +593,7 @@ export async function copyVideoToMedia(videoPath: string, presentationId: number
       }
     });
 
-    tauriInvoke<void>("copy_video_to_media", { videoPath, presentationId }).catch((e) => {
+    invoke<void>("copy_video_to_media", { videoPath, presentationId }).catch((e) => {
       cleanup();
       reject(e as Error);
     });

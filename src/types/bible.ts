@@ -1,27 +1,3 @@
-export interface BibleVersion {
-  id: number;
-  name: string;
-  abbreviation: string;
-  language: string;
-  filePath: string | null;
-}
+import type { BibleVersion, Book, Verse, BibleSearchResult } from "../lib/bindings";
 
-export interface Book {
-  name: string;
-  chapterCount: number;
-}
-
-export interface Verse {
-  id: number;
-  versionId: number;
-  book: string;
-  chapter: number;
-  verse: number;
-  text: string;
-}
-
-export interface BibleSearchResult {
-  verse: Verse;
-  bookName: string;
-  snippet: string;
-}
+export type { BibleVersion, Book, Verse, BibleSearchResult };

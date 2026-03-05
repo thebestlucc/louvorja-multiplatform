@@ -9,7 +9,7 @@ import {
   toggleBlackScreen as tauriToggleBlack,
   toggleLogoScreen as tauriToggleLogo,
 } from "../lib/tauri";
-import { toast } from "sonner";
+import { notify } from "../lib/notifications";
 import { useDisplayStore } from "../stores/display-store";
 import type { OverlayState } from "../types/presentation";
 import { resolveProjectionMonitorIndexes } from "../lib/monitor-resolution";
@@ -65,10 +65,11 @@ export function useMonitorsControl() {
       try {
         await openProjectorWindow(monitorId);
       } catch (err) {
-        console.error("openProjectorWindow failed:", err);
-        toast.error(String(err));
+        console.error("Window operation failed:", err);
+        notify.tauriError(err);
         throw err;
       }
+
     },
     [],
   );
@@ -77,8 +78,8 @@ export function useMonitorsControl() {
     try {
       await closeProjectorWindow();
     } catch (err) {
-      console.error("closeProjectorWindow failed:", err);
-      toast.error(String(err));
+      console.error("Window operation failed:", err);
+      notify.tauriError(err);
       throw err;
     }
   }, []);
@@ -106,10 +107,11 @@ export function useMonitorsControl() {
       try {
         await openReturnWindow(monitorId);
       } catch (err) {
-        console.error("openReturnWindow failed:", err);
-        toast.error(String(err));
+        console.error("Window operation failed:", err);
+        notify.tauriError(err);
         throw err;
       }
+
     },
     [],
   );
@@ -118,8 +120,8 @@ export function useMonitorsControl() {
     try {
       await closeReturnWindow();
     } catch (err) {
-      console.error("closeReturnWindow failed:", err);
-      toast.error(String(err));
+      console.error("Window operation failed:", err);
+      notify.tauriError(err);
       throw err;
     }
   }, []);
@@ -146,8 +148,8 @@ export function useMonitorsControl() {
     try {
       await tauriToggleBlack();
     } catch (err) {
-      console.error("toggleBlackScreen failed:", err);
-      toast.error(String(err));
+      console.error("Overlay operation failed:", err);
+      notify.tauriError(err);
       throw err;
     }
   }, []);
@@ -156,8 +158,8 @@ export function useMonitorsControl() {
     try {
       await tauriToggleLogo();
     } catch (err) {
-      console.error("toggleLogoScreen failed:", err);
-      toast.error(String(err));
+      console.error("Overlay operation failed:", err);
+      notify.tauriError(err);
       throw err;
     }
   }, []);

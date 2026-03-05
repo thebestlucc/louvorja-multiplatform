@@ -1,10 +1,7 @@
-import type { SlideContent } from "../types/presentation";
-import type { Setting } from "../types/settings";
+import type { SlideContent, Setting, TimerStateData, TimerMode } from "./bindings";
 import {
   formatUtilityTimer,
   localeFromLanguage,
-  type TimerMode,
-  type TimerStateData,
 } from "../types/utilities";
 
 export const PROJECTOR_SCREEN_CONTENT_TYPE_KEY = "projector.default.contentType";
@@ -101,6 +98,23 @@ interface BuildProjectorDefaultSlideArgs {
   };
 }
 
+const EMPTY_SLIDE_PROPS = {
+  text: null,
+  title: null,
+  subtitle: null,
+  label: null,
+  videoPath: null,
+  backgroundImage: null,
+  backgroundColor: null,
+  audioPath: null,
+  autoPlay: null,
+  loop: null,
+  muted: null,
+  mode: null,
+  textColor: null,
+  textSize: null,
+};
+
 export function buildProjectorDefaultSlide({
   defaults,
   now,
@@ -113,33 +127,38 @@ export function buildProjectorDefaultSlide({
       return null;
     case "text":
       return {
-        type: "text",
+        ...EMPTY_SLIDE_PROPS,
+        slideType: "text",
         text: normalizeText(defaults.text) || DEFAULT_PROJECTOR_SCREEN_TEXT,
       };
     case "image": {
       const mediaPath = normalizeText(defaults.mediaPath);
       if (!mediaPath) {
         return {
-          type: "cover",
+          ...EMPTY_SLIDE_PROPS,
+          slideType: "cover",
           title: labels.missingMedia,
         };
       }
       return {
-        type: "image",
-        src: mediaPath,
-        alt: DEFAULT_PROJECTOR_SCREEN_TEXT,
+        ...EMPTY_SLIDE_PROPS,
+        slideType: "image",
+        backgroundImage: mediaPath,
+        label: DEFAULT_PROJECTOR_SCREEN_TEXT,
       };
     }
     case "video": {
       const mediaPath = normalizeText(defaults.mediaPath);
       if (!mediaPath) {
         return {
-          type: "cover",
+          ...EMPTY_SLIDE_PROPS,
+          slideType: "cover",
           title: labels.missingMedia,
         };
       }
       return {
-        type: "video",
+        ...EMPTY_SLIDE_PROPS,
+        slideType: "video",
         videoPath: mediaPath,
         autoPlay: true,
         loop: true,
@@ -150,7 +169,8 @@ export function buildProjectorDefaultSlide({
     case "clock": {
       const locale = localeFromLanguage(language);
       return {
-        type: "cover",
+        ...EMPTY_SLIDE_PROPS,
+        slideType: "cover",
         title: now.toLocaleTimeString(locale, {
           hour: "2-digit",
           minute: "2-digit",
@@ -168,7 +188,8 @@ export function buildProjectorDefaultSlide({
       const timerMode = timerState?.mode ?? "countdown";
       const valueMs = resolveTimerFallbackMs(timerState, timerMode);
       return {
-        type: "cover",
+        ...EMPTY_SLIDE_PROPS,
+        slideType: "cover",
         title: formatUtilityTimer(valueMs, timerMode),
         subtitle: timerMode === "countdown" ? labels.countdown : labels.stopwatch,
       };

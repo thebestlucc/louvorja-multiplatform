@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
-import type { AudioStatusPayload, PlaybackStatus, PlaybackMode, SyncPoint } from "../types/audio";
+import type { AudioStatusPayload, SyncPoint } from "../lib/bindings";
+import type { PlaybackStatus, PlaybackMode } from "../types/audio";
 import { usePresentationStore } from "./presentation-store";
 import { useDisplayStore } from "./display-store";
 import { projectSlideIndex } from "../lib/projection-playback";

@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { resolveMediaPath } from "../../lib/tauri";
-import type { VideoSlideContent } from "../../types/presentation";
+import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { VideoPlayer } from "./video-player";
 
 export type VideoRenderMode = "projector" | "return-current" | "editor";
 
 interface VideoSlideProps {
-  slide: VideoSlideContent;
+  slide: SlideContent;
   renderMode: VideoRenderMode;
   className?: string;
 }
@@ -54,10 +54,10 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
     if (renderMode === "editor") {
       return false;
     }
-    return slide.autoPlay;
+    return slide.autoPlay ?? true;
   }, [renderMode, slide.autoPlay]);
 
-  const muted = renderMode === "return-current" ? true : slide.muted;
+  const muted = renderMode === "return-current" ? true : (slide.muted ?? false);
 
   if (!resolvedSrc) {
     return (
@@ -76,7 +76,7 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
       <VideoPlayer
         src={resolvedSrc}
         autoPlay={shouldAutoplay}
-        loop={slide.loop}
+        loop={slide.loop ?? false}
         muted={muted}
         controls={renderMode === "editor"}
         fit={fit}

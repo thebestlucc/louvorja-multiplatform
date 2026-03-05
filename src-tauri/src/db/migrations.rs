@@ -94,6 +94,16 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (16)", [])?;
     }
 
+    if current_version < 17 {
+        migrate_v17(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (17)", [])?;
+    }
+
+    if current_version < 18 {
+        migrate_v18(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (18)", [])?;
+    }
+
     Ok(())
 }
 
@@ -698,6 +708,37 @@ fn migrate_v16(conn: &Connection) -> Result<(), AppError> {
 
     // Extend hymns with api_music_id
     add_column_if_missing(conn, "hymns", "api_music_id", "INTEGER")?;
+
+    Ok(())
+}
+
+fn migrate_v17(conn: &Connection) -> Result<(), AppError> {
+    // Index to speed up filtering API albums from the Hinário tab
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS collection_hymns_hymn_idx ON collection_hymns(hymn_id);"
+    )?;
+    Ok(())
+}
+
+fn migrate_v18(conn: &Connection) -> Result<(), AppError> {
+    // 1. Identify all hymns linked to an API-imported collection and mark them as 'album'
+    conn.execute_batch(
+        "UPDATE hymns SET category = 'album' 
+         WHERE id IN (
+             SELECT ch.hymn_id FROM collection_hymns ch
+             JOIN collections c ON c.id = ch.collection_id
+             WHERE c.api_album_id IS NOT NULL
+         );"
+    )?;
+
+    // 2. Mark everything else as 'hymnal' (the default for the Hinário tab)
+    // Also, if they have no album name, give them the default hymnal name 
+    // to ensure they appear in the Hinário Cards view.
+    conn.execute_batch(
+        "UPDATE hymns SET category = 'hymnal' WHERE category IS NULL OR category = '';
+         UPDATE hymns SET album = 'Hinário Adventista' 
+         WHERE category = 'hymnal' AND (album IS NULL OR album = '');"
+    )?;
 
     Ok(())
 }

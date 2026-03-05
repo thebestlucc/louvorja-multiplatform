@@ -164,6 +164,7 @@ fn sync_streaming_projection_state(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn start_streaming_server(
     port: Option<u16>,
     app: AppHandle,
@@ -206,6 +207,7 @@ pub fn start_streaming_server(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn stop_streaming_server(state: tauri::State<'_, StreamingState>) -> Result<(), AppError> {
     let mut server = state
         .server
@@ -216,6 +218,7 @@ pub fn stop_streaming_server(state: tauri::State<'_, StreamingState>) -> Result<
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_streaming_status(
     state: tauri::State<'_, StreamingState>,
 ) -> Result<StreamingInfo, AppError> {
@@ -227,6 +230,7 @@ pub fn get_streaming_status(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_streaming_broadcast(
     enabled: bool,
     state: tauri::State<'_, StreamingState>,

@@ -37,9 +37,7 @@ import {
   getHymn,
   setCurrentSlide,
 } from "../lib/tauri";
-import type { Hymn } from "../types/hymn";
-import type { BibleSearchResult } from "../types/bible";
-import type { CollectionSearchResult } from "../types/collection";
+import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../lib/bindings";
 
 export const Route = createFileRoute("/spotlight")({
   component: SpotlightWindow,
@@ -56,10 +54,28 @@ function parseFirstStanza(lyrics: string | null): string {
   return stanzas[0] ?? "";
 }
 
+const EMPTY_SLIDE_PROPS = {
+  text: null,
+  title: null,
+  subtitle: null,
+  label: null,
+  videoPath: null,
+  backgroundImage: null,
+  backgroundColor: null,
+  audioPath: null,
+  autoPlay: null,
+  loop: null,
+  muted: null,
+  mode: null,
+  textColor: null,
+  textSize: null,
+};
+
 async function projectBibleVerse(result: BibleSearchResult) {
   const { verse, bookName } = result;
   await setCurrentSlide({
-    slide_type: "bible",
+    ...EMPTY_SLIDE_PROPS,
+    slideType: "bible",
     text: verse.text,
     title: `${bookName} ${verse.chapter}:${verse.verse}`,
   });
@@ -69,7 +85,8 @@ async function projectHymnFirstStanza(hymn: Hymn) {
   const fullHymn = await getHymn(hymn.id);
   const stanzaText = parseFirstStanza(fullHymn.lyrics);
   await setCurrentSlide({
-    slide_type: "lyrics",
+    ...EMPTY_SLIDE_PROPS,
+    slideType: "lyrics",
     text: stanzaText || hymn.title,
     title: hymn.title,
   });
@@ -380,21 +397,21 @@ function SpotlightWindow() {
               >
                 {collectionResults.map((col) => (
                   <Command.Item
-                    key={`${col.kind}-${col.collection_id}-${col.song_id ?? ""}`}
-                    value={`collection-${col.collection_id}-${col.song_id ?? ""}`}
+                    key={`${col.kind}-${col.collectionId}-${col.songId ?? ""}`}
+                    value={`collection-${col.collectionId}-${col.songId ?? ""}`}
                     onSelect={() =>
                       void spotlightSelect(
                         "navigate",
-                        col.song_id
-                          ? `/collections/${col.collection_id}/songs/${col.song_id}`
-                          : `/collections/${col.collection_id}`,
+                        col.songId
+                          ? `/collections/${col.collectionId}/songs/${col.songId}`
+                          : `/collections/${col.collectionId}`,
                       )
                     }
                     className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
                     <FolderOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="text-[11px] text-gray-400">{col.collection_name}</span>
+                      <span className="text-[11px] text-gray-400">{col.collectionName}</span>
                       <span className="truncate">{col.title}</span>
                     </div>
                   </Command.Item>

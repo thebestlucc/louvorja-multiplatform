@@ -1,10 +1,42 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSlides, useCreateSlide, useUpdateSlide, useDeleteSlide, useReorderSlides, useUpdatePresentation, usePresentation } from "../lib/queries";
-import type { SlideContent, Slide } from "../types/presentation";
-import { parseSlideRow } from "../types/presentation";
+import type { SlideContent, Slide } from "../lib/bindings";
 
 interface UsePresentationOptions {
   presentationId: number;
+}
+
+interface SlideWithParsedContent extends Omit<Slide, "content"> {
+  content: SlideContent;
+}
+
+function parseSlideRow(row: Slide): SlideWithParsedContent {
+  let content: SlideContent;
+  try {
+    content = JSON.parse(row.content) as SlideContent;
+  } catch {
+    content = {
+      slideType: "text",
+      text: row.content,
+      title: null,
+      subtitle: null,
+      label: null,
+      videoPath: null,
+      backgroundImage: null,
+      backgroundColor: null,
+      audioPath: null,
+      autoPlay: null,
+      loop: null,
+      muted: null,
+      mode: null,
+      textColor: null,
+      textSize: null,
+    };
+  }
+  return {
+    ...row,
+    content,
+  };
 }
 
 export function usePresentation2({ presentationId }: UsePresentationOptions) {
@@ -31,7 +63,7 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
   }, [slideRows]);
 
   // Merge server slides with local edits for immediate UI response
-  const slides: Slide[] = useMemo(() => {
+  const slides: SlideWithParsedContent[] = useMemo(() => {
     return serverSlides.map((s) => {
       const localContent = localEdits[s.id];
       if (localContent) {
@@ -104,7 +136,23 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
 
   const addSlide = useCallback(() => {
     const sortOrder = slides.length;
-    const content: SlideContent = { type: "text", text: "" };
+    const content: SlideContent = {
+      slideType: "text",
+      text: "",
+      title: null,
+      subtitle: null,
+      label: null,
+      videoPath: null,
+      backgroundImage: null,
+      backgroundColor: null,
+      audioPath: null,
+      autoPlay: null,
+      loop: null,
+      muted: null,
+      mode: null,
+      textColor: null,
+      textSize: null,
+    };
     createSlideMutation.mutate({
       presentationId,
       contentJson: JSON.stringify(content),

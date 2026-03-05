@@ -164,6 +164,7 @@ fn hide_spotlight(app: &AppHandle) {
 /// - kind = "action": emits spotlight-action to main window for execution
 /// - kind = "hide": just hides the spotlight window
 #[tauri::command]
+#[specta::specta]
 pub fn spotlight_select(kind: String, payload: String, app: AppHandle) -> Result<(), AppError> {
     hide_spotlight(&app);
 
@@ -191,6 +192,7 @@ pub fn spotlight_select(kind: String, payload: String, app: AppHandle) -> Result
 
 /// Hides the spotlight window. Called when the spotlight loses focus.
 #[tauri::command]
+#[specta::specta]
 pub fn spotlight_hide(app: AppHandle) -> Result<(), AppError> {
     hide_spotlight(&app);
     Ok(())

@@ -6,27 +6,30 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_presentations(state: tauri::State<'_, AppState>) -> Result<Vec<Presentation>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::get_presentations(&conn)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_presentation(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Presentation, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::get_presentation_by_id(&conn, id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn create_presentation(
     title: String,
     aspect_ratio: String,
@@ -34,13 +37,14 @@ pub fn create_presentation(
 ) -> Result<Presentation, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let id = crate::db::queries::slides::insert_presentation(&conn, &title, &aspect_ratio)?;
     crate::db::queries::slides::get_presentation_by_id(&conn, id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_presentation(
     id: i64,
     title: String,
@@ -49,33 +53,36 @@ pub fn update_presentation(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::update_presentation(&conn, id, &title, &aspect_ratio)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_presentation(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::delete_presentation(&conn, id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_slides(
     presentation_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Slide>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::get_slides(&conn, presentation_id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn create_slide(
     presentation_id: i64,
     content_json: String,
@@ -84,7 +91,7 @@ pub fn create_slide(
 ) -> Result<Slide, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let id = crate::db::queries::slides::insert_slide(
         &conn,
@@ -101,6 +108,7 @@ pub fn create_slide(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn update_slide(
     id: i64,
     content_json: String,
@@ -108,21 +116,23 @@ pub fn update_slide(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::update_slide(&conn, id, &content_json)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn delete_slide(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::delete_slide(&mut conn, id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn reorder_slides(
     presentation_id: i64,
     slide_ids: Vec<i64>,
@@ -130,12 +140,13 @@ pub fn reorder_slides(
 ) -> Result<(), AppError> {
     let mut conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::slides::update_slide_orders(&mut conn, presentation_id, &slide_ids)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn import_slja(
     path: String,
     app: AppHandle,
@@ -166,7 +177,7 @@ pub fn import_slja(
 
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let pres_id = crate::db::queries::slides::insert_presentation(
         &conn,
@@ -190,6 +201,7 @@ pub fn import_slja(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn export_slja(
     presentation_id: i64,
     path: String,
@@ -198,7 +210,7 @@ pub fn export_slja(
 ) -> Result<(), AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let presentation = crate::db::queries::slides::get_presentation_by_id(&conn, presentation_id)?;
     let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;

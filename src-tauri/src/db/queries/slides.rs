@@ -307,6 +307,8 @@ mod tests {
               year INTEGER,
               cover_path TEXT,
               auto_cover_path TEXT,
+              source_type TEXT NOT NULL DEFAULT 'file',
+              api_album_id INTEGER,
               created_at TEXT DEFAULT (datetime('now')),
               updated_at TEXT DEFAULT (datetime('now'))
             );
@@ -440,7 +442,7 @@ mod tests {
 
     #[test]
     fn reindexes_collection_song_documents_on_slide_delete() {
-        let conn = setup_conn();
+        let mut conn = setup_conn();
         let presentation_id =
             insert_presentation_with_kind(&conn, "Song", "16:9", "collection_song")
                 .expect("presentation");
@@ -457,7 +459,7 @@ mod tests {
 
         assert!(has_song_search_hit(&conn, "deletetoken"));
 
-        delete_slide(&conn, slide_id).expect("delete slide");
+        delete_slide(&mut conn, slide_id).expect("delete slide");
 
         assert!(!has_song_search_hit(&conn, "deletetoken"));
     }

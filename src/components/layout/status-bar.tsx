@@ -59,7 +59,7 @@ export function StatusBar() {
       <div className="flex items-center gap-3">
         {showSyncIndicator && (
           <button
-            onClick={() => navigate({ to: "/settings" })}
+            onClick={() => navigate({ to: "/settings", search: { tab: "migration" } })}
             className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-blue-400 hover:bg-white/10"
             title={t("settings.legacyFetch.progressTitle")}
           >

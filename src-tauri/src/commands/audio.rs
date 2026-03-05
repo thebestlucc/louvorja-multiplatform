@@ -1,3 +1,4 @@
+use specta::Type;
 use crate::audio::SyncPoint;
 use crate::error::AppError;
 use crate::state::{AppState, AudioState};
@@ -11,10 +12,12 @@ use tauri::{AppHandle, Emitter, Manager};
 const AUDIO_STATUS_EVENT: &str = "audio-status";
 const AUDIO_STATUS_EMIT_INTERVAL_MS: u64 = 50;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioStatusPayload {
+    #[specta(type = f64)]
     pub position_ms: u64,
+    #[specta(type = f64)]
     pub duration_ms: Option<u64>,
     pub is_playing: bool,
     pub is_paused: bool,
@@ -113,8 +116,10 @@ fn start_audio_status_stream(app: &AppHandle, state: &AudioState) -> Result<(), 
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_play(
     file_path: String,
+    position_ms: Option<u64>,
     app: AppHandle,
     state: tauri::State<'_, AudioState>,
 ) -> Result<(), AppError> {
@@ -124,7 +129,7 @@ pub fn audio_play(
             .player
             .lock()
             .map_err(|e| AppError::Internal(e.to_string()))?;
-        player.play(&resolved_path)?;
+        player.play(&resolved_path, position_ms)?;
         // Store the original (unresolved) path so the frontend can identify
         // which file is playing using the same relative path it passed in.
         player.set_input_path(&file_path);
@@ -136,6 +141,7 @@ pub fn audio_play(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_play_alert(
     file_path: Option<String>,
     volume: Option<f32>,
@@ -149,6 +155,7 @@ pub fn audio_play_alert(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_pause(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let player = state
         .player
@@ -161,6 +168,7 @@ pub fn audio_pause(app: AppHandle, state: tauri::State<'_, AudioState>) -> Resul
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_resume(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let player = state
         .player
@@ -174,6 +182,7 @@ pub fn audio_resume(app: AppHandle, state: tauri::State<'_, AudioState>) -> Resu
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_stop(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let mut player = state
         .player
@@ -187,6 +196,7 @@ pub fn audio_stop(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_seek(
     position_ms: u64,
     app: AppHandle,
@@ -203,6 +213,7 @@ pub fn audio_seek(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_set_volume(
     volume: f32,
     app: AppHandle,
@@ -219,6 +230,7 @@ pub fn audio_set_volume(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_get_position(state: tauri::State<'_, AudioState>) -> Result<u64, AppError> {
     let player = state
         .player
@@ -228,6 +240,7 @@ pub fn audio_get_position(state: tauri::State<'_, AudioState>) -> Result<u64, Ap
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn audio_get_status(
     state: tauri::State<'_, AudioState>,
 ) -> Result<AudioStatusPayload, AppError> {
@@ -235,18 +248,20 @@ pub fn audio_get_status(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_sync_points(
     hymn_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<SyncPoint>, AppError> {
     let conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::get_sync_points(&conn, hymn_id)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn save_sync_points(
     hymn_id: i64,
     points: Vec<SyncPoint>,
@@ -254,7 +269,7 @@ pub fn save_sync_points(
 ) -> Result<(), AppError> {
     let mut conn = state
         .db
-        .lock()
+        .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::music::save_sync_points(&mut conn, hymn_id, &points)
 }

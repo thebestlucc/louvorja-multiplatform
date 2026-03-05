@@ -1,7 +1,6 @@
 ---
 name: tauri-command
 description: Scaffold a new Tauri command end-to-end (Rust query → command → lib.rs registration → TS wrapper → TanStack Query hook)
-disable-model-invocation: true
 ---
 
 # Tauri Command Scaffolder

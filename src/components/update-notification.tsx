@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "../lib/notifications";
 import { useCheckForUpdates, useInstallUpdate } from "../lib/queries";
 import { classifyUpdateError } from "../lib/update-errors";
 import { usePresentationStore } from "../stores/presentation-store";
@@ -91,11 +91,11 @@ export function UpdateNotification() {
             installMutation
               .mutateAsync()
               .then(() => {
-                toast.success(t("updater.installing"));
+                notify.success(t("updater.installing"));
               })
               .catch((error) => {
                 const pastoral = classifyUpdateError(error);
-                toast.error(t(pastoral.titleKey), {
+                notify.error(t(pastoral.titleKey), {
                   description: `${t(pastoral.whyKey)} ${t(pastoral.actionKey)}\n\n${t(pastoral.reassuranceKey)}`,
                   duration: Infinity,
                 });

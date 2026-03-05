@@ -4,14 +4,13 @@ import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { ChevronLeft, ChevronRight, Play, Pause } from "lucide-react";
 import { getCurrentSlide, getOverlayState, getSlideContext } from "../../lib/tauri";
-import { flatToSlideContent } from "../../types/presentation";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
 import { useDisplayStore } from "../../stores/display-store";
 import { useSlides } from "../../hooks/use-slides";
 import { useAudio } from "../../hooks/use-audio";
 import { cn } from "../../lib/utils";
 import { Button } from "../../components/ui/button";
-import type { SlideContentFlat, SlideContextFlat, OverlayState, SlideContent } from "../../types/presentation";
+import type { SlideContext, OverlayState, SlideContent } from "../../lib/bindings";
 
 export const Route = createFileRoute("/operator/")({
   component: OperatorScreen,
@@ -31,8 +30,8 @@ function OperatorScreen() {
 
   // Load initial state on mount
   useEffect(() => {
-    void getCurrentSlide().then((flat) => {
-      if (flat) setCurrentSlide(flatToSlideContent(flat));
+    void getCurrentSlide().then((slide) => {
+      if (slide) setCurrentSlide(slide);
     });
     void getOverlayState().then(setOverlay);
     void getSlideContext().then((ctx) => {
@@ -45,8 +44,8 @@ function OperatorScreen() {
 
   // Listen for slide-changed
   useEffect(() => {
-    const unsub = listen<SlideContentFlat>("slide-changed", (e) => {
-      setCurrentSlide(flatToSlideContent(e.payload));
+    const unsub = listen<SlideContent>("slide-changed", (e) => {
+      setCurrentSlide(e.payload);
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
   }, []);
@@ -63,7 +62,7 @@ function OperatorScreen() {
 
   // Listen for slide-context — updates page index/total for every projection type
   useEffect(() => {
-    const unsub = listen<SlideContextFlat>("slide-context", (e) => {
+    const unsub = listen<SlideContext>("slide-context", (e) => {
       setSlideIndex(e.payload.index);
       setSlideTotal(e.payload.total);
     }).catch(() => () => {});

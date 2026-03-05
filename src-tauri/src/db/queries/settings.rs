@@ -97,6 +97,7 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
         DELETE FROM service_items;
         DELETE FROM favorites;
         DELETE FROM collection_songs;
+        DELETE FROM collection_hymns;
 
         -- Clear parent tables (but NOT bible tables)
         DELETE FROM hymns;
@@ -106,6 +107,7 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
 
         -- Clear FTS tables (but NOT bible_fts)
         DELETE FROM hymns_fts;
+        DELETE FROM collections_fts;
 
         -- Reset monitor configs but keep settings
         DELETE FROM monitor_configs;

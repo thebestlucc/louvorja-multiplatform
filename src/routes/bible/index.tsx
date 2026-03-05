@@ -60,7 +60,7 @@ function BibleIndex() {
   }, [book, chapter, verse, bible.currentVersionId, bible.setBook, bible.setChapter, bible.selectVerse]);
 
   const currentVersion = bible.versions.find((v) => v.id === bible.currentVersionId);
-  const availableBooks = useMemo(() => new Set(bible.books.map((b) => b.name)), [bible.books]);
+  const availableBooks = useMemo(() => new Set<string>(bible.books.map((b) => b.name)), [bible.books]);
   const orderedBooks = useMemo(
     () =>
       bible.books
