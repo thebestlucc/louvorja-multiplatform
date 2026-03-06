@@ -132,16 +132,9 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         while (queuedSlide != null) {
           const nextSlide = queuedSlide;
           queuedSlide = null;
-          // Check fresh state each iteration: only project if projection is
-          // explicitly active (not just because windows happen to be open).
-          const displayState = useDisplayStore.getState();
-          const shouldProject = displayState.currentProjectionType !== null &&
-            (displayState.projectorWindowOpen || displayState.returnWindowOpen);
-          console.log("[audio-store] Syncing slide:", nextSlide, "shouldProject:", shouldProject);
+          console.log("[audio-store] Syncing slide:", nextSlide);
           usePresentationStore.getState().setActiveSlideIndex(nextSlide);
-          if (shouldProject) {
-            await catcher(projectSlideIndex(nextSlide), { notify: false });
-          }
+          await catcher(projectSlideIndex(nextSlide), { notify: false });
         }
         projectedSlideInFlight = false;
       })();
