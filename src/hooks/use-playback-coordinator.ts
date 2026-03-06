@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { useQueueStore } from "../stores/queue-store";
 import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useDisplayStore } from "../stores/display-store";
 import { getSyncPoints } from "../lib/tauri";
 import { catcher } from "../lib/catcher";
 import { projectSlideIndex } from "../lib/projection-playback";
@@ -38,7 +39,11 @@ export function usePlaybackCoordinator() {
     lastPlayedIndexRef.current = index;
 
     const hymnId = item.hymn?.id;
-    const audioPath = item.type === "projection" ? null : (item.hymn?.playbackPath || item.hymn?.audioPath);
+    const audioPath = item.type === "projection"
+      ? null
+      : item.type === "playback"
+        ? (item.hymn?.playbackPath || item.hymn?.audioPath)
+        : item.hymn?.audioPath; // "audio" = Cantado = sung version
 
     await catcher(async () => {
       // 1. Fetch sync points if it's a hymn
@@ -66,6 +71,7 @@ export function usePlaybackCoordinator() {
         setPresentationSlides(generatedSlides);
       }
 
+      useDisplayStore.getState().setCurrentProjectionType("hymn");
       setActiveSlideIndex(0);
       await projectSlideIndex(0);
 

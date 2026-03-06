@@ -128,10 +128,8 @@ body {
 <script>
 let es = null;
 let utilityEs = null;
-let uiEs = null;
 let reconnectTimer = null;
 let utilityReconnectTimer = null;
-let uiReconnectTimer = null;
 let uiLanguage = "pt";
 let lastRealPayload = null;
 let lastUtilityEvent = null;
@@ -290,7 +288,7 @@ function clearStatus() {
 }
 
 function setStatus(key, isError) {
-  hideMedia();
+  resetVisualStyle();
   const content = document.getElementById("content");
   content.style.display = "none";
   const status = document.getElementById("status");
@@ -718,14 +716,6 @@ function scheduleUtilityReconnect() {
   }, 1500);
 }
 
-function scheduleUiReconnect() {
-  if (uiReconnectTimer) return;
-  uiReconnectTimer = setTimeout(function () {
-    uiReconnectTimer = null;
-    connectUi();
-  }, 1500);
-}
-
 async function connectIfAvailable() {
   await refreshUiLanguage();
   if (es) return;
@@ -737,7 +727,6 @@ async function connectIfAvailable() {
   }
   connect();
   connectUtility();
-  connectUi();
 }
 
 function connect() {
@@ -777,36 +766,17 @@ function connectUtility() {
   };
 }
 
-function connectUi() {
-  if (uiEs) return;
-  uiEs = new EventSource("/sse/ui");
-  uiEs.onmessage = function (event) {
-    try {
-      const payload = JSON.parse(event.data);
-      applyLanguage(payload.language);
-    } catch (_) {}
-  };
-  uiEs.onerror = function () {
-    if (uiEs) {
-      uiEs.close();
-      uiEs = null;
-    }
-    scheduleUiReconnect();
-  };
-}
-
 applyStaticText();
 resetVisualStyle();
 setStatus("waitingContent", false);
 void connectIfAvailable();
+setInterval(function() { void refreshUiLanguage(); }, 30000);
 
 window.addEventListener("beforeunload", function () {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (utilityReconnectTimer) clearTimeout(utilityReconnectTimer);
-  if (uiReconnectTimer) clearTimeout(uiReconnectTimer);
   if (es) es.close();
   if (utilityEs) utilityEs.close();
-  if (uiEs) uiEs.close();
 });
 </script>
 </body>
