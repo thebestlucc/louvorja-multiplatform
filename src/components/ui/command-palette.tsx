@@ -30,7 +30,7 @@ import { useMonitorsControl } from "../../hooks/use-monitors";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import {
-  searchHymns,
+  searchAllHymns,
   searchBible,
   searchCollections,
 } from "../../lib/tauri";
@@ -95,7 +95,7 @@ export function CommandPalette() {
     const timer = setTimeout(async () => {
       const [results] = await catcher(
         Promise.all([
-          searchHymns(query),
+          searchAllHymns(query),
           query.trim().length >= 2
             ? searchBible(query, null)
             : Promise.resolve([]),
@@ -103,8 +103,8 @@ export function CommandPalette() {
             ? searchCollections(query)
             : Promise.resolve([]),
         ]),
+        { notify: false },
       );
-
       if (results) {
         const [h, b, c] = results;
         setHymns(h.slice(0, 5));

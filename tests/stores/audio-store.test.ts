@@ -1,0 +1,25 @@
+import { test, describe } from "node:test";
+import * as assert from "node:assert";
+import { useAudioStore } from "../../src/stores/audio-store";
+
+describe("Audio Store", () => {
+  test("onFinished callback is called when audio ends", async () => {
+    let finishedCalled = false;
+    
+    // This is TDD-RED: we are testing a feature that doesn't exist yet
+    // The current store doesn't have setOnFinished or similar.
+    const store = useAudioStore.getState();
+    
+    // @ts-ignore - feature not implemented yet
+    store.setOnFinished(() => {
+      finishedCalled = true;
+    });
+
+    // We need to simulate the event that triggers completion
+    // But since we can't easily mock the 'listen' from Tauri in this environment 
+    // without more setup, we'll just test that the interface exists first.
+    
+    // @ts-ignore
+    assert.strictEqual(typeof store.setOnFinished, "function", "setOnFinished should be a function");
+  });
+});

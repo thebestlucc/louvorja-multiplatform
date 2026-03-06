@@ -3,7 +3,8 @@ import type { Hymn } from "../lib/bindings";
 
 export interface QueueItem {
   id: string;
-  hymn: Hymn;
+  hymn?: Hymn;
+  title?: string;
   type: "audio" | "playback" | "projection";
 }
 
@@ -16,6 +17,7 @@ interface QueueState {
   setCurrentIndex: (index: number) => void;
   next: () => void;
   prev: () => void;
+  shuffleQueue: () => void;
 }
 
 export const useQueueStore = create<QueueState>((set) => ({
@@ -31,10 +33,12 @@ export const useQueueStore = create<QueueState>((set) => ({
     let newIndex = state.currentIndex;
     if (index < state.currentIndex) {
       newIndex--;
-    } else if (index === state.currentIndex && newItems.length === 0) {
-      newIndex = -1;
-    } else if (index === state.currentIndex && index >= newItems.length) {
-      newIndex = newItems.length - 1;
+    } else if (index === state.currentIndex) {
+      if (newItems.length === 0) {
+        newIndex = -1;
+      } else if (index >= newItems.length) {
+        newIndex = newItems.length - 1;
+      }
     }
     return { items: newItems, currentIndex: newIndex };
   }),
@@ -46,4 +50,25 @@ export const useQueueStore = create<QueueState>((set) => ({
   prev: () => set((state) => ({
     currentIndex: state.currentIndex > 0 ? state.currentIndex - 1 : state.currentIndex
   })),
+  shuffleQueue: () => set((state) => {
+    if (state.items.length <= 1) return state;
+    
+    const currentItem = state.currentIndex >= 0 ? state.items[state.currentIndex] : null;
+    const otherItems = state.items.filter((_, i) => i !== state.currentIndex);
+    
+    // Fisher-Yates shuffle
+    for (let i = otherItems.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [otherItems[i], otherItems[j]] = [otherItems[j], otherItems[i]];
+    }
+    
+    if (currentItem) {
+      return {
+        items: [currentItem, ...otherItems],
+        currentIndex: 0
+      };
+    }
+    
+    return { items: otherItems };
+  }),
 }));

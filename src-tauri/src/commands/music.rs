@@ -17,6 +17,19 @@ pub fn search_hymns(
 
 #[tauri::command]
 #[specta::specta]
+pub fn search_all_hymns(
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Hymn>, AppError> {
+    let conn = state
+        .db
+        .get()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::music::search_all_hymns(&conn, &query)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn get_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<Hymn, AppError> {
     let conn = state
         .db

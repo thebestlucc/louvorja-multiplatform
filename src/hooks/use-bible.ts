@@ -6,6 +6,7 @@ import type { SlideContent } from "../lib/bindings";
 import { projectSlideWithType } from "../lib/projection-playback";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useQueueStore } from "../stores/queue-store";
 
 const EMPTY_SLIDE_PROPS = {
   text: null,
@@ -40,6 +41,7 @@ export function useBible() {
   const setPresentationSlides = usePresentationStore((s) => s.setSlides);
   const setActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
   const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
+  const addToQueue = useQueueStore((s) => s.addToQueue);
 
   const isProjecting = currentProjectionType === "bible";
 
@@ -98,6 +100,12 @@ export function useBible() {
     setCurrentPresentation(null);
     setPresentationSlides(slides);
     setActiveSlideIndex(0);
+
+    addToQueue([{
+      id: crypto.randomUUID(),
+      title,
+      type: "projection"
+    }], true);
 
     await catcher(async () => {
       await projectSlideWithType(slides[0], "bible");

@@ -257,15 +257,6 @@ pub struct ApiAlbum {
     pub musics: Vec<ApiMusic>,
 }
 
-/// Category from the API
-/// Planned for album-import-collections feature (see docs/pre-dev/album-import-collections/)
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct ApiCategory {
-    #[specta(type = f64)]
-    pub id_category: i64,
-    pub name: String,
-}
 
 /// Params response from /params endpoint
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -409,53 +400,6 @@ pub mod fetcher {
         Ok(params)
     }
 
-    /// Fetch all musics for a language - handles pagination
-    #[allow(dead_code)]
-    pub async fn fetch_musics(lang: ApiLanguage) -> Result<Vec<ApiMusic>, AppError> {
-        let mut all_musics = Vec::new();
-        let mut page = 1;
-        
-        loop {
-            let url = format!("{}/{}/musics?page={}", API_BASE_URL, lang.as_str(), page);
-            let response = reqwest::get(&url)
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to fetch musics page {}: {}", page, e)))?;
-            
-            if !response.status().is_success() {
-                return Err(AppError::Internal(format!(
-                    "API returned error status: {}",
-                    response.status()
-                )));
-            }
-
-            // Get response text to check for API error response
-            let body = response.text().await
-                .map_err(|e| AppError::Internal(format!("Failed to read response body: {}", e)))?;
-
-            // Check if response is an error (e.g., language not found)
-            if let Ok(error_resp) = serde_json::from_str::<ApiErrorResponse>(&body) {
-                if error_resp.error.contains("não encontrado") || error_resp.error.contains("not found") {
-                    return Err(AppError::Internal(format!("NO_CONTENT_AVAILABLE:{}", lang.as_str())));
-                }
-                return Err(AppError::Internal(format!("API error: {}", error_resp.error)));
-            }
-
-            let paginated: PaginatedResponse<ApiMusic> = serde_json::from_str(&body)
-                .map_err(|e| AppError::Internal(format!("Failed to parse musics response page {}: {}", page, e)))?;
-            
-            let is_last = paginated.last_page.map(|lp| page >= lp).unwrap_or(true)
-                || paginated.data.is_empty();
-            
-            all_musics.extend(paginated.data);
-            
-            if is_last {
-                break;
-            }
-            page += 1;
-        }
-        
-        Ok(all_musics)
-    }
 
     /// Fetch all albums for a language — a single page
     pub async fn fetch_albums_page(lang: ApiLanguage, page: i64) -> Result<PaginatedResponse<ApiAlbum>, AppError> {
@@ -854,12 +798,15 @@ pub mod importer {
                 (true, Some(id))
             }
             Some(id) => {
-                // Exists but don't replace — still set api_music_id/category if missing
+                // Exists but don't replace — still set api_music_id/category if missing or if new category is 'hymnal'
                 if api_music_id.is_some() || category.is_some() {
                     conn.execute(
                         "UPDATE hymns SET 
                             api_music_id = COALESCE(api_music_id, ?1),
-                            category = COALESCE(category, ?2)
+                            category = CASE 
+                                WHEN ?2 = 'hymnal' THEN 'hymnal' 
+                                ELSE COALESCE(category, ?2) 
+                            END
                          WHERE id = ?3",
                         rusqlite::params![api_music_id, category, id],
                     )?;

@@ -59,7 +59,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
         let mut stmt = conn.prepare(
             "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
              FROM hymns h
-             WHERE h.number = ?1 
+             WHERE h.number = ?1
              AND h.category = 'hymnal'
              ORDER BY h.title"
         )?;
@@ -83,6 +83,43 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
          WHERE hymns_fts MATCH ?1
          AND h.category = 'hymnal'
          ORDER BY rank"
+    )?;
+    let hymns = stmt
+        .query_map(params![fts_query], map_hymn_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(hymns)
+}
+
+pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppError> {
+    let trimmed = query.trim();
+
+    if trimmed.is_empty() {
+        let mut stmt = conn.prepare(
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
+             FROM hymns
+             ORDER BY number, title
+             LIMIT 100"
+        )?;
+        let hymns = stmt
+            .query_map([], map_hymn_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
+    // Text search via FTS5
+    let sanitized = sanitize_fts_query(trimmed);
+    if sanitized.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let fts_query = format!("{}*", sanitized);
+    let mut stmt = conn.prepare(
+        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
+         FROM hymns h
+         JOIN hymns_fts ON hymns_fts.rowid = h.id
+         WHERE hymns_fts MATCH ?1
+         ORDER BY rank
+         LIMIT 100"
     )?;
     let hymns = stmt
         .query_map(params![fts_query], map_hymn_row)?
@@ -126,7 +163,7 @@ pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, A
     let mut stmt = conn.prepare(
         "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
          FROM hymns h 
-         WHERE h.album = ?1 
+         WHERE h.album = ?1
          AND h.category = 'hymnal'
          ORDER BY h.number, h.title"
     )?;
@@ -298,7 +335,7 @@ struct SyncLyric {
     _lyric: String,
     order: i32,
     time: Option<String>,
-    _instrumental_time: Option<String>,
+    instrumental_time: Option<String>,
 }
 
 pub fn get_sync_points(
@@ -308,6 +345,7 @@ pub fn get_sync_points(
     log::debug!("[get_sync_points] Fetching sync points for hymn_id={}", hymn_id);
     
     // First, try to get sync points from the audio_sync_points table
+    // (Note: manual overrides currently only apply to default audio, not instrumental)
     let mut stmt = conn.prepare(
         "SELECT slide_index, timestamp_ms FROM audio_sync_points WHERE hymn_id = ?1 ORDER BY timestamp_ms"
     )?;
@@ -316,6 +354,7 @@ pub fn get_sync_points(
             Ok(crate::audio::SyncPoint {
                 slide_index: row.get::<_, i64>("slide_index")? as usize,
                 timestamp_ms: row.get::<_, i64>("timestamp_ms")? as u64,
+                instrumental_timestamp_ms: None,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -348,6 +387,7 @@ pub fn get_sync_points(
                 sync_points.push(crate::audio::SyncPoint {
                     slide_index: 0,
                     timestamp_ms: 0,
+                    instrumental_timestamp_ms: Some(0),
                 });
 
                 // Sort by order and convert to SyncPoint
@@ -356,19 +396,18 @@ pub fn get_sync_points(
 
                 // Cover slide is index 0, lyrics start at index 1
                 for (idx, sync_lyric) in sorted_lyrics.iter().enumerate() {
-                    if let Some(time_str) = &sync_lyric.time {
-                        if let Some(ms) = parse_time_to_ms(time_str) {
-                            log::debug!("[get_sync_points] Lyric idx={} time={:?} -> {}ms", idx, time_str, ms);
-                            sync_points.push(crate::audio::SyncPoint {
-                                // Slide index 0 is cover, so lyrics start at 1
-                                slide_index: idx + 1,
-                                timestamp_ms: ms,
-                            });
-                        } else {
-                            log::warn!("[get_sync_points] Failed to parse time: {:?}", time_str);
-                        }
+                    let ms_default = sync_lyric.time.as_ref().and_then(|t| parse_time_to_ms(t));
+                    let ms_inst = sync_lyric.instrumental_time.as_ref().and_then(|t| parse_time_to_ms(t));
+                    
+                    if ms_default.is_some() || ms_inst.is_some() {
+                        sync_points.push(crate::audio::SyncPoint {
+                            // Slide index 0 is cover, so lyrics start at 1
+                            slide_index: idx + 1,
+                            timestamp_ms: ms_default.unwrap_or(0),
+                            instrumental_timestamp_ms: ms_inst,
+                        });
                     } else {
-                        log::debug!("[get_sync_points] Lyric idx={} has no time", idx);
+                        log::debug!("[get_sync_points] Lyric idx={} has no parsable time", idx);
                     }
                 }
 
@@ -450,7 +489,6 @@ pub fn resolve_hymn_audio_path(conn: &Connection, hymn_id: i64) -> Result<Option
     Ok(legacy_path)
 }
 
-#[allow(dead_code)]
 pub fn find_hymn_by_api_music_id(conn: &Connection, api_music_id: i64) -> Option<i64> {
     conn.query_row(
         "SELECT id FROM hymns WHERE api_music_id = ?1",

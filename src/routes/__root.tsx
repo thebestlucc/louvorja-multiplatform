@@ -1,16 +1,17 @@
 import { createRootRoute, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import { toast, Toaster } from "sonner";
+import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
 import { StatusBar } from "../components/layout/status-bar";
-import { SlideNavBar } from "../components/display/slide-nav-bar";
 import { CommandPalette } from "../components/ui/command-palette";
 import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { UpdateNotification } from "../components/update-notification";
 import { useKeyboard } from "../hooks/use-keyboard";
+import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
 import { useMonitorsControl } from "../hooks/use-monitors";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
@@ -21,6 +22,7 @@ import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution
 import { useThemeStore } from "../stores/theme-store";
 import { useLegacyFetchStore } from "../stores/legacy-fetch-store";
 import { catcher } from "../lib/catcher";
+import { checkDbVersion } from "../lib/tauri";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
 import type { LegacyFetchProgress, LegacyFetchReport } from "../lib/bindings";
@@ -192,6 +194,24 @@ function RootLayout() {
     })();
   }, [isBareRoute, monitorConfigs, monitorConfigsLoaded, monitors, monitorsLoaded, queryClient]);
 
+  // Check for new hymnal data version on mount (runs once, only when not on bare routes)
+  const { t } = useTranslation();
+  useEffect(() => {
+    if (isBareRoute) return;
+    void (async () => {
+      await catcher(async () => {
+        const result = await checkDbVersion();
+        if (result.hasNewVersion) {
+          toast.info(t("settings.legacyFetch.newVersionAvailable"), {
+            description: t("settings.legacyFetch.newVersionDescription"),
+          });
+        }
+      });
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
+
+  usePlaybackCoordinator();
   useKeyboard({ enabled: !isBareRoute });
 
   const router = useRouter();
@@ -265,7 +285,6 @@ function RootLayout() {
         <main id="main-scroll-area" className="flex-1 overflow-auto p-4">
           <Outlet />
         </main>
-        <SlideNavBar />
         <StatusBar />
       </div>
       <CommandPalette />

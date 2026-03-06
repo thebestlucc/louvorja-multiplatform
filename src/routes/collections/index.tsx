@@ -1,5 +1,5 @@
 import { DragEvent, FormEvent, useDeferredValue, useMemo, useState, useRef } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, Loader2, Plus, Trash2, LayoutGrid, List as ListIcon, MoreVertical, Play, MonitorPlay, Music, Upload } from "lucide-react";
 import { notify } from "../../lib/notifications";
@@ -18,6 +18,7 @@ import type { Collection } from "../../lib/bindings";
 import { getCollection, getCollectionHymns, getSlides } from "../../lib/tauri";
 import { parseSlideRow } from "../../types/presentation";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { CoverImage } from "../../components/media/cover-image";
 import {
@@ -45,6 +46,7 @@ function getCreationYear(createdAt: string): number | null {
 
 function CollectionsIndex() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { data, isLoading } = useCollections();
   const createMutation = useCreateCollection();
   const deleteMutation = useDeleteCollection();
@@ -52,7 +54,8 @@ function CollectionsIndex() {
 
   const setPresentationSlides = usePresentationStore((state) => state.setSlides);
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
-  const { bindHymnToPlaybackQueue, handleStartCantado, handleStartPlayback } = useHymnPlayback();
+  const { bindHymnToPlaybackQueue } = useHymnPlayback();
+  const addToQueue = useQueueStore((state) => state.addToQueue);
 
   const [tab, setTab] = useState<"albums" | "custom">("albums");
   const [view, setView] = useState<"list" | "grid">("grid");
@@ -173,15 +176,19 @@ function CollectionsIndex() {
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
         if (hymns.length > 0) {
-          await handleStartCantado(hymns[0]);
+          const queueItems: QueueItem[] = hymns.map((hymn) => ({
+            id: crypto.randomUUID(),
+            hymn,
+            type: "audio",
+          }));
+          addToQueue(queueItems, true);
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
+          void router.navigate({ to: "/operator" });
         }
       } else {
         const detail = await getCollection(collection.id);
-        // Playing custom collection not yet fully supported as playlist, play first for now
         if (detail.songs.length > 0) {
           notify.info("Custom collection playlist not yet fully implemented. Playing first item...");
-          // handlePlaySong logic from detail page would be needed here, or similar hook
         }
       }
     }, { notify: true, fallbackMessage: t("collections.playFailed") });
@@ -192,8 +199,14 @@ function CollectionsIndex() {
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
         if (hymns.length > 0) {
-          await handleStartPlayback(hymns[0]);
+          const queueItems: QueueItem[] = hymns.map((hymn) => ({
+            id: crypto.randomUUID(),
+            hymn,
+            type: "playback",
+          }));
+          addToQueue(queueItems, true);
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
+          void router.navigate({ to: "/operator" });
         }
       }
     }, { notify: true, fallbackMessage: t("collections.playFailed") });

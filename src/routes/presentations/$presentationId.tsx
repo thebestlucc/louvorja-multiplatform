@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Download } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -16,6 +16,8 @@ import type { SlideContent } from "../../lib/bindings";
 import { projectSlideIndex } from "../../lib/projection-playback";
 import { usePresentationStore } from "../../stores/presentation-store";
 
+import { useQueueStore } from "../../stores/queue-store";
+
 export const Route = createFileRoute("/presentations/$presentationId")({
   component: PresentationDetail,
 });
@@ -24,6 +26,7 @@ function PresentationDetail() {
   const { presentationId } = Route.useParams();
   const id = Number(presentationId);
   const { t } = useTranslation();
+  const router = useRouter();
   
   const {
     presentation,
@@ -60,18 +63,27 @@ function PresentationDetail() {
     }
 
     await catcher(async () => {
-      // Set the current presentation context in the store
+      // 1. Set the current presentation context in the store
       setCurrentPresentation(id);
       setPresentationSlides(slideContents);
       setPresentationActiveSlideIndex(0);
 
-      // Project the first slide
+      // 2. Clear queue and add this presentation
+      useQueueStore.getState().addToQueue([{
+        id: crypto.randomUUID(),
+        title: presentation?.title || "Presentation",
+        type: "projection"
+      }], true);
+
+      // 3. Project the first slide
       await projectSlideIndex(0);
 
       // Update local UI state
       setActiveSlideIndex(0);
+
+      void router.navigate({ to: "/operator" });
     }, { notify: true });
-  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationSlides, setPresentationActiveSlideIndex]);
+  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationSlides, setPresentationActiveSlideIndex, router]);
 
   const handleExport = async () => {
     if (!presentation) return;

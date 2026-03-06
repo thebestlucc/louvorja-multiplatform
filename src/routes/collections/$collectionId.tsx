@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
@@ -47,6 +47,7 @@ import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 
 import { normalizeMediaPath } from "../../lib/media-path";
+import { useQueueStore } from "../../stores/queue-store";
 import {
   Dialog,
   DialogContent,
@@ -80,6 +81,7 @@ function CollectionDetail() {
   const id = Number(collectionId);
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const router = useRouter();
   const { data, isLoading } = useCollection(id);
   const updateMutation = useUpdateCollection();
   const importMutation = useImportCollectionSong();
@@ -98,8 +100,6 @@ function CollectionDetail() {
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const setPresentationSlides = usePresentationStore((state) => state.setSlides);
   const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
-  const startAudioStatusSubscription = useAudioStore((state) => state.startStatusSubscription);
-  const stopAudioStatusSubscription = useAudioStore((state) => state.stopStatusSubscription);
   const { data: autoCheckSetting } = useSetting("collections.autoCheckSourceOnOpen");
   const isApiCollection = data?.collection.sourceType === "api";
   const { data: collectionHymns } = useCollectionHymns(isApiCollection ? id : -1);
@@ -242,8 +242,28 @@ function CollectionDetail() {
       return;
     }
 
-    stopAudioStatusSubscription();
-    setAudioSyncPoints([]);
+    const { audioPath, syncPoints } = extractLegacyPlaybackMetadata(slideRows);
+    
+    useQueueStore.getState().addToQueue([{ 
+      id: crypto.randomUUID(), 
+      hymn: {
+        id: song.id,
+        title: song.cachePresentationTitle || song.sourcePath.split(/[\\/]/).pop() || "",
+        lyrics: null,
+        album: null,
+        number: null,
+        audioPath: audioPath,
+        playbackPath: null,
+        coverPath: null,
+        sourceHash: null,
+        sourceMtimeMs: null,
+        syncStatus: "inSync",
+        createdAt: "",
+        updatedAt: ""
+      } as any, 
+      type: audioPath ? "audio" : "projection" 
+    }], true);
+
     const slideContents = slideRows.map((row) => parseSlideRow(row).content);
     if (slideContents.length === 0) {
       notify.error(t("collections.playEmpty"));
@@ -254,10 +274,8 @@ function CollectionDetail() {
     setPresentationSlides(slideContents);
     await goToSlide(0);
 
-    const { audioPath, syncPoints } = extractLegacyPlaybackMetadata(slideRows);
     if (audioPath) {
       setPlaybackMode("sung");
-      startAudioStatusSubscription();
       await play(audioPath);
       setAudioSyncPoints(syncPoints);
 
@@ -275,6 +293,8 @@ function CollectionDetail() {
     } else {
       setPlaybackMode("silent");
     }
+
+    void router.navigate({ to: "/operator" });
   };
 
   return (

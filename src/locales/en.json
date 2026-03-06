@@ -9,7 +9,7 @@
     "bible": "Bible",
     "presentations": "Presentations",
     "services": "Services",
-    "operator": "Operator",
+    "operator": "Now Playing",
     "utilities": "Utilities",
     "settings": "Settings",
     "help": "Help"
@@ -24,8 +24,16 @@
     "nextSlide": "Next slide",
     "play": "Play",
     "pause": "Pause",
+    "stop": "Stop",
     "playingQueue": "Playing Queue",
-    "queueEmpty": "Queue is empty"
+    "queueEmpty": "Queue is empty",
+    "modeSlides": "Only slides",
+    "modeAudio": "Default audio",
+    "modeInstrumental": "Playback/Instrumental",
+    "nextQueue": "Next in queue",
+    "prevQueue": "Previous in queue",
+    "clearQueue": "Clear queue",
+    "shuffleQueue": "Shuffle queue"
   },
   "table": {
     "actions": "Actions"
@@ -272,7 +280,10 @@
     "author": "Author",
     "project": "Project",
     "stopProjection": "Stop projection",
-    "slides": "Slides"
+    "slides": "Slides",
+    "number": "Number",
+    "title": "Title",
+    "album": "Album"
   },
   "hymn": {
     "actionSung": "Sung",
@@ -287,7 +298,21 @@
     "restoreFailed": "Failed to restore hymn: {{error}}",
     "lyricsModal": {
       "noLyrics": "No lyrics available"
-    }
+    },
+    "slides": "Slides",
+    "noLyrics": "No lyrics",
+    "info": "Information",
+    "author": "Author",
+    "album": "Album",
+    "category": "Category",
+    "audio": "Audio",
+    "actions": "Actions",
+    "deleteConfirm": "Are you sure you want to delete this hymn?",
+    "editTitle": "Edit Hymn",
+    "editHint": "Update hymn details and lyrics.",
+    "number": "Number",
+    "title": "Title",
+    "lyrics": "Lyrics"
   },
   "collections": {
     "subtitle": "Build song libraries separate from presentations.",
@@ -312,7 +337,7 @@
     "projectedAll": "Projected {{count}} slides from collection",
     "projectFailed": "Failed to project collection",
     "playingHymn": "Playing: {{title}}",
-    "playFailed": "Failed to play collection",
+    "playFailed": "Could not play song: {{error}}",
     "creating": "Creating...",
     "searchPlaceholder": "Search collections...",
     "empty": "No collections yet.",
@@ -345,7 +370,6 @@
     "autoCheckDisabledHint": "Auto-check is disabled. Enable it in Settings to validate source sync automatically.",
     "playSong": "Play song",
     "playEmpty": "This song has no slides to project.",
-    "playFailed": "Could not play song: {{error}}",
     "openPresentation": "Open cached presentation",
     "resync": "Resync source",
     "moveUp": "Move up",
@@ -367,7 +391,11 @@
       "stale": "Stale",
       "missing_source": "Missing source",
       "error": "Error"
-    }
+    },
+    "syncFailed": "Sync failed",
+    "syncSuccess": "Sync successful",
+    "name": "Name",
+    "year": "Year"
   },
   "presentations": {
     "new": "New Presentation",
@@ -442,7 +470,12 @@
       "text": "Text",
       "image": "Image",
       "video": "Video"
-    }
+    },
+    "emptyPresentation": "This presentation is empty.",
+    "project": "Project",
+    "slides": "Slides",
+    "noSlideSelected": "No slide selected.",
+    "settings": "Settings"
   },
   "bible": {
     "versions": "Versions",
@@ -654,7 +687,10 @@
         "label": "Syncing",
         "hymns": "hymns",
         "progress": "{{current}}/{{total}}"
-      }
+      },
+      "newVersionAvailable": "New content available",
+      "newVersionDescription": "The LouvorJA server has updated hymnal data. Re-download to get the latest hymns.",
+      "newVersionAction": "Download now"
     },
     "tabs": {
       "general": "General",

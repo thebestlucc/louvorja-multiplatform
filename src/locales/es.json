@@ -9,7 +9,7 @@
     "bible": "Biblia",
     "presentations": "Presentaciones",
     "services": "Cultos",
-    "operator": "Operador",
+    "operator": "Reproduciendo ahora",
     "utilities": "Utilidades",
     "settings": "Configuración",
     "help": "Ayuda"
@@ -24,8 +24,16 @@
     "nextSlide": "Diapositiva siguiente",
     "play": "Reproducir",
     "pause": "Pausar",
+    "stop": "Detener",
     "playingQueue": "Cola de Reproducción",
-    "queueEmpty": "Cola vacía"
+    "queueEmpty": "Cola vacía",
+    "modeSlides": "Solo diapositivas",
+    "modeAudio": "Audio predeterminado",
+    "modeInstrumental": "Playback/Instrumental",
+    "nextQueue": "Siguiente en la cola",
+    "prevQueue": "Anterior en la cola",
+    "clearQueue": "Limpiar cola",
+    "shuffleQueue": "Mezclar cola"
   },
   "table": {
     "actions": "Acciones"
@@ -272,7 +280,10 @@
     "author": "Autor",
     "project": "Proyectar",
     "stopProjection": "Detener proyección",
-    "slides": "Diapositivas"
+    "slides": "Diapositivas",
+    "number": "Número",
+    "title": "Título",
+    "album": "Álbum"
   },
   "hymn": {
     "actionSung": "Cantado",
@@ -287,7 +298,21 @@
     "restoreFailed": "Error al restaurar himno: {{error}}",
     "lyricsModal": {
       "noLyrics": "Letra no disponible"
-    }
+    },
+    "slides": "Diapositivas",
+    "noLyrics": "Sin letra",
+    "info": "Información",
+    "author": "Autor",
+    "album": "Álbum",
+    "category": "Categoría",
+    "audio": "Audio",
+    "actions": "Acciones",
+    "deleteConfirm": "¿Está seguro de que desea eliminar este himno?",
+    "editTitle": "Editar Himno",
+    "editHint": "Actualice los detalles y letra del himno.",
+    "number": "Número",
+    "title": "Título",
+    "lyrics": "Letra"
   },
   "collections": {
     "subtitle": "Construya bibliotecas de canciones separadas de presentaciones.",
@@ -312,7 +337,7 @@
     "projectedAll": "Proyectadas {{count}} diapositivas de la colección",
     "projectFailed": "Error al proyectar la colección",
     "playingHymn": "Reproduciendo: {{title}}",
-    "playFailed": "Error al reproducir la colección",
+    "playFailed": "No se pudo reproducir la canción: {{error}}",
     "creating": "Creando...",
     "searchPlaceholder": "Buscar colecciones...",
     "empty": "Aún no hay colecciones.",
@@ -345,7 +370,6 @@
     "autoCheckDisabledHint": "La verificación automática está desactivada. Actívela en Configuración para validar la sincronización de origen automáticamente.",
     "playSong": "Reproducir canción",
     "playEmpty": "Esta canción no tiene diapositivas para proyectar.",
-    "playFailed": "No se pudo reproducir la canción: {{error}}",
     "openPresentation": "Abrir presentación en caché",
     "resync": "Resincronizar origen",
     "moveUp": "Mover arriba",
@@ -367,7 +391,11 @@
       "stale": "Desactualizado",
       "missing_source": "Origen faltante",
       "error": "Error"
-    }
+    },
+    "syncFailed": "Sincronización fallida",
+    "syncSuccess": "Sincronizado con éxito",
+    "name": "Nombre",
+    "year": "Año"
   },
   "presentations": {
     "new": "Nueva Presentación",
@@ -442,7 +470,12 @@
       "text": "Texto",
       "image": "Imagen",
       "video": "Vídeo"
-    }
+    },
+    "emptyPresentation": "Esta presentación está vacía.",
+    "project": "Proyectar",
+    "slides": "Diapositivas",
+    "noSlideSelected": "Ninguna diapositiva seleccionada.",
+    "settings": "Configuración"
   },
   "bible": {
     "versions": "Versiones",
@@ -530,8 +563,8 @@
     "autoStartOn": "Activado",
     "autoStartOff": "Desactivado",
     "defaultPort": "Puerto predeterminado",
-    "autoStart": "Iniciar streaming autom\u00e1ticamente",
-    "autoStartDesc": "Iniciar autom\u00e1ticamente el servidor de streaming al abrir la aplicaci\u00f3n",
+    "autoStart": "Iniciar streaming automáticamente",
+    "autoStartDesc": "Iniciar automáticamente el servidor de streaming al abrir la aplicación",
     "video": "Vídeo",
     "ffprobeEnabled": "Activar fallback con ffprobe",
     "ffprobeEnabledDesc": "Usar ffprobe solo cuando falle el parser nativo de metadatos.",
@@ -654,7 +687,10 @@
         "label": "Sincronizando",
         "hymns": "himnos",
         "progress": "{{current}}/{{total}}"
-      }
+      },
+      "newVersionAvailable": "Nuevo contenido disponible",
+      "newVersionDescription": "El servidor de LouvorJA ha actualizado los datos del himnario. Vuelva a descargar para obtener los himnos más recientes.",
+      "newVersionAction": "Descargar ahora"
     },
     "tabs": {
       "general": "General",

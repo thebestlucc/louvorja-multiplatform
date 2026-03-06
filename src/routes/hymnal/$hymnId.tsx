@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, BookOpen, Copy, Monitor, Music, Pencil, RefreshCw, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Monitor, Music, Pencil, RefreshCw, Square, Trash2 } from "lucide-react";
 import { useDeleteHymn, useHymn, useRestoreHymnFromApi, useSyncPoints, useUpdateHymn } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
@@ -9,7 +9,6 @@ import { useSlides } from "../../hooks/use-slides";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { copyToClipboard } from "../../lib/clipboard";
 import { LyricsDisplay } from "../../components/music/lyrics-display";
-import { LyricsModal } from "../../components/music/lyrics-modal";
 import { AudioControls } from "../../components/music/audio-controls";
 import { AudioSyncEditor } from "../../components/music/audio-sync-editor";
 import { SlideList } from "../../components/slides/slide-list";
@@ -45,7 +44,6 @@ function HymnDetail() {
   const { bindHymnToPlaybackQueue: bindHymnToQueue, handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [lyricsModalOpen, setLyricsModalOpen] = useState(false);
   const [isProjecting, setIsProjecting] = useState(false);
   const [isQueueBoundToHymn, setIsQueueBoundToHymn] = useState(false);
   const [localActiveIndex, setLocalActiveIndex] = useState(0);
@@ -91,9 +89,6 @@ function HymnDetail() {
   }, [bindHymnToPlaybackQueue, generatedSlides.length, goToSlide]);
 
   useEffect(() => {
-    // Sync localActiveIndex from presentation store when:
-    // 1. isProjecting is true (slide changes from projection)
-    // 2. isQueueBoundToHymn is true (audio is playing, sync points update activeSlideIndex)
     if (!isProjecting && !isQueueBoundToHymn) {
       return;
     }
@@ -181,7 +176,23 @@ function HymnDetail() {
 
   return (
     <div className="flex h-full gap-4">
-      {/* Main content */}
+      {/* Left Sidebar: Slides */}
+      <div className="w-64 shrink-0 overflow-auto rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-3 text-sm font-medium">{t("hymn.slides")}</h3>
+        <SlideList
+          slides={generatedSlides}
+          activeIndex={localActiveIndex}
+          onSelect={(i) => {
+            if (isProjecting) {
+              void projectHymnSlide(i);
+            } else {
+              setLocalActiveIndex(i);
+            }
+          }}
+        />
+      </div>
+
+      {/* Middle Container */}
       <div className="flex flex-1 flex-col gap-4 overflow-auto">
         <div className="flex items-center gap-3">
           <Button 
@@ -205,201 +216,178 @@ function HymnDetail() {
             )}
             <h1 className="text-xl font-semibold">{hymn.title}</h1>
           </div>
-          {hymn.album && (
-            <span className="text-sm text-muted-foreground">{hymn.album}</span>
-          )}
-          <div className="ml-auto flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              <Pencil className="mr-2 h-4 w-4" />
-              {t("actions.edit")}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {t("actions.edit")}
+          </Button>
+          {hymn.apiMusicId != null && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={restoreMutation.isPending}
+              onClick={async () => {
+                const lang = (i18n.language as "pt" | "en" | "es") || "pt";
+                const [_, error] = await catcher(
+                  restoreMutation.mutateAsync({ hymnId: id, language: lang }),
+                  { notify: true, fallbackMessage: t("hymn.restoreFailed", { error: "" }) }
+                );
+                if (!error) {
+                  notify.success(t("hymn.restoreSuccess"));
+                }
+              }}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${restoreMutation.isPending ? "animate-spin" : ""}`} />
+              {t("hymn.restoreFromApi")}
             </Button>
-            {hymn.apiMusicId != null && (
+          )}
+          {isProjecting ? (
+            <>
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
-                disabled={restoreMutation.isPending}
                 onClick={async () => {
-                  const lang = (i18n.language as "pt" | "en" | "es") || "pt";
-                  const [_, error] = await catcher(
-                    restoreMutation.mutateAsync({ hymnId: id, language: lang }),
-                    { notify: true, fallbackMessage: t("hymn.restoreFailed", { error: "" }) }
-                  );
-                  if (!error) {
-                    notify.success(t("hymn.restoreSuccess"));
-                  }
+                  await stopProjectionAndSongAudio();
+                  setIsProjecting(false);
+                  setIsQueueBoundToHymn(false);
                 }}
               >
-                <RefreshCw className={`mr-2 h-4 w-4 ${restoreMutation.isPending ? "animate-spin" : ""}`} />
-                {t("hymn.restoreFromApi")}
+                <Square className="mr-2 h-4 w-4" />
+                {t("hymn.stopProjection")}
               </Button>
-            )}
-            {isProjecting ? (
-              <>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={async () => {
-                    await stopProjectionAndSongAudio();
-                    setIsProjecting(false);
-                    setIsQueueBoundToHymn(false);
-                  }}
-                >
-                  <Square className="mr-2 h-4 w-4" />
-                  {t("hymn.stopProjection")}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setLyricsModalOpen(true)}>
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  {t("hymn.actionShowLyrics")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    if (hymn?.lyrics) {
-                      await copyToClipboard(hymn.lyrics);
-                      notify.success(t("hymn.lyricsCopied"));
-                    }
-                  }}
-                >
-                  <Copy className="mr-1 h-4 w-4" />
-                  {t("hymn.copyLyrics")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button size="sm" onClick={() => void onStartCantado()}>
-                  <Monitor className="mr-2 h-4 w-4" />
-                  {t("hymn.actionSung")}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void onStartPlayback()}>
-                  {t("hymn.actionPlayback")}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void onStartSlidesOnly()}>
-                  {t("hymn.actionSlidesOnly")}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setLyricsModalOpen(true)}>
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  {t("hymn.actionShowLyrics")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    if (hymn?.lyrics) {
-                      await copyToClipboard(hymn.lyrics);
-                      notify.success(t("hymn.lyricsCopied"));
-                    }
-                  }}
-                >
-                  <Copy className="mr-1 h-4 w-4" />
-                  {t("hymn.copyLyrics")}
-                </Button>
-              </>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <Button size="sm" onClick={() => void onStartCantado()}>
+                <Monitor className="mr-2 h-4 w-4" />
+                {t("hymn.actionSung")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void onStartPlayback()}>
+                {t("hymn.actionPlayback")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void onStartSlidesOnly()}>
+                {t("hymn.actionSlidesOnly")}
+              </Button>
+            </>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={async () => {
+              if (hymn?.lyrics) {
+                await copyToClipboard(hymn.lyrics);
+                notify.success(t("hymn.lyricsCopied"));
+              }
+            }}
+          >
+            <Copy className="mr-1 h-4 w-4" />
+            {t("hymn.copyLyrics")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={async () => {
+              if (confirm(t("hymn.deleteConfirm"))) {
+                const [_, error] = await catcher(deleteMutation.mutateAsync(id), {
+                  notify: true,
+                  fallbackMessage: t("hymnal.deleteFailed", { error: "" }),
+                });
+                if (!error) {
+                  void navigate({ to: "/hymnal" });
+                }
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
-        
-        <div className="flex flex-1 gap-4 min-h-0">
-          <div className="w-64 shrink-0 overflow-auto rounded-lg border border-border bg-card p-4">
-            <h3 className="mb-3 text-sm font-medium">{t("hymn.slides")}</h3>
-            <SlideList
-              slides={generatedSlides}
-              activeIndex={localActiveIndex}
-              onSelect={(i) => void projectHymnSlide(i)}
-            />
-          </div>
 
-          <div className="flex-1 overflow-auto rounded-lg border border-border bg-card p-4">
-            {hymn.lyrics ? (
-              <LyricsDisplay
-                lyrics={hymn.lyrics}
-                activeStanza={isProjecting ? Math.max(0, localActiveIndex - 1) : localActiveIndex}
-                onStanzaClick={(i) => {
-                  if (isProjecting) {
-                    void projectHymnSlide(i + 1);
-                  } else {
-                    setLocalActiveIndex(i + 1);
-                  }
-                }}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-muted-foreground">
-                {t("hymn.noLyrics")}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="w-80 shrink-0 space-y-4">
+        {/* Music Information */}
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-medium">{t("hymn.info")}</h3>
-          <div className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-4 text-sm">
             {hymn.author && (
               <div>
-                <span className="text-muted-foreground">{t("hymn.author")}: </span>
-                {hymn.author}
+                <span className="text-muted-foreground block text-xs">{t("hymn.author")}</span>
+                <span className="font-medium">{hymn.author}</span>
               </div>
             )}
             {hymn.album && (
               <div>
-                <span className="text-muted-foreground">{t("hymn.album")}: </span>
-                {hymn.album}
+                <span className="text-muted-foreground block text-xs">{t("hymn.album")}</span>
+                <span className="font-medium">{hymn.album}</span>
               </div>
             )}
             {hymn.category && (
               <div>
-                <span className="text-muted-foreground">{t("hymn.category")}: </span>
-                <Badge variant="outline">{hymn.category}</Badge>
+                <span className="text-muted-foreground block text-xs">{t("hymn.category")}</span>
+                <Badge variant="secondary" className="mt-1">{hymn.category}</Badge>
               </div>
             )}
           </div>
         </div>
 
+        {/* Local Audio Controls */}
         {hymn.audioPath && (
           <div className="rounded-lg border border-border bg-card p-4">
-            <h3 className="mb-2 text-sm font-medium">{t("hymn.audio")}</h3>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium">{t("hymn.audio")}</h3>
+              <Button
+                variant={showSyncEditor ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowSyncEditor(!showSyncEditor)}
+              >
+                <Music className="mr-2 h-4 w-4" />
+                {t("audio.syncEditor")}
+              </Button>
+            </div>
+            
+            {/* onBeforePlay is omitted so it plays locally without projecting */}
             <AudioControls
               filePath={hymn.audioPath}
               playbackPath={hymn.playbackPath}
-              onBeforePlay={() => void bindHymnToPlaybackQueue(localActiveIndex)}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2 w-full"
-              onClick={() => setShowSyncEditor(!showSyncEditor)}
-            >
-              <Music className="mr-2 h-4 w-4" />
-              {t("audio.syncEditor")}
-            </Button>
+
+            {showSyncEditor && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <AudioSyncEditor
+                  hymnId={id}
+                  initialPoints={syncPointsData ?? []}
+                  totalSlides={generatedSlides.length}
+                  slides={generatedSlides}
+                  onClose={() => setShowSyncEditor(false)}
+                />
+              </div>
+            )}
           </div>
         )}
+      </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">{t("hymn.actions")}</h3>
-          <div className="space-y-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              className="w-full"
-              onClick={async () => {
-                if (confirm(t("hymn.deleteConfirm"))) {
-                  const [_, error] = await catcher(deleteMutation.mutateAsync(id), {
-                    notify: true,
-                    fallbackMessage: t("hymnal.deleteFailed", { error: "" }),
-                  });
-                  if (!error) {
-                    void navigate({ to: "/hymnal" });
-                  }
-                }
-              }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {t("actions.delete")}
-            </Button>
+      {/* Right Sidebar: Lyrics */}
+      <div className="w-80 shrink-0 overflow-auto rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-3 text-sm font-medium">{t("hymn.lyrics")}</h3>
+        {hymn.lyrics ? (
+          <LyricsDisplay
+            lyrics={hymn.lyrics}
+            activeStanza={isProjecting ? Math.max(0, localActiveIndex - 1) : localActiveIndex}
+            onStanzaClick={(i) => {
+              if (isProjecting) {
+                void projectHymnSlide(i + 1);
+              } else {
+                setLocalActiveIndex(i + 1);
+              }
+            }}
+          />
+        ) : (
+          <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
+            {t("hymn.noLyrics")}
           </div>
-        </div>
+        )}
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -461,17 +449,7 @@ function HymnDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {showSyncEditor && hymn.audioPath && (
-        <AudioSyncEditor
-          hymnId={id}
-          initialPoints={syncPointsData ?? []}
-          totalSlides={generatedSlides.length}
-          onClose={() => setShowSyncEditor(false)}
-        />
-      )}
-
-      <LyricsModal hymn={hymn} open={lyricsModalOpen} onOpenChange={setLyricsModalOpen} />
     </div>
   );
 }
+

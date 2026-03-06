@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  searchHymns, getHymn, getAlbums, getHymnsByAlbum, updateHymn, deleteHymn, getHymnAudioPath,
+  searchHymns,
+  searchAllHymns,
+  getHymn,
+  getAlbums,
+  getHymnsByAlbum,
+  updateHymn,
+  deleteHymn,
+  getHymnAudioPath,
   getAvailableMonitors, setCurrentSlide, getSyncPoints, saveSyncPoints,
   getCollections, getCollection, createCollection, updateCollection, deleteCollection, importCollectionSong,
   checkCollectionSongSync, resyncCollectionSong, removeCollectionSong, reorderCollectionSongs,
@@ -105,6 +112,13 @@ export function useHymns(query: string) {
   return useQuery({
     queryKey: queryKeys.hymns.search(query),
     queryFn: () => searchHymns(query),
+  });
+}
+
+export function useAllHymns(query: string) {
+  return useQuery({
+    queryKey: ["hymns", "search-all", query],
+    queryFn: () => searchAllHymns(query),
   });
 }
 
