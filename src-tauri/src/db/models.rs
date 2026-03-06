@@ -321,8 +321,9 @@ pub struct CollectionSearchResult {
     pub snippet: String,
 }
 
-/// Join table struct for collection ↔ hymn links.
-/// Scaffolded for future direct-link CRUD endpoints; current queries return `Vec<Hymn>` instead.
+/// Schema reference for the `collection_hymns` join table.
+/// The table is actively used via raw queries in `db/queries/collections.rs`.
+/// This struct documents the table shape but row mapping uses direct field access.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -335,14 +336,4 @@ pub struct CollectionHymn {
     pub hymn_id: i64,
     pub item_order: i32,
     pub created_at: String,
-}
-
-/// Collection with its linked hymns.
-/// Used by `get_collection_with_hymns` query (scaffolded for future collection detail endpoint).
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionWithHymns {
-    pub collection: Collection,
-    pub hymns: Vec<Hymn>,
 }

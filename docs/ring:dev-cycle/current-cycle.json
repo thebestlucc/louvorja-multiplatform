@@ -48,10 +48,25 @@
           "tdd_green": { "status": "completed" }
         }
       }
+    },
+    {
+      "id": "T-004",
+      "title": "Update Audio Store for Auto-Next",
+      "status": "completed",
+      "gate_progress": {
+        "implementation": { "status": "completed" }
+      }
+    },
+    {
+      "id": "T-005",
+      "title": "Create Playback Coordinator Hook",
+      "status": "completed",
+      "gate_progress": {
+        "implementation": { "status": "completed" }
+      }
     }
     ],
-    "status": "completed",
-      "gate_progress": {}
+    "status": "in_progress",      "gate_progress": {}
     }
   ],
   "metrics": {

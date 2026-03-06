@@ -5,6 +5,14 @@
 
 
 export const commands = {
+async getHymn(id: number) : Promise<Result<Hymn, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_hymn", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async searchHymns(query: string) : Promise<Result<Hymn[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("search_hymns", { query }) };
@@ -13,9 +21,9 @@ async searchHymns(query: string) : Promise<Result<Hymn[], AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getHymn(id: number) : Promise<Result<Hymn, AppErrorResponse>> {
+async searchAllHymns(query: string) : Promise<Result<Hymn[], AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_hymn", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("search_all_hymns", { query }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -839,7 +847,7 @@ async startLegacyFetch(options: LegacyFetchOptions) : Promise<Result<string, App
 }
 },
 /**
- * Get the current progress of a legacy fetch operation
+ * Get current progress
  */
 async getLegacyFetchProgress(runId: string) : Promise<Result<LegacyFetchProgress, AppErrorResponse>> {
     try {
@@ -850,7 +858,7 @@ async getLegacyFetchProgress(runId: string) : Promise<Result<LegacyFetchProgress
 }
 },
 /**
- * Cancel a running legacy fetch operation
+ * Cancel a running operation
  */
 async cancelLegacyFetch(runId: string) : Promise<Result<null, AppErrorResponse>> {
     try {
@@ -861,7 +869,7 @@ async cancelLegacyFetch(runId: string) : Promise<Result<null, AppErrorResponse>>
 }
 },
 /**
- * Get the final report of a completed legacy fetch operation
+ * Get the final report
  */
 async getLegacyFetchReport(runId: string) : Promise<Result<LegacyFetchReport | null, AppErrorResponse>> {
     try {
@@ -872,7 +880,7 @@ async getLegacyFetchReport(runId: string) : Promise<Result<LegacyFetchReport | n
 }
 },
 /**
- * Fetch params from the API (for checking connectivity)
+ * Fetch params from the API
  */
 async fetchLegacyParams() : Promise<Result<ApiParams, AppErrorResponse>> {
     try {
@@ -882,10 +890,14 @@ async fetchLegacyParams() : Promise<Result<ApiParams, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
-/**
- * Re-fetch a single hymn from the API and update its DB row + re-download cover.
- * Requires the hymn to have an `api_music_id`.
- */
+async checkDbVersion() : Promise<Result<DbVersionCheckResult, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_db_version") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async restoreHymnFromApi(hymnId: number, language: ApiLanguage) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("restore_hymn_from_api", { hymnId, language }) };
@@ -894,10 +906,6 @@ async restoreHymnFromApi(hymnId: number, language: ApiLanguage) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
-/**
- * Re-fetch a single album from the API and update its musics.
- * Requires the collection to have an `api_album_id`.
- */
 async restoreAlbumFromApi(collectionId: number, language: ApiLanguage) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("restore_album_from_api", { collectionId, language }) };
@@ -1046,6 +1054,11 @@ export type CollectionSearchResult = { kind: string; collectionId: number; songI
 export type CollectionSong = { id: number; collectionId: number; sourcePath: string; sourceFormat: string; sourceHash: string | null; sourceMtimeMs: number; cachePresentationId: number; syncStatus: CollectionSongSyncStatus; lastSyncAt: string | null; itemOrder: number; createdAt: string; updatedAt: string; cachePresentationTitle: string | null }
 export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "error"
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
+/**
+ * Check if the API has a newer db_version than what we have stored locally.
+ * Returns `{ has_new_version: bool, new_version: Option<i64> }`.
+ */
+export type DbVersionCheckResult = { hasNewVersion: boolean; newVersion: number | null }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
 /**
@@ -1107,7 +1120,7 @@ export type SlideContent = { slideType: string; text: string | null; title: stri
 export type SlideContext = { next: SlideContent | null; index: number; total: number; title: string }
 export type StreamingInfo = { isRunning: boolean; ip: string | null; port: number; urls: StreamingUrls | null; connections: number; broadcastEnabled: boolean }
 export type StreamingUrls = { music: string; bible: string; returnMonitor: string }
-export type SyncPoint = { slideIndex: number; timestampMs: number }
+export type SyncPoint = { slideIndex: number; timestampMs: number; instrumentalTimestampMs?: number | null }
 export type TimerMode = "countdown" | "stopwatch"
 export type TimerStateData = { mode: TimerMode; isRunning: boolean; currentTimeMs: number; durationMs: number; laps: number[] }
 export type UpdateInfo = { version: string; currentVersion: string; notes: string | null }

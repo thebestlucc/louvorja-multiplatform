@@ -50,6 +50,10 @@ export async function searchHymns(query: string): Promise<Hymn[]> {
   return tauriInvoke<Hymn[]>("search_hymns", { query });
 }
 
+export async function searchAllHymns(query: string): Promise<Hymn[]> {
+  return tauriInvoke<Hymn[]>("search_all_hymns", { query });
+}
+
 export async function getHymn(id: number): Promise<Hymn> {
   return tauriInvoke<Hymn>("get_hymn", { id });
 }
@@ -440,6 +444,10 @@ export async function getLegacyFetchReport(runId: string): Promise<LegacyFetchRe
 
 export async function fetchLegacyParams(): Promise<ApiParams> {
   return tauriInvoke<ApiParams>("fetch_legacy_params");
+}
+
+export async function checkDbVersion(): Promise<{ hasNewVersion: boolean; newVersion: number | null }> {
+  return tauriInvoke<{ hasNewVersion: boolean; newVersion: number | null }>("check_db_version");
 }
 
 export async function restoreHymnFromApi(hymnId: number, language: string): Promise<void> {

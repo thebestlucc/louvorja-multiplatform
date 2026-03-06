@@ -6,6 +6,7 @@ import type { PlaybackStatus, PlaybackMode } from "../types/audio";
 import { usePresentationStore } from "./presentation-store";
 import { useDisplayStore } from "./display-store";
 import { projectSlideIndex } from "../lib/projection-playback";
+import { audioPlay, audioPause, audioResume, audioStop, audioSeek, audioSetVolume } from "../lib/tauri";
 
 interface AudioStoreState {
   status: PlaybackStatus;
@@ -18,9 +19,9 @@ interface AudioStoreState {
   statusSubscription: (() => void) | null;
   subscriptionToken: number;
   lastSyncSlide: number;
-  manualSyncLock: {
-    slideIndex: number;
-    targetTimestampMs: number;
+  onFinished: (() => void) | null;
+  seekLock: {
+    targetMs: number;
     expiresAtMs: number;
   } | null;
   setStatus: (status: PlaybackStatus) => void;
@@ -30,13 +31,19 @@ interface AudioStoreState {
   setVolume: (volume: number) => void;
   setPlaybackMode: (mode: PlaybackMode) => void;
   setSyncPoints: (points: SyncPoint[]) => void;
-  setManualSyncLock: (slideIndex: number, targetTimestampMs: number, holdMs?: number) => void;
-  clearManualSyncLock: () => void;
+  setOnFinished: (callback: (() => void) | null) => void;
   /** Immediately sync active slide to a given audio position (e.g. after seek). */
   syncToPosition: (positionMs: number) => void;
   startStatusSubscription: () => void;
   stopStatusSubscription: () => void;
   reset: () => void;
+
+  // Centralized Audio Actions
+  play: (filePath: string, positionMs?: number) => Promise<void>;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+  stop: () => Promise<void>;
+  seek: (ms: number) => Promise<void>;
 }
 
 function findSlideAtPosition(syncPoints: SyncPoint[], positionMs: number): number {
@@ -63,29 +70,23 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   statusSubscription: null,
   subscriptionToken: 0,
   lastSyncSlide: -1,
-  manualSyncLock: null,
+  onFinished: null,
+  seekLock: null,
   setStatus: (status) => set({ status }),
   setCurrentFile: (file) => set({ currentFile: file }),
   setPosition: (ms) => set({ positionMs: ms }),
   setDuration: (ms) => set({ durationMs: ms }),
-  setVolume: (volume) => set({ volume }),
+  setVolume: async (volume) => {
+    await audioSetVolume(volume);
+    set({ volume });
+  },
   setPlaybackMode: (mode) => set({ playbackMode: mode }),
   setSyncPoints: (points) => {
     console.log("[audio-store] setSyncPoints called with", points.length, "points:", points);
     const sorted = [...points].sort((a, b) => a.timestampMs - b.timestampMs);
     set({ syncPoints: sorted, lastSyncSlide: -1 });
   },
-  setManualSyncLock: (slideIndex, targetTimestampMs, holdMs = 1_200) => {
-    set({
-      manualSyncLock: {
-        slideIndex,
-        targetTimestampMs,
-        expiresAtMs: Date.now() + holdMs,
-      },
-      lastSyncSlide: slideIndex,
-    });
-  },
-  clearManualSyncLock: () => set({ manualSyncLock: null }),
+  setOnFinished: (callback) => set({ onFinished: callback }),
   syncToPosition: (positionMs: number) => {
     const state = get();
     if (state.syncPoints.length === 0) return;
@@ -152,17 +153,28 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       }
 
       const currentState = get();
+      
+      // Handle seek lock: ignore stale payloads from before a recent seek
+      let seekLock = currentState.seekLock;
+      if (seekLock) {
+        if (Date.now() >= seekLock.expiresAtMs) {
+          seekLock = null;
+          set({ seekLock: null });
+        } else if (Math.abs(payload.positionMs - seekLock.targetMs) > 400) {
+          // Payload is likely stale (prior to the seek), ignore it
+          return;
+        } else {
+          // Payload has caught up to the seek
+          seekLock = null;
+          set({ seekLock: null });
+        }
+      }
+
       const newStatus: PlaybackStatus = payload.isPlaying
         ? "playing"
         : payload.isPaused
           ? "paused"
           : "idle";
-
-      let manualSyncLock = currentState.manualSyncLock;
-      if (manualSyncLock && Date.now() >= manualSyncLock.expiresAtMs) {
-        manualSyncLock = null;
-        set({ manualSyncLock: null });
-      }
 
       set({
         positionMs: payload.positionMs,
@@ -176,17 +188,6 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         const targetSlide = findSlideAtPosition(currentState.syncPoints, payload.positionMs);
         console.log("[audio-store] Sync check: positionMs=", payload.positionMs, "targetSlide=", targetSlide, "syncPoints=", currentState.syncPoints.length);
         if (targetSlide >= 0) {
-          if (manualSyncLock) {
-            const lockReached =
-              targetSlide === manualSyncLock.slideIndex ||
-              Math.abs(payload.positionMs - manualSyncLock.targetTimestampMs) <= 300;
-
-            if (!lockReached && targetSlide !== manualSyncLock.slideIndex) {
-              return;
-            }
-
-            set({ manualSyncLock: null });
-          }
           queueSlideProjection(targetSlide);
         }
       } else if (payload.isPlaying || payload.isPaused) {
@@ -194,7 +195,12 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       }
 
       if (!payload.isPlaying && !payload.isPaused) {
+        const finishedCallback = get().onFinished;
         get().stopStatusSubscription();
+        if (finishedCallback) {
+          console.log("[audio-store] Playback finished, calling onFinished callback");
+          finishedCallback();
+        }
       }
     };
 
@@ -223,7 +229,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       statusSubscription: null,
       subscriptionToken: subscriptionToken + 1,
       lastSyncSlide: -1,
-      manualSyncLock: null,
+      seekLock: null,
     });
   },
   reset: () => {
@@ -242,7 +248,34 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       statusSubscription: null,
       subscriptionToken: subscriptionToken + 1,
       lastSyncSlide: -1,
-      manualSyncLock: null,
+      seekLock: null,
     });
   },
+
+  play: async (filePath: string, positionMs?: number) => {
+    get().startStatusSubscription();
+    await audioPlay(filePath, positionMs);
+  },
+  pause: async () => {
+    await audioPause();
+    set({ status: "paused" });
+  },
+  resume: async () => {
+    get().startStatusSubscription();
+    await audioResume();
+  },
+  stop: async () => {
+    await audioStop();
+    get().stopStatusSubscription();
+    set({ status: "idle", positionMs: 0 });
+  },
+  seek: async (ms: number) => {
+    // Optimistically apply the new position and lock it to prevent flicker
+    set({
+      positionMs: ms,
+      seekLock: { targetMs: ms, expiresAtMs: Date.now() + 1000 }
+    });
+    get().syncToPosition(ms);
+    await audioSeek(ms);
+  }
 }));

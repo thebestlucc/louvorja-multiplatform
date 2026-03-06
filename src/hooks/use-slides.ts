@@ -71,16 +71,12 @@ export function useSlides() {
 
     const [_, error] = await catcher(
       async () => {
-        const { audioSeek } = await import("../lib/tauri");
-        audioState.setManualSyncLock(index, timestampMs);
-        await audioSeek(timestampMs);
-        audioState.setPosition(timestampMs);
+        await audioState.seek(timestampMs);
       },
       { notify: false },
     );
 
     if (error) {
-      audioState.clearManualSyncLock();
       console.warn("Failed to seek audio on manual slide navigation:", error);
     }
   }, []);
@@ -110,7 +106,7 @@ export function useSlides() {
     if (currentSlides.length === 0) return;
 
     if (idx < currentSlides.length - 1) {
-      await goToSlide(idx + 1);
+      await goToSlide(idx + 1, { seekAudio: true });
       return;
     }
 
@@ -119,7 +115,7 @@ export function useSlides() {
 
   const prevSlide = useCallback(async () => {
     const { activeSlideIndex: idx } = usePresentationStore.getState();
-    await goToSlide(idx - 1);
+    await goToSlide(idx - 1, { seekAudio: true });
   }, [goToSlide]);
 
   return {
@@ -135,7 +131,7 @@ export function useSlides() {
   };
 }
 
-function resolveSlideSeekTimestamp(syncPoints: SyncPoint[], slideIndex: number): number | null {
+export function resolveSlideSeekTimestamp(syncPoints: SyncPoint[], slideIndex: number): number | null {
   let bestMatch: SyncPoint | null = null;
   let nearestFuture: SyncPoint | null = null;
 

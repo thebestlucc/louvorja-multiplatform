@@ -32,7 +32,7 @@ import { catcher } from "../lib/catcher";
 import {
   spotlightSelect,
   spotlightHide,
-  searchHymns,
+  searchAllHymns,
   searchBible,
   searchCollections,
   getHymn,
@@ -152,7 +152,7 @@ function SpotlightWindow() {
     const timer = setTimeout(async () => {
       const [results] = await catcher(
         Promise.all([
-          searchHymns(query),
+          searchAllHymns(query),
           query.trim().length >= 2 ? searchBible(query, null) : Promise.resolve([]),
           query.trim().length >= 2 ? searchCollections(query) : Promise.resolve([]),
         ]),

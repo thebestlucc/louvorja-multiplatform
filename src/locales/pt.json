@@ -9,7 +9,7 @@
     "bible": "Bíblia",
     "presentations": "Apresentações",
     "services": "Cultos",
-    "operator": "Operador",
+    "operator": "Tocando agora",
     "utilities": "Utilidades",
     "settings": "Configurações",
     "help": "Ajuda"
@@ -24,8 +24,16 @@
     "nextSlide": "Próximo slide",
     "play": "Reproduzir",
     "pause": "Pausar",
+    "stop": "Parar",
     "playingQueue": "Fila de Reprodução",
-    "queueEmpty": "Fila vazia"
+    "queueEmpty": "Fila vazia",
+    "modeSlides": "Só slides",
+    "modeAudio": "Áudio padrão",
+    "modeInstrumental": "Playback/Instrumental",
+    "nextQueue": "Próximo da fila",
+    "prevQueue": "Anterior da fila",
+    "clearQueue": "Limpar fila",
+    "shuffleQueue": "Embaralhar fila"
   },
   "table": {
     "actions": "Ações"
@@ -272,7 +280,10 @@
     "author": "Autor",
     "project": "Projetar",
     "stopProjection": "Parar projeção",
-    "slides": "Slides"
+    "slides": "Slides",
+    "number": "Número",
+    "title": "Título",
+    "album": "Álbum"
   },
   "hymn": {
     "actionSung": "Cantado",
@@ -287,7 +298,21 @@
     "restoreFailed": "Falha ao restaurar hino: {{error}}",
     "lyricsModal": {
       "noLyrics": "Letra não disponível"
-    }
+    },
+    "slides": "Slides",
+    "noLyrics": "Sem letra",
+    "info": "Informações",
+    "author": "Autor",
+    "album": "Álbum",
+    "category": "Categoria",
+    "audio": "Áudio",
+    "actions": "Ações",
+    "deleteConfirm": "Tem certeza que deseja excluir este hino?",
+    "editTitle": "Editar Hino",
+    "editHint": "Atualize os detalhes e letra do hino.",
+    "number": "Número",
+    "title": "Título",
+    "lyrics": "Letra"
   },
   "collections": {
     "subtitle": "Monte bibliotecas de músicas separadas das apresentações.",
@@ -312,7 +337,7 @@
     "projectedAll": "Projetados {{count}} slides da coletânea",
     "projectFailed": "Falha ao projetar coletânea",
     "playingHymn": "Reproduzindo: {{title}}",
-    "playFailed": "Falha ao reproduzir coletânea",
+    "playFailed": "Não foi possível reproduzir a música: {{error}}",
     "creating": "Criando...",
     "searchPlaceholder": "Pesquisar coleções...",
     "empty": "Nenhuma coleção ainda.",
@@ -345,7 +370,6 @@
     "autoCheckDisabledHint": "A verificação automática está desativada. Ative em Configurações para validar sincronização da fonte automaticamente.",
     "playSong": "Reproduzir música",
     "playEmpty": "Esta música não possui slides para projeção.",
-    "playFailed": "Não foi possível reproduzir a música: {{error}}",
     "openPresentation": "Abrir apresentação em cache",
     "resync": "Ressincronizar fonte",
     "moveUp": "Mover para cima",
@@ -367,7 +391,11 @@
       "stale": "Desatualizado",
       "missing_source": "Fonte ausente",
       "error": "Erro"
-    }
+    },
+    "syncFailed": "Sincronização falhou",
+    "syncSuccess": "Sincronizado com sucesso",
+    "name": "Nome",
+    "year": "Ano"
   },
   "presentations": {
     "new": "Nova Apresentação",
@@ -442,7 +470,12 @@
       "text": "Texto",
       "image": "Imagem",
       "video": "Vídeo"
-    }
+    },
+    "emptyPresentation": "Esta apresentação está vazia.",
+    "project": "Projetar",
+    "slides": "Slides",
+    "noSlideSelected": "Nenhum slide selecionado.",
+    "settings": "Configurações"
   },
   "bible": {
     "versions": "Versões",
@@ -529,7 +562,7 @@
     "launchAtStartupDesc": "Abrir LouvorJA automaticamente ao ligar o computador.",
     "autoStartOn": "Ativado",
     "autoStartOff": "Desativado",
-    "defaultPort": "Porta padr\u00e3o",
+    "defaultPort": "Porta padrão",
     "autoStart": "Iniciar streaming automaticamente",
     "autoStartDesc": "Iniciar automaticamente o servidor de streaming ao abrir o aplicativo",
     "video": "Vídeo",
@@ -654,7 +687,10 @@
         "label": "Sincronizando",
         "hymns": "hinos",
         "progress": "{{current}}/{{total}}"
-      }
+      },
+      "newVersionAvailable": "Novo conteúdo disponível",
+      "newVersionDescription": "O servidor do LouvorJA atualizou os dados do hinário. Baixe novamente para obter os hinos mais recentes.",
+      "newVersionAction": "Baixar agora"
     },
     "tabs": {
       "general": "Geral",

@@ -1,6 +1,6 @@
 use crate::db::models::{
     Collection, CollectionSearchResult, CollectionSong, CollectionSongSyncStatus,
-    CollectionWithHymns, CollectionWithSongs, Hymn,
+    CollectionWithSongs, Hymn,
 };
 use crate::error::AppError;
 use rusqlite::{params, Connection, Row};
@@ -736,16 +736,6 @@ pub fn get_collection_hymns(conn: &Connection, collection_id: i64) -> Result<Vec
     Ok(rows)
 }
 
-/// Scaffolded for future collection detail endpoint.
-#[allow(dead_code)]
-pub fn get_collection_with_hymns(
-    conn: &Connection,
-    id: i64,
-) -> Result<CollectionWithHymns, AppError> {
-    let collection = get_collection_by_id(conn, id)?;
-    let hymns = get_collection_hymns(conn, id)?;
-    Ok(CollectionWithHymns { collection, hymns })
-}
 
 pub fn delete_collection_hymn(
     conn: &Connection,

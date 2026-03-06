@@ -45,8 +45,9 @@ pub fn run() {
     let specta_builder = tauri_specta::Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
             // Music
-            commands::music::search_hymns,
             commands::music::get_hymn,
+            commands::music::search_hymns,
+            commands::music::search_all_hymns,
             commands::music::get_albums,
             commands::music::get_hymns_by_album,
             commands::music::create_hymn,
@@ -163,6 +164,7 @@ pub fn run() {
             commands::legacy_fetch::cancel_legacy_fetch,
             commands::legacy_fetch::get_legacy_fetch_report,
             commands::legacy_fetch::fetch_legacy_params,
+            commands::legacy_fetch::check_db_version,
             commands::legacy_fetch::restore_hymn_from_api,
             commands::legacy_fetch::restore_album_from_api,
             // Updater
