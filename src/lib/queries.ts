@@ -17,6 +17,9 @@ import {
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
+  listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment,
+  replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
+  generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
   getMonitorConfigs, setMonitorConfig,
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
@@ -34,6 +37,10 @@ import type {
   LegacyFetchOptions,
   SyncPoint,
   SlideContent,
+  ScheduleAssignmentInput,
+  ScheduleDayInput,
+  ScheduleDepartmentInput,
+  ScheduleGenerationRequest,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
 
@@ -73,6 +80,11 @@ export const queryKeys = {
     detail: (id: number) => ["services", id] as const,
     items: (serviceId: number) => ["services", serviceId, "items"] as const,
   },
+  schedule: {
+    all: ["schedule"] as const,
+    departments: ["schedule", "departments"] as const,
+    month: (year: number, month: number) => ["schedule", "month", year, month] as const,
+  },
   settings: {
     all: ["settings"] as const,
     detail: (key: string) => ["settings", key] as const,
@@ -106,6 +118,21 @@ export const queryKeys = {
 
 function invalidateTimerState(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.utilities.timerState });
+}
+
+function invalidateScheduleQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  month?: { year: number; month: number },
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.schedule.departments });
+  if (month) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.schedule.month(month.year, month.month),
+    });
+    return;
+  }
+
+  queryClient.invalidateQueries({ queryKey: queryKeys.schedule.all });
 }
 
 export function useHymns(query: string) {
@@ -650,6 +677,104 @@ export function useUpdateServiceItem() {
       updateServiceItem(vars.id, vars.title, vars.notes),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+// Schedules
+export function useScheduleDepartments() {
+  return useQuery({
+    queryKey: queryKeys.schedule.departments,
+    queryFn: () => listScheduleDepartments(),
+  });
+}
+
+export function useScheduleMonth(year: number, month: number, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.schedule.month(year, month),
+    queryFn: () => getScheduleMonth(year, month),
+    enabled: (options?.enabled ?? true) && year > 0 && month >= 1 && month <= 12,
+  });
+}
+
+export function useSaveScheduleDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ScheduleDepartmentInput) => saveScheduleDepartment(input),
+    onSuccess: () => {
+      invalidateScheduleQueries(queryClient);
+    },
+  });
+}
+
+export function useDeleteScheduleDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteScheduleDepartment(id),
+    onSuccess: () => {
+      invalidateScheduleQueries(queryClient);
+    },
+  });
+}
+
+export function useReplaceScheduleDepartmentMembers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { departmentId: number; members: string[] }) =>
+      replaceScheduleDepartmentMembers(vars.departmentId, vars.members),
+    onSuccess: () => {
+      invalidateScheduleQueries(queryClient);
+    },
+  });
+}
+
+export function useSaveScheduleMonthDays() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { year: number; month: number; days: ScheduleDayInput[] }) =>
+      saveScheduleMonthDays(vars.year, vars.month, vars.days),
+    onSuccess: (_, vars) => {
+      invalidateScheduleQueries(queryClient, { year: vars.year, month: vars.month });
+    },
+  });
+}
+
+export function useGenerateScheduleMonth() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ScheduleGenerationRequest) => generateScheduleMonth(input),
+    onSuccess: (_, input) => {
+      invalidateScheduleQueries(queryClient, { year: input.year, month: input.month });
+    },
+  });
+}
+
+export function useSetScheduleDayResponsibleDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      scheduleDayId: number;
+      responsibleDepartmentId: number | null;
+      year: number;
+      month: number;
+    }) =>
+      setScheduleDayResponsibleDepartment(
+        vars.scheduleDayId,
+        vars.responsibleDepartmentId,
+      ),
+    onSuccess: (_, vars) => {
+      invalidateScheduleQueries(queryClient, { year: vars.year, month: vars.month });
+    },
+  });
+}
+
+export function useSaveScheduleDayAssignments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { year: number; month: number; input: ScheduleAssignmentInput }) =>
+      saveScheduleDayAssignments(vars.input),
+    onSuccess: (_, vars) => {
+      invalidateScheduleQueries(queryClient, { year: vars.year, month: vars.month });
     },
   });
 }

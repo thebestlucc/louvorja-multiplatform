@@ -49,6 +49,7 @@ struct CollectionSongSearchDoc {
     collection_description: String,
     source_path: String,
     title: Option<String>,
+    cover_path: Option<String>,
     body: String,
 }
 
@@ -108,6 +109,17 @@ fn collections_fts_exists(conn: &Connection) -> Result<bool, AppError> {
     Ok(exists > 0)
 }
 
+fn sqlite_table_exists(conn: &Connection, table: &str) -> Result<bool, AppError> {
+    let exists: i64 = conn.query_row(
+        "SELECT COUNT(1)
+         FROM sqlite_master
+         WHERE type = 'table' AND name = ?1",
+        params![table],
+        |row| row.get(0),
+    )?;
+    Ok(exists > 0)
+}
+
 fn upsert_collection_search_document(
     conn: &Connection,
     collection_id: i64,
@@ -123,7 +135,7 @@ fn upsert_collection_search_document(
     )?;
 
     let row = conn.query_row(
-        "SELECT id, name, COALESCE(description, '') AS description
+        "SELECT id, name, COALESCE(description, '') AS description, cover_path
          FROM collections
          WHERE id = ?1",
         params![collection_id],
@@ -132,11 +144,12 @@ fn upsert_collection_search_document(
                 row.get::<_, i64>("id")?,
                 row.get::<_, String>("name")?,
                 row.get::<_, String>("description")?,
+                row.get::<_, Option<String>>("cover_path")?,
             ))
         },
     );
 
-    let (id, name, description) = match row {
+    let (id, name, description, cover_path) = match row {
         Ok(row) => row,
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()),
         Err(other) => return Err(AppError::Database(other)),
@@ -144,9 +157,9 @@ fn upsert_collection_search_document(
 
     conn.execute(
         "INSERT INTO collections_fts (
-            entity_type, collection_id, song_id, collection_name, title, description, body
-         ) VALUES ('collection', ?1, NULL, ?2, ?2, ?3, ?3)",
-        params![id, name, description],
+            entity_type, collection_id, song_id, cover_path, collection_name, title, description, body
+         ) VALUES ('collection', ?1, NULL, ?2, ?3, ?3, ?4, ?4)",
+        params![id, cover_path, name, description],
     )?;
 
     Ok(())
@@ -156,39 +169,64 @@ fn get_collection_song_search_document(
     conn: &Connection,
     song_id: i64,
 ) -> Result<Option<CollectionSongSearchDoc>, AppError> {
-    let row = conn.query_row(
+    let mut stmt = conn.prepare(
         "SELECT cs.id AS song_id,
                 cs.collection_id,
                 c.name AS collection_name,
                 COALESCE(c.description, '') AS collection_description,
+                c.cover_path AS collection_cover,
                 cs.source_path,
-                p.title AS title,
-                COALESCE(GROUP_CONCAT(s.content, ' '), '') AS body
+                p.title AS title
          FROM collection_songs cs
          JOIN collections c ON c.id = cs.collection_id
          LEFT JOIN presentations p ON p.id = cs.cache_presentation_id
-         LEFT JOIN slides s ON s.presentation_id = cs.cache_presentation_id
-         WHERE cs.id = ?1
-         GROUP BY cs.id, cs.collection_id, c.name, c.description, cs.source_path, p.title",
-        params![song_id],
-        |row| {
-            Ok(CollectionSongSearchDoc {
-                song_id: row.get("song_id")?,
-                collection_id: row.get("collection_id")?,
-                collection_name: row.get("collection_name")?,
-                collection_description: row.get("collection_description")?,
-                source_path: row.get("source_path")?,
-                title: row.get("title")?,
-                body: row.get("body")?,
-            })
-        },
-    );
+         WHERE cs.id = ?1",
+    )?;
 
-    match row {
-        Ok(value) => Ok(Some(value)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(other) => Err(AppError::Database(other)),
+    let doc = stmt.query_row(params![song_id], |row| {
+        Ok(CollectionSongSearchDoc {
+            song_id: row.get("song_id")?,
+            collection_id: row.get("collection_id")?,
+            collection_name: row.get("collection_name")?,
+            collection_description: row.get("collection_description")?,
+            source_path: row.get("source_path")?,
+            title: row.get("title")?,
+            cover_path: row.get("collection_cover")?,
+            body: String::new(), // To be filled below
+        })
+    });
+
+    let mut doc = match doc {
+        Ok(doc) => doc,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(other) => return Err(AppError::Database(other)),
+    };
+
+    // Extract text from slides JSON
+    let mut slides_stmt = conn.prepare(
+        "SELECT content FROM slides
+         WHERE presentation_id = (SELECT cache_presentation_id FROM collection_songs WHERE id = ?1)
+         ORDER BY slide_index ASC",
+    )?;
+
+    let contents = slides_stmt
+        .query_map(params![song_id], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut lyrics_text = Vec::new();
+    for content in contents {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(text) = value.get("text").and_then(|v| v.as_str()) {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    lyrics_text.push(trimmed.to_string());
+                }
+            }
+        }
     }
+
+    doc.body = lyrics_text.join("\n\n");
+    Ok(Some(doc))
 }
 
 fn upsert_collection_song_search_document(conn: &Connection, song_id: i64) -> Result<(), AppError> {
@@ -218,14 +256,78 @@ fn upsert_collection_song_search_document(conn: &Connection, song_id: i64) -> Re
 
     conn.execute(
         "INSERT INTO collections_fts (
-            entity_type, collection_id, song_id, collection_name, title, description, body
-         ) VALUES ('song', ?1, ?2, ?3, ?4, ?5, ?6)",
+            entity_type, collection_id, song_id, cover_path, collection_name, title, description, body
+         ) VALUES ('song', ?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             doc.collection_id,
             doc.song_id,
+            doc.cover_path,
             doc.collection_name,
             title,
             doc.collection_description,
+            body,
+        ],
+    )?;
+
+    Ok(())
+}
+
+fn upsert_collection_hymn_search_document(
+    conn: &Connection,
+    collection_id: i64,
+    hymn_id: i64,
+) -> Result<(), AppError> {
+    if !collections_fts_exists(conn)? {
+        return Ok(());
+    }
+
+    conn.execute(
+        "DELETE FROM collections_fts
+         WHERE entity_type = 'hymn' AND collection_id = ?1 AND song_id = ?2",
+        params![collection_id, hymn_id],
+    )?;
+
+    let mut stmt = conn.prepare(
+        "SELECT h.title,
+                COALESCE(h.lyrics, '') AS lyrics,
+                COALESCE(h.author, '') AS author,
+                COALESCE(h.album, '') AS album,
+                c.name AS collection_name,
+                COALESCE(c.description, '') AS collection_description,
+                c.cover_path
+         FROM hymns h
+         JOIN collections c ON c.id = ?1
+         WHERE h.id = ?2",
+    )?;
+
+    let (title, lyrics, author, album, collection_name, collection_description, cover_path) = stmt.query_row(
+        params![collection_id, hymn_id],
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        },
+    )?;
+
+    let body = format!("{} {} {} {}", lyrics, author, album, collection_description);
+
+    conn.execute(
+        "INSERT INTO collections_fts (
+            entity_type, collection_id, song_id, cover_path, collection_name, title, description, body
+         ) VALUES ('hymn', ?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            collection_id,
+            hymn_id,
+            cover_path,
+            collection_name,
+            title,
+            collection_description,
             body,
         ],
     )?;
@@ -256,6 +358,17 @@ pub fn rebuild_collections_search_index(conn: &Connection) -> Result<(), AppErro
         upsert_collection_song_search_document(conn, song_id)?;
     }
 
+    if sqlite_table_exists(conn, "collection_hymns")? {
+        let mut collection_hymns_stmt =
+            conn.prepare("SELECT collection_id, hymn_id FROM collection_hymns")?;
+        let collection_hymn_ids = collection_hymns_stmt
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (collection_id, hymn_id) in collection_hymn_ids {
+            upsert_collection_hymn_search_document(conn, collection_id, hymn_id)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -270,8 +383,11 @@ fn reindex_collection_song_documents(
     for song_id in song_ids {
         upsert_collection_song_search_document(conn, song_id)?;
     }
+
     Ok(())
 }
+
+
 
 pub fn reindex_collection_song_documents_by_presentation(
     conn: &Connection,
@@ -314,9 +430,10 @@ pub fn search_collections(
         "SELECT entity_type,
                 collection_id,
                 song_id,
+                cover_path,
                 collection_name,
                 title,
-                COALESCE(snippet(collections_fts, 6, '', '', ' ... ', 24), '') AS snippet
+                COALESCE(snippet(collections_fts, 7, '', '', ' ... ', 24), '') AS snippet
          FROM collections_fts
          WHERE collections_fts MATCH ?1
          ORDER BY bm25(collections_fts) ASC
@@ -331,6 +448,7 @@ pub fn search_collections(
                 song_id: row.get("song_id")?,
                 collection_name: row.get("collection_name")?,
                 title: row.get("title")?,
+                cover_path: row.get("cover_path")?,
                 snippet: row.get("snippet")?,
             })
         })?
@@ -717,6 +835,8 @@ pub fn insert_collection_hymn(
         params![collection_id, hymn_id, item_order],
     )?;
 
+    upsert_collection_hymn_search_document(conn, collection_id, hymn_id)?;
+
     Ok(!exists) // true = newly created link
 }
 
@@ -736,7 +856,6 @@ pub fn get_collection_hymns(conn: &Connection, collection_id: i64) -> Result<Vec
     Ok(rows)
 }
 
-
 pub fn delete_collection_hymn(
     conn: &Connection,
     collection_id: i64,
@@ -746,8 +865,16 @@ pub fn delete_collection_hymn(
         "DELETE FROM collection_hymns WHERE collection_id = ?1 AND hymn_id = ?2",
         params![collection_id, hymn_id],
     )?;
+    if collections_fts_exists(conn)? {
+        conn.execute(
+            "DELETE FROM collections_fts
+             WHERE entity_type = 'hymn' AND collection_id = ?1 AND song_id = ?2",
+            params![collection_id, hymn_id],
+        )?;
+    }
     Ok(())
 }
+
 
 pub fn find_collection_by_api_album_id(
     conn: &Connection,
@@ -808,10 +935,57 @@ mod tests {
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 UNIQUE(collection_id, hymn_id)
             );
+            CREATE VIRTUAL TABLE collections_fts USING fts5(
+                entity_type UNINDEXED,
+                collection_id UNINDEXED,
+                song_id UNINDEXED,
+                cover_path UNINDEXED,
+                collection_name,
+                title,
+                description,
+                body
+            );
             "#,
         )
         .expect("schema setup");
         conn
+    }
+
+    #[test]
+    fn test_collection_hymn_fts_indexing() {
+        let conn = setup_conn();
+        let coll_id = insert_test_collection(&conn);
+        let hymn_id = insert_test_hymn(&conn, "Amazing Grace");
+
+        // Insert collection hymn
+        insert_collection_hymn(&conn, coll_id, hymn_id, 1).unwrap();
+
+        // Search for it
+        let results = search_collections(&conn, "Amazing", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Amazing Grace");
+        assert_eq!(results[0].kind, "hymn");
+        assert_eq!(results[0].song_id, Some(hymn_id));
+
+        // Delete it
+        delete_collection_hymn(&conn, coll_id, hymn_id).unwrap();
+
+        // Search again
+        let results = search_collections(&conn, "Amazing", 10).unwrap();
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_upsert_collection_search_document() {
+        let conn = setup_conn();
+        let coll_id = insert_test_collection(&conn);
+        
+        // This call previously panicked due to parameter mismatch
+        upsert_collection_search_document(&conn, coll_id).unwrap();
+
+        let results = search_collections(&conn, "Test", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Test Album");
     }
 
     fn insert_test_collection(conn: &Connection) -> i64 {

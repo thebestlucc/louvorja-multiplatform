@@ -728,6 +728,11 @@ pub mod importer {
 
 
     /// Import a music entry into the hymns table (sync, with pre-downloaded paths)
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - `api_music_id` deduplication check fails against the database.
+    /// - Database insertion (`INSERT` or `UPDATE`) fails due to a constraint or connection issue.
     pub fn import_music_to_db(
         conn: &Connection,
         music: &ApiMusic,
@@ -743,8 +748,8 @@ pub mod importer {
         let lyrics_sync = lyrics_to_sync_json(&music.lyrics);
         let track_number = music.track;
 
-        // Check if hymn with this api_music_id already exists (preferred dedup)
-        let existing_id: Option<i64> = if let Some(amid) = api_music_id {
+        // Check if hymn with this api_music_id already exists (ID-based dedup, preferred)
+        let id_match: Option<i64> = if let Some(amid) = api_music_id {
             conn.query_row(
                 "SELECT id FROM hymns WHERE api_music_id = ?1",
                 rusqlite::params![amid],
@@ -755,15 +760,20 @@ pub mod importer {
             None
         };
 
-        // Fall back to title-based dedup
-        let existing_id = existing_id.or_else(|| {
+        // Fall back to title-based dedup (only used to prevent duplicates, never to replace)
+        let title_match: Option<i64> = if id_match.is_none() {
             conn.query_row(
                 "SELECT id FROM hymns WHERE title = ?1",
                 rusqlite::params![music.name],
                 |row| row.get::<_, i64>(0),
             )
             .ok()
-        });
+        } else {
+            None
+        };
+
+        // replace_existing only applies to ID matches — never replace by title alone
+        let existing_id = if replace_existing { id_match } else { id_match.or(title_match) };
 
         let (was_imported, hymn_id) = match existing_id {
             Some(id) if replace_existing => {
@@ -814,6 +824,13 @@ pub mod importer {
                 (false, Some(id))
             }
             None => {
+                // When replace_existing=true, a title-only match means skip: we won't replace
+                // by name, and we won't insert a duplicate either.
+                if replace_existing {
+                    if let Some(id) = title_match {
+                        return Ok((false, Some(id)));
+                    }
+                }
                 conn.execute(
                     r#"
                     INSERT INTO hymns (number, title, album, lyrics, audio_path, playback_path, cover_path, lyrics_sync, api_music_id, category, created_at, updated_at)
@@ -836,25 +853,6 @@ pub mod importer {
                 (true, Some(new_id))
             }
         };
-
-        // Update FTS index for search
-        if let Some(id) = hymn_id {
-            // Delete old FTS entry if updating
-            if existing_id.is_some() {
-                let _ = conn.execute(
-                    "INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
-                     VALUES('delete', ?1, '', '', '', '')",
-                    rusqlite::params![id],
-                );
-            }
-            // Insert new FTS entry
-            conn.execute(
-                "INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
-                 SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
-                 FROM hymns WHERE id = ?1",
-                rusqlite::params![id],
-            )?;
-        }
 
         Ok((was_imported, hymn_id))
     }

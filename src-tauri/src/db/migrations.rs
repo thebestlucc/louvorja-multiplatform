@@ -104,6 +104,54 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (18)", [])?;
     }
 
+    if current_version < 19 {
+        migrate_v19(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (19)", [])?;
+    }
+
+    if current_version < 20 {
+        migrate_v20(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (20)", [])?;
+    }
+
+    if current_version < 21 {
+        migrate_v21(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (21)", [])?;
+    }
+
+    if current_version < 22 {
+        migrate_v22(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (22)", [])?;
+    }
+
+    if current_version < 23 {
+        migrate_v23(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (23)", [])?;
+    }
+
+    Ok(())
+}
+
+fn migrate_v21(conn: &Connection) -> Result<(), AppError> {
+    // We need to drop and recreate collections_fts to add the cover_path column
+    // and also rebuild the hymns_fts index to ensure the category filter is correct.
+    conn.execute_batch(
+        "
+        DROP TABLE IF EXISTS collections_fts;
+        CREATE VIRTUAL TABLE collections_fts USING fts5(
+            entity_type UNINDEXED,
+            collection_id UNINDEXED,
+            song_id UNINDEXED,
+            cover_path UNINDEXED,
+            collection_name,
+            title,
+            description,
+            body
+        );
+        ",
+    )?;
+    crate::db::queries::collections::rebuild_collections_search_index(conn)?;
+    crate::db::queries::music::rebuild_hymns_search_index(conn)?;
     Ok(())
 }
 
@@ -368,7 +416,7 @@ fn migrate_v3(conn: &Connection) -> Result<(), AppError> {
 
     // Rebuild FTS index
     conn.execute_batch(
-        "DELETE FROM bible_fts;
+        "INSERT INTO bible_fts(bible_fts) VALUES('delete-all');
          INSERT INTO bible_fts(rowid, text, book) SELECT id, text, book FROM bible_verses;",
     )?;
 
@@ -477,6 +525,7 @@ fn migrate_v10(conn: &Connection) -> Result<(), AppError> {
             entity_type UNINDEXED,
             collection_id UNINDEXED,
             song_id UNINDEXED,
+            cover_path UNINDEXED,
             collection_name,
             title,
             description,
@@ -564,7 +613,7 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
         WHERE m.id_language = 'pt'
         ORDER BY am.track;
 
-        DELETE FROM hymns_fts;
+        INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');
         INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
         SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
         FROM hymns;
@@ -605,7 +654,7 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
         INNER JOIN bible_versions nv ON nv.abbreviation = lv.abbreviation
         WHERE lv.id_language = 'pt';
 
-        DELETE FROM bible_fts;
+        INSERT INTO bible_fts(bible_fts) VALUES('delete-all');
         INSERT INTO bible_fts(rowid, text, book)
         SELECT id, text, book FROM bible_verses;
     ")?;
@@ -741,4 +790,358 @@ fn migrate_v18(conn: &Connection) -> Result<(), AppError> {
     )?;
 
     Ok(())
+}
+
+
+fn migrate_v19(conn: &Connection) -> Result<(), AppError> {
+    // Rebuild all FTS indexes to fix desynchronization and include new search documents
+    crate::db::queries::music::rebuild_hymns_search_index(conn)?;
+    crate::db::queries::collections::rebuild_collections_search_index(conn)?;
+    Ok(())
+}
+
+fn migrate_v20(conn: &Connection) -> Result<(), AppError> {
+    // Rebuild collections FTS to clean up duplicated hymns and improve song indexing
+    crate::db::queries::collections::rebuild_collections_search_index(conn)?;
+    Ok(())
+}
+
+fn migrate_v22(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS schedule_departments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT,
+            name_pt TEXT,
+            name_en TEXT,
+            name_es TEXT,
+            icon TEXT NOT NULL,
+            color TEXT NOT NULL,
+            people_per_day INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_system INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_department_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            department_id INTEGER NOT NULL REFERENCES schedule_departments(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_months (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            year INTEGER NOT NULL,
+            month INTEGER NOT NULL,
+            notes TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_days (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            schedule_month_id INTEGER NOT NULL REFERENCES schedule_months(id) ON DELETE CASCADE,
+            service_date TEXT NOT NULL,
+            label TEXT,
+            source_kind TEXT NOT NULL DEFAULT 'manual',
+            responsible_department_id INTEGER REFERENCES schedule_departments(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_day_departments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            schedule_day_id INTEGER NOT NULL REFERENCES schedule_days(id) ON DELETE CASCADE,
+            department_id INTEGER NOT NULL REFERENCES schedule_departments(id) ON DELETE CASCADE,
+            people_per_day INTEGER NOT NULL DEFAULT 1,
+            manual_override INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            schedule_day_department_id INTEGER NOT NULL REFERENCES schedule_day_departments(id) ON DELETE CASCADE,
+            member_id INTEGER NOT NULL REFERENCES schedule_department_members(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_departments_code
+            ON schedule_departments(code)
+            WHERE code IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_schedule_department_members_department
+            ON schedule_department_members(department_id, sort_order);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_months_year_month
+            ON schedule_months(year, month);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_days_month_date
+            ON schedule_days(schedule_month_id, service_date);
+        CREATE INDEX IF NOT EXISTS idx_schedule_days_responsible_department
+            ON schedule_days(responsible_department_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_day_departments_unique
+            ON schedule_day_departments(schedule_day_id, department_id);
+        CREATE INDEX IF NOT EXISTS idx_schedule_day_departments_department
+            ON schedule_day_departments(department_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_assignments_unique
+            ON schedule_assignments(schedule_day_department_id, member_id);
+        CREATE INDEX IF NOT EXISTS idx_schedule_assignments_order
+            ON schedule_assignments(schedule_day_department_id, sort_order);
+        ",
+    )?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "music",
+            "Música",
+            "Song",
+            "Música",
+            "music",
+            "#A855F7",
+            1,
+        ],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "multimedia",
+            "Multimídia / Sonoplastia",
+            "Multimedia",
+            "Multimedia / Sonido",
+            "monitor-play",
+            "#2563EB",
+            2,
+        ],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "reception",
+            "Recepção",
+            "Reception",
+            "Recepción",
+            "handshake",
+            "#16A34A",
+            3,
+        ],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "deacons",
+            "Diáconos",
+            "Deacons",
+            "Diáconos",
+            "shield",
+            "#D97706",
+            4,
+        ],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "deaconesses",
+            "Diaconisas",
+            "Deaconesses",
+            "Diaconisas",
+            "shield-check",
+            "#EC4899",
+            5,
+        ],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "communication",
+            "Comunicação",
+            "Communication",
+            "Comunicación",
+            "megaphone",
+            "#DC2626",
+            6,
+        ],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schedule_departments
+            (code, name_pt, name_en, name_es, icon, color, people_per_day, sort_order, is_system, is_active)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1)",
+        rusqlite::params![
+            "cleaning",
+            "Limpeza",
+            "Cleaning",
+            "Limpieza",
+            "sparkles",
+            "#0891B2",
+            7,
+        ],
+    )?;
+
+    Ok(())
+}
+
+fn migrate_v23(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        -- Auto-sync hymns_fts when hymns are inserted
+        CREATE TRIGGER IF NOT EXISTS hymns_ai
+        AFTER INSERT ON hymns
+        WHEN NEW.category = 'hymnal'
+        BEGIN
+            INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+            VALUES (NEW.id, NEW.title, COALESCE(NEW.lyrics,''), COALESCE(NEW.author,''), COALESCE(NEW.album,''));
+        END;
+
+        -- Auto-sync hymns_fts when hymns are deleted
+        CREATE TRIGGER IF NOT EXISTS hymns_ad
+        AFTER DELETE ON hymns
+        BEGIN
+            INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+            VALUES ('delete', OLD.id, OLD.title, COALESCE(OLD.lyrics,''), COALESCE(OLD.author,''), COALESCE(OLD.album,''));
+        END;
+
+        -- Auto-sync hymns_fts when hymns are updated
+        CREATE TRIGGER IF NOT EXISTS hymns_au
+        AFTER UPDATE ON hymns
+        BEGIN
+            INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+            VALUES ('delete', OLD.id, OLD.title, COALESCE(OLD.lyrics,''), COALESCE(OLD.author,''), COALESCE(OLD.album,''));
+            INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+            SELECT NEW.id, NEW.title, COALESCE(NEW.lyrics,''), COALESCE(NEW.author,''), COALESCE(NEW.album,'')
+            WHERE NEW.category = 'hymnal';
+        END;
+        ",
+    )?;
+    // Rebuild index to ensure it's current (handles any previously-missed upserts)
+    crate::db::queries::music::rebuild_hymns_search_index(conn)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn creates_schedule_schema_and_seeds_departments() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+
+        run_migrations(&conn).expect("run migrations");
+
+        for table in [
+            "schedule_departments",
+            "schedule_department_members",
+            "schedule_months",
+            "schedule_days",
+            "schedule_day_departments",
+            "schedule_assignments",
+        ] {
+            assert!(
+                table_exists(&conn, table).expect("table exists"),
+                "missing table {table}"
+            );
+        }
+
+        let schema_version: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |row| row.get(0),
+            )
+            .expect("schema version");
+        assert_eq!(schema_version, 23);
+
+        let department_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM schedule_departments", [], |row| row.get(0))
+            .expect("department count");
+        assert_eq!(department_count, 7);
+
+        let schedule_fts_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'schedule%fts%'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("schedule fts count");
+        assert_eq!(schedule_fts_count, 0);
+
+        let mut stmt = conn
+            .prepare("SELECT code FROM schedule_departments ORDER BY sort_order ASC")
+            .expect("prepare seeded department query");
+        let codes = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .expect("query seeded departments")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect seeded departments");
+
+        assert_eq!(
+            codes,
+            vec![
+                "music".to_string(),
+                "multimedia".to_string(),
+                "reception".to_string(),
+                "deacons".to_string(),
+                "deaconesses".to_string(),
+                "communication".to_string(),
+                "cleaning".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn fresh_migration_chain_stepwise_reaches_v23() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+
+        for (version, migration) in [
+            (1_i64, migrate_v1 as fn(&Connection) -> Result<(), AppError>),
+            (2, migrate_v2),
+            (3, migrate_v3),
+            (4, migrate_v4),
+            (5, migrate_v5),
+            (6, migrate_v6),
+            (7, migrate_v7),
+            (8, migrate_v8),
+            (9, migrate_v9),
+            (10, migrate_v10),
+            (11, migrate_v11),
+            (12, migrate_v12),
+            (13, migrate_v13),
+            (14, migrate_v14),
+            (15, migrate_v15),
+            (16, migrate_v16),
+            (17, migrate_v17),
+            (18, migrate_v18),
+            (19, migrate_v19),
+            (20, migrate_v20),
+            (21, migrate_v21),
+            (22, migrate_v22),
+            (23, migrate_v23),
+        ] {
+            migration(&conn).unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
+        }
+    }
 }

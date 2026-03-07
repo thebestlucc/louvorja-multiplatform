@@ -34,6 +34,7 @@ import { Route as CollectionsIndexRouteImport } from './routes/collections/index
 import { Route as BibleIndexRouteImport } from './routes/bible/index'
 import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
 import { Route as UtilitiesTextRouteImport } from './routes/utilities/text'
+import { Route as UtilitiesSchedulesRouteImport } from './routes/utilities/schedules'
 import { Route as UtilitiesLotteryRouteImport } from './routes/utilities/lottery'
 import { Route as UtilitiesClockRouteImport } from './routes/utilities/clock'
 import { Route as ServicesServiceIdRouteImport } from './routes/services/$serviceId'
@@ -169,6 +170,11 @@ const UtilitiesTextRoute = UtilitiesTextRouteImport.update({
   path: '/text',
   getParentRoute: () => UtilitiesRouteRoute,
 } as any)
+const UtilitiesSchedulesRoute = UtilitiesSchedulesRouteImport.update({
+  id: '/schedules',
+  path: '/schedules',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
 const UtilitiesLotteryRoute = UtilitiesLotteryRouteImport.update({
   id: '/lottery',
   path: '/lottery',
@@ -240,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
@@ -267,6 +274,7 @@ export interface FileRoutesByTo {
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible': typeof BibleIndexRoute
@@ -304,6 +312,7 @@ export interface FileRoutesById {
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | '/services/$serviceId'
     | '/utilities/clock'
     | '/utilities/lottery'
+    | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible/'
@@ -369,6 +379,7 @@ export interface FileRouteTypes {
     | '/services/$serviceId'
     | '/utilities/clock'
     | '/utilities/lottery'
+    | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/services/$serviceId'
     | '/utilities/clock'
     | '/utilities/lottery'
+    | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible/'
@@ -612,6 +624,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UtilitiesTextRouteImport
       parentRoute: typeof UtilitiesRouteRoute
     }
+    '/utilities/schedules': {
+      id: '/utilities/schedules'
+      path: '/schedules'
+      fullPath: '/utilities/schedules'
+      preLoaderRoute: typeof UtilitiesSchedulesRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
     '/utilities/lottery': {
       id: '/utilities/lottery'
       path: '/lottery'
@@ -789,6 +808,7 @@ const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
 interface UtilitiesRouteRouteChildren {
   UtilitiesClockRoute: typeof UtilitiesClockRoute
   UtilitiesLotteryRoute: typeof UtilitiesLotteryRoute
+  UtilitiesSchedulesRoute: typeof UtilitiesSchedulesRoute
   UtilitiesTextRoute: typeof UtilitiesTextRoute
   UtilitiesTimerRoute: typeof UtilitiesTimerRoute
   UtilitiesIndexRoute: typeof UtilitiesIndexRoute
@@ -797,6 +817,7 @@ interface UtilitiesRouteRouteChildren {
 const UtilitiesRouteRouteChildren: UtilitiesRouteRouteChildren = {
   UtilitiesClockRoute: UtilitiesClockRoute,
   UtilitiesLotteryRoute: UtilitiesLotteryRoute,
+  UtilitiesSchedulesRoute: UtilitiesSchedulesRoute,
   UtilitiesTextRoute: UtilitiesTextRoute,
   UtilitiesTimerRoute: UtilitiesTimerRoute,
   UtilitiesIndexRoute: UtilitiesIndexRoute,

@@ -448,16 +448,16 @@ export function CommandPalette() {
           </Command.Group>
         )}
 
-        {/* Collections group */}
-        {collectionResults.length > 0 && (
+        {/* Collections group (Albums/Folders) */}
+        {collectionResults.filter(r => r.kind === "collection").length > 0 && (
           <Command.Group
-            heading={t("nav.collections")}
+            heading={t("commandPalette.collections")}
             className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
           >
-            {collectionResults.map((result, idx) => (
+            {collectionResults.filter(r => r.kind === "collection").map((result, idx) => (
               <Command.Item
-                key={`collection-search-${result.kind}-${result.collectionId}-${result.songId ?? "none"}-${idx}`}
-                value={`collection-${result.collectionId}-${result.songId ?? "none"}-${result.title}-${result.collectionName}`}
+                key={`collection-search-coll-${result.collectionId}-${idx}`}
+                value={`collection-${result.collectionId}-${result.title}`}
                 onSelect={() => {
                   navigate({
                     to: "/collections/$collectionId",
@@ -467,17 +467,62 @@ export function CommandPalette() {
                 }}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
               >
-                {result.kind === "song" ? (
-                  <Music className="h-4 w-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
+                <CoverImage
+                  path={result.coverPath}
+                  title={result.title}
+                  fallback={<FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  className="h-5 w-5 rounded"
+                />
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{result.title}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {result.kind === "song"
-                      ? `${result.collectionName} · ${result.snippet || t("collections.songs")}`
-                      : result.snippet || result.collectionName}
+                    {result.snippet || result.collectionName}
+                  </span>
+                </span>
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+
+        {/* Collection Songs group (Individual tracks) */}
+        {collectionResults.filter(r => r.kind !== "collection").length > 0 && (
+          <Command.Group
+            heading={t("commandPalette.collectionSongs")}
+            className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+          >
+            {collectionResults.filter(r => r.kind !== "collection").map((result, idx) => (
+              <Command.Item
+                key={`collection-search-song-${result.kind}-${result.collectionId}-${result.songId}-${idx}`}
+                value={`collection-song-${result.collectionId}-${result.songId}-${result.title}-${result.collectionName}`}
+                onSelect={() => {
+                  if (result.kind === "song") {
+                    navigate({
+                      to: "/collections/$collectionId/songs/$songId",
+                      params: { 
+                        collectionId: String(result.collectionId),
+                        songId: String(result.songId)
+                      },
+                    });
+                  } else {
+                    navigate({
+                      to: "/hymnal/$hymnId",
+                      params: { hymnId: String(result.songId) },
+                    });
+                  }
+                  setOpen(false);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
+              >
+                <CoverImage
+                  path={result.coverPath}
+                  title={result.title}
+                  fallback={<Music className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  className="h-5 w-5 rounded"
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{result.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {result.collectionName} · {result.snippet || t("collections.songs")}
                   </span>
                 </span>
               </Command.Item>

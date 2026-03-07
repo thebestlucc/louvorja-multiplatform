@@ -113,6 +113,7 @@
     "hymns": "Himnos",
     "bible": "Versículos Bíblicos",
     "collections": "Colecciones",
+    "collectionSongs": "Canciones de Colecciones",
     "searching": "Buscando..."
   },
   "spotlight": {
@@ -158,11 +159,18 @@
       "timer": "Temporizador",
       "clock": "Reloj",
       "lottery": "Sorteo",
-      "text": "Texto"
+      "text": "Texto",
+      "schedules": "Horarios"
     },
     "overview": {
       "title": "Elija una herramienta",
-      "description": "Abra una utilidad para usarla durante el flujo del culto."
+      "description": "Abra una utilidad para usarla durante el flujo del culto.",
+      "cards": {
+        "schedules": {
+          "title": "Horarios de departamentos",
+          "description": "Prepare, revise e imprima horarios mensuales de los departamentos."
+        }
+      }
     },
     "projection": {
       "project": "Proyectar en pantalla",
@@ -253,6 +261,60 @@
       "lowercase": "minúsculas",
       "titleCase": "Título",
       "sentenceCase": "Oración"
+    },
+    "schedules": {
+      "title": "Horarios de departamentos",
+      "subtitle": "Cree y revise horarios mensuales de los departamentos antes de imprimir.",
+      "description": "Organice los días de culto, los departamentos y las asignaciones del mes seleccionado.",
+      "monthPicker": {
+        "label": "Mes del horario",
+        "previous": "Mes anterior",
+        "next": "Mes siguiente",
+        "current": "Mes actual"
+      },
+      "generate": {
+        "title": "Generación",
+        "description": "Genere las asignaciones del mes seleccionado preservando los ajustes manuales cuando sea necesario.",
+        "action": "Generar horario",
+        "preserveManual": "Conservar ajustes manuales",
+        "overwriteManual": "Sobrescribir ajustes manuales"
+      },
+      "daySelection": {
+        "title": "Días de culto",
+        "description": "Los días seleccionados de este mes aparecerán aquí para asignación e impresión.",
+        "empty": "Aún no hay días de culto seleccionados para este mes.",
+        "selectedDays": "{{count}} día seleccionado",
+        "selectedDays_other": "{{count}} días seleccionados"
+      },
+      "departmentManagement": {
+        "title": "Departamentos",
+        "description": "Administre departamentos y miembros antes de generar el horario del mes.",
+        "empty": "No hay departamentos activos disponibles."
+      },
+      "responsibleDepartment": {
+        "title": "Departamento responsable",
+        "description": "Elija qué departamento es responsable de cada día de culto seleccionado.",
+        "label": "Departamento responsable",
+        "none": "Sin asignar"
+      },
+      "print": {
+        "title": "Impresión y exportación",
+        "description": "Prepare una salida compacta en A4 para uno o más departamentos.",
+        "action": "Abrir vista de impresión",
+        "pdf": "Exportar PDF"
+      },
+      "emptyStates": {
+        "noDays": "Seleccione días de culto de este mes para comenzar a crear el horario.",
+        "noDepartments": "Agregue miembros a por lo menos un departamento para generar las asignaciones."
+      },
+      "loading": {
+        "month": "Cargando horario del mes...",
+        "departments": "Cargando departamentos..."
+      },
+      "placeholders": {
+        "toolbar": "Las acciones de generación, impresión y mes aparecerán aquí en el siguiente paso.",
+        "calendar": "El calendario mensual y el panel del día se implementarán en la próxima tarea."
+      }
     }
   },
   "hymnal": {
