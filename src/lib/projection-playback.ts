@@ -1,4 +1,5 @@
 import {
+  clearCurrentSlide,
   getAvailableMonitors,
   getMonitorConfigs,
   openProjectorWindow,
@@ -166,7 +167,6 @@ export async function projectSlideWithType(
  * Clear the current slide and reset projection type
  */
 export async function clearProjectionWithType(): Promise<void> {
-  const { clearCurrentSlide } = await import("./tauri");
   await clearCurrentSlide();
   useDisplayStore.getState().setCurrentProjectionType(null);
 }
