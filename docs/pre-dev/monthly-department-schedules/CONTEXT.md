@@ -1,10 +1,18 @@
 ---
 feature: monthly-department-schedules
 date: 2026-03-06
-status: active-context
+status: implemented
+implemented_on: 2026-03-07
 ---
 
 # Monthly Department Schedules - Context Handoff
+
+Implementation state:
+- The feature is implemented and verified.
+- The route lives at `/utilities/schedules`.
+- The current repo migration head is `v24`; the schedule schema starts at `v22`.
+- `src/lib/bindings.ts` is generated with a `// @ts-nocheck` header because the current `tauri-specta` RC emits unused event/channel helpers under `noUnusedLocals`.
+- The remaining use for this file is follow-up maintenance and regression fixes, not first-pass implementation.
 
 Use this file to recover context before starting any implementation subtask.
 
@@ -26,11 +34,14 @@ Include:
 - custom departments with optional localized names
 - multiple assigned people per day
 - print preview with OS print dialog
+- persisted department print order
+- in-app success toasts and confirmation dialogs
+- optional department-side `shuffle on generate`
 
 Exclude:
 - attendance
 - reminders
-- confirmations
+- volunteer confirmations
 - analytics
 - volunteer history dashboards
 
@@ -156,9 +167,9 @@ Current exception:
 
 ## Session Recovery Rule
 
-If implementation is interrupted:
+If follow-up maintenance is interrupted:
 1. reopen this file
 2. reopen `docs/pre-dev/monthly-department-schedules/TASKS.md`
-3. resume from the next unchecked subtask only
+3. inspect the implemented feature files directly before changing behavior
 
 Do not re-open the full design/plan unless a decision is actually unclear.

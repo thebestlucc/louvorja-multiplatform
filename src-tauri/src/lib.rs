@@ -200,6 +200,9 @@ pub fn run() {
     specta_builder
         .export(
             specta_typescript::Typescript::default()
+                .header(
+                    "// @ts-nocheck\n// tauri-specta currently emits unused event/channel globals for this app shape.",
+                )
                 .bigint(specta_typescript::BigIntExportBehavior::Number),
             "../src/lib/bindings.ts",
         )

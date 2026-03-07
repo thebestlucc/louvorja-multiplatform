@@ -10,6 +10,39 @@
 
 **Architecture constraint:** V1 does not require schedule search. If full-text search is added later, FTS5 must be created and maintained at the database level via migrations and triggers, not through Rust-side manual rebuild/upsert helpers. The only current exception in the app remains collection-song search because of its multi-table aggregation.
 
+## Implementation Outcome
+
+Status on `2026-03-07`: complete.
+
+Delivered behavior:
+- calendar-first monthly schedule utility at `/utilities/schedules`
+- explicit day selection plus weekday patterns
+- department management with custom departments, ordering, active state, localized names, and member ordering
+- month generation with manual override preservation and optional department-side member randomization
+- day details editing with responsible department selection
+- in-app confirmation dialogs and success toasts for destructive/save flows
+- A4 print preview with multi-department packing, persisted print order, and OS print dialog handoff
+
+Implementation deltas from the initial draft:
+- the base schedule schema landed at migration `v22`
+- the current repository migration head is `v24`
+- `src/lib/bindings.ts` is exported with a `// @ts-nocheck` header because the current `tauri-specta` RC emits unused event/channel globals that fail this repo's `noUnusedLocals` build setting
+
+Final verification executed:
+
+```bash
+cd /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri && cargo test db::queries::schedules --lib
+cd /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform && pnpm test
+cd /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform && pnpm lint:i18n
+cd /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform && pnpm build
+```
+
+Observed result:
+- all schedule Rust tests passed
+- frontend unit tests passed
+- locale validation passed
+- full frontend build passed
+
 ## Verification Commands
 
 Run these after implementation:
