@@ -206,9 +206,9 @@ export function DepartmentManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-6xl overflow-hidden p-0">
-        <div className="grid h-full min-h-[70vh] pt-10 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="border-b border-border/80 bg-surface/60 lg:border-r lg:border-b-0">
+      <DialogContent className="h-[88vh] max-h-[88vh] max-w-6xl overflow-hidden p-0">
+        <div className="grid h-full min-h-0 pt-10 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="flex min-h-0 flex-col border-b border-border/80 bg-surface/60 lg:border-r lg:border-b-0">
             <DialogHeader className="border-b border-border/80 px-5 py-4">
               <DialogTitle className="flex items-center gap-2">
                 <Settings2 className="h-5 w-5" />
@@ -219,14 +219,14 @@ export function DepartmentManagerDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="border-b border-border/80 px-4 py-4">
+            <div className="shrink-0 border-b border-border/80 px-4 py-4">
               <Button type="button" className="w-full" onClick={() => handleSelectDepartment("new")}>
                 <Plus className="mr-2 h-4 w-4" />
                 {t("utilities.schedules.departmentManagement.addCustom")}
               </Button>
             </div>
 
-            <ScrollArea className="h-[calc(70vh-10.5rem)] px-3 py-3">
+            <ScrollArea className="min-h-0 flex-1 px-3 py-3">
               <div className="space-y-2">
                 {sortedDepartments.map((department) => {
                   const Icon = getScheduleDepartmentIcon(department.icon);
@@ -282,7 +282,7 @@ export function DepartmentManagerDialog({
               )}
             </ScrollArea>
 
-            <div className="border-t border-border/80 bg-surface/95 px-5 py-4 backdrop-blur">
+            <div className="shrink-0 border-t border-border/80 bg-surface/95 px-5 py-4 backdrop-blur">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   {draft && !draft.isSystem ? (

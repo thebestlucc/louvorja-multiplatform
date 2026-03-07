@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
+import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 
 export interface EditableMember {
@@ -74,24 +75,26 @@ export function MemberListEditor({ members, disabled, onChange, onAdd }: MemberL
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <div className="space-y-2">
-            {members.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                {t("utilities.schedules.departmentManagement.membersEmpty")}
-              </div>
-            ) : (
-              members.map((member, index) => (
-                <SortableMemberRow
-                  key={member.id}
-                  member={member}
-                  index={index}
-                  disabled={disabled}
-                  onChangeName={(name) => updateMemberName(member.id, name)}
-                  onRemove={() => removeMember(member.id)}
-                />
-              ))
-            )}
-          </div>
+          <ScrollArea className="max-h-[18.5rem] pr-2">
+            <div className="space-y-2">
+              {members.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                  {t("utilities.schedules.departmentManagement.membersEmpty")}
+                </div>
+              ) : (
+                members.map((member, index) => (
+                  <SortableMemberRow
+                    key={member.id}
+                    member={member}
+                    index={index}
+                    disabled={disabled}
+                    onChangeName={(name) => updateMemberName(member.id, name)}
+                    onRemove={() => removeMember(member.id)}
+                  />
+                ))
+              )}
+            </div>
+          </ScrollArea>
         </SortableContext>
       </DndContext>
 

@@ -3,6 +3,7 @@ use crate::db::models::{
     ScheduleDepartmentInput, ScheduleDepartmentMember, ScheduleMonth, ScheduleMonthDetail,
 };
 use crate::error::AppError;
+use chrono::{Duration, NaiveDate};
 use rand::seq::SliceRandom;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::collections::{HashMap, HashSet};
@@ -11,9 +12,19 @@ use std::collections::{HashMap, HashSet};
 struct GenerationTarget {
     id: i64,
     department_id: i64,
+    service_date: String,
     people_per_day: i32,
     manual_override: bool,
     shuffle_on_generate: bool,
+    group_dates_in_print: bool,
+    repeat_members_in_grouped_dates: bool,
+}
+
+#[derive(Debug, Clone)]
+struct DepartmentGenerationState {
+    service_date: String,
+    people_per_day: i32,
+    assignments: Vec<i64>,
 }
 
 fn map_schedule_department_row(row: &Row) -> Result<ScheduleDepartment, rusqlite::Error> {
@@ -27,6 +38,8 @@ fn map_schedule_department_row(row: &Row) -> Result<ScheduleDepartment, rusqlite
         color: row.get("color")?,
         people_per_day: row.get("people_per_day")?,
         shuffle_on_generate: row.get("shuffle_on_generate")?,
+        group_dates_in_print: row.get("group_dates_in_print")?,
+        repeat_members_in_grouped_dates: row.get("repeat_members_in_grouped_dates")?,
         sort_order: row.get("sort_order")?,
         is_system: row.get("is_system")?,
         is_active: row.get("is_active")?,
@@ -188,10 +201,21 @@ fn maybe_shuffle_member_ids<R: rand::Rng + ?Sized>(
     }
 }
 
+fn are_consecutive_service_dates(left: &str, right: &str) -> bool {
+    let Ok(left_date) = NaiveDate::parse_from_str(left, "%Y-%m-%d") else {
+        return false;
+    };
+    let Ok(right_date) = NaiveDate::parse_from_str(right, "%Y-%m-%d") else {
+        return false;
+    };
+
+    right_date == left_date + Duration::days(1)
+}
+
 pub fn list_schedule_departments(conn: &Connection) -> Result<Vec<ScheduleDepartment>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, code, name_pt, name_en, name_es, icon, color, people_per_day,
-                shuffle_on_generate,
+                shuffle_on_generate, group_dates_in_print, repeat_members_in_grouped_dates,
                 sort_order, is_system, is_active, created_at, updated_at
          FROM schedule_departments
          ORDER BY sort_order ASC, id ASC",
@@ -267,10 +291,12 @@ pub fn upsert_schedule_department(
                  color = ?6,
                  people_per_day = ?7,
                  shuffle_on_generate = ?8,
-                 sort_order = ?9,
-                 is_active = ?10,
+                 group_dates_in_print = ?9,
+                 repeat_members_in_grouped_dates = ?10,
+                 sort_order = ?11,
+                 is_active = ?12,
                  updated_at = datetime('now')
-             WHERE id = ?11",
+             WHERE id = ?13",
             params![
                 code,
                 name_pt,
@@ -280,6 +306,8 @@ pub fn upsert_schedule_department(
                 input.color.trim(),
                 input.people_per_day,
                 input.shuffle_on_generate,
+                input.group_dates_in_print,
+                input.repeat_members_in_grouped_dates,
                 input.sort_order,
                 input.is_active,
                 id,
@@ -319,8 +347,8 @@ pub fn upsert_schedule_department(
         conn.execute(
             "INSERT INTO schedule_departments (
                 code, name_pt, name_en, name_es, icon, color, people_per_day,
-                shuffle_on_generate, sort_order, is_system, is_active
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)",
+                shuffle_on_generate, group_dates_in_print, repeat_members_in_grouped_dates, sort_order, is_system, is_active
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12)",
             params![
                 code,
                 name_pt,
@@ -330,6 +358,8 @@ pub fn upsert_schedule_department(
                 input.color.trim(),
                 input.people_per_day,
                 input.shuffle_on_generate,
+                input.group_dates_in_print,
+                input.repeat_members_in_grouped_dates,
                 input.sort_order,
                 input.is_active,
             ],
@@ -631,9 +661,12 @@ pub fn generate_schedule_month(
         let mut stmt = tx.prepare(
             "SELECT sdd.id,
                     sdd.department_id,
+                    sd.service_date,
                     sdd.people_per_day,
                     sdd.manual_override,
-                    department.shuffle_on_generate
+                    department.shuffle_on_generate,
+                    department.group_dates_in_print,
+                    department.repeat_members_in_grouped_dates
              FROM schedule_day_departments sdd
              JOIN schedule_days sd ON sd.id = sdd.schedule_day_id
              JOIN schedule_departments department ON department.id = sdd.department_id
@@ -644,9 +677,12 @@ pub fn generate_schedule_month(
             Ok(GenerationTarget {
                 id: row.get(0)?,
                 department_id: row.get(1)?,
-                people_per_day: row.get(2)?,
-                manual_override: row.get(3)?,
-                shuffle_on_generate: row.get(4)?,
+                service_date: row.get(2)?,
+                people_per_day: row.get(3)?,
+                manual_override: row.get(4)?,
+                shuffle_on_generate: row.get(5)?,
+                group_dates_in_print: row.get(6)?,
+                repeat_members_in_grouped_dates: row.get(7)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>()?
@@ -692,6 +728,8 @@ pub fn generate_schedule_month(
     }
 
     let mut cursor_by_department: HashMap<i64, usize> = HashMap::new();
+    let mut generation_state_by_department: HashMap<i64, DepartmentGenerationState> =
+        HashMap::new();
     let mut insert_stmt = tx.prepare(
         "INSERT INTO schedule_assignments (
             schedule_day_department_id, member_id, sort_order
@@ -700,6 +738,7 @@ pub fn generate_schedule_month(
 
     for target in &targets {
         if target.manual_override && !overwrite_manual {
+            generation_state_by_department.remove(&target.department_id);
             continue;
         }
 
@@ -716,15 +755,52 @@ pub fn generate_schedule_month(
         )?;
 
         let Some(member_ids) = member_ids_by_department.get(&target.department_id) else {
+            generation_state_by_department.remove(&target.department_id);
             continue;
         };
 
-        let cursor = cursor_by_department
-            .entry(target.department_id)
-            .or_insert(0);
-        let assignments = next_assignment_member_ids(member_ids, cursor, target.people_per_day);
+        let should_repeat_group_assignments = target.group_dates_in_print
+            && target.repeat_members_in_grouped_dates
+            && generation_state_by_department
+                .get(&target.department_id)
+                .map(|state| {
+                    state.people_per_day == target.people_per_day
+                        && are_consecutive_service_dates(
+                            &state.service_date,
+                            &target.service_date,
+                        )
+                })
+                .unwrap_or(false);
+
+        let assignments = if should_repeat_group_assignments {
+            generation_state_by_department
+                .get(&target.department_id)
+                .map(|state| state.assignments.clone())
+                .unwrap_or_default()
+        } else {
+            let cursor = cursor_by_department
+                .entry(target.department_id)
+                .or_insert(0);
+            next_assignment_member_ids(member_ids, cursor, target.people_per_day)
+        };
+
+        let generated_assignments = assignments.clone();
+
         for (sort_order, member_id) in assignments.into_iter().enumerate() {
             insert_stmt.execute(params![target.id, member_id, sort_order as i32])?;
+        }
+
+        if target.group_dates_in_print && target.repeat_members_in_grouped_dates {
+            generation_state_by_department.insert(
+                target.department_id,
+                DepartmentGenerationState {
+                    service_date: target.service_date.clone(),
+                    people_per_day: target.people_per_day,
+                    assignments: generated_assignments,
+                },
+            );
+        } else {
+            generation_state_by_department.remove(&target.department_id);
         }
     }
     drop(insert_stmt);
@@ -1068,6 +1144,8 @@ mod tests {
                 color: "#225577".into(),
                 people_per_day,
                 shuffle_on_generate: false,
+                group_dates_in_print: false,
+                repeat_members_in_grouped_dates: true,
                 sort_order: 100,
                 is_active: true,
             },
@@ -1148,6 +1226,43 @@ mod tests {
         assert_eq!(detail.month.month, 3);
         assert!(!detail.departments.is_empty(), "seeded departments missing");
         assert!(detail.days.is_empty(), "new schedule month should not have days");
+    }
+
+    #[test]
+    fn upserting_department_persists_print_grouping_flags() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department = upsert_schedule_department(
+            &conn,
+            &ScheduleDepartmentInput {
+                id: None,
+                code: Some("grouped_print".into()),
+                name_pt: Some("Agrupado".into()),
+                name_en: Some("Grouped".into()),
+                name_es: Some("Agrupado".into()),
+                icon: "users".into(),
+                color: "#225577".into(),
+                people_per_day: 1,
+                shuffle_on_generate: false,
+                group_dates_in_print: true,
+                repeat_members_in_grouped_dates: false,
+                sort_order: 200,
+                is_active: true,
+            },
+        )
+        .expect("create grouped print department");
+
+        assert!(department.group_dates_in_print);
+        assert!(!department.repeat_members_in_grouped_dates);
+
+        let listed_department = list_schedule_departments(&conn)
+            .expect("list departments")
+            .into_iter()
+            .find(|item| item.id == department.id)
+            .expect("department in list");
+        assert!(listed_department.group_dates_in_print);
+        assert!(!listed_department.repeat_members_in_grouped_dates);
     }
 
     #[test]
@@ -1237,6 +1352,133 @@ mod tests {
                 vec!["Ana".to_owned(), "Bia".to_owned()],
                 vec!["Carol".to_owned(), "Ana".to_owned()],
             ]
+        );
+    }
+
+    #[test]
+    fn generation_repeats_assignments_for_consecutive_grouped_dates_when_enabled() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department = setup_schedule_department(&conn, "gen_group_repeat", 1, &["Ana", "Bia", "Carol"]);
+        upsert_schedule_department(
+            &conn,
+            &ScheduleDepartmentInput {
+                id: Some(department.id),
+                code: department.code.clone(),
+                name_pt: department.name_pt.clone(),
+                name_en: department.name_en.clone(),
+                name_es: department.name_es.clone(),
+                icon: department.icon.clone(),
+                color: department.color.clone(),
+                people_per_day: department.people_per_day,
+                shuffle_on_generate: false,
+                group_dates_in_print: true,
+                repeat_members_in_grouped_dates: true,
+                sort_order: department.sort_order,
+                is_active: true,
+            },
+        )
+        .expect("enable grouped repeat generation");
+
+        let month = get_or_create_schedule_month(&conn, 2026, 3).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[
+                ScheduleDayInput {
+                    service_date: "2026-03-07".into(),
+                    label: None,
+                    source_kind: Some("pattern".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-03-08".into(),
+                    label: None,
+                    source_kind: Some("pattern".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-03-10".into(),
+                    label: None,
+                    source_kind: Some("pattern".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+            ],
+        )
+        .expect("attach grouped days");
+
+        let detail =
+            generate_schedule_month(&conn, 2026, 3, false).expect("generate schedule month");
+
+        assert_eq!(
+            assignment_names_for_department(&detail, department.id),
+            vec![
+                vec!["Ana".to_owned()],
+                vec!["Ana".to_owned()],
+                vec!["Bia".to_owned()],
+            ]
+        );
+    }
+
+    #[test]
+    fn generation_keeps_rotation_for_grouped_dates_when_repeat_is_disabled() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department = setup_schedule_department(&conn, "gen_group_no_repeat", 1, &["Ana", "Bia", "Carol"]);
+        upsert_schedule_department(
+            &conn,
+            &ScheduleDepartmentInput {
+                id: Some(department.id),
+                code: department.code.clone(),
+                name_pt: department.name_pt.clone(),
+                name_en: department.name_en.clone(),
+                name_es: department.name_es.clone(),
+                icon: department.icon.clone(),
+                color: department.color.clone(),
+                people_per_day: department.people_per_day,
+                shuffle_on_generate: false,
+                group_dates_in_print: true,
+                repeat_members_in_grouped_dates: false,
+                sort_order: department.sort_order,
+                is_active: true,
+            },
+        )
+        .expect("disable grouped repeat generation");
+
+        let month = get_or_create_schedule_month(&conn, 2026, 3).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[
+                ScheduleDayInput {
+                    service_date: "2026-03-07".into(),
+                    label: None,
+                    source_kind: Some("pattern".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-03-08".into(),
+                    label: None,
+                    source_kind: Some("pattern".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+            ],
+        )
+        .expect("attach grouped days");
+
+        let detail =
+            generate_schedule_month(&conn, 2026, 3, false).expect("generate schedule month");
+
+        assert_eq!(
+            assignment_names_for_department(&detail, department.id),
+            vec![vec!["Ana".to_owned()], vec!["Bia".to_owned()]]
         );
     }
 
@@ -1556,6 +1798,8 @@ mod tests {
                 color: department.color.clone(),
                 people_per_day: 2,
                 shuffle_on_generate: false,
+                group_dates_in_print: false,
+                repeat_members_in_grouped_dates: true,
                 sort_order: department.sort_order,
                 is_active: true,
             },
@@ -1608,6 +1852,8 @@ mod tests {
                 color: department.color.clone(),
                 people_per_day: 2,
                 shuffle_on_generate: false,
+                group_dates_in_print: false,
+                repeat_members_in_grouped_dates: true,
                 sort_order: department.sort_order,
                 is_active: true,
             },

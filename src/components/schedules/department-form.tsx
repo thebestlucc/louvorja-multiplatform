@@ -23,6 +23,8 @@ export interface ScheduleDepartmentDraft {
   color: string;
   peoplePerDay: number;
   shuffleOnGenerate: boolean;
+  groupDatesInPrint: boolean;
+  repeatMembersInGroupedDates: boolean;
   sortOrder: number;
   isActive: boolean;
   isSystem: boolean;
@@ -211,6 +213,44 @@ export function DepartmentForm({
             </span>
           </label>
 
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={draft.groupDatesInPrint}
+              disabled={disabled}
+              onChange={(event) => updateField("groupDatesInPrint", event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border"
+            />
+            <span className="space-y-1">
+              <span className="block font-medium">
+                {t("utilities.schedules.departmentManagement.groupDatesInPrint")}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t("utilities.schedules.departmentManagement.groupDatesInPrintHint")}
+              </span>
+            </span>
+          </label>
+
+          <label
+            className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-foreground"
+          >
+            <input
+              type="checkbox"
+              checked={draft.repeatMembersInGroupedDates}
+              disabled={disabled || !draft.groupDatesInPrint}
+              onChange={(event) => updateField("repeatMembersInGroupedDates", event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border"
+            />
+            <span className="space-y-1">
+              <span className="block font-medium">
+                {t("utilities.schedules.departmentManagement.repeatMembersInGroupedDates")}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t("utilities.schedules.departmentManagement.repeatMembersInGroupedDatesHint")}
+              </span>
+            </span>
+          </label>
+
           <label className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-foreground">
             <input
               type="checkbox"
@@ -249,6 +289,8 @@ export function toScheduleDepartmentInput(draft: ScheduleDepartmentDraft): Sched
     color: draft.color,
     peoplePerDay: draft.peoplePerDay,
     shuffleOnGenerate: draft.shuffleOnGenerate,
+    groupDatesInPrint: draft.groupDatesInPrint,
+    repeatMembersInGroupedDates: draft.repeatMembersInGroupedDates,
     sortOrder: draft.sortOrder,
     isActive: draft.isActive,
   };
@@ -265,6 +307,8 @@ export function buildEmptyDepartmentDraft(sortOrder: number): ScheduleDepartment
     color: "#1d4ed8",
     peoplePerDay: 1,
     shuffleOnGenerate: false,
+    groupDatesInPrint: false,
+    repeatMembersInGroupedDates: true,
     sortOrder,
     isActive: true,
     isSystem: false,
@@ -297,6 +341,8 @@ export function departmentDraftFromEntity(
     color: string;
     peoplePerDay: number;
     shuffleOnGenerate: boolean;
+    groupDatesInPrint: boolean;
+    repeatMembersInGroupedDates: boolean;
     sortOrder: number;
     isSystem: boolean;
     isActive: boolean;
@@ -313,6 +359,8 @@ export function departmentDraftFromEntity(
     color: department.color,
     peoplePerDay: department.peoplePerDay,
     shuffleOnGenerate: department.shuffleOnGenerate,
+    groupDatesInPrint: department.groupDatesInPrint,
+    repeatMembersInGroupedDates: department.repeatMembersInGroupedDates,
     sortOrder: department.sortOrder,
     isActive: department.isActive,
     isSystem: department.isSystem,

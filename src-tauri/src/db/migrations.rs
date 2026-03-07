@@ -134,6 +134,16 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (24)", [])?;
     }
 
+    if current_version < 25 {
+        migrate_v25(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (25)", [])?;
+    }
+
+    if current_version < 26 {
+        migrate_v26(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (26)", [])?;
+    }
+
     Ok(())
 }
 
@@ -824,6 +834,8 @@ fn migrate_v22(conn: &Connection) -> Result<(), AppError> {
             color TEXT NOT NULL,
             people_per_day INTEGER NOT NULL DEFAULT 1,
             shuffle_on_generate INTEGER NOT NULL DEFAULT 0,
+            group_dates_in_print INTEGER NOT NULL DEFAULT 0,
+            repeat_members_in_grouped_dates INTEGER NOT NULL DEFAULT 1,
             sort_order INTEGER NOT NULL DEFAULT 0,
             is_system INTEGER NOT NULL DEFAULT 0,
             is_active INTEGER NOT NULL DEFAULT 1,
@@ -1057,6 +1069,26 @@ fn migrate_v24(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v25(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "schedule_departments",
+        "group_dates_in_print",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    Ok(())
+}
+
+fn migrate_v26(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "schedule_departments",
+        "repeat_members_in_grouped_dates",
+        "INTEGER NOT NULL DEFAULT 1",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1089,12 +1121,22 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 24);
+        assert_eq!(schema_version, 26);
 
         assert!(
             column_exists(&conn, "schedule_departments", "shuffle_on_generate")
                 .expect("shuffle_on_generate column exists"),
             "missing shuffle_on_generate column"
+        );
+        assert!(
+            column_exists(&conn, "schedule_departments", "group_dates_in_print")
+                .expect("group_dates_in_print column exists"),
+            "missing group_dates_in_print column"
+        );
+        assert!(
+            column_exists(&conn, "schedule_departments", "repeat_members_in_grouped_dates")
+                .expect("repeat_members_in_grouped_dates column exists"),
+            "missing repeat_members_in_grouped_dates column"
         );
 
         let department_count: i64 = conn
@@ -1135,7 +1177,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v24() {
+    fn fresh_migration_chain_stepwise_reaches_v26() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1163,6 +1205,8 @@ mod tests {
             (22, migrate_v22),
             (23, migrate_v23),
             (24, migrate_v24),
+            (25, migrate_v25),
+            (26, migrate_v26),
         ] {
             migration(&conn).unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
         }
