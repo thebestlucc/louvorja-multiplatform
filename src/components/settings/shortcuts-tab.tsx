@@ -5,21 +5,10 @@ import {
   SHORTCUT_DEFINITIONS,
   SHORTCUT_CATEGORY_ORDER,
   comboToDisplayKeys,
+  keyboardEventToShortcutCombo,
+  normalizeShortcutCombo,
 } from "../../lib/shortcut-definitions";
-import { useSetting, useSetShortcut } from "../../lib/queries";
-
-// Converts a KeyboardEvent into a stored combo string like "Shift+F5" or "Alt+Right"
-function eventToComboString(e: KeyboardEvent): string | null {
-  // Ignore modifier-only keypresses
-  if (["Meta", "Shift", "Alt", "Control"].includes(e.key)) return null;
-
-  const parts: string[] = [];
-  if (e.metaKey || e.ctrlKey) parts.push("Meta");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.altKey) parts.push("Alt");
-  parts.push(e.key);
-  return parts.join("+");
-}
+import { useAllSettings, useSetting, useSetShortcut } from "../../lib/queries";
 
 // A single shortcut recording cell (local or global layer)
 function ShortcutCell({
@@ -35,8 +24,13 @@ function ShortcutCell({
   const { data: setting } = useSetting(`shortcut.${def.id}.${layer}`);
   const setShortcut = useSetShortcut();
 
-  const defaultCombo = layer === "local" ? def.defaultLocal : def.defaultGlobal;
-  const currentCombo = setting?.value ?? defaultCombo ?? "";
+  const defaultComboRaw = layer === "local" ? def.defaultLocal : def.defaultGlobal;
+  const defaultCombo = defaultComboRaw
+    ? normalizeShortcutCombo(defaultComboRaw, layer)
+    : "";
+  const currentCombo = setting?.value
+    ? normalizeShortcutCombo(setting.value, layer)
+    : defaultCombo;
 
   const [recording, setRecording] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
@@ -60,7 +54,7 @@ function ShortcutCell({
         return;
       }
 
-      const combo = eventToComboString(e);
+      const combo = keyboardEventToShortcutCombo(e, layer);
       if (!combo) return;
 
       // Conflict check: scan all bindings in the same layer
@@ -168,19 +162,43 @@ function ShortcutActionRow({
 
 export function ShortcutsTab() {
   const { t } = useTranslation();
+  const { data: allSettings = [] } = useAllSettings();
 
   // Build a flat map of default bindings for conflict detection.
   // Key format: "id.layer" → combo string.
-  // Uses defaults only (good enough for MVP; customized values can still be
-  // manually compared within each ShortcutCell when recording).
-  const allCurrentBindings = Object.fromEntries(
-    SHORTCUT_DEFINITIONS.flatMap((def) => {
-      const entries: [string, string][] = [];
-      if (def.defaultLocal) entries.push([`${def.id}.local`, def.defaultLocal]);
-      if (def.defaultGlobal) entries.push([`${def.id}.global`, def.defaultGlobal]);
-      return entries;
-    }),
-  );
+  const allCurrentBindings = {
+    ...Object.fromEntries(
+      SHORTCUT_DEFINITIONS.flatMap((def) => {
+        const entries: [string, string][] = [];
+        if (def.defaultLocal) {
+          entries.push([
+            `${def.id}.local`,
+            normalizeShortcutCombo(def.defaultLocal, "local"),
+          ]);
+        }
+        if (def.defaultGlobal) {
+          entries.push([
+            `${def.id}.global`,
+            normalizeShortcutCombo(def.defaultGlobal, "global"),
+          ]);
+        }
+        return entries;
+      }),
+    ),
+    ...Object.fromEntries(
+      allSettings
+        .map((setting) => {
+          const match = /^shortcut\.(.+)\.(local|global)$/.exec(setting.key);
+          if (!match || !setting.value) return null;
+          const [, id, layer] = match;
+          return [
+            `${id}.${layer}`,
+            normalizeShortcutCombo(setting.value, layer as "local" | "global"),
+          ] as const;
+        })
+        .filter((entry): entry is readonly [string, string] => entry !== null),
+    ),
+  };
 
   return (
     <div className="space-y-6">

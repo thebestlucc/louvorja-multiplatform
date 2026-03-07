@@ -7,7 +7,6 @@ import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
 import { StatusBar } from "../components/layout/status-bar";
-import { CommandPalette } from "../components/ui/command-palette";
 import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { UpdateNotification } from "../components/update-notification";
 import { useKeyboard } from "../hooks/use-keyboard";
@@ -287,7 +286,6 @@ function RootLayout() {
         </main>
         <StatusBar />
       </div>
-      <CommandPalette />
       <KeyboardShortcutsPanel />
       <UpdateNotification />
       <Toaster

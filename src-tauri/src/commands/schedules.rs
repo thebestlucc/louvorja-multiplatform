@@ -140,3 +140,37 @@ pub fn save_schedule_day_assignments(
         &input.member_ids,
     )
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_schedule_day_department_people_per_day(
+    schedule_day_department_id: i64,
+    people_per_day: i32,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .get()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::schedules::update_schedule_day_department_people_per_day(
+        &conn,
+        schedule_day_department_id,
+        people_per_day,
+    )
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn reset_schedule_day_department_manual_override(
+    schedule_day_department_id: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .get()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::schedules::reset_schedule_day_department_manual_override(
+        &conn,
+        schedule_day_department_id,
+    )
+}

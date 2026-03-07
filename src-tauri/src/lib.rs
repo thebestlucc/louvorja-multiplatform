@@ -102,6 +102,18 @@ pub fn run() {
             commands::liturgy::reorder_service_items,
             commands::liturgy::duplicate_service,
             commands::liturgy::update_service_item,
+            // Schedules
+            commands::schedules::list_schedule_departments,
+            commands::schedules::save_schedule_department,
+            commands::schedules::delete_schedule_department,
+            commands::schedules::replace_schedule_department_members,
+            commands::schedules::get_schedule_month,
+            commands::schedules::save_schedule_month_days,
+            commands::schedules::generate_schedule_month,
+            commands::schedules::set_schedule_day_responsible_department,
+            commands::schedules::save_schedule_day_assignments,
+            commands::schedules::update_schedule_day_department_people_per_day,
+            commands::schedules::reset_schedule_day_department_manual_override,
             // Audio
             commands::audio::audio_play,
             commands::audio::audio_play_alert,
@@ -178,6 +190,7 @@ pub fn run() {
             commands::utility::get_video_metadata,
             commands::utility::resolve_media_path,
             // Spotlight
+            commands::spotlight::spotlight_open,
             commands::spotlight::spotlight_select,
             commands::spotlight::spotlight_hide,
         ]);
@@ -192,7 +205,11 @@ pub fn run() {
         .expect("Failed to export specta bindings");
 
     // Normal app initialization
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    { builder = builder.plugin(tauri_nspanel::init()); }
+    builder
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -243,6 +260,13 @@ pub fn run() {
             // Create main window after setup
             create_main_window(app.handle())?;
 
+            // Pre-create the spotlight window hidden so it lives on the current
+            // OS Space. When the user triggers the shortcut, open_spotlight_window()
+            // simply repositions and shows it — no Space switch occurs.
+            if let Err(e) = commands::spotlight::create_spotlight_window(app.handle()) {
+                eprintln!("[spotlight] Failed to pre-create spotlight window: {e}");
+            }
+
             // Auto-start streaming server if configured
             {
                 let db_state = app.state::<AppState>();
@@ -279,7 +303,7 @@ pub fn run() {
             // Register global shortcuts from settings
             {
                 let global_defaults = [
-                    ("app-command-palette", "CmdOrCtrl+Shift+L"),
+                    ("app-command-palette", "CmdOrCtrl+Shift+K"),
                     ("app-shortcuts-help", "Alt+H"),
                 ];
 
@@ -299,20 +323,10 @@ pub fn run() {
                         .unwrap_or_else(|| default_str.to_string());
 
                     if !combo_str.is_empty() {
-                        use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-                        if let Ok(shortcut) = combo_str.parse::<Shortcut>() {
-                            let action_clone = action.to_string();
-                            let app_handle = app.handle().clone();
-                            let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
-                                if event.state == ShortcutState::Pressed {
-                                    if action_clone == "app-command-palette" {
-                                        let _ = crate::commands::spotlight::open_spotlight_window(&app_handle);
-                                    } else {
-                                        let _ = app_handle.emit("global-shortcut", &action_clone);
-                                    }
-                                }
-                            });
-                            shortcuts_map.insert(action.to_string(), combo_str);
+                        if let Ok(normalized) =
+                            commands::settings::register_global_shortcut(action, &combo_str, app.handle())
+                        {
+                            shortcuts_map.insert(action.to_string(), normalized);
                         }
                     }
                 }

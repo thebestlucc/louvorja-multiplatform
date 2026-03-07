@@ -15,6 +15,7 @@ import {
   Clock3,
   Shuffle,
   CaseSensitive,
+  CalendarDays,
   CircleHelp,
   Monitor,
   MonitorSmartphone,
@@ -186,6 +187,7 @@ function SpotlightWindow() {
     { id: "help", icon: CircleHelp, label: t("nav.help"), to: "/help" },
     { id: "timer", icon: Timer, label: t("utilities.nav.timer"), to: "/utilities/timer" },
     { id: "clock", icon: Clock3, label: t("utilities.nav.clock"), to: "/utilities/clock" },
+    { id: "schedules", icon: CalendarDays, label: t("utilities.nav.schedules"), to: "/utilities/schedules" },
     { id: "lottery", icon: Shuffle, label: t("utilities.nav.lottery"), to: "/utilities/lottery" },
     { id: "text", icon: CaseSensitive, label: t("utilities.nav.text"), to: "/utilities/text" },
   ];
@@ -218,14 +220,14 @@ function SpotlightWindow() {
     // No h-screen — the panel sizes to its content.
     // The Tauri window is already centered on screen (Rust), so the panel
     // appears centered. Transparent space below = shows desktop through.
-    <div className="flex w-screen justify-center bg-transparent p-0">
-      <div className="w-full overflow-hidden rounded-2xl border border-black/8 bg-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-        <Command shouldFilter={false}>
+    <div className="flex h-screen w-screen justify-center bg-transparent p-0">
+      <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-black/8 bg-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+        <Command shouldFilter={false} className="flex h-full flex-col">
 
           {/* ── Search bar ── */}
           <div
             onMouseDown={handleSearchBarMouseDown}
-            className="flex cursor-grab items-center gap-2.5 px-4 py-3.5 active:cursor-grabbing"
+            className="sticky top-0 z-10 flex shrink-0 cursor-grab items-center gap-2.5 bg-white/85 px-4 py-3.5 backdrop-blur-2xl active:cursor-grabbing"
           >
             {searching ? (
               <Loader2 className="h-5 w-5 shrink-0 animate-spin text-gray-400" />
@@ -243,9 +245,9 @@ function SpotlightWindow() {
           </div>
 
           {/* Divider — only shown when there are results */}
-          {hasResults && <div className="h-px bg-black/8 mx-0" />}
+          {hasResults && <div className="mx-0 h-px shrink-0 bg-black/8" />}
 
-          <Command.List className="max-h-[420px] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
+          <Command.List className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
             <Command.Empty className="py-10 text-center text-sm text-gray-400">
               {t("commandPalette.noResults")}
             </Command.Empty>
@@ -390,7 +392,6 @@ function SpotlightWindow() {
                       <CoverImage
                         path={col.coverPath}
                         title={col.title}
-                        fallback={<FolderOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />}
                         className="h-4 w-4 rounded shadow-xs"
                       />
                       <div className="flex min-w-0 flex-1 flex-col">
@@ -424,7 +425,6 @@ function SpotlightWindow() {
                       <CoverImage
                         path={col.coverPath}
                         title={col.title}
-                        fallback={<Music className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />}
                         className="h-4 w-4 rounded shadow-xs"
                       />
                       <div className="flex min-w-0 flex-1 flex-col">
@@ -441,7 +441,7 @@ function SpotlightWindow() {
           </Command.List>
 
           {/* ── Footer ── */}
-          <div className="flex items-center gap-4 border-t border-black/8 px-4 py-2.5 text-[11px] text-gray-400">
+          <div className="flex shrink-0 items-center gap-4 border-t border-black/8 px-4 py-2.5 text-[11px] text-gray-400">
             <span>{t("spotlight.hintNavigate")}</span>
             <span>{t("spotlight.hintOpen")}</span>
             <span>{t("spotlight.hintClose")}</span>

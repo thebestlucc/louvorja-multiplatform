@@ -146,6 +146,16 @@ fn get_department_people_per_day(conn: &Connection, department_id: i64) -> Resul
     })
 }
 
+fn ensure_people_per_day(people_per_day: i32) -> Result<(), AppError> {
+    if people_per_day > 0 {
+        Ok(())
+    } else {
+        Err(AppError::Internal(
+            "Schedule departments must allow at least one person per day.".into(),
+        ))
+    }
+}
+
 fn next_assignment_member_ids(
     member_ids: &[i64],
     cursor: &mut usize,
@@ -204,11 +214,7 @@ pub fn upsert_schedule_department(
     conn: &Connection,
     input: &ScheduleDepartmentInput,
 ) -> Result<ScheduleDepartment, AppError> {
-    if input.people_per_day <= 0 {
-        return Err(AppError::Internal(
-            "Schedule departments must allow at least one person per day.".into(),
-        ));
-    }
+    ensure_people_per_day(input.people_per_day)?;
     if input.icon.trim().is_empty() {
         return Err(AppError::Internal("Schedule department icon is required.".into()));
     }
@@ -376,28 +382,28 @@ pub fn replace_schedule_month_days(
     get_schedule_month_by_id(conn, month_id)?;
 
     let tx = conn.unchecked_transaction()?;
-    tx.execute(
-        "DELETE FROM schedule_days WHERE schedule_month_id = ?1",
-        params![month_id],
-    )?;
+    let existing_day_ids_by_date = {
+        let mut stmt = tx.prepare(
+            "SELECT id, service_date
+             FROM schedule_days
+             WHERE schedule_month_id = ?1",
+        )?;
+        let rows = stmt.query_map(params![month_id], |row| {
+            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(0)?))
+        })?;
+        rows.collect::<Result<HashMap<String, i64>, _>>()?
+    };
 
-    let mut insert_day_stmt = tx.prepare(
-        "INSERT INTO schedule_days (
-            schedule_month_id, service_date, label, source_kind, responsible_department_id
-         ) VALUES (?1, ?2, ?3, ?4, ?5)",
-    )?;
-    let mut insert_day_department_stmt = tx.prepare(
-        "INSERT INTO schedule_day_departments (
-            schedule_day_id, department_id, people_per_day
-         ) VALUES (?1, ?2, ?3)",
-    )?;
-
+    let mut seen_service_dates = HashSet::new();
     for day in days {
         let service_date = day.service_date.trim();
         if service_date.is_empty() {
             return Err(AppError::Internal(
                 "Schedule day service_date cannot be empty.".into(),
             ));
+        }
+        if !seen_service_dates.insert(service_date.to_owned()) {
+            continue;
         }
         let source_kind = day
             .source_kind
@@ -406,26 +412,94 @@ pub fn replace_schedule_month_days(
             .filter(|value| !value.is_empty())
             .unwrap_or("manual");
 
-        insert_day_stmt.execute(params![
-            month_id,
-            service_date,
-            trim_opt(day.label.as_deref()),
-            source_kind,
-            day.responsible_department_id,
-        ])?;
-        let day_id = tx.last_insert_rowid();
+        let day_id = if let Some(existing_day_id) = existing_day_ids_by_date.get(service_date) {
+            tx.execute(
+                "UPDATE schedule_days
+                 SET label = ?1,
+                     source_kind = ?2,
+                     responsible_department_id = ?3,
+                     updated_at = datetime('now')
+                 WHERE id = ?4",
+                params![
+                    trim_opt(day.label.as_deref()),
+                    source_kind,
+                    day.responsible_department_id,
+                    existing_day_id,
+                ],
+            )?;
+            *existing_day_id
+        } else {
+            tx.execute(
+                "INSERT INTO schedule_days (
+                    schedule_month_id, service_date, label, source_kind, responsible_department_id
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    month_id,
+                    service_date,
+                    trim_opt(day.label.as_deref()),
+                    source_kind,
+                    day.responsible_department_id,
+                ],
+            )?;
+            tx.last_insert_rowid()
+        };
+
+        let existing_day_department_ids = {
+            let mut stmt = tx.prepare(
+                "SELECT id, department_id
+                 FROM schedule_day_departments
+                 WHERE schedule_day_id = ?1",
+            )?;
+            let rows = stmt.query_map(params![day_id], |row| {
+                Ok((row.get::<_, i64>(1)?, row.get::<_, i64>(0)?))
+            })?;
+            rows.collect::<Result<HashMap<i64, i64>, _>>()?
+        };
 
         let mut seen_department_ids = HashSet::new();
         for department_id in &day.department_ids {
             if !seen_department_ids.insert(*department_id) {
                 continue;
             }
+
+            if let Some(existing_day_department_id) = existing_day_department_ids.get(department_id) {
+                tx.execute(
+                    "UPDATE schedule_day_departments
+                     SET updated_at = datetime('now')
+                     WHERE id = ?1",
+                    params![existing_day_department_id],
+                )?;
+                continue;
+            }
+
             let people_per_day = get_department_people_per_day(&tx, *department_id)?;
-            insert_day_department_stmt.execute(params![day_id, department_id, people_per_day])?;
+            tx.execute(
+                "INSERT INTO schedule_day_departments (
+                    schedule_day_id, department_id, people_per_day
+                 ) VALUES (?1, ?2, ?3)",
+                params![day_id, department_id, people_per_day],
+            )?;
+        }
+
+        for (existing_day_department_id, department_id) in existing_day_department_ids {
+            if seen_department_ids.contains(&department_id) {
+                continue;
+            }
+
+            tx.execute(
+                "DELETE FROM schedule_day_departments WHERE id = ?1",
+                params![existing_day_department_id],
+            )?;
         }
     }
-    drop(insert_day_department_stmt);
-    drop(insert_day_stmt);
+
+    for (service_date, day_id) in existing_day_ids_by_date {
+        if seen_service_dates.contains(&service_date) {
+            continue;
+        }
+
+        tx.execute("DELETE FROM schedule_days WHERE id = ?1", params![day_id])?;
+    }
 
     tx.execute(
         "UPDATE schedule_months
@@ -728,6 +802,85 @@ pub fn save_day_assignments(
     Ok(())
 }
 
+pub fn update_schedule_day_department_people_per_day(
+    conn: &Connection,
+    day_department_id: i64,
+    people_per_day: i32,
+) -> Result<(), AppError> {
+    ensure_people_per_day(people_per_day)?;
+
+    let month_id = conn
+        .query_row(
+            "SELECT sd.schedule_month_id
+             FROM schedule_day_departments sdd
+             JOIN schedule_days sd ON sd.id = sdd.schedule_day_id
+             WHERE sdd.id = ?1",
+            params![day_department_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!(
+                "Schedule day department with id {} not found",
+                day_department_id
+            )),
+            other => AppError::Database(other),
+        })?;
+
+    conn.execute(
+        "UPDATE schedule_day_departments
+         SET people_per_day = ?1,
+             updated_at = datetime('now')
+         WHERE id = ?2",
+        params![people_per_day, day_department_id],
+    )?;
+    conn.execute(
+        "UPDATE schedule_months
+         SET updated_at = datetime('now')
+         WHERE id = ?1",
+        params![month_id],
+    )?;
+
+    Ok(())
+}
+
+pub fn reset_schedule_day_department_manual_override(
+    conn: &Connection,
+    day_department_id: i64,
+) -> Result<(), AppError> {
+    let month_id = conn
+        .query_row(
+            "SELECT sd.schedule_month_id
+             FROM schedule_day_departments sdd
+             JOIN schedule_days sd ON sd.id = sdd.schedule_day_id
+             WHERE sdd.id = ?1",
+            params![day_department_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!(
+                "Schedule day department with id {} not found",
+                day_department_id
+            )),
+            other => AppError::Database(other),
+        })?;
+
+    conn.execute(
+        "UPDATE schedule_day_departments
+         SET manual_override = 0,
+             updated_at = datetime('now')
+         WHERE id = ?1",
+        params![day_department_id],
+    )?;
+    conn.execute(
+        "UPDATE schedule_months
+         SET updated_at = datetime('now')
+         WHERE id = ?1",
+        params![month_id],
+    )?;
+
+    Ok(())
+}
+
 pub fn set_schedule_day_responsible_department(
     conn: &Connection,
     schedule_day_id: i64,
@@ -833,6 +986,24 @@ mod tests {
                     .collect::<Vec<_>>()
             })
             .collect()
+    }
+
+    fn day_department_id_for_date(
+        detail: &ScheduleMonthDetail,
+        service_date: &str,
+        department_id: i64,
+    ) -> i64 {
+        detail
+            .days
+            .iter()
+            .find(|day| day.service_date == service_date)
+            .and_then(|day| {
+                day.departments
+                    .iter()
+                    .find(|department| department.department_id == department_id)
+            })
+            .map(|department| department.id)
+            .expect("day department id")
     }
 
     #[test]
@@ -1043,5 +1214,155 @@ mod tests {
         );
         assert!(!detail.days[0].departments[0].manual_override);
         assert!(!detail.days[1].departments[0].manual_override);
+    }
+
+    #[test]
+    fn replace_schedule_month_days_preserves_existing_assignments_for_kept_day_departments() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department =
+            setup_schedule_department(&conn, "preserve_assignments", 1, &["Ana", "Bia", "Carol"]);
+        let month = get_or_create_schedule_month(&conn, 2026, 4).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[
+                ScheduleDayInput {
+                    service_date: "2026-04-05".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-04-12".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+            ],
+        )
+        .expect("attach initial days");
+
+        let initial_detail = get_schedule_month_detail(&conn, 2026, 4).expect("initial detail");
+        let day_department_id =
+            day_department_id_for_date(&initial_detail, "2026-04-05", department.id);
+        let carol_member_id = department
+            .members
+            .iter()
+            .find(|member| member.name == "Carol")
+            .expect("carol member")
+            .id;
+        save_day_assignments(&conn, day_department_id, &[carol_member_id])
+            .expect("save manual assignments");
+
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[
+                ScheduleDayInput {
+                    service_date: "2026-04-05".into(),
+                    label: Some("Morning worship".into()),
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: Some(department.id),
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-04-19".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+            ],
+        )
+        .expect("replace month days");
+
+        let detail = get_schedule_month_detail(&conn, 2026, 4).expect("updated detail");
+        assert_eq!(detail.days.len(), 2);
+        assert_eq!(
+            assignment_names_for_department(&detail, department.id),
+            vec![vec!["Carol".to_owned()], Vec::new()]
+        );
+        assert!(detail.days[0].departments[0].manual_override);
+        assert_eq!(detail.days[0].label.as_deref(), Some("Morning worship"));
+        assert_eq!(detail.days[0].responsible_department_id, Some(department.id));
+    }
+
+    #[test]
+    fn reset_schedule_day_department_manual_override_clears_manual_flag_without_removing_assignments() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department =
+            setup_schedule_department(&conn, "reset_manual_override", 1, &["Ana", "Bia", "Carol"]);
+        let month = get_or_create_schedule_month(&conn, 2026, 5).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[ScheduleDayInput {
+                service_date: "2026-05-03".into(),
+                label: None,
+                source_kind: Some("manual".into()),
+                responsible_department_id: None,
+                department_ids: vec![department.id],
+            }],
+        )
+        .expect("attach day");
+
+        let initial_detail = get_schedule_month_detail(&conn, 2026, 5).expect("initial detail");
+        let day_department_id =
+            day_department_id_for_date(&initial_detail, "2026-05-03", department.id);
+        let carol_member_id = department
+            .members
+            .iter()
+            .find(|member| member.name == "Carol")
+            .expect("carol member")
+            .id;
+        save_day_assignments(&conn, day_department_id, &[carol_member_id])
+            .expect("save manual assignments");
+
+        reset_schedule_day_department_manual_override(&conn, day_department_id)
+            .expect("reset manual override");
+
+        let detail = get_schedule_month_detail(&conn, 2026, 5).expect("updated detail");
+        assert_eq!(
+            assignment_names_for_department(&detail, department.id),
+            vec![vec!["Carol".to_owned()]]
+        );
+        assert!(!detail.days[0].departments[0].manual_override);
+    }
+
+    #[test]
+    fn update_schedule_day_department_people_per_day_persists_value() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department = setup_schedule_department(&conn, "update_people", 1, &["Ana", "Bia"]);
+        let month = get_or_create_schedule_month(&conn, 2026, 6).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[ScheduleDayInput {
+                service_date: "2026-06-07".into(),
+                label: None,
+                source_kind: Some("manual".into()),
+                responsible_department_id: None,
+                department_ids: vec![department.id],
+            }],
+        )
+        .expect("attach day");
+
+        let initial_detail = get_schedule_month_detail(&conn, 2026, 6).expect("initial detail");
+        let day_department_id =
+            day_department_id_for_date(&initial_detail, "2026-06-07", department.id);
+
+        update_schedule_day_department_people_per_day(&conn, day_department_id, 2)
+            .expect("update people per day");
+
+        let detail = get_schedule_month_detail(&conn, 2026, 6).expect("updated detail");
+        assert_eq!(detail.days[0].departments[0].people_per_day, 2);
     }
 }

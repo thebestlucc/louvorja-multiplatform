@@ -468,6 +468,24 @@ export async function saveScheduleDayAssignments(
   return tauriInvoke<void>("save_schedule_day_assignments", { input });
 }
 
+export async function updateScheduleDayDepartmentPeoplePerDay(
+  scheduleDayDepartmentId: number,
+  peoplePerDay: number,
+): Promise<void> {
+  return tauriInvoke<void>("update_schedule_day_department_people_per_day", {
+    scheduleDayDepartmentId,
+    peoplePerDay,
+  });
+}
+
+export async function resetScheduleDayDepartmentManualOverride(
+  scheduleDayDepartmentId: number,
+): Promise<void> {
+  return tauriInvoke<void>("reset_schedule_day_department_manual_override", {
+    scheduleDayDepartmentId,
+  });
+}
+
 // Settings
 export async function getSetting(key: string): Promise<Setting> {
   return tauriInvoke<Setting>("get_setting", { key });
@@ -685,6 +703,10 @@ export async function updateGlobalShortcut(
   shortcutStr: string,
 ): Promise<void> {
   return tauriInvoke<void>("update_global_shortcut", { action, shortcutStr });
+}
+
+export async function spotlightOpen(): Promise<void> {
+  return tauriInvoke<void>("spotlight_open");
 }
 
 export async function spotlightSelect(

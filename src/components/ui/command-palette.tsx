@@ -16,6 +16,7 @@ import {
   Clock3,
   Shuffle,
   CaseSensitive,
+  CalendarDays,
   Monitor,
   MonitorSmartphone,
   MonitorOff,
@@ -214,6 +215,14 @@ export function CommandPalette() {
       label: t("utilities.nav.clock"),
       value: `${t("utilities.nav.clock")} ${t("nav.utilities")} time`,
       to: "/utilities/clock",
+      group: "utilities",
+    },
+    {
+      id: "route-utilities-schedules",
+      icon: CalendarDays,
+      label: t("utilities.nav.schedules"),
+      value: `${t("utilities.nav.schedules")} ${t("nav.utilities")} calendar roster departments monthly`,
+      to: "/utilities/schedules",
       group: "utilities",
     },
     {
