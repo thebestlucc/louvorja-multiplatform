@@ -435,6 +435,78 @@ async updateServiceItem(id: number, title: string, notes: string | null) : Promi
     else return { status: "error", error: e  as any };
 }
 },
+async listScheduleDepartments() : Promise<Result<ScheduleDepartment[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_schedule_departments") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveScheduleDepartment(input: ScheduleDepartmentInput) : Promise<Result<ScheduleDepartment, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_schedule_department", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteScheduleDepartment(id: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_schedule_department", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async replaceScheduleDepartmentMembers(departmentId: number, members: string[]) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("replace_schedule_department_members", { departmentId, members }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getScheduleMonth(year: number, month: number) : Promise<Result<ScheduleMonthDetail, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_schedule_month", { year, month }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveScheduleMonthDays(year: number, month: number, days: ScheduleDayInput[]) : Promise<Result<ScheduleMonthDetail, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_schedule_month_days", { year, month, days }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async generateScheduleMonth(input: ScheduleGenerationRequest) : Promise<Result<ScheduleMonthDetail, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("generate_schedule_month", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setScheduleDayResponsibleDepartment(scheduleDayId: number, responsibleDepartmentId: number | null) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_schedule_day_responsible_department", { scheduleDayId, responsibleDepartmentId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveScheduleDayAssignments(input: ScheduleAssignmentInput) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_schedule_day_assignments", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async audioPlay(filePath: string, positionMs: number | null) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("audio_play", { filePath, positionMs }) };
@@ -837,6 +909,9 @@ async getMigrationReport(runId: string) : Promise<Result<MigrationReport, AppErr
 },
 /**
  * Start a legacy fetch operation
+ * 
+ * # Errors
+ * Returns an error if it fails to acquire a lock on `AppState` to store the run status.
  */
 async startLegacyFetch(options: LegacyFetchOptions) : Promise<Result<string, AppErrorResponse>> {
     try {
@@ -848,6 +923,9 @@ async startLegacyFetch(options: LegacyFetchOptions) : Promise<Result<string, App
 },
 /**
  * Get current progress
+ * 
+ * # Errors
+ * Returns an error if the `run_id` is not found or if the state lock fails.
  */
 async getLegacyFetchProgress(runId: string) : Promise<Result<LegacyFetchProgress, AppErrorResponse>> {
     try {
@@ -859,6 +937,9 @@ async getLegacyFetchProgress(runId: string) : Promise<Result<LegacyFetchProgress
 },
 /**
  * Cancel a running operation
+ * 
+ * # Errors
+ * Returns an error if the `run_id` is not found or if the state lock fails.
  */
 async cancelLegacyFetch(runId: string) : Promise<Result<null, AppErrorResponse>> {
     try {
@@ -870,6 +951,9 @@ async cancelLegacyFetch(runId: string) : Promise<Result<null, AppErrorResponse>>
 },
 /**
  * Get the final report
+ * 
+ * # Errors
+ * Returns an error if the state lock fails.
  */
 async getLegacyFetchReport(runId: string) : Promise<Result<LegacyFetchReport | null, AppErrorResponse>> {
     try {
@@ -898,6 +982,15 @@ async checkDbVersion() : Promise<Result<DbVersionCheckResult, AppErrorResponse>>
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Restore a single hymn from the LouvorJA API.
+ * 
+ * # Errors
+ * Returns an error if:
+ * - The requested hymn cannot be found in the database.
+ * - Fetching the music details from the API fails.
+ * - Database connection or insertion fails.
+ */
 async restoreHymnFromApi(hymnId: number, language: ApiLanguage) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("restore_hymn_from_api", { hymnId, language }) };
@@ -906,6 +999,15 @@ async restoreHymnFromApi(hymnId: number, language: ApiLanguage) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Restore an entire album/collection from the LouvorJA API.
+ * 
+ * # Errors
+ * Returns an error if:
+ * - The requested collection cannot be found in the database.
+ * - Fetching the album details or songs from the API fails.
+ * - Database connection or insertion fails.
+ */
 async restoreAlbumFromApi(collectionId: number, language: ApiLanguage) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("restore_album_from_api", { collectionId, language }) };
@@ -1050,7 +1152,7 @@ export type BibleVersion = { id: number; name: string; abbreviation: string; lan
 export type Book = { name: string; chapterCount: number }
 export type ClearDatabaseResult = { success: boolean }
 export type Collection = { id: number; name: string; description: string | null; year: number | null; coverPath: string | null; autoCoverPath: string | null; songCount: number; sourceType: string; apiAlbumId: number; createdAt: string; updatedAt: string }
-export type CollectionSearchResult = { kind: string; collectionId: number; songId: number; collectionName: string; title: string; snippet: string }
+export type CollectionSearchResult = { kind: string; collectionId: number; songId: number; collectionName: string; title: string; coverPath: string | null; snippet: string }
 export type CollectionSong = { id: number; collectionId: number; sourcePath: string; sourceFormat: string; sourceHash: string | null; sourceMtimeMs: number; cachePresentationId: number; syncStatus: CollectionSongSyncStatus; lastSyncAt: string | null; itemOrder: number; createdAt: string; updatedAt: string; cachePresentationTitle: string | null }
 export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "error"
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
@@ -1111,6 +1213,17 @@ export type MonitorConfig = { id: number; monitorId: string; role: string; enabl
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
+export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
+export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }
+export type ScheduleDay = { id: number; scheduleMonthId: number; serviceDate: string; label: string | null; sourceKind: string; responsibleDepartmentId: number | null; createdAt: string; updatedAt: string; responsibleDepartment: ScheduleDepartment | null; departments: ScheduleDayDepartment[] }
+export type ScheduleDayDepartment = { id: number; scheduleDayId: number; departmentId: number; peoplePerDay: number; manualOverride: boolean; createdAt: string; updatedAt: string; department: ScheduleDepartment | null; assignments: ScheduleAssignment[] }
+export type ScheduleDayInput = { serviceDate: string; label: string | null; sourceKind: string | null; responsibleDepartmentId: number | null; departmentIds: number[] }
+export type ScheduleDepartment = { id: number; code: string | null; namePt: string | null; nameEn: string | null; nameEs: string | null; icon: string; color: string; peoplePerDay: number; sortOrder: number; isSystem: boolean; isActive: boolean; createdAt: string; updatedAt: string; members: ScheduleDepartmentMember[] }
+export type ScheduleDepartmentInput = { id: number | null; code: string | null; namePt: string | null; nameEn: string | null; nameEs: string | null; icon: string; color: string; peoplePerDay: number; sortOrder: number; isActive: boolean }
+export type ScheduleDepartmentMember = { id: number; departmentId: number; name: string; sortOrder: number; isActive: boolean; createdAt: string; updatedAt: string }
+export type ScheduleGenerationRequest = { year: number; month: number; overwriteManual: boolean }
+export type ScheduleMonth = { id: number; year: number; month: number; notes: string | null; createdAt: string; updatedAt: string }
+export type ScheduleMonthDetail = { month: ScheduleMonth; departments: ScheduleDepartment[]; days: ScheduleDay[] }
 export type Service = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string }
 export type ServiceItem = { id: number; serviceId: number; itemType: string; itemId: number; title: string; itemOrder: number; notes: string | null }
 export type ServiceWithItems = { service: Service; items: ServiceItem[] }

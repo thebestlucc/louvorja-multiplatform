@@ -113,6 +113,7 @@
     "hymns": "Hymns",
     "bible": "Bible Verses",
     "collections": "Collections",
+    "collectionSongs": "Collection Musics",
     "searching": "Searching..."
   },
   "spotlight": {
@@ -158,11 +159,18 @@
       "timer": "Timer",
       "clock": "Clock",
       "lottery": "Lottery",
-      "text": "Text"
+      "text": "Text",
+      "schedules": "Schedules"
     },
     "overview": {
       "title": "Choose a tool",
-      "description": "Open a utility to run it in your service flow."
+      "description": "Open a utility to run it in your service flow.",
+      "cards": {
+        "schedules": {
+          "title": "Department schedules",
+          "description": "Prepare, review, and print monthly department rosters."
+        }
+      }
     },
     "projection": {
       "project": "Project to screen",
@@ -253,6 +261,60 @@
       "lowercase": "lowercase",
       "titleCase": "Title Case",
       "sentenceCase": "Sentence case"
+    },
+    "schedules": {
+      "title": "Department schedules",
+      "subtitle": "Build and review monthly department rosters before printing.",
+      "description": "Organize service days, departments, and assignments for the selected month.",
+      "monthPicker": {
+        "label": "Schedule month",
+        "previous": "Previous month",
+        "next": "Next month",
+        "current": "Current month"
+      },
+      "generate": {
+        "title": "Generation",
+        "description": "Generate assignments for the selected month while preserving manual edits when needed.",
+        "action": "Generate schedule",
+        "preserveManual": "Preserve manual overrides",
+        "overwriteManual": "Overwrite manual overrides"
+      },
+      "daySelection": {
+        "title": "Service days",
+        "description": "Selected days for this month will appear here for assignment and printing.",
+        "empty": "No service days selected for this month yet.",
+        "selectedDays": "{{count}} selected day",
+        "selectedDays_other": "{{count}} selected days"
+      },
+      "departmentManagement": {
+        "title": "Departments",
+        "description": "Manage departments and members before generating the month schedule.",
+        "empty": "No active departments available."
+      },
+      "responsibleDepartment": {
+        "title": "Responsible department",
+        "description": "Choose which department is responsible for each selected service day.",
+        "label": "Responsible department",
+        "none": "Not assigned"
+      },
+      "print": {
+        "title": "Print and export",
+        "description": "Prepare compact A4 output for one or more departments.",
+        "action": "Open print preview",
+        "pdf": "Export PDF"
+      },
+      "emptyStates": {
+        "noDays": "Select service days for this month to start building the schedule.",
+        "noDepartments": "Add members to at least one department to generate assignments."
+      },
+      "loading": {
+        "month": "Loading month schedule...",
+        "departments": "Loading departments..."
+      },
+      "placeholders": {
+        "toolbar": "Generation, print, and month actions will appear here in the next step.",
+        "calendar": "The monthly calendar and day drawer will be implemented in the next task."
+      }
     }
   },
   "hymnal": {

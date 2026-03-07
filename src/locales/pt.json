@@ -113,6 +113,7 @@
     "hymns": "Hinos",
     "bible": "Versículos Bíblicos",
     "collections": "Coleções",
+    "collectionSongs": "Músicas das Coleções",
     "searching": "Pesquisando..."
   },
   "spotlight": {
@@ -158,11 +159,18 @@
       "timer": "Timer",
       "clock": "Relógio",
       "lottery": "Sorteio",
-      "text": "Texto"
+      "text": "Texto",
+      "schedules": "Escalas"
     },
     "overview": {
       "title": "Escolha uma ferramenta",
-      "description": "Abra uma utilidade para usar no fluxo do culto."
+      "description": "Abra uma utilidade para usar no fluxo do culto.",
+      "cards": {
+        "schedules": {
+          "title": "Escalas de departamentos",
+          "description": "Prepare, revise e imprima escalas mensais dos departamentos."
+        }
+      }
     },
     "projection": {
       "project": "Projetar na tela",
@@ -253,6 +261,60 @@
       "lowercase": "minúsculas",
       "titleCase": "Título",
       "sentenceCase": "Sentença"
+    },
+    "schedules": {
+      "title": "Escalas de departamentos",
+      "subtitle": "Monte e revise escalas mensais dos departamentos antes da impressão.",
+      "description": "Organize os dias de culto, departamentos e designações do mês selecionado.",
+      "monthPicker": {
+        "label": "Mês da escala",
+        "previous": "Mês anterior",
+        "next": "Próximo mês",
+        "current": "Mês atual"
+      },
+      "generate": {
+        "title": "Geração",
+        "description": "Gere as designações do mês selecionado preservando edições manuais quando necessário.",
+        "action": "Gerar escala",
+        "preserveManual": "Preservar ajustes manuais",
+        "overwriteManual": "Sobrescrever ajustes manuais"
+      },
+      "daySelection": {
+        "title": "Dias de culto",
+        "description": "Os dias selecionados deste mês aparecerão aqui para designação e impressão.",
+        "empty": "Nenhum dia de culto foi selecionado para este mês ainda.",
+        "selectedDays": "{{count}} dia selecionado",
+        "selectedDays_other": "{{count}} dias selecionados"
+      },
+      "departmentManagement": {
+        "title": "Departamentos",
+        "description": "Gerencie departamentos e membros antes de gerar a escala do mês.",
+        "empty": "Nenhum departamento ativo disponível."
+      },
+      "responsibleDepartment": {
+        "title": "Departamento responsável",
+        "description": "Escolha qual departamento é responsável por cada dia de culto selecionado.",
+        "label": "Departamento responsável",
+        "none": "Não definido"
+      },
+      "print": {
+        "title": "Impressão e exportação",
+        "description": "Prepare uma saída compacta em A4 para um ou mais departamentos.",
+        "action": "Abrir visualização de impressão",
+        "pdf": "Exportar PDF"
+      },
+      "emptyStates": {
+        "noDays": "Selecione dias de culto deste mês para começar a montar a escala.",
+        "noDepartments": "Adicione membros em pelo menos um departamento para gerar as designações."
+      },
+      "loading": {
+        "month": "Carregando escala do mês...",
+        "departments": "Carregando departamentos..."
+      },
+      "placeholders": {
+        "toolbar": "As ações de geração, impressão e mês aparecerão aqui na próxima etapa.",
+        "calendar": "O calendário mensal e o painel do dia serão implementados na próxima tarefa."
+      }
     }
   },
   "hymnal": {

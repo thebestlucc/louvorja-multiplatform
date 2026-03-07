@@ -1,3 +1,13 @@
+//! Legacy fetch commands module
+//!
+//! This module contains Tauri commands and IPC handlers for the legacy fetcher.
+//! It manages the separation between the IPC thread (returning immediately) and the
+//! background execution thread (running Tokio tasks).
+//! 
+//! # Side Effects
+//!
+//! Interacts with `AppState` to store run status and emits progress events to the frontend.
+
 use crate::error::AppError;
 use crate::legacy_fetch::{
     fetcher, importer, new_run_id, LegacyFetchError, LegacyFetchOptions,
@@ -40,6 +50,9 @@ impl From<&LegacyFetchProgress> for LegacyFetchProgressEvent {
 }
 
 /// Start a legacy fetch operation
+///
+/// # Errors
+/// Returns an error if it fails to acquire a lock on `AppState` to store the run status.
 #[tauri::command]
 #[specta::specta]
 pub fn start_legacy_fetch(
@@ -134,6 +147,9 @@ pub fn start_legacy_fetch(
 }
 
 /// Get current progress
+///
+/// # Errors
+/// Returns an error if the `run_id` is not found or if the state lock fails.
 #[tauri::command]
 #[specta::specta]
 pub fn get_legacy_fetch_progress(
@@ -152,6 +168,9 @@ pub fn get_legacy_fetch_progress(
 }
 
 /// Cancel a running operation
+///
+/// # Errors
+/// Returns an error if the `run_id` is not found or if the state lock fails.
 #[tauri::command]
 #[specta::specta]
 pub fn cancel_legacy_fetch(
@@ -172,6 +191,9 @@ pub fn cancel_legacy_fetch(
 }
 
 /// Get the final report
+///
+/// # Errors
+/// Returns an error if the state lock fails.
 #[tauri::command]
 #[specta::specta]
 pub fn get_legacy_fetch_report(
@@ -415,6 +437,9 @@ async fn run_legacy_fetch_background(
             }
         }
 
+        let mut db_batch = Vec::new();
+        let batch_size = 15;
+
         loop {
             if cancel_h.load(Ordering::SeqCst) { break; }
 
@@ -461,28 +486,46 @@ async fn run_legacy_fetch_background(
             if playback_res.is_some() { audio_h.fetch_add(1, Ordering::Relaxed); }
             if cover_res.is_some() { images_h.fetch_add(1, Ordering::Relaxed); }
 
-            let state = app_h.state::<AppState>();
-            let db_res = {
-                let _d_permit = dsem_h.acquire().await.ok();
-                if let Ok(db) = state.db.get() {
-                    importer::import_music_to_db(
-                        &db, &detailed_item, audio_res.as_deref(), playback_res.as_deref(), cover_res.as_deref(),
-                        options_h.replace_existing, Some(options_h.language.to_hymnal_name()), Some(detailed_item.id_music), Some("hymnal")
-                    )
-                } else { Err(AppError::Internal("DB Lock failed".into())) }
-            };
+            db_batch.push((detailed_item, audio_res, playback_res, cover_res));
 
-            match db_res {
-                Ok((imported, _)) => {
-                    if imported { hymns_imported_h.fetch_add(1, Ordering::Relaxed); let _ = app_h.emit("data-changed", ()); }
-                    else { hymns_skipped_h.fetch_add(1, Ordering::Relaxed); }
-                }
-                Err(e) => {
-                    log::error!("Failed to import hymn {}: {}", detailed_item.id_music, e);
-                    let mut errs = errors_h.lock().unwrap();
-                    errs.push(LegacyFetchError { item_type: "hymn".to_string(), item_id: Some(detailed_item.id_music.to_string()), message: e.to_string() });
+            let is_last_item = current_index + 1 >= queue.len() && page >= last_page_num.unwrap_or(0);
+            
+            if db_batch.len() >= batch_size || is_last_item {
+                let state = app_h.state::<AppState>();
+                let _d_permit = dsem_h.acquire().await.ok();
+                if let Ok(mut db) = state.db.get() {
+                    if let Ok(tx) = db.transaction() {
+                        let mut db_changed = false;
+                        for (item, a, p, c) in db_batch.drain(..) {
+                            let db_res = importer::import_music_to_db(
+                                &tx, &item, a.as_deref(), p.as_deref(), c.as_deref(),
+                                options_h.replace_existing, Some(options_h.language.to_hymnal_name()), Some(item.id_music), Some("hymnal")
+                            );
+                            match db_res {
+                                Ok((imported, _)) => {
+                                    if imported { hymns_imported_h.fetch_add(1, Ordering::Relaxed); db_changed = true; }
+                                    else { hymns_skipped_h.fetch_add(1, Ordering::Relaxed); }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to import hymn {}: {}", item.id_music, e);
+                                    let mut errs = errors_h.lock().unwrap();
+                                    errs.push(LegacyFetchError { item_type: "hymn".to_string(), item_id: Some(item.id_music.to_string()), message: e.to_string() });
+                                }
+                            }
+                        }
+                        if let Err(e) = tx.commit() {
+                            log::error!("Failed to commit batch: {}", e);
+                        } else if db_changed {
+                            let _ = app_h.emit("data-changed", ());
+                        }
+                    } else {
+                        db_batch.clear(); // Clear to prevent infinite loop on tx error
+                    }
+                } else {
+                    db_batch.clear();
                 }
             }
+
             processed_h.fetch_add(1, Ordering::Relaxed);
             current_index += 1;
         }
@@ -620,10 +663,7 @@ async fn run_legacy_fetch_background(
                     let processed_clone = processed_a.clone();
                     let audio_clone = audio_a.clone();
                     let images_clone = images_a.clone();
-                    let linked_clone = linked_a.clone();
-                    let errors_clone = errors_a.clone();
                     let sem_clone = sem_a.clone();
-                    let dsem_clone = dsem_a.clone();
                     let total_hymns_clone = total_hymns_a.clone();
                     let total_albums_clone = total_albums_a.clone();
                     let total_songs_clone = total_album_songs_a.clone();
@@ -652,37 +692,55 @@ async fn run_legacy_fetch_background(
                         if playback_res.is_some() { audio_clone.fetch_add(1, Ordering::Relaxed); }
                         if cover_res.is_some() { images_clone.fetch_add(1, Ordering::Relaxed); }
 
-                        let db_state = app_clone.state::<AppState>();
-                        let db_res = {
-                            let _d_permit = dsem_clone.acquire().await.ok();
-                            if let Ok(g) = db_state.db.get() {
-                                let hymn_id_res = importer::import_music_to_db(&g, &detailed_item, audio_res.as_deref(), playback_res.as_deref(), cover_res.as_deref(), options_clone.replace_existing, Some(&album_name), Some(detailed_item.id_music), Some("album"));
-                                match hymn_id_res {
-                                    Ok((imported, Some(hymn_id))) => {
-                                        if imported { let _ = app_clone.emit("data-changed", ()); }
-                                        let track_order = detailed_item.track.unwrap_or(mi as i64);
-                                        if let Ok(true) = crate::db::queries::collections::insert_collection_hymn(&g, collection_id, hymn_id, track_order) {
-                                            linked_clone.fetch_add(1, Ordering::Relaxed);
-                                            let _ = app_clone.emit("data-changed", ());
-                                        }
-                                        Ok(())
-                                    }
-                                    Ok((_, None)) => Err(AppError::Internal("Import failed".into())),
-                                    Err(e) => Err(e)
-                                }
-                            } else { Err(AppError::Internal("DB Lock failed".into())) }
-                        };
-
-                        if let Err(e) = db_res {
-                            log::error!("Failed to import album song {}: {}", detailed_item.id_music, e);
-                            let mut errs = errors_clone.lock().unwrap();
-                            errs.push(LegacyFetchError { item_type: "album_song".to_string(), item_id: Some(detailed_item.id_music.to_string()), message: e.to_string() });
-                        }
                         processed_clone.fetch_add(1, Ordering::Relaxed);
+                        (detailed_item, audio_res, playback_res, cover_res, mi as i64)
                     });
                     m_current_index += 1;
                 }
-                while let Some(_) = song_tasks.join_next().await {}
+                
+                let mut song_results = Vec::new();
+                while let Some(res) = song_tasks.join_next().await {
+                    if let Ok(data) = res {
+                        song_results.push(data);
+                    }
+                }
+                
+                let db_state = app_a.state::<AppState>();
+                let _d_permit = dsem_a.acquire().await.ok();
+                if let Ok(mut g) = db_state.db.get() {
+                    if let Ok(tx) = g.transaction() {
+                        let mut db_changed = false;
+                        for (detailed_item, audio_res, playback_res, cover_res, mi) in song_results {
+                            let hymn_id_res = importer::import_music_to_db(
+                                &tx, &detailed_item, audio_res.as_deref(), playback_res.as_deref(), cover_res.as_deref(),
+                                options_a.replace_existing, Some(&album.name), Some(detailed_item.id_music), Some("album")
+                            );
+                            match hymn_id_res {
+                                Ok((imported, Some(hymn_id))) => {
+                                    if imported { db_changed = true; }
+                                    let track_order = detailed_item.track.unwrap_or(mi);
+                                    if let Ok(true) = crate::db::queries::collections::insert_collection_hymn(&tx, collection_id, hymn_id, track_order) {
+                                        linked_a.fetch_add(1, Ordering::Relaxed);
+                                        db_changed = true;
+                                    }
+                                }
+                                Ok((_, None)) => {
+                                    log::error!("Failed to import album song {}: db returned None", detailed_item.id_music);
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to import album song {}: {}", detailed_item.id_music, e);
+                                    let mut errs = errors_a.lock().unwrap();
+                                    errs.push(LegacyFetchError { item_type: "album_song".to_string(), item_id: Some(detailed_item.id_music.to_string()), message: e.to_string() });
+                                }
+                            }
+                        }
+                        if let Err(e) = tx.commit() {
+                            log::error!("Failed to commit album songs: {}", e);
+                        } else if db_changed {
+                            let _ = app_a.emit("data-changed", ());
+                        }
+                    }
+                }
             }
             processed_a.fetch_add(1, Ordering::Relaxed);
             current_index += 1;
@@ -780,6 +838,13 @@ fn finalize_fetch_sync(
     let _ = app.emit("legacy-fetch-report", &report);
 }
 
+/// Restore a single hymn from the LouvorJA API.
+///
+/// # Errors
+/// Returns an error if:
+/// - The requested hymn cannot be found in the database.
+/// - Fetching the music details from the API fails.
+/// - Database connection or insertion fails.
 #[tauri::command]
 #[specta::specta]
 pub async fn restore_hymn_from_api(
@@ -822,6 +887,13 @@ pub async fn restore_hymn_from_api(
     Ok(())
 }
 
+/// Restore an entire album/collection from the LouvorJA API.
+///
+/// # Errors
+/// Returns an error if:
+/// - The requested collection cannot be found in the database.
+/// - Fetching the album details or songs from the API fails.
+/// - Database connection or insertion fails.
 #[tauri::command]
 #[specta::specta]
 pub async fn restore_album_from_api(

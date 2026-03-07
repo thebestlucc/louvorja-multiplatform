@@ -52,6 +52,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 urlencoding = "2"
 tauri-plugin-store = "2"
 tauri-plugin-clipboard-manager = "2"
+mimalloc = { version = "0.1.48", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5.2"

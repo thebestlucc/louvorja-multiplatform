@@ -1,6 +1,6 @@
 import { Link, Outlet, createFileRoute, useMatchRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { CaseSensitive, Clock3, LayoutGrid, Shuffle, Timer } from "lucide-react";
+import { CalendarDays, CaseSensitive, Clock3, LayoutGrid, Shuffle, Timer } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export const Route = createFileRoute("/utilities")({
@@ -11,6 +11,7 @@ const utilityNav = [
   { to: "/utilities", icon: LayoutGrid, key: "utilities.nav.overview" },
   { to: "/utilities/timer", icon: Timer, key: "utilities.nav.timer" },
   { to: "/utilities/clock", icon: Clock3, key: "utilities.nav.clock" },
+  { to: "/utilities/schedules", icon: CalendarDays, key: "utilities.nav.schedules" },
   { to: "/utilities/lottery", icon: Shuffle, key: "utilities.nav.lottery" },
   { to: "/utilities/text", icon: CaseSensitive, key: "utilities.nav.text" },
 ] as const;
@@ -26,7 +27,7 @@ function UtilitiesLayout() {
         <p className="text-sm text-muted-foreground">{t("utilities.subtitle")}</p>
       </div>
 
-      <nav className="grid grid-cols-2 gap-2 md:grid-cols-5">
+      <nav className="grid grid-cols-2 gap-2 md:grid-cols-6">
         {utilityNav.map((item) => {
           const isActive = Boolean(matchRoute({ to: item.to }));
           return (

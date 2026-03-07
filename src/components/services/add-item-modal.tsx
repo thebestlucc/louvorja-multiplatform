@@ -135,14 +135,21 @@ function HymnForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
               <CoverImage
                 path={hymn.coverPath}
                 title={hymn.title}
-                className="h-6 w-6 rounded"
+                className="h-7 w-7 rounded shrink-0"
               />
-              {hymn.number != null && (
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-500/10 text-[11px] font-semibold tabular-nums text-blue-600">
-                  {hymn.number}
-                </span>
-              )}
-              <span className="truncate">{hymn.title}</span>
+              <div className="flex flex-col min-w-0 flex-1">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  {hymn.number != null && (
+                    <span className="flex h-5 w-7 shrink-0 items-center justify-center rounded bg-blue-500/10 text-[10px] font-semibold tabular-nums text-blue-600">
+                      #{hymn.number}
+                    </span>
+                  )}
+                  <span className="truncate font-medium">{hymn.title}</span>
+                </div>
+                {hymn.album && (
+                  <span className="truncate text-[10px] text-muted-foreground">{hymn.album}</span>
+                )}
+              </div>
             </button>
           ))}
         </div>

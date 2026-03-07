@@ -334,10 +334,17 @@ function SpotlightWindow() {
                     className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
                   >
                     <Music className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
-                    <span className="flex-1 truncate">{hymn.title}</span>
-                    {hymn.number && (
-                      <span className="text-xs text-gray-400">#{hymn.number}</span>
-                    )}
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-gray-400 truncate flex-1">
+                          {hymn.album || t("hymnal.albumUnknown", "Hinário")}
+                        </span>
+                        {hymn.number != null && (
+                          <span className="text-[10px] text-gray-400 shrink-0">#{hymn.number}</span>
+                        )}
+                      </div>
+                      <span className="truncate">{hymn.title}</span>
+                    </div>
                     <button
                       title={t("spotlight.projectToScreen")}
                       onClick={(e) => {
@@ -393,33 +400,69 @@ function SpotlightWindow() {
               </Command.Group>
             )}
 
-            {/* ── Collections ── */}
-            {collectionResults.length > 0 && (
+            {/* ── Collections (Albums/Folders) ── */}
+            {collectionResults.filter(col => col.kind === "collection").length > 0 && (
               <Command.Group
                 heading={t("commandPalette.collections")}
                 className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
               >
-                {collectionResults.map((col) => (
-                  <Command.Item
-                    key={`${col.kind}-${col.collectionId}-${col.songId ?? ""}`}
-                    value={`collection-${col.collectionId}-${col.songId ?? ""}`}
-                    onSelect={() =>
-                      void spotlightSelect(
-                        "navigate",
-                        col.songId
-                          ? `/collections/${col.collectionId}/songs/${col.songId}`
-                          : `/collections/${col.collectionId}`,
-                      )
-                    }
-                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
-                  >
-                    <FolderOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="text-[11px] text-gray-400">{col.collectionName}</span>
-                      <span className="truncate">{col.title}</span>
-                    </div>
-                  </Command.Item>
-                ))}
+                {collectionResults
+                  .filter(col => col.kind === "collection")
+                  .map((col) => (
+                    <Command.Item
+                      key={`collection-${col.collectionId}`}
+                      value={`collection-${col.collectionId}`}
+                      onSelect={() =>
+                        void spotlightSelect("navigate", `/collections/${col.collectionId}`)
+                      }
+                      className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    >
+                      <CoverImage
+                        path={col.coverPath}
+                        title={col.title}
+                        fallback={<FolderOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />}
+                        className="h-4 w-4 rounded shadow-xs"
+                      />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate">{col.title}</span>
+                      </div>
+                    </Command.Item>
+                  ))}
+              </Command.Group>
+            )}
+
+            {/* ── Collection Musics (Individual songs) ── */}
+            {collectionResults.filter(col => col.kind !== "collection").length > 0 && (
+              <Command.Group
+                heading={t("commandPalette.collectionSongs")}
+                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+              >
+                {collectionResults
+                  .filter(col => col.kind !== "collection")
+                  .map((col) => (
+                    <Command.Item
+                      key={`${col.kind}-${col.collectionId}-${col.songId}`}
+                      value={`song-${col.collectionId}-${col.songId}`}
+                      onSelect={() =>
+                        void spotlightSelect(
+                          "navigate",
+                          `/collections/${col.collectionId}/songs/${col.songId}`,
+                        )
+                      }
+                      className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    >
+                      <CoverImage
+                        path={col.coverPath}
+                        title={col.title}
+                        fallback={<Music className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />}
+                        className="h-4 w-4 rounded shadow-xs"
+                      />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="text-[11px] text-gray-400">{col.collectionName}</span>
+                        <span className="truncate">{col.title}</span>
+                      </div>
+                    </Command.Item>
+                  ))}
               </Command.Group>
             )}
 
