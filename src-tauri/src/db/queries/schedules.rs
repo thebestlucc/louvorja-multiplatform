@@ -3,6 +3,7 @@ use crate::db::models::{
     ScheduleDepartmentInput, ScheduleDepartmentMember, ScheduleMonth, ScheduleMonthDetail,
 };
 use crate::error::AppError;
+use rand::seq::SliceRandom;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::collections::{HashMap, HashSet};
 
@@ -12,6 +13,7 @@ struct GenerationTarget {
     department_id: i64,
     people_per_day: i32,
     manual_override: bool,
+    shuffle_on_generate: bool,
 }
 
 fn map_schedule_department_row(row: &Row) -> Result<ScheduleDepartment, rusqlite::Error> {
@@ -24,6 +26,7 @@ fn map_schedule_department_row(row: &Row) -> Result<ScheduleDepartment, rusqlite
         icon: row.get("icon")?,
         color: row.get("color")?,
         people_per_day: row.get("people_per_day")?,
+        shuffle_on_generate: row.get("shuffle_on_generate")?,
         sort_order: row.get("sort_order")?,
         is_system: row.get("is_system")?,
         is_active: row.get("is_active")?,
@@ -175,9 +178,20 @@ fn next_assignment_member_ids(
     assignments
 }
 
+fn maybe_shuffle_member_ids<R: rand::Rng + ?Sized>(
+    member_ids: &mut [i64],
+    shuffle_on_generate: bool,
+    rng: &mut R,
+) {
+    if shuffle_on_generate && member_ids.len() > 1 {
+        member_ids.shuffle(rng);
+    }
+}
+
 pub fn list_schedule_departments(conn: &Connection) -> Result<Vec<ScheduleDepartment>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, code, name_pt, name_en, name_es, icon, color, people_per_day,
+                shuffle_on_generate,
                 sort_order, is_system, is_active, created_at, updated_at
          FROM schedule_departments
          ORDER BY sort_order ASC, id ASC",
@@ -228,6 +242,21 @@ pub fn upsert_schedule_department(
     let name_es = trim_opt(input.name_es.as_deref());
 
     let id = if let Some(id) = input.id {
+        let previous_people_per_day: i32 = conn
+            .query_row(
+                "SELECT people_per_day
+                 FROM schedule_departments
+                 WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!(
+                    "Schedule department with id {} not found",
+                    id
+                )),
+                other => AppError::Database(other),
+            })?;
         let updated = conn.execute(
             "UPDATE schedule_departments
              SET code = ?1,
@@ -237,10 +266,11 @@ pub fn upsert_schedule_department(
                  icon = ?5,
                  color = ?6,
                  people_per_day = ?7,
-                 sort_order = ?8,
-                 is_active = ?9,
+                 shuffle_on_generate = ?8,
+                 sort_order = ?9,
+                 is_active = ?10,
                  updated_at = datetime('now')
-             WHERE id = ?10",
+             WHERE id = ?11",
             params![
                 code,
                 name_pt,
@@ -249,6 +279,7 @@ pub fn upsert_schedule_department(
                 input.icon.trim(),
                 input.color.trim(),
                 input.people_per_day,
+                input.shuffle_on_generate,
                 input.sort_order,
                 input.is_active,
                 id,
@@ -260,13 +291,36 @@ pub fn upsert_schedule_department(
                 id
             )));
         }
+
+        if previous_people_per_day != input.people_per_day {
+            conn.execute(
+                "UPDATE schedule_day_departments
+                 SET people_per_day = ?1,
+                     updated_at = datetime('now')
+                 WHERE department_id = ?2
+                   AND people_per_day = ?3",
+                params![input.people_per_day, id, previous_people_per_day],
+            )?;
+            conn.execute(
+                "UPDATE schedule_months
+                 SET updated_at = datetime('now')
+                 WHERE id IN (
+                     SELECT DISTINCT sd.schedule_month_id
+                     FROM schedule_days sd
+                     JOIN schedule_day_departments sdd ON sdd.schedule_day_id = sd.id
+                     WHERE sdd.department_id = ?1
+                       AND sdd.people_per_day = ?2
+                 )",
+                params![id, input.people_per_day],
+            )?;
+        }
         id
     } else {
         conn.execute(
             "INSERT INTO schedule_departments (
                 code, name_pt, name_en, name_es, icon, color, people_per_day,
-                sort_order, is_system, is_active
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9)",
+                shuffle_on_generate, sort_order, is_system, is_active
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)",
             params![
                 code,
                 name_pt,
@@ -275,6 +329,7 @@ pub fn upsert_schedule_department(
                 input.icon.trim(),
                 input.color.trim(),
                 input.people_per_day,
+                input.shuffle_on_generate,
                 input.sort_order,
                 input.is_active,
             ],
@@ -309,6 +364,58 @@ pub fn delete_schedule_department(conn: &Connection, id: i64) -> Result<(), AppE
         "DELETE FROM schedule_departments WHERE id = ?1",
         params![id],
     )?;
+    Ok(())
+}
+
+pub fn reorder_schedule_departments(
+    conn: &Connection,
+    department_ids: &[i64],
+) -> Result<(), AppError> {
+    let existing_departments = list_schedule_departments(conn)?;
+    let expected_count = existing_departments.len();
+
+    if department_ids.len() != expected_count {
+        return Err(AppError::Internal(format!(
+            "Expected {} department ids for reorder, received {}.",
+            expected_count,
+            department_ids.len()
+        )));
+    }
+
+    let existing_ids: HashSet<i64> = existing_departments
+        .iter()
+        .map(|department| department.id)
+        .collect();
+    let mut seen_ids = HashSet::new();
+    for department_id in department_ids {
+        if !existing_ids.contains(department_id) {
+            return Err(AppError::NotFound(format!(
+                "Schedule department with id {} not found",
+                department_id
+            )));
+        }
+
+        if !seen_ids.insert(*department_id) {
+            return Err(AppError::Internal(format!(
+                "Schedule department id {} was provided more than once.",
+                department_id
+            )));
+        }
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    let mut stmt = tx.prepare(
+        "UPDATE schedule_departments
+         SET sort_order = ?1,
+             updated_at = datetime('now')
+         WHERE id = ?2",
+    )?;
+    for (index, department_id) in department_ids.iter().enumerate() {
+        stmt.execute(params![index as i32 + 1, department_id])?;
+    }
+    drop(stmt);
+    tx.commit()?;
+
     Ok(())
 }
 
@@ -525,7 +632,8 @@ pub fn generate_schedule_month(
             "SELECT sdd.id,
                     sdd.department_id,
                     sdd.people_per_day,
-                    sdd.manual_override
+                    sdd.manual_override,
+                    department.shuffle_on_generate
              FROM schedule_day_departments sdd
              JOIN schedule_days sd ON sd.id = sdd.schedule_day_id
              JOIN schedule_departments department ON department.id = sdd.department_id
@@ -538,6 +646,7 @@ pub fn generate_schedule_month(
                 department_id: row.get(1)?,
                 people_per_day: row.get(2)?,
                 manual_override: row.get(3)?,
+                shuffle_on_generate: row.get(4)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>()?
@@ -545,6 +654,10 @@ pub fn generate_schedule_month(
 
     let target_department_ids: HashSet<i64> =
         targets.iter().map(|target| target.department_id).collect();
+    let shuffle_on_generate_by_department: HashMap<i64, bool> = targets
+        .iter()
+        .map(|target| (target.department_id, target.shuffle_on_generate))
+        .collect();
     let mut member_ids_by_department: HashMap<i64, Vec<i64>> = HashMap::new();
     if !target_department_ids.is_empty() {
         let mut stmt = tx.prepare(
@@ -564,6 +677,18 @@ pub fn generate_schedule_month(
                     .push(member_id);
             }
         }
+    }
+
+    let mut rng = rand::thread_rng();
+    for (department_id, member_ids) in &mut member_ids_by_department {
+        maybe_shuffle_member_ids(
+            member_ids,
+            shuffle_on_generate_by_department
+                .get(department_id)
+                .copied()
+                .unwrap_or(false),
+            &mut rng,
+        );
     }
 
     let mut cursor_by_department: HashMap<i64, usize> = HashMap::new();
@@ -923,6 +1048,7 @@ pub fn set_schedule_day_responsible_department(
 mod tests {
     use super::*;
     use crate::db::models::ScheduleDepartmentInput;
+    use rand::{rngs::StdRng, SeedableRng};
 
     fn setup_schedule_department(
         conn: &Connection,
@@ -941,6 +1067,7 @@ mod tests {
                 icon: "users".into(),
                 color: "#225577".into(),
                 people_per_day,
+                shuffle_on_generate: false,
                 sort_order: 100,
                 is_active: true,
             },
@@ -1364,5 +1491,174 @@ mod tests {
 
         let detail = get_schedule_month_detail(&conn, 2026, 6).expect("updated detail");
         assert_eq!(detail.days[0].departments[0].people_per_day, 2);
+    }
+
+    #[test]
+    fn maybe_shuffle_member_ids_respects_department_setting() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut deterministic_ids = vec![1, 2, 3, 4];
+        maybe_shuffle_member_ids(&mut deterministic_ids, false, &mut rng);
+        assert_eq!(deterministic_ids, vec![1, 2, 3, 4]);
+
+        let mut shuffled_ids = vec![1, 2, 3, 4];
+        maybe_shuffle_member_ids(&mut shuffled_ids, true, &mut rng);
+        assert_ne!(shuffled_ids, vec![1, 2, 3, 4]);
+
+        let mut normalized_ids = shuffled_ids.clone();
+        normalized_ids.sort_unstable();
+        assert_eq!(normalized_ids, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn updating_department_people_per_day_propagates_to_default_day_departments_only() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department = setup_schedule_department(&conn, "propagate_default", 1, &["Ana", "Bia", "Carol"]);
+        let month = get_or_create_schedule_month(&conn, 2026, 8).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[
+                ScheduleDayInput {
+                    service_date: "2026-08-02".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-08-09".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+            ],
+        )
+        .expect("attach days");
+
+        let initial_detail = get_schedule_month_detail(&conn, 2026, 8).expect("initial detail");
+        let custom_day_department_id =
+            day_department_id_for_date(&initial_detail, "2026-08-09", department.id);
+        update_schedule_day_department_people_per_day(&conn, custom_day_department_id, 3)
+            .expect("set custom people per day");
+
+        upsert_schedule_department(
+            &conn,
+            &ScheduleDepartmentInput {
+                id: Some(department.id),
+                code: department.code.clone(),
+                name_pt: department.name_pt.clone(),
+                name_en: department.name_en.clone(),
+                name_es: department.name_es.clone(),
+                icon: department.icon.clone(),
+                color: department.color.clone(),
+                people_per_day: 2,
+                shuffle_on_generate: false,
+                sort_order: department.sort_order,
+                is_active: true,
+            },
+        )
+        .expect("update department default people per day");
+
+        let detail = get_schedule_month_detail(&conn, 2026, 8).expect("updated detail");
+        assert_eq!(detail.days[0].departments[0].people_per_day, 2);
+        assert_eq!(detail.days[1].departments[0].people_per_day, 3);
+    }
+
+    #[test]
+    fn generation_uses_updated_department_people_per_day_defaults() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let department = setup_schedule_department(&conn, "generate_default", 1, &["Ana", "Bia", "Carol"]);
+        let month = get_or_create_schedule_month(&conn, 2026, 9).expect("create month");
+        replace_schedule_month_days(
+            &conn,
+            month.id,
+            &[
+                ScheduleDayInput {
+                    service_date: "2026-09-06".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+                ScheduleDayInput {
+                    service_date: "2026-09-13".into(),
+                    label: None,
+                    source_kind: Some("manual".into()),
+                    responsible_department_id: None,
+                    department_ids: vec![department.id],
+                },
+            ],
+        )
+        .expect("attach days");
+
+        upsert_schedule_department(
+            &conn,
+            &ScheduleDepartmentInput {
+                id: Some(department.id),
+                code: department.code.clone(),
+                name_pt: department.name_pt.clone(),
+                name_en: department.name_en.clone(),
+                name_es: department.name_es.clone(),
+                icon: department.icon.clone(),
+                color: department.color.clone(),
+                people_per_day: 2,
+                shuffle_on_generate: false,
+                sort_order: department.sort_order,
+                is_active: true,
+            },
+        )
+        .expect("update department default people per day");
+
+        let detail =
+            generate_schedule_month(&conn, 2026, 9, false).expect("generate schedule month");
+
+        assert_eq!(
+            assignment_names_for_department(&detail, department.id),
+            vec![
+                vec!["Ana".to_owned(), "Bia".to_owned()],
+                vec!["Carol".to_owned(), "Ana".to_owned()],
+            ]
+        );
+        assert_eq!(detail.days[0].departments[0].people_per_day, 2);
+        assert_eq!(detail.days[1].departments[0].people_per_day, 2);
+    }
+
+    #[test]
+    fn reorder_schedule_departments_persists_department_order() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+
+        let initial_departments = list_schedule_departments(&conn).expect("initial departments");
+        let mut reordered_ids = initial_departments
+            .iter()
+            .map(|department| department.id)
+            .collect::<Vec<_>>();
+        reordered_ids.reverse();
+
+        reorder_schedule_departments(&conn, &reordered_ids).expect("reorder departments");
+
+        let reordered_departments = list_schedule_departments(&conn).expect("reordered departments");
+        assert_eq!(
+            reordered_departments
+                .iter()
+                .map(|department| department.id)
+                .collect::<Vec<_>>(),
+            reordered_ids
+        );
+
+        let detail = get_schedule_month_detail(&conn, 2026, 7).expect("month detail after reorder");
+        assert_eq!(
+            detail
+                .departments
+                .iter()
+                .map(|department| department.id)
+                .collect::<Vec<_>>(),
+            reordered_ids
+        );
     }
 }

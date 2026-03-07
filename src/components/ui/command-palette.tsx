@@ -504,15 +504,15 @@ export function CommandPalette() {
                 key={`collection-search-song-${result.kind}-${result.collectionId}-${result.songId}-${idx}`}
                 value={`collection-song-${result.collectionId}-${result.songId}-${result.title}-${result.collectionName}`}
                 onSelect={() => {
-                  if (result.kind === "song") {
+                  if (result.kind === "song" && result.songId != null) {
                     navigate({
-                      to: "/collections/$collectionId/songs/$songId",
+                      to: "/collections/$collectionId",
                       params: { 
                         collectionId: String(result.collectionId),
-                        songId: String(result.songId)
                       },
+                      hash: `song-${result.songId}`,
                     });
-                  } else {
+                  } else if (result.songId != null) {
                     navigate({
                       to: "/hymnal/$hymnId",
                       params: { hymnId: String(result.songId) },

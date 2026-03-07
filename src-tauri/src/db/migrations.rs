@@ -129,6 +129,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (23)", [])?;
     }
 
+    if current_version < 24 {
+        migrate_v24(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (24)", [])?;
+    }
+
     Ok(())
 }
 
@@ -818,6 +823,7 @@ fn migrate_v22(conn: &Connection) -> Result<(), AppError> {
             icon TEXT NOT NULL,
             color TEXT NOT NULL,
             people_per_day INTEGER NOT NULL DEFAULT 1,
+            shuffle_on_generate INTEGER NOT NULL DEFAULT 0,
             sort_order INTEGER NOT NULL DEFAULT 0,
             is_system INTEGER NOT NULL DEFAULT 0,
             is_active INTEGER NOT NULL DEFAULT 1,
@@ -1041,6 +1047,16 @@ fn migrate_v23(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v24(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "schedule_departments",
+        "shuffle_on_generate",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1073,7 +1089,13 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 23);
+        assert_eq!(schema_version, 24);
+
+        assert!(
+            column_exists(&conn, "schedule_departments", "shuffle_on_generate")
+                .expect("shuffle_on_generate column exists"),
+            "missing shuffle_on_generate column"
+        );
 
         let department_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM schedule_departments", [], |row| row.get(0))
@@ -1113,7 +1135,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v23() {
+    fn fresh_migration_chain_stepwise_reaches_v24() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1140,6 +1162,7 @@ mod tests {
             (21, migrate_v21),
             (22, migrate_v22),
             (23, migrate_v23),
+            (24, migrate_v24),
         ] {
             migration(&conn).unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
         }

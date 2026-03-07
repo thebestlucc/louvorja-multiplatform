@@ -459,6 +459,14 @@ async deleteScheduleDepartment(id: number) : Promise<Result<null, AppErrorRespon
     else return { status: "error", error: e  as any };
 }
 },
+async reorderScheduleDepartments(departmentIds: number[]) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reorder_schedule_departments", { departmentIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async replaceScheduleDepartmentMembers(departmentId: number, members: string[]) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("replace_schedule_department_members", { departmentId, members }) };
@@ -1242,8 +1250,8 @@ export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberI
 export type ScheduleDay = { id: number; scheduleMonthId: number; serviceDate: string; label: string | null; sourceKind: string; responsibleDepartmentId: number | null; createdAt: string; updatedAt: string; responsibleDepartment: ScheduleDepartment | null; departments: ScheduleDayDepartment[] }
 export type ScheduleDayDepartment = { id: number; scheduleDayId: number; departmentId: number; peoplePerDay: number; manualOverride: boolean; createdAt: string; updatedAt: string; department: ScheduleDepartment | null; assignments: ScheduleAssignment[] }
 export type ScheduleDayInput = { serviceDate: string; label: string | null; sourceKind: string | null; responsibleDepartmentId: number | null; departmentIds: number[] }
-export type ScheduleDepartment = { id: number; code: string | null; namePt: string | null; nameEn: string | null; nameEs: string | null; icon: string; color: string; peoplePerDay: number; sortOrder: number; isSystem: boolean; isActive: boolean; createdAt: string; updatedAt: string; members: ScheduleDepartmentMember[] }
-export type ScheduleDepartmentInput = { id: number | null; code: string | null; namePt: string | null; nameEn: string | null; nameEs: string | null; icon: string; color: string; peoplePerDay: number; sortOrder: number; isActive: boolean }
+export type ScheduleDepartment = { id: number; code: string | null; namePt: string | null; nameEn: string | null; nameEs: string | null; icon: string; color: string; peoplePerDay: number; shuffleOnGenerate: boolean; sortOrder: number; isSystem: boolean; isActive: boolean; createdAt: string; updatedAt: string; members: ScheduleDepartmentMember[] }
+export type ScheduleDepartmentInput = { id: number | null; code: string | null; namePt: string | null; nameEn: string | null; nameEs: string | null; icon: string; color: string; peoplePerDay: number; shuffleOnGenerate: boolean; sortOrder: number; isActive: boolean }
 export type ScheduleDepartmentMember = { id: number; departmentId: number; name: string; sortOrder: number; isActive: boolean; createdAt: string; updatedAt: string }
 export type ScheduleGenerationRequest = { year: number; month: number; overwriteManual: boolean }
 export type ScheduleMonth = { id: number; year: number; month: number; notes: string | null; createdAt: string; updatedAt: string }

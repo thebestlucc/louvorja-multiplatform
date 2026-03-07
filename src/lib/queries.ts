@@ -17,7 +17,7 @@ import {
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
-  listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment,
+  listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
   replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
   updateScheduleDayDepartmentPeoplePerDay, resetScheduleDayDepartmentManualOverride,
@@ -712,6 +712,16 @@ export function useDeleteScheduleDepartment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteScheduleDepartment(id),
+    onSuccess: () => {
+      invalidateScheduleQueries(queryClient);
+    },
+  });
+}
+
+export function useReorderScheduleDepartments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (departmentIds: number[]) => reorderScheduleDepartments(departmentIds),
     onSuccess: () => {
       invalidateScheduleQueries(queryClient);
     },

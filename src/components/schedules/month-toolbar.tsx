@@ -47,6 +47,7 @@ export function MonthToolbar({
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   const isBusy = isSaving || isGenerating;
+  const arePatternsBusy = Boolean(isSaving);
 
   return (
     <Card className="border-border/80 bg-gradient-to-br from-surface to-surface/70 shadow-sm">
@@ -106,7 +107,7 @@ export function MonthToolbar({
           year={year}
           month={month}
           selectedDates={selectedDates}
-          disabled={isBusy}
+          disabled={arePatternsBusy}
           onToggleWeekdayPattern={onToggleWeekdayPattern}
           onClearSelection={onClearSelection}
         />

@@ -49,6 +49,9 @@ pub fn set_setting(
         if let Ok(server) = streaming_state.server.lock() {
             server.set_ui_language(&value);
         }
+    }
+
+    if key == "app.language" || key == "app.theme" {
         let _ = app.emit(
             "setting-changed",
             SettingChangedPayload {

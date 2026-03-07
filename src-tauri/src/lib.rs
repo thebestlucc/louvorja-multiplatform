@@ -106,6 +106,7 @@ pub fn run() {
             commands::schedules::list_schedule_departments,
             commands::schedules::save_schedule_department,
             commands::schedules::delete_schedule_department,
+            commands::schedules::reorder_schedule_departments,
             commands::schedules::replace_schedule_department_members,
             commands::schedules::get_schedule_month,
             commands::schedules::save_schedule_month_days,

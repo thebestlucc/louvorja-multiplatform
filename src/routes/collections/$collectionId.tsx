@@ -122,6 +122,7 @@ function CollectionDetail() {
   }, [data]);
 
   const effectiveCover = coverPath ?? data?.collection.autoCoverPath ?? null;
+  const activeSongAnchor = router.state.location.hash.replace(/^#/, "");
 
   const syncKey = useMemo(() => {
     if (!data) return "";
@@ -170,6 +171,17 @@ function CollectionDetail() {
       cancelled = true;
     };
   }, [autoCheck, checkSongSync, data, resyncSong, syncKey, t]);
+
+  useEffect(() => {
+    if (!data || isApiCollection || activeSongAnchor.length === 0) return;
+
+    const element = document.getElementById(activeSongAnchor);
+    if (!element) return;
+
+    requestAnimationFrame(() => {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [activeSongAnchor, data, isApiCollection]);
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">{t("hymnal.loading")}</p>;
@@ -451,10 +463,18 @@ function CollectionDetail() {
           <p className="text-sm text-muted-foreground">{t("collections.emptySongs")}</p>
         ) : (
           <div className="space-y-2">
-            {data.songs.map((song, index) => (
+            {data.songs.map((song, index) => {
+              const songAnchor = `song-${song.id}`;
+              const isActiveSong = activeSongAnchor === songAnchor;
+
+              return (
               <div
+                id={songAnchor}
                 key={song.id}
-                className="group relative flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted/50"
+                className={[
+                  "group relative flex items-center gap-2 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted/50",
+                  isActiveSong ? "bg-muted/60 ring-1 ring-primary/40" : "",
+                ].join(" ")}
               >
                 {song.cachePresentationId && (
                   <Link
@@ -565,7 +585,8 @@ function CollectionDetail() {
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

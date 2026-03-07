@@ -8,10 +8,18 @@ import { MonthCalendar } from "../../components/schedules/month-calendar";
 import { MonthToolbar } from "../../components/schedules/month-toolbar";
 import { PrintPreviewDialog } from "../../components/schedules/print-preview-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import type { ScheduleDay, ScheduleDayDepartment, ScheduleDayInput, ScheduleMonthDetail } from "../../lib/bindings";
+import type {
+  ScheduleDay,
+  ScheduleDayDepartment,
+  ScheduleDayInput,
+  ScheduleDepartment,
+  ScheduleMonthDetail,
+} from "../../lib/bindings";
 import { catcher } from "../../lib/catcher";
+import { notify } from "../../lib/notifications";
 import {
   useGenerateScheduleMonth,
+  useReorderScheduleDepartments,
   useResetScheduleDayDepartmentManualOverride,
   useSaveScheduleDayAssignments,
   useSaveScheduleMonthDays,
@@ -19,7 +27,12 @@ import {
   useScheduleMonth,
   useUpdateScheduleDayDepartmentPeoplePerDay,
 } from "../../lib/queries";
-import { getWeekdayPatternDates, toggleSelectedDate } from "../../lib/schedules";
+import {
+  addDepartmentToSelectedDays,
+  buildDaySelectionFromLastStoredSchedule,
+  getWeekdayPatternDates,
+  toggleSelectedDate,
+} from "../../lib/schedules";
 
 export const Route = createFileRoute("/utilities/schedules")({
   component: UtilitiesSchedulesPage,
@@ -58,6 +71,10 @@ function buildDayInputs(
   defaultDepartmentIds: number[],
 ): ScheduleDayInput[] {
   const existingDaysByDate = new Map(existingDays.map((day) => [day.serviceDate, day]));
+  const persistedDayInputs = existingDays
+    .map((day) => toScheduleDayInput(day))
+    .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate));
+  const builtDayInputs: ScheduleDayInput[] = [];
 
   return nextSelectedDates
     .slice()
@@ -65,16 +82,20 @@ function buildDayInputs(
     .map((serviceDate) => {
       const existingDay = existingDaysByDate.get(serviceDate);
       if (existingDay) {
-        return toScheduleDayInput(existingDay);
+        const existingDayInput = toScheduleDayInput(existingDay);
+        builtDayInputs.push(existingDayInput);
+        return existingDayInput;
       }
 
-      return {
+      const inheritedDayInput = buildDaySelectionFromLastStoredSchedule({
+        existingDays: persistedDayInputs,
+        draftDays: builtDayInputs,
         serviceDate,
-        label: null,
         sourceKind,
-        responsibleDepartmentId: null,
-        departmentIds: defaultDepartmentIds,
-      };
+        defaultDepartmentIds,
+      });
+      builtDayInputs.push(inheritedDayInput);
+      return inheritedDayInput;
     });
 }
 
@@ -122,6 +143,7 @@ function UtilitiesSchedulesPage() {
   } = useScheduleDepartments();
   const saveScheduleMonthDays = useSaveScheduleMonthDays();
   const generateScheduleMonth = useGenerateScheduleMonth();
+  const reorderScheduleDepartments = useReorderScheduleDepartments();
   const saveScheduleDayAssignments = useSaveScheduleDayAssignments();
   const updateScheduleDayDepartmentPeoplePerDay = useUpdateScheduleDayDepartmentPeoplePerDay();
   const resetScheduleDayDepartmentManualOverride = useResetScheduleDayDepartmentManualOverride();
@@ -157,6 +179,7 @@ function UtilitiesSchedulesPage() {
   const isSavingDays = saveScheduleMonthDays.isPending;
   const isBusy = isSavingDays
     || generateScheduleMonth.isPending
+    || reorderScheduleDepartments.isPending
     || saveScheduleDayAssignments.isPending
     || updateScheduleDayDepartmentPeoplePerDay.isPending
     || resetScheduleDayDepartmentManualOverride.isPending;
@@ -284,6 +307,38 @@ function UtilitiesSchedulesPage() {
     }
 
     setVisibleMonth(result);
+    notify.success(t("utilities.schedules.generate.success"), {
+      description: t("utilities.schedules.generate.successDescription", {
+        count: result.days.length,
+        month: monthLabel,
+      }),
+    });
+  };
+
+  const handleDepartmentCreated = async (department: ScheduleDepartment) => {
+    if (!department.isActive || scheduleDays.length === 0) {
+      return;
+    }
+
+    await persistMonthDayInputs(
+      addDepartmentToSelectedDays(
+        scheduleDays.map((day) => toScheduleDayInput(day)),
+        department.id,
+      ),
+    );
+  };
+
+  const handlePersistDepartmentOrder = async (departmentIds: number[]) => {
+    const [, error] = await catcher(
+      reorderScheduleDepartments.mutateAsync(departmentIds),
+      { notify: true },
+    );
+    if (error) {
+      return false;
+    }
+
+    const result = await refreshAllScheduleData();
+    return Boolean(result);
   };
 
   const handleSaveDaySettings = async (params: {
@@ -291,7 +346,7 @@ function UtilitiesSchedulesPage() {
     responsibleDepartmentId: number | null;
     departmentIds: number[];
   }) => {
-    await persistMonthDayInputs(
+    const result = await persistMonthDayInputs(
       buildUpdatedMonthInputs(scheduleDays, (day) => {
         if (day.serviceDate !== params.serviceDate) {
           return toScheduleDayInput(day);
@@ -304,10 +359,15 @@ function UtilitiesSchedulesPage() {
         };
       }),
     );
+    if (!result) {
+      return;
+    }
+
+    notify.success(t("utilities.schedules.dayDetails.saveSuccess"));
   };
 
   const handleRemoveDay = async (serviceDate: string) => {
-    await persistMonthDayInputs(
+    const result = await persistMonthDayInputs(
       buildUpdatedMonthInputs(scheduleDays, (day) => {
         if (day.serviceDate === serviceDate) {
           return null;
@@ -316,7 +376,12 @@ function UtilitiesSchedulesPage() {
         return toScheduleDayInput(day);
       }),
     );
+    if (!result) {
+      return;
+    }
+
     setSelectedDayDate(null);
+    notify.success(t("utilities.schedules.dayDetails.removeSuccess"));
   };
 
   const handleSaveDayDepartmentManual = async (params: {
@@ -359,7 +424,12 @@ function UtilitiesSchedulesPage() {
       return;
     }
 
-    await refreshMonthDetail();
+    const result = await refreshMonthDetail();
+    if (!result) {
+      return;
+    }
+
+    notify.success(t("utilities.schedules.dayDetails.saveAssignmentsSuccess"));
   };
 
   const handleResetDayDepartmentGenerated = async (params: {
@@ -411,6 +481,7 @@ function UtilitiesSchedulesPage() {
     }
 
     setVisibleMonth(result);
+    notify.success(t("utilities.schedules.dayDetails.resetSuccess"));
   };
 
   return (
@@ -543,6 +614,10 @@ function UtilitiesSchedulesPage() {
         open={isDepartmentManagerOpen}
         locale={i18n.language}
         departments={departments ?? []}
+        onDepartmentCreated={handleDepartmentCreated}
+        onGenerateSchedule={handleGenerateMonth}
+        canGenerateSchedule={selectedDayCount > 0}
+        isGenerating={generateScheduleMonth.isPending}
         onOpenChange={(open) => {
           setIsDepartmentManagerOpen(open);
           if (!open) {
@@ -573,6 +648,7 @@ function UtilitiesSchedulesPage() {
         locale={i18n.language}
         monthDetail={visibleMonth}
         monthLabel={monthLabel}
+        onReorderDepartments={handlePersistDepartmentOrder}
         onOpenChange={setIsPrintPreviewOpen}
       />
     </>

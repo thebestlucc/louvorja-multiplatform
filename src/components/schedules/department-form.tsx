@@ -1,5 +1,4 @@
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
   Select,
@@ -23,6 +22,7 @@ export interface ScheduleDepartmentDraft {
   icon: string;
   color: string;
   peoplePerDay: number;
+  shuffleOnGenerate: boolean;
   sortOrder: number;
   isActive: boolean;
   isSystem: boolean;
@@ -34,8 +34,6 @@ interface DepartmentFormProps {
   locale: string;
   disabled?: boolean;
   onChange: (draft: ScheduleDepartmentDraft) => void;
-  onSave: () => void;
-  onDelete?: () => void;
 }
 
 export function DepartmentForm({
@@ -43,8 +41,6 @@ export function DepartmentForm({
   locale,
   disabled,
   onChange,
-  onSave,
-  onDelete,
 }: DepartmentFormProps) {
   const { t } = useTranslation();
   const Icon = getScheduleDepartmentIcon(draft.icon);
@@ -94,16 +90,6 @@ export function DepartmentForm({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {onDelete ? (
-            <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={onDelete}>
-              {t("actions.delete")}
-            </Button>
-          ) : null}
-          <Button type="button" size="sm" disabled={disabled} onClick={onSave}>
-            {t("actions.save")}
-          </Button>
-        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
@@ -207,6 +193,24 @@ export function DepartmentForm({
             onChange={(event) => updateField("peoplePerDay", Math.max(1, Number(event.target.value) || 1))}
           />
 
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={draft.shuffleOnGenerate}
+              disabled={disabled}
+              onChange={(event) => updateField("shuffleOnGenerate", event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border"
+            />
+            <span className="space-y-1">
+              <span className="block font-medium">
+                {t("utilities.schedules.departmentManagement.shuffleOnGenerate")}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t("utilities.schedules.departmentManagement.shuffleOnGenerateHint")}
+              </span>
+            </span>
+          </label>
+
           <label className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-foreground">
             <input
               type="checkbox"
@@ -244,6 +248,7 @@ export function toScheduleDepartmentInput(draft: ScheduleDepartmentDraft): Sched
     icon: draft.icon,
     color: draft.color,
     peoplePerDay: draft.peoplePerDay,
+    shuffleOnGenerate: draft.shuffleOnGenerate,
     sortOrder: draft.sortOrder,
     isActive: draft.isActive,
   };
@@ -259,6 +264,7 @@ export function buildEmptyDepartmentDraft(sortOrder: number): ScheduleDepartment
     icon: "users",
     color: "#1d4ed8",
     peoplePerDay: 1,
+    shuffleOnGenerate: false,
     sortOrder,
     isActive: true,
     isSystem: false,
@@ -290,6 +296,7 @@ export function departmentDraftFromEntity(
     icon: string;
     color: string;
     peoplePerDay: number;
+    shuffleOnGenerate: boolean;
     sortOrder: number;
     isSystem: boolean;
     isActive: boolean;
@@ -305,6 +312,7 @@ export function departmentDraftFromEntity(
     icon: department.icon,
     color: department.color,
     peoplePerDay: department.peoplePerDay,
+    shuffleOnGenerate: department.shuffleOnGenerate,
     sortOrder: department.sortOrder,
     isActive: department.isActive,
     isSystem: department.isSystem,

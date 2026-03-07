@@ -1,4 +1,5 @@
-import type { ScheduleDay, ScheduleDayDepartment, ScheduleDepartment, ScheduleMonthDetail } from "./bindings";
+import type { ScheduleDay, ScheduleDayDepartment, ScheduleMonthDetail } from "./bindings";
+import { getScheduleDepartmentLabel } from "./schedule-departments";
 
 const DEFAULT_PAGE_CAPACITY = 28;
 
@@ -28,22 +29,6 @@ export interface SchedulePrintPack {
   pages: SchedulePrintPage[];
 }
 
-function getDepartmentLabel(
-  department: Pick<ScheduleDepartment, "code" | "namePt" | "nameEn" | "nameEs">,
-  locale: string,
-) {
-  const language = locale.split("-")[0];
-  const candidates = language === "pt"
-    ? [department.namePt, department.nameEn, department.nameEs]
-    : language === "es"
-      ? [department.nameEs, department.namePt, department.nameEn]
-      : [department.nameEn, department.namePt, department.nameEs];
-
-  return candidates.find((value) => value && value.trim().length > 0)
-    ?? department.code
-    ?? "--";
-}
-
 function estimateSectionUnits(entries: SchedulePrintEntry[]) {
   return entries.reduce((total, entry) => {
     const lineUnits = Math.max(1, Math.ceil(Math.max(entry.assigneeNames.length, 1) / 2));
@@ -59,6 +44,10 @@ export function getPrintableDepartmentIds(detail: ScheduleMonthDetail) {
   const ids: number[] = [];
 
   for (const department of detail.departments) {
+    if (!department.isActive) {
+      continue;
+    }
+
     const hasEntries = detail.days.some((day) => Boolean(findDepartmentEntry(day, department.id)));
     if (hasEntries) {
       ids.push(department.id);
@@ -70,12 +59,15 @@ export function getPrintableDepartmentIds(detail: ScheduleMonthDetail) {
 
 export function buildSchedulePrintPack(
   detail: ScheduleMonthDetail,
-  selectedDepartmentIds: number[],
+  selectedDepartmentIds: number[] | undefined,
   locale: string,
   options?: { pageCapacity?: number },
 ): SchedulePrintPack {
-  const selectedSet = new Set(selectedDepartmentIds);
-  const hasExplicitSelection = selectedSet.size > 0;
+  const selectedSet = new Set(selectedDepartmentIds ?? []);
+  const hasExplicitSelection = selectedDepartmentIds !== undefined;
+  const selectedOrder = new Map(
+    (selectedDepartmentIds ?? []).map((departmentId, index) => [departmentId, index]),
+  );
   const pageCapacity = options?.pageCapacity ?? DEFAULT_PAGE_CAPACITY;
 
   const sections = detail.departments
@@ -106,14 +98,22 @@ export function buildSchedulePrintPack(
 
       return {
         departmentId: department.id,
-        title: getDepartmentLabel(department, locale),
+        title: getScheduleDepartmentLabel(department, locale),
         color: department.color,
         icon: department.icon,
         entries,
         estimatedUnits: estimateSectionUnits(entries),
       } satisfies SchedulePrintSection;
     })
-    .filter((section) => section.entries.length > 0);
+    .filter((section) => section.entries.length > 0)
+    .sort((left, right) => {
+      if (!hasExplicitSelection) {
+        return 0;
+      }
+
+      return (selectedOrder.get(left.departmentId) ?? Number.MAX_SAFE_INTEGER)
+        - (selectedOrder.get(right.departmentId) ?? Number.MAX_SAFE_INTEGER);
+    });
 
   const pages: SchedulePrintPage[] = [];
   let currentPageSections: SchedulePrintSection[] = [];

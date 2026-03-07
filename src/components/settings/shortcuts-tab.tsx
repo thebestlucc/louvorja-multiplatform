@@ -185,19 +185,17 @@ export function ShortcutsTab() {
         return entries;
       }),
     ),
-    ...Object.fromEntries(
-      allSettings
-        .map((setting) => {
-          const match = /^shortcut\.(.+)\.(local|global)$/.exec(setting.key);
-          if (!match || !setting.value) return null;
-          const [, id, layer] = match;
-          return [
-            `${id}.${layer}`,
-            normalizeShortcutCombo(setting.value, layer as "local" | "global"),
-          ] as const;
-        })
-        .filter((entry): entry is readonly [string, string] => entry !== null),
-    ),
+    ...allSettings.reduce<Record<string, string>>((bindings, setting) => {
+      const match = /^shortcut\.(.+)\.(local|global)$/.exec(setting.key);
+      if (!match || !setting.value) return bindings;
+
+      const [, id, layer] = match;
+      bindings[`${id}.${layer}`] = normalizeShortcutCombo(
+        setting.value,
+        layer as "local" | "global",
+      );
+      return bindings;
+    }, {}),
   };
 
   return (
