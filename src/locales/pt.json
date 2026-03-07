@@ -916,6 +916,8 @@
         "departmentDays_other": "{{count}} dias de culto",
         "description": "Prepare uma saída compacta em A4 para um ou mais departamentos.",
         "dialogAction": "Imprimir / Salvar em PDF",
+        "error": "Não foi possível abrir a impressão",
+        "errorDescription": "Verifique as permissões da janela e tente novamente.",
         "empty": "Selecione um ou mais departamentos com dias agendados para visualizar o pacote imprimível.",
         "pageLabel": "Página {{page}}",
         "pdf": "Exportar PDF",

@@ -16,9 +16,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckSquare, FileOutput, GripVertical, Printer, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ScheduleMonthDetail } from "../../lib/bindings";
+import { catcher } from "../../lib/catcher";
+import { notify } from "../../lib/notifications";
 import { buildSchedulePrintPack, getPrintableDepartmentIds } from "../../lib/schedule-print";
 import { Button } from "../ui/button";
 import {
@@ -63,6 +66,37 @@ interface PrintPreviewDialogProps {
   monthLabel: string;
   onOpenChange: (open: boolean) => void;
   onReorderDepartments?: (departmentIds: number[]) => Promise<boolean | void>;
+}
+
+function SchedulePrintPages({
+  locale,
+  pages,
+  pageLabel,
+  showPageLabel,
+}: {
+  locale: string;
+  pages: ReturnType<typeof buildSchedulePrintPack>["pages"];
+  pageLabel: (page: number) => string;
+  showPageLabel?: boolean;
+}) {
+  return pages.map((page) => (
+    <section key={page.pageNumber} className="schedule-print-page relative rounded-[28px] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
+      {showPageLabel ? (
+        <div className="schedule-print-page-label absolute right-[10mm] top-[6mm] text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+          {pageLabel(page.pageNumber)}
+        </div>
+      ) : null}
+      <div className="space-y-4">
+        {page.sections.map((section) => (
+          <PrintDepartmentSection
+            key={`${page.pageNumber}-${section.departmentId}`}
+            locale={locale}
+            section={section}
+          />
+        ))}
+      </div>
+    </section>
+  ));
 }
 
 export function PrintPreviewDialog({
@@ -164,9 +198,18 @@ export function PrintPreviewDialog({
       });
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     document.body.classList.add("schedule-print-mode");
-    window.print();
+    const [, error] = await catcher(async () => {
+      await window.print();
+      return true;
+    }, { notify: false });
+    if (error) {
+      document.body.classList.remove("schedule-print-mode");
+      notify.error(t("utilities.schedules.print.error"), {
+        description: error.message || t("utilities.schedules.print.errorDescription"),
+      });
+    }
   };
 
   const printableDepartments = useMemo(
@@ -183,12 +226,27 @@ export function PrintPreviewDialog({
       .map((departmentId) => departmentsById.get(departmentId))
       .filter((department): department is NonNullable<typeof department> => Boolean(department));
   }, [orderedDepartmentIds, printableDepartments]);
+  const pageLabel = (page: number) => t("utilities.schedules.print.pageLabel", { page });
+  const exportPrintRoot = open && typeof document !== "undefined"
+    ? createPortal(
+      <div data-schedule-print-export-root className="schedule-print-root space-y-6">
+        <SchedulePrintPages
+          locale={locale}
+          pages={pack.pages}
+          pageLabel={pageLabel}
+        />
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-[84rem] border-none bg-transparent p-0 shadow-none">
-        <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
-          <div className="grid min-h-[78vh] pt-12 lg:grid-cols-[340px_minmax(0,1fr)]">
+    <>
+      {exportPrintRoot}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[92vh] max-w-[84rem] border-none bg-transparent p-0 shadow-none">
+          <div data-schedule-print-shell className="overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+            <div data-schedule-print-grid className="grid min-h-[78vh] pt-12 lg:grid-cols-[340px_minmax(0,1fr)]">
             <aside data-print-hidden className="border-b border-border/80 bg-surface/70 lg:border-r lg:border-b-0">
               <DialogHeader className="border-b border-border/80 px-5 py-4">
                 <DialogTitle className="flex items-center gap-2">
@@ -227,7 +285,7 @@ export function PrintPreviewDialog({
                   </Button>
                 </div>
 
-                <Button type="button" className="w-full" onClick={handlePrint} disabled={pack.pages.length === 0}>
+                <Button type="button" className="w-full" onClick={() => void handlePrint()} disabled={pack.pages.length === 0}>
                   <Printer className="mr-2 h-4 w-4" />
                   {t("utilities.schedules.print.dialogAction")}
                 </Button>
@@ -258,38 +316,29 @@ export function PrintPreviewDialog({
               </ScrollArea>
             </aside>
 
-            <div className="min-h-0 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100">
-              <ScrollArea className="h-[78vh] px-6 py-6">
-                <div data-schedule-print-root className="schedule-print-root space-y-6">
+              <div data-schedule-print-stage className="min-h-0 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100">
+                <ScrollArea data-schedule-print-scroll className="h-[78vh] px-6 py-6">
+                  <div data-schedule-print-root className="schedule-print-root space-y-6">
                   {pack.pages.length === 0 ? (
                     <div data-print-hidden className="rounded-2xl border border-dashed border-border bg-background px-6 py-10 text-base leading-7 text-muted-foreground">
                       {t("utilities.schedules.print.empty")}
                     </div>
                   ) : (
-                    pack.pages.map((page) => (
-                      <section key={page.pageNumber} className="schedule-print-page rounded-[28px] bg-white p-[12mm] text-slate-900 shadow-xl ring-1 ring-slate-200/70">
-                        <div data-print-hidden className="schedule-print-page-label mb-4 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                          {t("utilities.schedules.print.pageLabel", { page: page.pageNumber })}
-                        </div>
-                        <div className="space-y-4">
-                          {page.sections.map((section) => (
-                            <PrintDepartmentSection
-                              key={`${page.pageNumber}-${section.departmentId}`}
-                              locale={locale}
-                              section={section}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    ))
+                    <SchedulePrintPages
+                      locale={locale}
+                      pages={pack.pages}
+                      pageLabel={pageLabel}
+                      showPageLabel
+                    />
                   )}
-                </div>
-              </ScrollArea>
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

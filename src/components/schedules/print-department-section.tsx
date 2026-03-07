@@ -51,14 +51,14 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
       <div className="px-5 py-4">
         <header className="flex items-center gap-3 border-b border-slate-200 pb-3">
           <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white"
             style={{ backgroundColor: section.color }}
           >
             <Icon className="h-5 w-5" />
           </div>
 
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-bold uppercase tracking-[0.16em] text-slate-900">
+            <h3 className="text-[17px] font-bold uppercase tracking-[0.16em] text-slate-900">
               {section.title}
             </h3>
             <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">
@@ -77,7 +77,7 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
                 className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-3 rounded-2xl border border-slate-200 px-3 py-2.5"
               >
                 <div className="flex h-full flex-col items-center justify-center text-center">
-                  <div className="flex flex-wrap items-baseline justify-center gap-1 text-[12px] tracking-[0.08em] text-slate-700">
+                  <div className="flex flex-wrap items-baseline justify-center gap-1 text-[13px] tracking-[0.08em] text-slate-700">
                     {dayLabel.weekday ? (
                       <span className="font-semibold uppercase">{dayLabel.weekday}</span>
                     ) : null}
@@ -93,7 +93,7 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
                 ) : null}
                 </div>
 
-                <div className="min-w-0 self-center text-sm leading-6 text-slate-800">
+                <div className="min-w-0 self-center text-[15px] leading-7 text-slate-800">
                   {entry.assigneeNames.length > 0
                     ? entry.assigneeNames.join(" • ")
                     : t("utilities.schedules.print.unassigned")}

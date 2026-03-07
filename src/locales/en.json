@@ -916,6 +916,8 @@
         "departmentDays_other": "{{count}} service days",
         "description": "Prepare compact A4 output for one or more departments.",
         "dialogAction": "Print / Save as PDF",
+        "error": "Could not open print dialog",
+        "errorDescription": "Check the window permissions and try again.",
         "empty": "Select one or more departments with scheduled days to preview the printable pack.",
         "pageLabel": "Page {{page}}",
         "pdf": "Export PDF",
