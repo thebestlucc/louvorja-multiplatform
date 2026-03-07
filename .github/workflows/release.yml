@@ -121,7 +121,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: .
+          path: dist
       - name: Inject updater endpoint and public key
         shell: bash
         env:
