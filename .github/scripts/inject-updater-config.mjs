@@ -16,10 +16,37 @@ json.build ??= {};
 if (skipFrontendBuild) {
   const frontendDist = json.build.frontendDist ?? "../dist";
   const resolvedFrontendDist = path.resolve(path.dirname(configPath), frontendDist);
+  const frontendDistCandidates = [
+    resolvedFrontendDist,
+    path.join(resolvedFrontendDist, "dist"),
+    path.join(resolvedFrontendDist, "frontend-dist"),
+    path.join(resolvedFrontendDist, "frontend-dist", "dist"),
+    path.resolve("frontend-dist"),
+    path.resolve("frontend-dist", "dist"),
+  ];
 
-  if (!fs.existsSync(resolvedFrontendDist)) {
+  const availableFrontendDist = frontendDistCandidates.find((candidate) => {
+    if (!fs.existsSync(candidate)) {
+      return false;
+    }
+
+    return fs.existsSync(path.join(candidate, "index.html"));
+  });
+
+  if (!availableFrontendDist) {
     throw new Error(
-      `TAURI_SKIP_FRONTEND_BUILD=true but no frontendDist was found at ${resolvedFrontendDist}`
+      `TAURI_SKIP_FRONTEND_BUILD=true but no frontendDist was found. Checked: ${frontendDistCandidates.join(", ")}`
+    );
+  }
+
+  if (availableFrontendDist !== resolvedFrontendDist) {
+    fs.mkdirSync(resolvedFrontendDist, { recursive: true });
+    fs.cpSync(availableFrontendDist, resolvedFrontendDist, {
+      recursive: true,
+      force: true,
+    });
+    console.log(
+      `Normalized prebuilt frontend assets from ${path.relative(process.cwd(), availableFrontendDist)} to ${frontendDist}`
     );
   }
 
