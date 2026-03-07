@@ -366,6 +366,8 @@ pub struct ScheduleDepartment {
     pub color: String,
     pub people_per_day: i32,
     pub shuffle_on_generate: bool,
+    pub group_dates_in_print: bool,
+    pub repeat_members_in_grouped_dates: bool,
     pub sort_order: i32,
     pub is_system: bool,
     pub is_active: bool,
@@ -454,6 +456,8 @@ pub struct ScheduleDepartmentInput {
     pub color: String,
     pub people_per_day: i32,
     pub shuffle_on_generate: bool,
+    pub group_dates_in_print: bool,
+    pub repeat_members_in_grouped_dates: bool,
     pub sort_order: i32,
     pub is_active: bool,
 }

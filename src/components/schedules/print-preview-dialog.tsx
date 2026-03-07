@@ -72,11 +72,13 @@ function SchedulePrintPages({
   locale,
   pages,
   pageLabel,
+  documentTitle,
   showPageLabel,
 }: {
   locale: string;
   pages: ReturnType<typeof buildSchedulePrintPack>["pages"];
   pageLabel: (page: number) => string;
+  documentTitle: string;
   showPageLabel?: boolean;
 }) {
   return pages.map((page) => (
@@ -86,7 +88,16 @@ function SchedulePrintPages({
           {pageLabel(page.pageNumber)}
         </div>
       ) : null}
-      <div className="space-y-4">
+      <div className="border-b border-slate-200/80 pb-3">
+        <div className="flex items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[20px] font-black uppercase tracking-[0.08em] text-slate-950">
+              {documentTitle}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 space-y-4">
         {page.sections.map((section) => (
           <PrintDepartmentSection
             key={`${page.pageNumber}-${section.departmentId}`}
@@ -97,6 +108,44 @@ function SchedulePrintPages({
       </div>
     </section>
   ));
+}
+
+function SchedulePrintEmptyPage({
+  title,
+  subtitle,
+  description,
+}: {
+  title: string;
+  subtitle: string;
+  description: string;
+}) {
+  return (
+    <section className="schedule-print-page relative rounded-[28px] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
+      <div className="flex h-full flex-col justify-between rounded-[24px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.04)_0%,rgba(255,255,255,0.98)_45%,rgba(59,130,246,0.05)_100%)] px-8 py-8">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
+            {subtitle}
+          </div>
+          <h2 className="mt-4 overflow-hidden text-ellipsis whitespace-nowrap text-[32px] font-black uppercase leading-[1.05] tracking-[0.08em] text-slate-950">
+            {title}
+          </h2>
+          <div className="mt-5 h-[3px] w-20 rounded-full bg-slate-900/12" />
+        </div>
+
+        <div className="max-w-[32rem] rounded-[24px] border border-dashed border-slate-300 bg-slate-50/80 px-6 py-6 text-[16px] leading-7 text-slate-600">
+          {description}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function waitForPrintTitleCommit() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
 }
 
 export function PrintPreviewDialog({
@@ -200,10 +249,14 @@ export function PrintPreviewDialog({
 
   const handlePrint = async () => {
     document.body.classList.add("schedule-print-mode");
+    const previousTitle = document.title;
+    document.title = printStageTitle;
+    await waitForPrintTitleCommit();
     const [, error] = await catcher(async () => {
       await window.print();
       return true;
     }, { notify: false });
+    document.title = previousTitle;
     if (error) {
       document.body.classList.remove("schedule-print-mode");
       notify.error(t("utilities.schedules.print.error"), {
@@ -227,14 +280,25 @@ export function PrintPreviewDialog({
       .filter((department): department is NonNullable<typeof department> => Boolean(department));
   }, [orderedDepartmentIds, printableDepartments]);
   const pageLabel = (page: number) => t("utilities.schedules.print.pageLabel", { page });
+  const printStageTitle = `${t("utilities.schedules.print.documentTitle")} - ${monthLabel}`;
+  const printStageSubtitle = t("utilities.schedules.print.title");
   const exportPrintRoot = open && typeof document !== "undefined"
     ? createPortal(
       <div data-schedule-print-export-root className="schedule-print-root space-y-6">
-        <SchedulePrintPages
-          locale={locale}
-          pages={pack.pages}
-          pageLabel={pageLabel}
-        />
+        {pack.pages.length === 0 ? (
+          <SchedulePrintEmptyPage
+            title={printStageTitle}
+            subtitle={printStageSubtitle}
+            description={t("utilities.schedules.print.empty")}
+          />
+        ) : (
+          <SchedulePrintPages
+            locale={locale}
+            pages={pack.pages}
+            pageLabel={pageLabel}
+            documentTitle={printStageTitle}
+          />
+        )}
       </div>,
       document.body,
     )
@@ -305,7 +369,7 @@ export function PrintPreviewDialog({
                           locale={locale}
                           department={department}
                           checked={selectedDepartmentIds.includes(department.id)}
-                          dayCount={pack.sections.find((section) => section.departmentId === department.id)?.entries.length ?? 0}
+                          dayCount={pack.sections.find((section) => section.departmentId === department.id)?.dayCount ?? 0}
                           disabled={isPersistingOrder}
                           onToggle={handleToggleDepartment}
                         />
@@ -320,14 +384,19 @@ export function PrintPreviewDialog({
                 <ScrollArea data-schedule-print-scroll className="h-[78vh] px-6 py-6">
                   <div data-schedule-print-root className="schedule-print-root space-y-6">
                   {pack.pages.length === 0 ? (
-                    <div data-print-hidden className="rounded-2xl border border-dashed border-border bg-background px-6 py-10 text-base leading-7 text-muted-foreground">
-                      {t("utilities.schedules.print.empty")}
+                    <div data-print-hidden>
+                      <SchedulePrintEmptyPage
+                        title={printStageTitle}
+                        subtitle={printStageSubtitle}
+                        description={t("utilities.schedules.print.empty")}
+                      />
                     </div>
                   ) : (
                     <SchedulePrintPages
                       locale={locale}
                       pages={pack.pages}
                       pageLabel={pageLabel}
+                      documentTitle={printStageTitle}
                       showPageLabel
                     />
                   )}
