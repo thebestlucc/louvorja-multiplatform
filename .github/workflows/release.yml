@@ -55,11 +55,6 @@ jobs:
     steps:
       - name: Checkout app sources
         uses: actions/checkout@v4
-        with:
-          filter: blob:none
-          sparse-checkout: |
-            .github
-            src-tauri
       - uses: ./.github/actions/setup-tauri-ci
         with:
           setup-node: "false"
@@ -105,15 +100,6 @@ jobs:
     steps:
       - name: Checkout app sources
         uses: actions/checkout@v4
-        with:
-          filter: blob:none
-          sparse-checkout: |
-            .github
-            package.json
-            pnpm-lock.yaml
-            pnpm-workspace.yaml
-            src-tauri
-          sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-tauri-ci
         with:
           rust-targets: ${{ matrix.rust_targets }}

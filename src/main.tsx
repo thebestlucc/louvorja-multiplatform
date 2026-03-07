@@ -4,6 +4,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { routeTree } from "./routeTree.gen";
+import { SpotlightWindow } from "./routes/spotlight";
 import "./lib/i18n";
 import { catcherSync } from "./lib/catcher";
 
@@ -25,13 +26,11 @@ function getTauriWindowLabel(): string {
 const windowLabel = getTauriWindowLabel();
 
 if (windowLabel === "spotlight") {
-  import("./routes/spotlight").then(({ SpotlightWindow }) => {
-    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-      <React.StrictMode>
-        <SpotlightWindow />
-      </React.StrictMode>,
-    );
-  });
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <SpotlightWindow />
+    </React.StrictMode>,
+  );
 } else {
   const queryClient = new QueryClient({
     defaultOptions: {

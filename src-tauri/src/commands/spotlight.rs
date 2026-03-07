@@ -21,7 +21,7 @@ mod macos {
             }
         })
         panel_event!(SpotlightEventHandler {
-            window_did_resign_key(notification: &NSNotification) -> ()
+            window_did_resign_key(notification: &objc2_foundation::NSNotification) -> ()
         })
     }
 
