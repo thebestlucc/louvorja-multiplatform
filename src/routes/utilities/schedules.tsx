@@ -6,6 +6,7 @@ import { DayDetailsDialog } from "../../components/schedules/day-details-dialog"
 import { DepartmentManagerDialog } from "../../components/schedules/department-manager-dialog";
 import { MonthCalendar } from "../../components/schedules/month-calendar";
 import { MonthToolbar } from "../../components/schedules/month-toolbar";
+import { PrintPreviewDialog } from "../../components/schedules/print-preview-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import type { ScheduleDay, ScheduleDayDepartment, ScheduleDayInput, ScheduleMonthDetail } from "../../lib/bindings";
 import { catcher } from "../../lib/catcher";
@@ -107,6 +108,7 @@ function UtilitiesSchedulesPage() {
   const [visibleMonth, setVisibleMonth] = useState<ScheduleMonthDetail | null>(null);
   const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
   const [isDepartmentManagerOpen, setIsDepartmentManagerOpen] = useState(false);
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [overwriteManual, setOverwriteManual] = useState(false);
   const {
     data: scheduleMonth,
@@ -433,8 +435,10 @@ function UtilitiesSchedulesPage() {
           onToggleWeekdayPattern={handleToggleWeekdayPattern}
           onClearSelection={handleClearSelection}
           onOpenDepartmentManager={() => setIsDepartmentManagerOpen(true)}
+          onOpenPrintPreview={() => setIsPrintPreviewOpen(true)}
           onGenerate={() => void handleGenerateMonth()}
           onOverwriteManualChange={setOverwriteManual}
+          canPrint={scheduleDays.length > 0}
         />
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -562,6 +566,14 @@ function UtilitiesSchedulesPage() {
         onRemoveDay={handleRemoveDay}
         onSaveDayDepartmentManual={handleSaveDayDepartmentManual}
         onResetDayDepartmentGenerated={handleResetDayDepartmentGenerated}
+      />
+
+      <PrintPreviewDialog
+        open={isPrintPreviewOpen}
+        locale={i18n.language}
+        monthDetail={visibleMonth}
+        monthLabel={monthLabel}
+        onOpenChange={setIsPrintPreviewOpen}
       />
     </>
   );

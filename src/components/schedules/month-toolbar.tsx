@@ -18,8 +18,10 @@ interface MonthToolbarProps {
   onToggleWeekdayPattern: (weekday: number) => void;
   onClearSelection: () => void;
   onOpenDepartmentManager: () => void;
+  onOpenPrintPreview: () => void;
   onGenerate: () => void;
   onOverwriteManualChange: (value: boolean) => void;
+  canPrint?: boolean;
 }
 
 export function MonthToolbar({
@@ -36,8 +38,10 @@ export function MonthToolbar({
   onToggleWeekdayPattern,
   onClearSelection,
   onOpenDepartmentManager,
+  onOpenPrintPreview,
   onGenerate,
   onOverwriteManualChange,
+  canPrint,
 }: MonthToolbarProps) {
   const { t } = useTranslation();
   const today = new Date();
@@ -116,7 +120,7 @@ export function MonthToolbar({
             <Wand2 className="mr-2 h-4 w-4" />
             {t("utilities.schedules.generate.action")}
           </Button>
-          <Button type="button" variant="outline" disabled>
+          <Button type="button" variant="outline" disabled={isBusy || !canPrint} onClick={onOpenPrintPreview}>
             <Printer className="mr-2 h-4 w-4" />
             {t("utilities.schedules.print.action")}
           </Button>
