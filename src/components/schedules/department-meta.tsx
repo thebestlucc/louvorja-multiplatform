@@ -13,7 +13,7 @@ import {
   Sparkles,
   Users2,
 } from "lucide-react";
-import type { ScheduleDepartment } from "../../lib/bindings";
+export { getScheduleDepartmentLabel } from "../../lib/schedule-departments";
 
 const iconByCode: Record<string, LucideIcon> = {
   book: BookOpen,
@@ -51,24 +51,4 @@ export function getScheduleDepartmentIcon(icon: string | null | undefined): Luci
   }
 
   return iconByCode[icon] ?? Users2;
-}
-
-export function getScheduleDepartmentLabel(
-  department: Pick<ScheduleDepartment, "code" | "namePt" | "nameEn" | "nameEs"> | null | undefined,
-  locale: string,
-) {
-  if (!department) {
-    return "--";
-  }
-
-  const language = locale.split("-")[0];
-  const candidates = language === "pt"
-    ? [department.namePt, department.nameEn, department.nameEs]
-    : language === "es"
-      ? [department.nameEs, department.namePt, department.nameEn]
-      : [department.nameEn, department.namePt, department.nameEs];
-
-  return candidates.find((value) => value && value.trim().length > 0)
-    ?? department.code
-    ?? "--";
 }

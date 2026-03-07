@@ -24,6 +24,7 @@ function createMonthDetail(): ScheduleMonthDetail {
         icon: "handshake",
         color: "#16A34A",
         peoplePerDay: 1,
+        shuffleOnGenerate: false,
         sortOrder: 1,
         isSystem: true,
         isActive: true,
@@ -40,6 +41,7 @@ function createMonthDetail(): ScheduleMonthDetail {
         icon: "music",
         color: "#A855F7",
         peoplePerDay: 1,
+        shuffleOnGenerate: false,
         sortOrder: 2,
         isSystem: true,
         isActive: true,
@@ -56,6 +58,7 @@ function createMonthDetail(): ScheduleMonthDetail {
         icon: "sparkles",
         color: "#0891B2",
         peoplePerDay: 1,
+        shuffleOnGenerate: false,
         sortOrder: 3,
         isSystem: true,
         isActive: true,
@@ -138,11 +141,11 @@ function createMonthDetail(): ScheduleMonthDetail {
   };
 }
 
-test("print sections preserve department display order", () => {
+test("print sections respect the explicit preview order", () => {
   const pack = buildSchedulePrintPack(createMonthDetail(), [10, 20], "pt-BR");
 
-  assert.deepEqual(pack.sections.map((section) => section.departmentId), [20, 10]);
-  assert.deepEqual(pack.sections.map((section) => section.title), ["Recepção", "Música"]);
+  assert.deepEqual(pack.sections.map((section) => section.departmentId), [10, 20]);
+  assert.deepEqual(pack.sections.map((section) => section.title), ["Música", "Recepção"]);
 });
 
 test("empty or unselected departments are excluded from the printable payload", () => {
@@ -151,6 +154,26 @@ test("empty or unselected departments are excluded from the printable payload", 
   assert.deepEqual(getPrintableDepartmentIds(detail), [20, 10]);
 
   const pack = buildSchedulePrintPack(detail, [10], "pt-BR");
+  assert.deepEqual(pack.sections.map((section) => section.departmentId), [10]);
+});
+
+test("an explicit empty preview selection produces an empty printable payload", () => {
+  const pack = buildSchedulePrintPack(createMonthDetail(), [], "pt-BR");
+
+  assert.deepEqual(pack.sections, []);
+  assert.deepEqual(pack.pages, []);
+});
+
+test("inactive departments stay out of printable selectors even if they still have entries", () => {
+  const detail = createMonthDetail();
+  detail.departments[0] = {
+    ...detail.departments[0],
+    isActive: false,
+  };
+
+  assert.deepEqual(getPrintableDepartmentIds(detail), [10]);
+
+  const pack = buildSchedulePrintPack(detail, [20, 10], "pt-BR");
   assert.deepEqual(pack.sections.map((section) => section.departmentId), [10]);
 });
 

@@ -1,12 +1,13 @@
 import { createRootRoute, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
 import { StatusBar } from "../components/layout/status-bar";
+import { AppToaster } from "../components/ui/app-toaster";
 import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { UpdateNotification } from "../components/update-notification";
 import { useKeyboard } from "../hooks/use-keyboard";
@@ -288,12 +289,7 @@ function RootLayout() {
       </div>
       <KeyboardShortcutsPanel />
       <UpdateNotification />
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
-          className: "bg-surface text-foreground border-border",
-        }}
-      />
+      <AppToaster />
     </div>
   );
 }

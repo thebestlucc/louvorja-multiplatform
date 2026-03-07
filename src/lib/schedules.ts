@@ -6,6 +6,18 @@ export interface MonthGridCell {
   isToday: boolean;
 }
 
+export interface ScheduleDaySelectionInput {
+  serviceDate: string;
+  label: string | null;
+  sourceKind: string | null;
+  responsibleDepartmentId: number | null;
+  departmentIds: number[];
+}
+
+function normalizeDepartmentIds(departmentIds: readonly number[]) {
+  return Array.from(new Set(departmentIds)).sort((left, right) => left - right);
+}
+
 function createUtcDate(year: number, month: number, day: number) {
   return new Date(Date.UTC(year, month - 1, day));
 }
@@ -93,4 +105,46 @@ export function toggleSelectedDate(
   }
 
   return Array.from(nextSelectedDates).sort();
+}
+
+export function addDepartmentToSelectedDays(
+  days: readonly ScheduleDaySelectionInput[],
+  departmentId: number,
+): ScheduleDaySelectionInput[] {
+  return days
+    .map((day) => ({
+      ...day,
+      departmentIds: day.departmentIds.includes(departmentId)
+        ? day.departmentIds.slice()
+        : [...day.departmentIds, departmentId],
+    }))
+    .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate));
+}
+
+export function buildDaySelectionFromLastStoredSchedule(params: {
+  existingDays: readonly ScheduleDaySelectionInput[];
+  draftDays?: readonly ScheduleDaySelectionInput[];
+  serviceDate: string;
+  sourceKind: string | null;
+  defaultDepartmentIds: readonly number[];
+}): ScheduleDaySelectionInput {
+  const candidateDays = [...params.existingDays, ...(params.draftDays ?? [])]
+    .filter((day) => day.serviceDate !== params.serviceDate)
+    .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate));
+  const templateDay = candidateDays[candidateDays.length - 1];
+
+  const departmentIds = templateDay
+    ? normalizeDepartmentIds([
+      ...templateDay.departmentIds,
+      ...(templateDay.responsibleDepartmentId != null ? [templateDay.responsibleDepartmentId] : []),
+    ])
+    : normalizeDepartmentIds(params.defaultDepartmentIds);
+
+  return {
+    serviceDate: params.serviceDate,
+    label: null,
+    sourceKind: params.sourceKind,
+    responsibleDepartmentId: templateDay?.responsibleDepartmentId ?? null,
+    departmentIds,
+  };
 }

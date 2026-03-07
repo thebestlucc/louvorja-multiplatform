@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Settings2 } from "lucide-react";
+import { Plus, Save, Settings2, Trash2, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ScheduleDepartment } from "../../lib/bindings";
 import { catcher } from "../../lib/catcher";
@@ -25,6 +25,7 @@ import {
   toScheduleDepartmentInput,
   type ScheduleDepartmentDraft,
 } from "./department-form";
+import { ConfirmationDialog } from "./confirmation-dialog";
 import { getScheduleDepartmentIcon, getScheduleDepartmentLabel } from "./department-meta";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
@@ -34,6 +35,10 @@ interface DepartmentManagerDialogProps {
   locale: string;
   departments: ScheduleDepartment[];
   onOpenChange: (open: boolean) => void;
+  onDepartmentCreated?: (department: ScheduleDepartment) => Promise<void> | void;
+  onGenerateSchedule?: () => Promise<void>;
+  canGenerateSchedule?: boolean;
+  isGenerating?: boolean;
 }
 
 export function DepartmentManagerDialog({
@@ -41,6 +46,10 @@ export function DepartmentManagerDialog({
   locale,
   departments,
   onOpenChange,
+  onDepartmentCreated,
+  onGenerateSchedule,
+  canGenerateSchedule,
+  isGenerating,
 }: DepartmentManagerDialogProps) {
   const { t } = useTranslation();
   const saveDepartment = useSaveScheduleDepartment();
@@ -48,6 +57,7 @@ export function DepartmentManagerDialog({
   const replaceMembers = useReplaceScheduleDepartmentMembers();
   const [selectedDepartmentKey, setSelectedDepartmentKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<ScheduleDepartmentDraft | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const sortedDepartments = useMemo(
     () => departments.slice().sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id),
@@ -57,7 +67,7 @@ export function DepartmentManagerDialog({
     () => sortedDepartments.reduce((current, department) => Math.max(current, department.sortOrder), 0),
     [sortedDepartments],
   );
-  const isPending = saveDepartment.isPending || deleteDepartment.isPending || replaceMembers.isPending;
+  const isPending = saveDepartment.isPending || deleteDepartment.isPending || replaceMembers.isPending || Boolean(isGenerating);
 
   useEffect(() => {
     if (!open) {
@@ -98,14 +108,16 @@ export function DepartmentManagerDialog({
     setDraft(departmentDraftFromEntity(department));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (options?: { generateAfterSave?: boolean }) => {
     if (!draft) {
-      return;
+      return false;
     }
+
+    const isNewDepartment = draft.id == null;
 
     if (!draft.isSystem && getRequiredLocalizedName(draft, locale).length === 0) {
       notify.error(t("utilities.schedules.departmentManagement.activeLocaleRequired"));
-      return;
+      return false;
     }
 
     const [savedDepartment, saveError] = await catcher(
@@ -113,7 +125,7 @@ export function DepartmentManagerDialog({
       { notify: true },
     );
     if (saveError || !savedDepartment) {
-      return;
+      return false;
     }
 
     const members = draft.members
@@ -124,7 +136,17 @@ export function DepartmentManagerDialog({
       { notify: true },
     );
     if (membersError) {
-      return;
+      return false;
+    }
+
+    if (isNewDepartment && savedDepartment.isActive) {
+      const [, syncError] = await catcher(
+        Promise.resolve(onDepartmentCreated?.(savedDepartment)),
+        { notify: true },
+      );
+      if (syncError) {
+        return false;
+      }
     }
 
     setSelectedDepartmentKey(String(savedDepartment.id));
@@ -134,31 +156,52 @@ export function DepartmentManagerDialog({
         members: members.map((name, index) => ({ id: index + 1, name })),
       }),
     );
+    notify.success(t("utilities.schedules.departmentManagement.saveSuccess"));
+
+    if (options?.generateAfterSave && onGenerateSchedule) {
+      await onGenerateSchedule();
+    }
+
+    return true;
   };
 
   const handleDelete = async () => {
     if (!draft?.id || draft.isSystem) {
-      return;
-    }
-
-    if (!confirm(t("utilities.schedules.departmentManagement.deleteConfirm"))) {
-      return;
+      return false;
     }
 
     const [, error] = await catcher(deleteDepartment.mutateAsync(draft.id), { notify: true });
     if (error) {
-      return;
+      return false;
     }
 
     const nextDepartment = sortedDepartments.find((department) => department.id !== draft.id);
     if (nextDepartment) {
       setSelectedDepartmentKey(String(nextDepartment.id));
       setDraft(departmentDraftFromEntity(nextDepartment));
-      return;
+      notify.success(t("utilities.schedules.departmentManagement.deleteSuccess"));
+      return true;
     }
 
     setSelectedDepartmentKey("new");
     setDraft(buildEmptyDepartmentDraft(maxSortOrder + 1));
+    notify.success(t("utilities.schedules.departmentManagement.deleteSuccess"));
+    return true;
+  };
+
+  const handleDeleteClick = () => {
+    if (!draft?.id || draft.isSystem || isPending) {
+      return;
+    }
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    void handleDelete().then((deleted) => {
+      if (deleted) {
+        setIsDeleteDialogOpen(false);
+      }
+    });
   };
 
   return (
@@ -223,16 +266,14 @@ export function DepartmentManagerDialog({
             </ScrollArea>
           </aside>
 
-          <div className="min-h-0 bg-background">
-            <ScrollArea className="h-full px-5 py-5">
+          <div className="flex min-h-0 flex-col bg-background">
+            <ScrollArea className="min-h-0 flex-1 px-5 py-5">
               {draft ? (
                 <DepartmentForm
                   draft={draft}
                   locale={locale}
                   disabled={isPending}
                   onChange={setDraft}
-                  onSave={() => void handleSave()}
-                  onDelete={draft.isSystem ? undefined : () => void handleDelete()}
                 />
               ) : (
                 <div className="rounded-lg border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
@@ -240,9 +281,53 @@ export function DepartmentManagerDialog({
                 </div>
               )}
             </ScrollArea>
+
+            <div className="border-t border-border/80 bg-surface/95 px-5 py-4 backdrop-blur">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  {draft && !draft.isSystem ? (
+                    <Button type="button" variant="destructive" disabled={isPending} onClick={handleDeleteClick}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {t("actions.delete")}
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isPending || !draft}
+                    onClick={() => void handleSave()}
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {t("actions.save")}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isPending || !draft || !canGenerateSchedule}
+                    onClick={() => void handleSave({ generateAfterSave: true })}
+                  >
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    {t("utilities.schedules.departmentManagement.saveAndGenerate")}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
+
+      <ConfirmationDialog
+        open={isDeleteDialogOpen}
+        title={t("utilities.schedules.departmentManagement.deleteDialogTitle")}
+        description={t("utilities.schedules.departmentManagement.deleteConfirm")}
+        confirmLabel={t("actions.delete")}
+        cancelLabel={t("actions.cancel")}
+        isPending={isPending}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+      />
     </Dialog>
   );
 }

@@ -427,6 +427,10 @@ export async function deleteScheduleDepartment(id: number): Promise<void> {
   return tauriInvoke<void>("delete_schedule_department", { id });
 }
 
+export async function reorderScheduleDepartments(departmentIds: number[]): Promise<void> {
+  return tauriInvoke<void>("reorder_schedule_departments", { departmentIds });
+}
+
 export async function replaceScheduleDepartmentMembers(
   departmentId: number,
   members: string[],

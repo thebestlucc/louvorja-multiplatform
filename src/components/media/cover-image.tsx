@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { Image as ImageIcon } from "lucide-react";
@@ -9,13 +9,14 @@ interface CoverImageProps {
   path?: string | null;
   title: string;
   className?: string;
+  fallback?: ReactNode;
 }
 
 function isAbsolutePath(path: string): boolean {
   return path.startsWith("/") || /^[a-zA-Z]:\\/.test(path);
 }
 
-export function CoverImage({ path, title, className }: CoverImageProps) {
+export function CoverImage({ path, title, className, fallback }: CoverImageProps) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -91,10 +92,12 @@ export function CoverImage({ path, title, className }: CoverImageProps) {
           className,
         )}
       >
-        <div className="flex flex-col items-center justify-center text-muted-foreground">
-          <ImageIcon className="h-4 w-4" />
-          <span className="mt-1 text-[10px] font-semibold tracking-wide">{initials}</span>
-        </div>
+        {fallback ?? (
+          <div className="flex flex-col items-center justify-center text-muted-foreground">
+            <ImageIcon className="h-4 w-4" />
+            <span className="mt-1 text-[10px] font-semibold tracking-wide">{initials}</span>
+          </div>
+        )}
       </div>
     );
   }

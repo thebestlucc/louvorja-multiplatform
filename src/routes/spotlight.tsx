@@ -30,6 +30,7 @@ import {
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { catcher } from "../lib/catcher";
+import { THEMES, type Theme } from "../lib/constants";
 import {
   spotlightSelect,
   spotlightHide,
@@ -41,12 +42,23 @@ import {
 } from "../lib/tauri";
 import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../lib/bindings";
 import { CoverImage } from "../components/media/cover-image";
+import { useThemeStore } from "../stores/theme-store";
 
 export const Route = createFileRoute("/spotlight")({
   component: SpotlightWindow,
 });
 
 export { SpotlightWindow };
+
+type SettingChangedPayload = {
+  key: string;
+  value: string;
+};
+
+function isTheme(value: string | null | undefined): value is Theme {
+  if (!value) return false;
+  return THEMES.includes(value as Theme);
+}
 
 function parseFirstStanza(lyrics: string | null): string {
   if (!lyrics) return "";
@@ -97,6 +109,8 @@ async function projectHymnFirstStanza(hymn: Hymn) {
 
 function SpotlightWindow() {
   const { t } = useTranslation();
+  const setTheme = useThemeStore((state) => state.setTheme);
+  useThemeStore((state) => state.theme);
   const [query, setQuery] = useState("");
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [bibleResults, setBibleResults] = useState<BibleSearchResult[]>([]);
@@ -113,6 +127,34 @@ function SpotlightWindow() {
     document.body.style.background = "transparent";
     document.body.style.overflow = "hidden";
   }, []);
+
+  useEffect(() => {
+    const applyThemeCandidate = (candidate: string | null | undefined) => {
+      if (!isTheme(candidate)) return;
+      if (useThemeStore.getState().theme === candidate) return;
+      setTheme(candidate);
+    };
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "theme") return;
+      applyThemeCandidate(event.newValue);
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    let unlisten: (() => void) | undefined;
+    listen<SettingChangedPayload>("setting-changed", (event) => {
+      if (event.payload.key !== "app.theme") return;
+      applyThemeCandidate(event.payload.value);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      unlisten?.();
+    };
+  }, [setTheme]);
 
   // Reset state and focus input when spotlight becomes visible.
   // Driven by a Rust "spotlight-shown" event for reliable timing.
@@ -216,23 +258,33 @@ function SpotlightWindow() {
     bibleResults.length > 0 ||
     collectionResults.length > 0;
 
+  const groupHeadingClass =
+    "*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-muted-foreground *:[[cmdk-group-heading]]:select-none";
+  const itemClass =
+    "group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-foreground transition-colors hover:bg-surface-hover aria-selected:bg-accent aria-selected:text-accent-foreground";
+  const itemIconClass =
+    "h-4 w-4 shrink-0 text-muted-foreground group-aria-selected:text-accent-foreground";
+  const metaTextClass = "text-[11px] text-muted-foreground";
+  const projectButtonClass =
+    "ml-1 hidden rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground group-hover:block group-aria-selected:block";
+
   return (
     // No h-screen — the panel sizes to its content.
     // The Tauri window is already centered on screen (Rust), so the panel
     // appears centered. Transparent space below = shows desktop through.
-    <div className="flex h-screen w-screen justify-center bg-transparent p-0">
-      <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-black/8 bg-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+    <div className="flex h-screen w-screen justify-center bg-transparent p-0 text-foreground">
+      <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface/90 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
         <Command shouldFilter={false} className="flex h-full flex-col">
 
           {/* ── Search bar ── */}
           <div
             onMouseDown={handleSearchBarMouseDown}
-            className="sticky top-0 z-10 flex shrink-0 cursor-grab items-center gap-2.5 bg-white/85 px-4 py-3.5 backdrop-blur-2xl active:cursor-grabbing"
+            className="sticky top-0 z-10 flex shrink-0 cursor-grab items-center gap-2.5 bg-surface/90 px-4 py-3.5 backdrop-blur-2xl active:cursor-grabbing"
           >
             {searching ? (
-              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-gray-400" />
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground" />
             ) : (
-              <Search className="h-5 w-5 shrink-0 text-gray-400" />
+              <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
             )}
             <Command.Input
               ref={inputRef}
@@ -240,15 +292,15 @@ function SpotlightWindow() {
               value={query}
               onValueChange={setQuery}
               placeholder={t("commandPalette.placeholder")}
-              className="flex-1 cursor-text bg-transparent text-[17px] text-gray-900 outline-none placeholder:text-gray-400"
+              className="flex-1 cursor-text bg-transparent text-[17px] text-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
 
           {/* Divider — only shown when there are results */}
-          {hasResults && <div className="mx-0 h-px shrink-0 bg-black/8" />}
+          {hasResults && <div className="mx-0 h-px shrink-0 bg-border" />}
 
           <Command.List className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
-            <Command.Empty className="py-10 text-center text-sm text-gray-400">
+            <Command.Empty className="py-10 text-center text-sm text-muted-foreground">
               {t("commandPalette.noResults")}
             </Command.Empty>
 
@@ -256,16 +308,16 @@ function SpotlightWindow() {
             {filteredNav.length > 0 && (
               <Command.Group
                 heading={t("commandPalette.navigation")}
-                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+                className={groupHeadingClass}
               >
                 {filteredNav.map(({ id, icon: Icon, label, to }) => (
                   <Command.Item
                     key={id}
                     value={id}
                     onSelect={() => void spotlightSelect("navigate", to)}
-                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className={itemClass}
                   >
-                    <Icon className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
+                    <Icon className={itemIconClass} />
                     {label}
                   </Command.Item>
                 ))}
@@ -276,16 +328,16 @@ function SpotlightWindow() {
             {filteredActions.length > 0 && (
               <Command.Group
                 heading={t("commandPalette.globalActions")}
-                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+                className={groupHeadingClass}
               >
                 {filteredActions.map(({ id, icon: Icon, label, action }) => (
                   <Command.Item
                     key={id}
                     value={id}
                     onSelect={() => void spotlightSelect("action", action)}
-                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className={itemClass}
                   >
-                    <Icon className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
+                    <Icon className={itemIconClass} />
                     {label}
                   </Command.Item>
                 ))}
@@ -296,23 +348,23 @@ function SpotlightWindow() {
             {hymns.length > 0 && (
               <Command.Group
                 heading={t("commandPalette.hymns")}
-                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+                className={groupHeadingClass}
               >
                 {hymns.map((hymn) => (
                   <Command.Item
                     key={hymn.id}
                     value={`hymn-${hymn.id}`}
                     onSelect={() => void spotlightSelect("navigate", `/hymnal/${hymn.id}`)}
-                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className={itemClass}
                   >
-                    <Music className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
+                    <Music className={itemIconClass} />
                     <div className="flex min-w-0 flex-1 flex-col">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-gray-400 truncate flex-1">
+                        <span className={`${metaTextClass} flex-1 truncate`}>
                           {hymn.album || t("hymnal.albumUnknown", "Hinário")}
                         </span>
                         {hymn.number != null && (
-                          <span className="text-[10px] text-gray-400 shrink-0">#{hymn.number}</span>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">#{hymn.number}</span>
                         )}
                       </div>
                       <span className="truncate">{hymn.title}</span>
@@ -323,7 +375,7 @@ function SpotlightWindow() {
                         e.stopPropagation();
                         void projectHymnFirstStanza(hymn);
                       }}
-                      className="ml-1 hidden rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 group-hover:block group-aria-selected:block"
+                      className={projectButtonClass}
                     >
                       <MonitorPlay className="h-3.5 w-3.5" />
                     </button>
@@ -336,7 +388,7 @@ function SpotlightWindow() {
             {bibleResults.length > 0 && (
               <Command.Group
                 heading={t("commandPalette.bible")}
-                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+                className={groupHeadingClass}
               >
                 {bibleResults.map((result) => (
                   <Command.Item
@@ -348,11 +400,11 @@ function SpotlightWindow() {
                         `/bible?book=${result.verse.book}&chapter=${result.verse.chapter}&verse=${result.verse.verse}&version=${result.verse.versionId}`,
                       )
                     }
-                    className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                    className={itemClass}
                   >
-                    <BookOpen className="h-4 w-4 shrink-0 text-gray-400 group-aria-selected:text-blue-500" />
+                    <BookOpen className={itemIconClass} />
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="text-[11px] text-gray-400">
+                      <span className={metaTextClass}>
                         {result.bookName} {result.verse.chapter}:{result.verse.verse}
                       </span>
                       <span className="truncate">{result.snippet}</span>
@@ -363,7 +415,7 @@ function SpotlightWindow() {
                         e.stopPropagation();
                         void projectBibleVerse(result);
                       }}
-                      className="ml-1 hidden rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 group-hover:block group-aria-selected:block"
+                      className={projectButtonClass}
                     >
                       <MonitorPlay className="h-3.5 w-3.5" />
                     </button>
@@ -376,7 +428,7 @@ function SpotlightWindow() {
             {collectionResults.filter(col => col.kind === "collection").length > 0 && (
               <Command.Group
                 heading={t("commandPalette.collections")}
-                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+                className={groupHeadingClass}
               >
                 {collectionResults
                   .filter(col => col.kind === "collection")
@@ -387,7 +439,7 @@ function SpotlightWindow() {
                       onSelect={() =>
                         void spotlightSelect("navigate", `/collections/${col.collectionId}`)
                       }
-                      className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                      className={itemClass}
                     >
                       <CoverImage
                         path={col.coverPath}
@@ -406,7 +458,7 @@ function SpotlightWindow() {
             {collectionResults.filter(col => col.kind !== "collection").length > 0 && (
               <Command.Group
                 heading={t("commandPalette.collectionSongs")}
-                className="*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-gray-400 *:[[cmdk-group-heading]]:select-none"
+                className={groupHeadingClass}
               >
                 {collectionResults
                   .filter(col => col.kind !== "collection")
@@ -414,13 +466,19 @@ function SpotlightWindow() {
                     <Command.Item
                       key={`${col.kind}-${col.collectionId}-${col.songId}`}
                       value={`song-${col.collectionId}-${col.songId}`}
-                      onSelect={() =>
-                        void spotlightSelect(
-                          "navigate",
-                          `/collections/${col.collectionId}/songs/${col.songId}`,
-                        )
-                      }
-                      className="group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-gray-800 hover:bg-gray-100 aria-selected:bg-blue-50 aria-selected:text-blue-600"
+                      onSelect={() => {
+                        if (col.kind === "song" && col.songId != null) {
+                          return void spotlightSelect(
+                            "navigate",
+                            `/collections/${col.collectionId}#song-${col.songId}`,
+                          );
+                        }
+
+                        if (col.songId != null) {
+                          return void spotlightSelect("navigate", `/hymnal/${col.songId}`);
+                        }
+                      }}
+                      className={itemClass}
                     >
                       <CoverImage
                         path={col.coverPath}
@@ -428,7 +486,7 @@ function SpotlightWindow() {
                         className="h-4 w-4 rounded shadow-xs"
                       />
                       <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="text-[11px] text-gray-400">{col.collectionName}</span>
+                        <span className={metaTextClass}>{col.collectionName}</span>
                         <span className="truncate">{col.title}</span>
                       </div>
                     </Command.Item>
@@ -441,7 +499,7 @@ function SpotlightWindow() {
           </Command.List>
 
           {/* ── Footer ── */}
-          <div className="flex shrink-0 items-center gap-4 border-t border-black/8 px-4 py-2.5 text-[11px] text-gray-400">
+          <div className="flex shrink-0 items-center gap-4 border-t border-border bg-surface/70 px-4 py-2.5 text-[11px] text-muted-foreground">
             <span>{t("spotlight.hintNavigate")}</span>
             <span>{t("spotlight.hintOpen")}</span>
             <span>{t("spotlight.hintClose")}</span>

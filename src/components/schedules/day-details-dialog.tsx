@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import { ConfirmationDialog } from "./confirmation-dialog";
 import { DayDepartmentCard } from "./day-department-card";
 import { getScheduleDepartmentIcon, getScheduleDepartmentLabel } from "./department-meta";
 import { ScrollArea } from "../ui/scroll-area";
@@ -61,6 +62,11 @@ export function DayDetailsDialog({
   const { t } = useTranslation();
   const [responsibleDepartmentId, setResponsibleDepartmentId] = useState<string>("none");
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
+  const [confirmationState, setConfirmationState] = useState<
+    | { kind: "removeDay" }
+    | { kind: "removeDepartments"; count: number }
+    | null
+  >(null);
 
   useEffect(() => {
     if (!day) {
@@ -100,9 +106,9 @@ export function DayDetailsDialog({
     });
   };
 
-  const handleSaveDaySettings = async () => {
+  const buildNextDaySettings = () => {
     if (!day) {
-      return;
+      return null;
     }
 
     const nextResponsibleDepartmentId = responsibleDepartmentId === "none" ? null : Number(responsibleDepartmentId);
@@ -111,10 +117,28 @@ export function DayDetailsDialog({
       nextDepartmentIds.add(nextResponsibleDepartmentId);
     }
 
-    await onSaveDaySettings({
+    const removedDepartmentCount = day.departments.filter(
+      (department) => !nextDepartmentIds.has(department.departmentId),
+    ).length;
+
+    return {
       serviceDate: day.serviceDate,
       responsibleDepartmentId: nextResponsibleDepartmentId,
       departmentIds: Array.from(nextDepartmentIds).sort((left, right) => left - right),
+      removedDepartmentCount,
+    };
+  };
+
+  const handleSaveDaySettings = async () => {
+    const nextSettings = buildNextDaySettings();
+    if (!nextSettings) {
+      return;
+    }
+
+    await onSaveDaySettings({
+      serviceDate: nextSettings.serviceDate,
+      responsibleDepartmentId: nextSettings.responsibleDepartmentId,
+      departmentIds: nextSettings.departmentIds,
     });
   };
 
@@ -122,19 +146,51 @@ export function DayDetailsDialog({
     if (!day) {
       return;
     }
-
-    if (!confirm(t("utilities.schedules.dayDetails.removeDayConfirm"))) {
-      return;
-    }
-
     await onRemoveDay(day.serviceDate);
     onOpenChange(false);
   };
 
+  const handleConfirmDialog = () => {
+    if (!confirmationState) {
+      return;
+    }
+
+    if (confirmationState.kind === "removeDay") {
+      void handleRemoveDay().then(() => setConfirmationState(null));
+      return;
+    }
+
+    void handleSaveDaySettings().then(() => setConfirmationState(null));
+  };
+
+  const handleSaveDaySettingsClick = () => {
+    const nextSettings = buildNextDaySettings();
+    if (!nextSettings) {
+      return;
+    }
+
+    if (nextSettings.removedDepartmentCount > 0) {
+      setConfirmationState({
+        kind: "removeDepartments",
+        count: nextSettings.removedDepartmentCount,
+      });
+      return;
+    }
+
+    void handleSaveDaySettings();
+  };
+
+  const handleRemoveDayClick = () => {
+    if (!day || disabled) {
+      return;
+    }
+    setConfirmationState({ kind: "removeDay" });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-5xl overflow-hidden p-0">
-        <div className="flex h-full min-h-[72vh] flex-col bg-background">
+      <DialogContent className="h-[88vh] max-h-[88vh] max-w-5xl overflow-hidden p-0">
+        <div className="flex h-full min-h-0 min-w-0 flex-col bg-background pt-10">
           <DialogHeader className="border-b border-border/80 px-6 py-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
@@ -148,7 +204,7 @@ export function DayDetailsDialog({
               </div>
 
               {day ? (
-                <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={() => void handleRemoveDay()}>
+                <Button type="button" variant="destructive" size="sm" disabled={disabled} onClick={handleRemoveDayClick}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   {t("utilities.schedules.dayDetails.removeDay")}
                 </Button>
@@ -156,7 +212,7 @@ export function DayDetailsDialog({
             </div>
           </DialogHeader>
 
-          <ScrollArea className="h-full px-6 py-5">
+          <ScrollArea className="min-h-0 flex-1 px-6 py-5">
             {day ? (
               <div className="space-y-5">
                 <div className="grid gap-4 rounded-2xl border border-border/80 bg-surface/40 p-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -189,7 +245,7 @@ export function DayDetailsDialog({
                           {t("utilities.schedules.dayDetails.participatingDepartmentsHint")}
                         </p>
                       </div>
-                      <Button type="button" size="sm" disabled={disabled} onClick={() => void handleSaveDaySettings()}>
+                      <Button type="button" size="sm" disabled={disabled} onClick={handleSaveDaySettingsClick}>
                         {t("utilities.schedules.dayDetails.saveDaySettings")}
                       </Button>
                     </div>
@@ -269,6 +325,29 @@ export function DayDetailsDialog({
           </ScrollArea>
         </div>
       </DialogContent>
+
+      <ConfirmationDialog
+        open={confirmationState !== null}
+        title={confirmationState?.kind === "removeDay"
+          ? t("utilities.schedules.dayDetails.removeDayDialogTitle")
+          : t("utilities.schedules.dayDetails.removeDepartmentDialogTitle")}
+        description={confirmationState?.kind === "removeDay"
+          ? t("utilities.schedules.dayDetails.removeDayConfirm")
+          : t("utilities.schedules.dayDetails.removeDepartmentConfirm", {
+            count: confirmationState?.kind === "removeDepartments" ? confirmationState.count : 0,
+          })}
+        confirmLabel={confirmationState?.kind === "removeDay"
+          ? t("actions.remove")
+          : t("utilities.schedules.dayDetails.saveDaySettings")}
+        cancelLabel={t("actions.cancel")}
+        isPending={disabled}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmationState(null);
+          }
+        }}
+        onConfirm={handleConfirmDialog}
+      />
     </Dialog>
   );
 }

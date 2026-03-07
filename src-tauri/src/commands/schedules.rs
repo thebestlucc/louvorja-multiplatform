@@ -45,6 +45,19 @@ pub fn delete_schedule_department(
 
 #[tauri::command]
 #[specta::specta]
+pub fn reorder_schedule_departments(
+    department_ids: Vec<i64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .get()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::schedules::reorder_schedule_departments(&conn, &department_ids)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn replace_schedule_department_members(
     department_id: i64,
     members: Vec<String>,
