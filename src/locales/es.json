@@ -894,9 +894,21 @@
       },
       "print": {
         "action": "Abrir vista de impresión",
+        "clear": "Limpiar",
+        "departmentDays": "{{count}} día de culto",
+        "departmentDays_other": "{{count}} días de culto",
         "description": "Prepare una salida compacta en A4 para uno o más departamentos.",
+        "dialogAction": "Imprimir / Guardar como PDF",
+        "empty": "Seleccione uno o más departamentos con días programados para previsualizar el paquete imprimible.",
+        "pageLabel": "Página {{page}}",
         "pdf": "Exportar PDF",
-        "title": "Impresión y exportación"
+        "pdfHint": "Use el cuadro de impresión del sistema para elegir una impresora instalada, una impresora de red o un destino PDF.",
+        "previewDescription": "Revise el paquete A4 de {{month}} antes de abrir la impresión del sistema.",
+        "previewTitle": "Vista de impresión",
+        "responsibleBadge": "Responsable",
+        "selectAll": "Seleccionar todo",
+        "title": "Impresión y exportación",
+        "unassigned": "Sin asignados"
       },
       "responsibleDepartment": {
         "description": "Elija qué departamento es responsable de cada día de culto seleccionado.",

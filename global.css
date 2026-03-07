@@ -150,3 +150,77 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--theme-muted-fg);
 }
+
+.schedule-print-root {
+  color: #0f172a;
+}
+
+.schedule-print-page {
+  width: min(100%, 210mm);
+  min-height: 297mm;
+  margin-inline: auto;
+}
+
+.schedule-print-section {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body.schedule-print-mode * {
+    visibility: hidden !important;
+  }
+
+  body.schedule-print-mode [data-schedule-print-root],
+  body.schedule-print-mode [data-schedule-print-root] * {
+    visibility: visible !important;
+  }
+
+  body.schedule-print-mode [data-schedule-print-root] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body.schedule-print-mode [data-print-hidden] {
+    display: none !important;
+  }
+
+  .schedule-print-page {
+    width: auto;
+    min-height: auto;
+    margin: 0;
+    padding: 0;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .schedule-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .schedule-print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .schedule-print-page-label {
+    display: none !important;
+  }
+}
