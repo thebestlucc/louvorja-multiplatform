@@ -1,0 +1,10 @@
+docs/ export-ignore
+.agents/ export-ignore
+.claude/ export-ignore
+.codex/ export-ignore
+.gemini/ export-ignore
+.github/ export-ignore
+.specs/ export-ignore
+.tanstack/ export-ignore
+.vscode/ export-ignore
+CODEX/ export-ignore

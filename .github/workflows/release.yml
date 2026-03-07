@@ -6,77 +6,128 @@ on:
       - "v*"
   workflow_dispatch:
 
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  checks:
+  frontend-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout app sources
+        uses: actions/checkout@v4
         with:
-          node-version: 22
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            global.css
+            index.html
+            package.json
+            pnpm-lock.yaml
+            pnpm-workspace.yaml
+            public
+            src
+            tsconfig.json
+            tsconfig.node.json
+            vite.config.ts
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-tauri-ci
+        with:
+          setup-rust: "false"
+          install-linux-deps: "false"
       - name: Build frontend
-        run: pnpm exec vite build
-      - name: Type check
-        run: pnpm exec tsc --noEmit
+        shell: bash
+        run: pnpm build
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  rust-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app sources
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            src-tauri
+      - uses: ./.github/actions/setup-tauri-ci
+        with:
+          setup-node: "false"
+          install-frontend-deps: "false"
       - name: Rust check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+        shell: bash
+        run: cargo check --locked --manifest-path src-tauri/Cargo.toml
 
   tauri-release:
-    needs: checks
+    needs:
+      - frontend-checks
+      - rust-checks
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - name: macos-aarch64
+            platform: macos-latest
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
+            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - name: macos-x86_64
+            platform: macos-latest
             args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-22.04
+            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - name: linux-x86_64
+            platform: ubuntu-22.04
             args: ""
-          - platform: ubuntu-22.04-arm
+            rust_targets: ""
+          - name: linux-aarch64
+            platform: ubuntu-22.04-arm
             args: ""
-          - platform: windows-latest
+            rust_targets: ""
+          - name: windows-x86_64
+            platform: windows-latest
             args: ""
+            rust_targets: ""
     runs-on: ${{ matrix.platform }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      # TAURI_UPDATER_ENDPOINT: ${{ secrets.TAURI_UPDATER_ENDPOINT }}
-      # TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout app sources
+        uses: actions/checkout@v4
         with:
-          node-version: 22
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            package.json
+            pnpm-lock.yaml
+            pnpm-workspace.yaml
+            src-tauri
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-tauri-ci
         with:
-          targets: ${{ contains(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
+          rust-targets: ${{ matrix.rust_targets }}
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          workspaces: "./src-tauri -> target"
-      - name: Install Linux dependencies
-        if: ${{ contains(matrix.platform, 'ubuntu') }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+          name: frontend-dist
+          path: .
       - name: Inject updater endpoint and public key
+        shell: bash
+        env:
+          TAURI_UPDATER_ENDPOINT: ${{ secrets.TAURI_UPDATER_ENDPOINT }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SKIP_FRONTEND_BUILD: "true"
         run: node .github/scripts/inject-updater-config.mjs
       - name: Build and publish bundles
         uses: tauri-apps/tauri-action@v0

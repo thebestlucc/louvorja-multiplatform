@@ -1,0 +1,69 @@
+name: Setup Tauri CI
+description: Shared CI setup for LouvorJA release jobs.
+
+inputs:
+  setup-node:
+    description: Install pnpm and Node.js.
+    required: false
+    default: "true"
+  install-frontend-deps:
+    description: Install frontend dependencies with pnpm.
+    required: false
+    default: "true"
+  setup-rust:
+    description: Install the Rust toolchain and restore the Rust cache.
+    required: false
+    default: "true"
+  rust-targets:
+    description: Additional Rust targets to install.
+    required: false
+    default: ""
+  install-linux-deps:
+    description: Install Linux system packages required for Tauri builds.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      if: ${{ inputs.setup-node == 'true' }}
+      uses: pnpm/action-setup@v4
+      with:
+        run_install: false
+
+    - name: Setup Node.js
+      if: ${{ inputs.setup-node == 'true' }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Setup Rust toolchain
+      if: ${{ inputs.setup-rust == 'true' && inputs.rust-targets == '' }}
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Setup Rust toolchain with extra targets
+      if: ${{ inputs.setup-rust == 'true' && inputs.rust-targets != '' }}
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ inputs.rust-targets }}
+
+    - name: Restore Rust cache
+      if: ${{ inputs.setup-rust == 'true' }}
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: "./src-tauri -> target"
+
+    - name: Install Linux dependencies
+      if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev
+
+    - name: Install frontend dependencies
+      if: ${{ inputs.install-frontend-deps == 'true' }}
+      shell: bash
+      run: pnpm install --frozen-lockfile
