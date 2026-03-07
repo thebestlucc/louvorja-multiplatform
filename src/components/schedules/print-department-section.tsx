@@ -344,21 +344,6 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
                     </div>
                   ) : shouldShowDistinctGroupedMembers ? (
                     <PrintGroupedDistinctMembers entry={entry} />
-                  ) : entry.days.length > 1 ? (
-                    <div className="space-y-2">
-                      {entry.days.map((day, index) => (
-                        <div
-                          key={`${section.departmentId}-${entry.startDate}-${day.serviceDate}`}
-                          className={index > 0 ? "border-t border-slate-200 pt-2" : ""}
-                        >
-                          <PrintGroupedRepeatedRow
-                            day={day}
-                            locale={locale}
-                            accentBorder={accentBorder}
-                          />
-                        </div>
-                      ))}
-                    </div>
                   ) : (
                     <div className="space-y-2.5">
                       {entry.days.map((day, index) => (
