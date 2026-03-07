@@ -507,6 +507,22 @@ async saveScheduleDayAssignments(input: ScheduleAssignmentInput) : Promise<Resul
     else return { status: "error", error: e  as any };
 }
 },
+async updateScheduleDayDepartmentPeoplePerDay(scheduleDayDepartmentId: number, peoplePerDay: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_schedule_day_department_people_per_day", { scheduleDayDepartmentId, peoplePerDay }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resetScheduleDayDepartmentManualOverride(scheduleDayDepartmentId: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reset_schedule_day_department_manual_override", { scheduleDayDepartmentId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async audioPlay(filePath: string, positionMs: number | null) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("audio_play", { filePath, positionMs }) };
@@ -1094,6 +1110,14 @@ async getVideoMetadata(path: string) : Promise<Result<VideoMetadata, AppErrorRes
 async resolveMediaPath(path: string) : Promise<Result<string, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("resolve_media_path", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async spotlightOpen() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("spotlight_open") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

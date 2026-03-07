@@ -20,6 +20,7 @@ import {
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment,
   replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
+  updateScheduleDayDepartmentPeoplePerDay, resetScheduleDayDepartmentManualOverride,
   getMonitorConfigs, setMonitorConfig,
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
@@ -773,6 +774,36 @@ export function useSaveScheduleDayAssignments() {
   return useMutation({
     mutationFn: (vars: { year: number; month: number; input: ScheduleAssignmentInput }) =>
       saveScheduleDayAssignments(vars.input),
+    onSuccess: (_, vars) => {
+      invalidateScheduleQueries(queryClient, { year: vars.year, month: vars.month });
+    },
+  });
+}
+
+export function useUpdateScheduleDayDepartmentPeoplePerDay() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      year: number;
+      month: number;
+      scheduleDayDepartmentId: number;
+      peoplePerDay: number;
+    }) =>
+      updateScheduleDayDepartmentPeoplePerDay(
+        vars.scheduleDayDepartmentId,
+        vars.peoplePerDay,
+      ),
+    onSuccess: (_, vars) => {
+      invalidateScheduleQueries(queryClient, { year: vars.year, month: vars.month });
+    },
+  });
+}
+
+export function useResetScheduleDayDepartmentManualOverride() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { year: number; month: number; scheduleDayDepartmentId: number }) =>
+      resetScheduleDayDepartmentManualOverride(vars.scheduleDayDepartmentId),
     onSuccess: (_, vars) => {
       invalidateScheduleQueries(queryClient, { year: vars.year, month: vars.month });
     },

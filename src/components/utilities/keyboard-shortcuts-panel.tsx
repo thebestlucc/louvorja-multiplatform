@@ -5,6 +5,7 @@ import {
   SHORTCUT_DEFINITIONS,
   SHORTCUT_CATEGORY_ORDER,
   comboToDisplayKeys,
+  normalizeShortcutCombo,
 } from "../../lib/shortcut-definitions";
 import { useSetting } from "../../lib/queries";
 
@@ -14,31 +15,75 @@ export function openKeyboardShortcutsPanel() {
   window.dispatchEvent(new Event(SHORTCUTS_PANEL_OPEN_EVENT));
 }
 
+function ShortcutKeys({
+  id,
+  combo,
+}: {
+  id: string;
+  combo: string | undefined;
+}) {
+  if (!combo) {
+    return <span className="text-xs text-muted-foreground">---</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {comboToDisplayKeys(combo).map((keyPart) => (
+        <kbd
+          key={`${id}-${combo}-${keyPart}`}
+          className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-muted-foreground"
+        >
+          {keyPart}
+        </kbd>
+      ))}
+    </div>
+  );
+}
+
 function ShortcutRow({ def }: { def: (typeof SHORTCUT_DEFINITIONS)[number] }) {
   const { t } = useTranslation();
   const { data: localSetting } = useSetting(`shortcut.${def.id}.local`);
   const { data: globalSetting } = useSetting(`shortcut.${def.id}.global`);
 
-  const localCombo = localSetting?.value ?? def.defaultLocal;
-  const globalCombo = globalSetting?.value ?? def.defaultGlobal;
+  const localCombo = localSetting?.value
+    ? normalizeShortcutCombo(localSetting.value, "local")
+    : def.defaultLocal;
+  const globalCombo = globalSetting?.value
+    ? normalizeShortcutCombo(globalSetting.value, "global")
+    : def.defaultGlobal;
 
   const displayCombo = localCombo ?? globalCombo;
+
+  if (def.id === "app-command-palette") {
+    return (
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+        <span className="text-sm text-foreground">{t(def.labelKey)}</span>
+        <div className="flex min-w-[16rem] flex-col gap-2 text-right">
+          <div className="space-y-1">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("settings.shortcuts.localLabel")}
+            </span>
+            <div className="flex justify-end">
+              <ShortcutKeys id={`${def.id}-local`} combo={localCombo} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("settings.shortcuts.globalLabel")}
+            </span>
+            <div className="flex justify-end">
+              <ShortcutKeys id={`${def.id}-global`} combo={globalCombo} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
       <span className="text-sm text-foreground">{t(def.labelKey)}</span>
-      <div className="flex flex-wrap gap-1">
-        {displayCombo
-          ? comboToDisplayKeys(displayCombo).map((keyPart) => (
-              <kbd
-                key={`${def.id}-${keyPart}`}
-                className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-muted-foreground"
-              >
-                {keyPart}
-              </kbd>
-            ))
-          : <span className="text-xs text-muted-foreground">---</span>}
-      </div>
+      <ShortcutKeys id={def.id} combo={displayCombo} />
     </div>
   );
 }

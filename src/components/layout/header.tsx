@@ -16,8 +16,10 @@ import {
   type Theme,
   THEMES,
 } from "../../lib/constants";
-import { useSetSetting } from "../../lib/queries";
+import { useSetSetting, useSetting } from "../../lib/queries";
+import { comboToDisplayKeys, normalizeShortcutCombo } from "../../lib/shortcut-definitions";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
+import { spotlightOpen } from "../../lib/tauri";
 
 const LOCALE_BY_LANGUAGE: Record<Language, string> = {
   pt: "pt-BR",
@@ -29,6 +31,8 @@ export function Header() {
   const { t } = useTranslation();
   const { theme, language, setTheme, setLanguage } = useThemeStore();
   const setSettingMutation = useSetSetting();
+  const { data: spotlightShortcutSetting } = useSetting("shortcut.app-command-palette.local");
+  const { data: shortcutsHelpSetting } = useSetting("shortcut.app-shortcuts-help.local");
   const [now, setNow] = useState(() => new Date());
   const locale = LOCALE_BY_LANGUAGE[language];
 
@@ -60,9 +64,7 @@ export function Header() {
   }
 
   function openCommandPalette() {
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "k", metaKey: true }),
-    );
+    void spotlightOpen();
   }
 
   const dateLabel = now.toLocaleDateString(locale, {
@@ -77,6 +79,12 @@ export function Header() {
   });
 
   const shortcutsHelpLabel = t("commandPalette.actions.openShortcuts");
+  const spotlightShortcutLabel = comboToDisplayKeys(
+    normalizeShortcutCombo(spotlightShortcutSetting?.value ?? "Meta+k", "local"),
+  ).join(" + ");
+  const shortcutsHelpComboLabel = comboToDisplayKeys(
+    normalizeShortcutCombo(shortcutsHelpSetting?.value ?? "Meta+/", "local"),
+  ).join(" + ");
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-border bg-surface px-4">
@@ -91,7 +99,7 @@ export function Header() {
         <Search className="h-3.5 w-3.5" />
         <span>{t("actions.search")}...</span>
         <kbd className="ml-auto rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          ⌘K
+          {spotlightShortcutLabel}
         </kbd>
       </button>
 
@@ -105,7 +113,7 @@ export function Header() {
           size="icon"
           className="h-8 w-8"
           aria-label={shortcutsHelpLabel}
-          title={`${shortcutsHelpLabel} (Cmd/Ctrl + /)`}
+          title={`${shortcutsHelpLabel} (${shortcutsHelpComboLabel})`}
           onClick={openKeyboardShortcutsPanel}
         >
           <Keyboard className="h-4 w-4" />

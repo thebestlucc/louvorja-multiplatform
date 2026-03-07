@@ -4,10 +4,23 @@ import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
+import { useSetting } from "../lib/queries";
+import { matchesShortcutCombo, normalizeShortcutCombo } from "../lib/shortcut-definitions";
+import { spotlightOpen } from "../lib/tauri";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const { nextSlide, prevSlide } = useSlides();
   const { toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen } = useMonitorsControl();
+  const { data: spotlightShortcutSetting } = useSetting("shortcut.app-command-palette.local");
+  const { data: shortcutsHelpSetting } = useSetting("shortcut.app-shortcuts-help.local");
+  const spotlightLocalCombo = normalizeShortcutCombo(
+    spotlightShortcutSetting?.value ?? "Meta+k",
+    "local",
+  );
+  const shortcutsHelpLocalCombo = normalizeShortcutCombo(
+    shortcutsHelpSetting?.value ?? "Meta+/",
+    "local",
+  );
 
   const clearPresentation = useCallback(() => {
     usePresentationStore.getState().setSlides([]);
@@ -18,6 +31,12 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (matchesShortcutCombo(e, spotlightLocalCombo)) {
+        e.preventDefault();
+        void spotlightOpen();
+        return;
+      }
+
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -33,14 +52,13 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         return;
       }
 
+      if (matchesShortcutCombo(e, shortcutsHelpLocalCombo)) {
+        e.preventDefault();
+        openKeyboardShortcutsPanel();
+        return;
+      }
+
       switch (e.key) {
-        case "/":
-        case "?":
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault();
-            openKeyboardShortcutsPanel();
-          }
-          break;
         case "ArrowRight":
         case " ":
         case "PageDown":
@@ -79,7 +97,18 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [enabled, nextSlide, prevSlide, toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen, clearPresentation]);
+  }, [
+    enabled,
+    nextSlide,
+    prevSlide,
+    toggleProjector,
+    toggleReturn,
+    toggleBlackScreen,
+    toggleLogoScreen,
+    clearPresentation,
+    spotlightLocalCombo,
+    shortcutsHelpLocalCombo,
+  ]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -100,12 +129,6 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
             break;
           case "display-logo":
             toggleLogoScreen();
-            break;
-          case "app-command-palette":
-            // Simulate Cmd+K to open the command palette (matches the header button behavior)
-            document.dispatchEvent(
-              new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
-            );
             break;
           case "app-shortcuts-help":
             openKeyboardShortcutsPanel();

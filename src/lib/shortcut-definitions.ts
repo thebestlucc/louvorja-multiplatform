@@ -62,7 +62,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     category: "app",
     labelKey: "shortcuts.items.openCommandPalette",
     defaultLocal: "Meta+k",
-    defaultGlobal: "Alt+K",
+    defaultGlobal: "CmdOrCtrl+Shift+K",
   },
   {
     id: "app-shortcuts-help",
@@ -79,12 +79,162 @@ export const SHORTCUT_CATEGORY_ORDER: ShortcutDefinition["category"][] = [
   "display",
 ];
 
+type ShortcutLayer = "local" | "global";
+
+export type ShortcutKeyboardEventLike = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey"
+>;
+
+function normalizeShortcutKey(key: string, layer: ShortcutLayer): string {
+  const trimmed = key.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (layer === "local") {
+    switch (lower) {
+      case "right":
+        return "ArrowRight";
+      case "left":
+        return "ArrowLeft";
+      case "up":
+        return "ArrowUp";
+      case "down":
+        return "ArrowDown";
+      case "space":
+        return " ";
+      case "esc":
+        return "Escape";
+      default:
+        if (trimmed.length === 1) return trimmed.toLowerCase();
+        if (/^f\d+$/i.test(trimmed)) return trimmed.toUpperCase();
+        return trimmed;
+    }
+  }
+
+  switch (lower) {
+    case "arrowright":
+      return "Right";
+    case "arrowleft":
+      return "Left";
+    case "arrowup":
+      return "Up";
+    case "arrowdown":
+      return "Down";
+    case "space":
+    case "":
+      return "Space";
+    case "esc":
+      return "Escape";
+    default:
+      if (trimmed.length === 1) return trimmed.toUpperCase();
+      if (/^f\d+$/i.test(trimmed)) return trimmed.toUpperCase();
+      return trimmed;
+  }
+}
+
+function normalizeShortcutModifier(
+  part: string,
+  layer: ShortcutLayer,
+): string | null {
+  switch (part.trim().toLowerCase()) {
+    case "meta":
+    case "cmd":
+    case "command":
+    case "super":
+    case "commandorcontrol":
+    case "commandorctrl":
+    case "cmdorcontrol":
+    case "cmdorctrl":
+      return layer === "local" ? "Meta" : "CmdOrCtrl";
+    case "ctrl":
+    case "control":
+      return layer === "local" ? "Meta" : "Ctrl";
+    case "alt":
+    case "option":
+      return "Alt";
+    case "shift":
+      return "Shift";
+    default:
+      return null;
+  }
+}
+
+export function normalizeShortcutCombo(
+  combo: string,
+  layer: ShortcutLayer,
+): string {
+  if (!combo.trim()) return "";
+
+  let hasCommand = false;
+  let hasAlt = false;
+  let hasShift = false;
+  let key = "";
+
+  for (const part of combo.split("+")) {
+    const modifier = normalizeShortcutModifier(part, layer);
+    if (modifier === "Meta" || modifier === "CmdOrCtrl") {
+      hasCommand = true;
+      continue;
+    }
+    if (modifier === "Alt") {
+      hasAlt = true;
+      continue;
+    }
+    if (modifier === "Shift") {
+      hasShift = true;
+      continue;
+    }
+
+    key = normalizeShortcutKey(part, layer);
+  }
+
+  const parts: string[] = [];
+  if (hasCommand) parts.push(layer === "local" ? "Meta" : "CmdOrCtrl");
+  if (hasShift) parts.push("Shift");
+  if (hasAlt) parts.push("Alt");
+  if (key) parts.push(key);
+
+  return parts.join("+");
+}
+
+export function keyboardEventToShortcutCombo(
+  event: ShortcutKeyboardEventLike,
+  layer: ShortcutLayer,
+): string | null {
+  if (["Meta", "Shift", "Alt", "Control"].includes(event.key)) {
+    return null;
+  }
+
+  const key = normalizeShortcutKey(event.key, layer);
+  if (!key) return null;
+
+  const parts: string[] = [];
+  if (event.metaKey || event.ctrlKey) {
+    parts.push(layer === "local" ? "Meta" : "CmdOrCtrl");
+  }
+  if (event.shiftKey) parts.push("Shift");
+  if (event.altKey) parts.push("Alt");
+  parts.push(key);
+
+  return parts.join("+");
+}
+
+export function matchesShortcutCombo(
+  event: ShortcutKeyboardEventLike,
+  combo: string,
+): boolean {
+  return keyboardEventToShortcutCombo(event, "local") === normalizeShortcutCombo(combo, "local");
+}
+
 // Resolve a stored combo string into display label array for <kbd> chips.
 // e.g. "Shift+F5" → ["Shift", "F5"], "Meta+k" → ["Cmd/Ctrl", "K"]
 export function comboToDisplayKeys(combo: string): string[] {
-  return combo.split("+").map((part) => {
+  return normalizeShortcutCombo(combo, combo.includes("CmdOrCtrl") ? "global" : "local")
+    .split("+")
+    .map((part) => {
     switch (part.toLowerCase()) {
       case "meta":
+      case "cmdorctrl":
         return "Cmd/Ctrl";
       case "shift":
         return "Shift";
@@ -92,6 +242,22 @@ export function comboToDisplayKeys(combo: string): string[] {
         return "Alt/Option";
       case "ctrl":
         return "Ctrl";
+      case "arrowright":
+      case "right":
+        return "Right";
+      case "arrowleft":
+      case "left":
+        return "Left";
+      case "arrowup":
+      case "up":
+        return "Up";
+      case "arrowdown":
+      case "down":
+        return "Down";
+      case "escape":
+        return "Esc";
+      case " ":
+        return "Space";
       default:
         return part.toUpperCase();
     }
