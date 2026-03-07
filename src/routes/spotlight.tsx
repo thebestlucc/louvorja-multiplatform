@@ -39,6 +39,7 @@ import {
   setCurrentSlide,
 } from "../lib/tauri";
 import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../lib/bindings";
+import { CoverImage } from "../components/media/cover-image";
 
 export const Route = createFileRoute("/spotlight")({
   component: SpotlightWindow,
@@ -103,8 +104,6 @@ function SpotlightWindow() {
   >([]);
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
   // Make the webview fully transparent so only the panel renders visually.
   // Without this, the html/body default background fills the entire window
   // and shows below/around the frosted glass panel.
@@ -119,7 +118,6 @@ function SpotlightWindow() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen("spotlight-shown", () => {
-      clearTimeout(hideTimerRef.current);   // cancel stale hide timer on rapid reopen
       setQuery("");
       setHymns([]);
       setBibleResults([]);
@@ -150,50 +148,22 @@ function SpotlightWindow() {
     }
     setSearching(true);
     const timer = setTimeout(async () => {
-      const [results] = await catcher(
-        Promise.all([
-          searchAllHymns(query),
-          query.trim().length >= 2 ? searchBible(query, null) : Promise.resolve([]),
-          query.trim().length >= 2 ? searchCollections(query) : Promise.resolve([]),
-        ]),
-        { notify: false },
-      );
+      const long = query.trim().length >= 2;
+      // Run searches independently so a broken FTS index for one domain
+      // does not suppress results from the other two.
+      const [[h], [b], [c]] = await Promise.all([
+        catcher(searchAllHymns(query), { notify: false }),
+        long ? catcher(searchBible(query, null), { notify: false }) : Promise.resolve([[], null] as const),
+        long ? catcher(searchCollections(query), { notify: false }) : Promise.resolve([[], null] as const),
+      ]);
 
-      if (results) {
-        const [h, b, c] = results;
-        setHymns(h.slice(0, 5));
-        setBibleResults(b.slice(0, 5));
-        setCollectionResults(c.slice(0, 5));
-      }
-
+      setHymns((h ?? []).slice(0, 5));
+      setBibleResults((b ?? []).slice(0, 5));
+      setCollectionResults((c ?? []).slice(0, 5));
       setSearching(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
-
-  // Close when the spotlight window loses focus (e.g. user clicks main app).
-  // Debounced 150ms so a drag that briefly blurs the window doesn't close it.
-  // The `cancelled` flag guards against a listener leak if the component unmounts
-  // before the onFocusChanged Promise resolves.
-  useEffect(() => {
-    const win = getCurrentWindow();
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    win.onFocusChanged(({ payload: focused }) => {
-      clearTimeout(hideTimerRef.current);
-      if (!focused) {
-        hideTimerRef.current = setTimeout(() => void spotlightHide(), 150);
-      }
-    }).then((fn) => {
-      if (cancelled) fn(); // already unmounted — unlisten immediately
-      else unlisten = fn;
-    });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-      clearTimeout(hideTimerRef.current);
-    };
-  }, []);
 
   function handleSearchBarMouseDown(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
