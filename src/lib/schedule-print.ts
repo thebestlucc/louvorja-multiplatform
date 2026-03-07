@@ -1,7 +1,16 @@
 import type { ScheduleDay, ScheduleDayDepartment, ScheduleMonthDetail } from "./bindings";
 import { getScheduleDepartmentLabel } from "./schedule-departments";
 
-const DEFAULT_PAGE_CAPACITY = 28;
+const MM_TO_PX = 96 / 25.4;
+const DEFAULT_PRINT_PAGE_CONTENT_HEIGHT_PX = (297 - 24) * MM_TO_PX;
+const PRINT_SECTION_BASE_HEIGHT_PX = 124;
+const PRINT_ENTRY_GAP_PX = 10;
+const PRINT_ENTRY_VERTICAL_CHROME_PX = 24;
+const PRINT_ENTRY_LINE_HEIGHT_PX = 28;
+const PRINT_ENTRY_DATE_HEIGHT_PX = 18;
+const PRINT_ENTRY_LABEL_HEIGHT_PX = 16;
+const PRINT_ENTRY_RESPONSIBLE_HEIGHT_PX = 22;
+const PRINT_ENTRY_CHARS_PER_LINE = 28;
 
 export interface SchedulePrintEntry {
   serviceDate: string;
@@ -16,7 +25,7 @@ export interface SchedulePrintSection {
   color: string;
   icon: string;
   entries: SchedulePrintEntry[];
-  estimatedUnits: number;
+  estimatedHeightPx: number;
 }
 
 export interface SchedulePrintPage {
@@ -29,11 +38,29 @@ export interface SchedulePrintPack {
   pages: SchedulePrintPage[];
 }
 
-function estimateSectionUnits(entries: SchedulePrintEntry[]) {
-  return entries.reduce((total, entry) => {
-    const lineUnits = Math.max(1, Math.ceil(Math.max(entry.assigneeNames.length, 1) / 2));
-    return total + lineUnits;
-  }, 4);
+function estimateEntryHeightPx(entry: SchedulePrintEntry) {
+  const joinedNames = entry.assigneeNames.join(" • ").trim();
+  const contentLength = joinedNames.length > 0 ? joinedNames.length : 12;
+  const textLines = Math.max(1, Math.ceil(contentLength / PRINT_ENTRY_CHARS_PER_LINE));
+  const rightColumnHeight = textLines * PRINT_ENTRY_LINE_HEIGHT_PX;
+  let leftColumnHeight = PRINT_ENTRY_DATE_HEIGHT_PX;
+
+  if (entry.label) {
+    leftColumnHeight += PRINT_ENTRY_LABEL_HEIGHT_PX;
+  }
+
+  if (entry.isResponsible) {
+    leftColumnHeight += PRINT_ENTRY_RESPONSIBLE_HEIGHT_PX;
+  }
+
+  return Math.max(leftColumnHeight, rightColumnHeight) + PRINT_ENTRY_VERTICAL_CHROME_PX;
+}
+
+function estimateSectionHeightPx(entries: SchedulePrintEntry[]) {
+  return entries.reduce((total, entry, index) => {
+    const gap = index === 0 ? 0 : PRINT_ENTRY_GAP_PX;
+    return total + gap + estimateEntryHeightPx(entry);
+  }, PRINT_SECTION_BASE_HEIGHT_PX);
 }
 
 function findDepartmentEntry(day: ScheduleDay, departmentId: number): ScheduleDayDepartment | undefined {
@@ -61,14 +88,14 @@ export function buildSchedulePrintPack(
   detail: ScheduleMonthDetail,
   selectedDepartmentIds: number[] | undefined,
   locale: string,
-  options?: { pageCapacity?: number },
+  options?: { pageContentHeightPx?: number },
 ): SchedulePrintPack {
   const selectedSet = new Set(selectedDepartmentIds ?? []);
   const hasExplicitSelection = selectedDepartmentIds !== undefined;
   const selectedOrder = new Map(
     (selectedDepartmentIds ?? []).map((departmentId, index) => [departmentId, index]),
   );
-  const pageCapacity = options?.pageCapacity ?? DEFAULT_PAGE_CAPACITY;
+  const pageContentHeightPx = options?.pageContentHeightPx ?? DEFAULT_PRINT_PAGE_CONTENT_HEIGHT_PX;
 
   const sections = detail.departments
     .filter((department) => department.isActive)
@@ -102,7 +129,7 @@ export function buildSchedulePrintPack(
         color: department.color,
         icon: department.icon,
         entries,
-        estimatedUnits: estimateSectionUnits(entries),
+        estimatedHeightPx: estimateSectionHeightPx(entries),
       } satisfies SchedulePrintSection;
     })
     .filter((section) => section.entries.length > 0)
@@ -117,20 +144,23 @@ export function buildSchedulePrintPack(
 
   const pages: SchedulePrintPage[] = [];
   let currentPageSections: SchedulePrintSection[] = [];
-  let usedUnits = 0;
+  let usedHeightPx = 0;
 
   for (const section of sections) {
-    if (currentPageSections.length > 0 && usedUnits + section.estimatedUnits > pageCapacity) {
+    if (
+      currentPageSections.length > 0
+      && usedHeightPx + section.estimatedHeightPx > pageContentHeightPx
+    ) {
       pages.push({
         pageNumber: pages.length + 1,
         sections: currentPageSections,
       });
       currentPageSections = [];
-      usedUnits = 0;
+      usedHeightPx = 0;
     }
 
     currentPageSections.push(section);
-    usedUnits += section.estimatedUnits;
+    usedHeightPx += section.estimatedHeightPx;
   }
 
   if (currentPageSections.length > 0) {

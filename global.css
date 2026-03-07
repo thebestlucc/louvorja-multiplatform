@@ -152,13 +152,27 @@ body {
 }
 
 .schedule-print-root {
+  --schedule-print-paper-width: 210mm;
+  --schedule-print-paper-height: 297mm;
+  --schedule-print-paper-margin: 12mm;
+  --schedule-print-content-width: calc(var(--schedule-print-paper-width) - (var(--schedule-print-paper-margin) * 2));
+  --schedule-print-content-height: calc(var(--schedule-print-paper-height) - (var(--schedule-print-paper-margin) * 2));
   color: #0f172a;
+  width: 100%;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .schedule-print-page {
-  width: min(100%, 210mm);
-  min-height: 297mm;
+  box-sizing: border-box;
+  width: min(100%, var(--schedule-print-paper-width));
+  height: var(--schedule-print-paper-height);
+  padding: var(--schedule-print-paper-margin);
   margin-inline: auto;
+}
+
+[data-schedule-print-export-root] {
+  display: none;
 }
 
 .schedule-print-section {
@@ -169,27 +183,35 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 0;
   }
 
   html,
   body {
+    margin: 0 !important;
+    padding: 0 !important;
     background: #ffffff !important;
   }
 
-  body.schedule-print-mode * {
-    visibility: hidden !important;
+  body.schedule-print-mode > :not([data-schedule-print-export-root]) {
+    display: none !important;
   }
 
-  body.schedule-print-mode [data-schedule-print-root],
-  body.schedule-print-mode [data-schedule-print-root] * {
-    visibility: visible !important;
+  .schedule-print-root,
+  .schedule-print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  body.schedule-print-mode [data-schedule-print-root] {
+  body.schedule-print-mode [data-schedule-print-export-root] {
+    display: block !important;
     position: absolute;
-    inset: 0;
-    width: 100%;
+    inset: 0 auto auto 0;
+  }
+
+  body.schedule-print-mode [data-schedule-print-export-root].schedule-print-root {
+    width: var(--schedule-print-paper-width);
+    max-width: var(--schedule-print-paper-width);
     margin: 0;
     padding: 0;
   }
@@ -199,12 +221,13 @@ body {
   }
 
   .schedule-print-page {
-    width: auto;
-    min-height: auto;
+    width: var(--schedule-print-paper-width);
+    height: var(--schedule-print-paper-height);
     margin: 0;
-    padding: 0;
-    border: none !important;
+    padding: var(--schedule-print-paper-margin) !important;
     box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
     border-radius: 0 !important;
     break-after: page;
     page-break-after: always;
