@@ -38,7 +38,7 @@ The application already persists monitor-role assignments and uses them for auto
 ## Product/UX Findings
 
 1. Deferred item already documented: monitor config UI in post-Phase-6 handoff.
-   - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/handoffs/phase7-streaming/2026-02-11_23-42-22_phase6-complete-phase7-next.md:45`
+   - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/archive/handoffs/phase7-streaming/2026-02-11_23-42-22_phase6-complete-phase7-next.md:45`
 2. Settings copy currently covers default projector content and logo, but not monitor assignment controls.
    - `/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src/locales/en.json:502`
 3. Onboarding already has localized strings that can be reused/extended for monitor assignment labels and actions.

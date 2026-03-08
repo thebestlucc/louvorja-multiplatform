@@ -8,8 +8,10 @@ import {
   setSlideContext,
 } from "./tauri";
 import { useDisplayStore } from "../stores/display-store";
+import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
-import type { SlideContent } from "./bindings";
+import type { SlideContent, SlideContext } from "./bindings";
+import { resolveSlideTimingWindow } from "./audio-sync";
 import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
 import { catcher } from "./catcher";
 
@@ -87,12 +89,14 @@ export async function projectSlideIndex(index: number): Promise<void> {
   const projectionType: "hymn" | "presentation" = currentPresentationId ? "presentation" : "hymn";
 
   await projectSlideWithType(currentSlide, projectionType);
-  await setSlideContext({
-    next: nextSlide,
-    index,
-    total: presentationState.slides.length,
-    title: getSlideTitle(currentSlide),
-  });
+  await setSlideContext(
+    buildProjectionSlideContext(
+      nextSlide,
+      index,
+      presentationState.slides.length,
+      getSlideTitle(currentSlide),
+    ),
+  );
 }
 
 export async function projectCurrentSlideFromStore(): Promise<void> {
@@ -130,6 +134,37 @@ function getSlideTitle(slide: SlideContent): string {
     default:
       return "Slide";
   }
+}
+
+export function buildProjectionSlideContext(
+  next: SlideContent | null,
+  index: number,
+  total: number,
+  title: string,
+): SlideContext {
+  const audioState = useAudioStore.getState();
+  const hasPlaybackTiming =
+    usePresentationStore.getState().currentPresentationId == null
+    && audioState.currentFile != null
+    && audioState.syncPoints.length > 0;
+  const timingWindow = hasPlaybackTiming
+    ? resolveSlideTimingWindow(
+      audioState.syncPoints,
+      index,
+      audioState.playbackMode,
+      audioState.durationMs,
+    )
+    : { startMs: null, endMs: null };
+
+  return {
+    next,
+    index,
+    total,
+    title,
+    currentSlideStartMs: timingWindow.startMs,
+    nextSlideStartMs: timingWindow.endMs,
+    audioDurationMs: audioState.durationMs > 0 ? audioState.durationMs : null,
+  };
 }
 
 /**

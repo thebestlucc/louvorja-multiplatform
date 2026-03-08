@@ -1,6 +1,7 @@
 use crate::db::models::{Album, Hymn};
 use crate::error::AppError;
 use rusqlite::{params, Connection, Row};
+use std::collections::HashMap;
 
 fn map_hymn_row(row: &Row) -> Result<Hymn, rusqlite::Error> {
     Ok(Hymn {
@@ -146,11 +147,10 @@ pub fn rebuild_hymns_search_index(conn: &Connection) -> Result<(), AppError> {
          INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
          SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
          FROM hymns
-         WHERE category = 'hymnal';"
+         WHERE category = 'hymnal';",
     )?;
     Ok(())
 }
-
 
 pub fn get_hymn_by_id(conn: &Connection, id: i64) -> Result<Hymn, AppError> {
     conn.query_row(
@@ -197,7 +197,6 @@ pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, A
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
 }
-
 
 pub fn insert_hymn(
     conn: &Connection,
@@ -278,7 +277,8 @@ pub fn update_hymn(
         .unwrap_or(false);
 
     if fts_exists {
-        let mut stmt = conn.prepare("SELECT collection_id FROM collection_hymns WHERE hymn_id = ?1")?;
+        let mut stmt =
+            conn.prepare("SELECT collection_id FROM collection_hymns WHERE hymn_id = ?1")?;
         let collection_ids = stmt
             .query_map(params![id], |row| row.get::<_, i64>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -288,7 +288,7 @@ pub fn update_hymn(
             // But we can replicate its logic.
             // Actually, a better approach might be to just trigger a reindex if we had a shared helper.
             // For now, let's do it manually.
-            
+
             // Delete old entry
             conn.execute(
                 "DELETE FROM collections_fts WHERE entity_type = 'hymn' AND collection_id = ?1 AND song_id = ?2",
@@ -308,9 +308,8 @@ pub fn update_hymn(
                  WHERE h.id = ?2",
             )?;
 
-            if let Ok((title, lyrics, author, album, collection_name, collection_description)) = h_stmt.query_row(
-                params![collection_id, id],
-                |row| {
+            if let Ok((title, lyrics, author, album, collection_name, collection_description)) =
+                h_stmt.query_row(params![collection_id, id], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
@@ -319,8 +318,8 @@ pub fn update_hymn(
                         row.get::<_, String>(4)?,
                         row.get::<_, String>(5)?,
                     ))
-                },
-            ) {
+                })
+            {
                 let body = format!("{} {} {} {}", lyrics, author, album, collection_description);
                 conn.execute(
                     "INSERT INTO collections_fts (
@@ -347,7 +346,7 @@ pub fn delete_hymn(conn: &Connection, id: i64) -> Result<(), AppError> {
     if rows == 0 {
         return Err(AppError::NotFound(format!("Hymn with id {} not found", id)));
     }
-    
+
     // Cleanup collections_fts if it exists
     let fts_exists: bool = conn
         .query_row(
@@ -426,36 +425,161 @@ struct SyncLyric {
     order: i32,
     time: Option<String>,
     instrumental_time: Option<String>,
+    #[allow(dead_code)]
+    show_slide: Option<i32>,
+}
+
+struct StoredSyncPoint {
+    slide_index: usize,
+    timestamp_ms: u64,
+    instrumental_timestamp_ms: Option<u64>,
+}
+
+fn is_explicit_sync_timestamp(index: usize, timestamp_ms: Option<u64>) -> bool {
+    matches!(timestamp_ms, Some(value) if value > 0) || (index == 0 && timestamp_ms == Some(0))
+}
+
+fn resolve_sync_timeline(raw_timestamps: &[Option<u64>]) -> Vec<Option<u64>> {
+    let mut resolved = vec![None; raw_timestamps.len()];
+    let explicit_points = raw_timestamps
+        .iter()
+        .enumerate()
+        .filter_map(|(index, timestamp_ms)| {
+            if is_explicit_sync_timestamp(index, *timestamp_ms) {
+                Some((index, timestamp_ms.unwrap_or(0)))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for (index, timestamp_ms) in &explicit_points {
+        resolved[*index] = Some(*timestamp_ms);
+    }
+
+    for window in explicit_points.windows(2) {
+        let Some((previous_index, previous_ms)) = window.first().copied() else {
+            continue;
+        };
+        let Some((next_index, next_ms)) = window.get(1).copied() else {
+            continue;
+        };
+
+        let gap_count = next_index.saturating_sub(previous_index + 1);
+        if gap_count == 0 || next_ms <= previous_ms {
+            continue;
+        }
+
+        let span_ms = next_ms - previous_ms;
+        for gap_offset in 1..=gap_count {
+            let interpolated = previous_ms + (span_ms * gap_offset as u64) / (gap_count as u64 + 1);
+            resolved[previous_index + gap_offset] = Some(interpolated);
+        }
+    }
+
+    resolved
+}
+
+fn parse_lyrics_sync_points(
+    lyrics_sync: Option<&str>,
+) -> Result<Vec<crate::audio::SyncPoint>, AppError> {
+    let Some(json_str) = lyrics_sync else {
+        return Ok(vec![]);
+    };
+
+    match serde_json::from_str::<Vec<SyncLyric>>(json_str) {
+        Ok(sync_lyrics) => {
+            log::debug!("[get_sync_points] Parsed {} sync lyrics", sync_lyrics.len());
+            let mut sync_points = vec![crate::audio::SyncPoint {
+                slide_index: 0,
+                timestamp_ms: 0,
+                instrumental_timestamp_ms: Some(0),
+            }];
+
+            let mut sorted_lyrics = sync_lyrics;
+            sorted_lyrics.sort_by_key(|lyric| lyric.order);
+            let sung_timeline = resolve_sync_timeline(
+                &sorted_lyrics
+                    .iter()
+                    .map(|lyric| lyric.time.as_ref().and_then(|time| parse_time_to_ms(time)))
+                    .collect::<Vec<_>>(),
+            );
+            let instrumental_timeline = resolve_sync_timeline(
+                &sorted_lyrics
+                    .iter()
+                    .map(|lyric| {
+                        lyric
+                            .instrumental_time
+                            .as_ref()
+                            .and_then(|time| parse_time_to_ms(time))
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            for (idx, _sync_lyric) in sorted_lyrics.iter().enumerate() {
+                let ms_default = sung_timeline[idx];
+                let ms_inst = instrumental_timeline[idx];
+
+                if ms_default.is_some() || ms_inst.is_some() {
+                    sync_points.push(crate::audio::SyncPoint {
+                        slide_index: idx + 1,
+                        timestamp_ms: ms_default.or(ms_inst).unwrap_or(0),
+                        instrumental_timestamp_ms: ms_inst,
+                    });
+                } else {
+                    log::debug!(
+                        "[get_sync_points] Lyric idx={} has no resolvable timing after interpolation",
+                        idx
+                    );
+                }
+            }
+
+            Ok(sync_points)
+        }
+        Err(error) => {
+            log::warn!(
+                "[get_sync_points] Failed to parse lyrics_sync JSON: {}",
+                error
+            );
+            Ok(vec![])
+        }
+    }
+}
+
+fn load_stored_sync_points(
+    conn: &Connection,
+    hymn_id: i64,
+) -> Result<Vec<StoredSyncPoint>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT slide_index, timestamp_ms, instrumental_timestamp_ms
+         FROM audio_sync_points
+         WHERE hymn_id = ?1
+         ORDER BY timestamp_ms, slide_index",
+    )?;
+
+    let points = stmt
+        .query_map(params![hymn_id], |row| {
+            Ok(StoredSyncPoint {
+                slide_index: row.get::<_, i64>("slide_index")? as usize,
+                timestamp_ms: row.get::<_, i64>("timestamp_ms")? as u64,
+                instrumental_timestamp_ms: row
+                    .get::<_, Option<i64>>("instrumental_timestamp_ms")?
+                    .map(|value| value as u64),
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(points)
 }
 
 pub fn get_sync_points(
     conn: &Connection,
     hymn_id: i64,
 ) -> Result<Vec<crate::audio::SyncPoint>, AppError> {
-    log::debug!("[get_sync_points] Fetching sync points for hymn_id={}", hymn_id);
-    
-    // First, try to get sync points from the audio_sync_points table
-    // (Note: manual overrides currently only apply to default audio, not instrumental)
-    let mut stmt = conn.prepare(
-        "SELECT slide_index, timestamp_ms FROM audio_sync_points WHERE hymn_id = ?1 ORDER BY timestamp_ms"
-    )?;
-    let points: Vec<crate::audio::SyncPoint> = stmt
-        .query_map(params![hymn_id], |row| {
-            Ok(crate::audio::SyncPoint {
-                slide_index: row.get::<_, i64>("slide_index")? as usize,
-                timestamp_ms: row.get::<_, i64>("timestamp_ms")? as u64,
-                instrumental_timestamp_ms: None,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // If we found sync points in the table, return them
-    if !points.is_empty() {
-        log::debug!("[get_sync_points] Found {} sync points in audio_sync_points table", points.len());
-        return Ok(points);
-    }
-
-    // Otherwise, fall back to parsing the lyrics_sync JSON field from hymns table
+    log::debug!(
+        "[get_sync_points] Fetching sync points for hymn_id={}",
+        hymn_id
+    );
     let lyrics_sync: Option<String> = conn
         .query_row(
             "SELECT lyrics_sync FROM hymns WHERE id = ?1",
@@ -464,54 +588,52 @@ pub fn get_sync_points(
         )
         .ok()
         .flatten();
-    
-    log::debug!("[get_sync_points] lyrics_sync from DB: {:?}", lyrics_sync.as_ref().map(|s| if s.len() > 200 { format!("{}...", &s[..200]) } else { s.clone() }));
 
-    if let Some(json_str) = lyrics_sync {
-        match serde_json::from_str::<Vec<SyncLyric>>(&json_str) {
-            Ok(sync_lyrics) => {
-                log::debug!("[get_sync_points] Parsed {} sync lyrics", sync_lyrics.len());
-                let mut sync_points: Vec<crate::audio::SyncPoint> = Vec::new();
+    log::debug!(
+        "[get_sync_points] lyrics_sync from DB: {:?}",
+        lyrics_sync.as_ref().map(|s| if s.len() > 200 {
+            format!("{}...", &s[..200])
+        } else {
+            s.clone()
+        })
+    );
 
-                // Add cover slide at time 0
-                sync_points.push(crate::audio::SyncPoint {
-                    slide_index: 0,
-                    timestamp_ms: 0,
-                    instrumental_timestamp_ms: Some(0),
-                });
+    let baseline_points = parse_lyrics_sync_points(lyrics_sync.as_deref())?;
+    let stored_points = load_stored_sync_points(conn, hymn_id)?;
 
-                // Sort by order and convert to SyncPoint
-                let mut sorted_lyrics = sync_lyrics;
-                sorted_lyrics.sort_by_key(|l| l.order);
-
-                // Cover slide is index 0, lyrics start at index 1
-                for (idx, sync_lyric) in sorted_lyrics.iter().enumerate() {
-                    let ms_default = sync_lyric.time.as_ref().and_then(|t| parse_time_to_ms(t));
-                    let ms_inst = sync_lyric.instrumental_time.as_ref().and_then(|t| parse_time_to_ms(t));
-                    
-                    if ms_default.is_some() || ms_inst.is_some() {
-                        sync_points.push(crate::audio::SyncPoint {
-                            // Slide index 0 is cover, so lyrics start at 1
-                            slide_index: idx + 1,
-                            timestamp_ms: ms_default.unwrap_or(0),
-                            instrumental_timestamp_ms: ms_inst,
-                        });
-                    } else {
-                        log::debug!("[get_sync_points] Lyric idx={} has no parsable time", idx);
-                    }
-                }
-
-                log::debug!("[get_sync_points] Returning {} sync points", sync_points.len());
-                return Ok(sync_points);
-            }
-            Err(e) => {
-                log::warn!("[get_sync_points] Failed to parse lyrics_sync JSON: {}", e);
-            }
-        }
+    if stored_points.is_empty() {
+        log::debug!(
+            "[get_sync_points] Returning {} baseline sync points",
+            baseline_points.len()
+        );
+        return Ok(baseline_points);
     }
 
-    log::debug!("[get_sync_points] No sync points found for hymn_id={}", hymn_id);
-    Ok(vec![])
+    let mut baseline_by_slide: HashMap<usize, crate::audio::SyncPoint> = baseline_points
+        .into_iter()
+        .map(|point| (point.slide_index, point))
+        .collect();
+    let mut merged_points = Vec::with_capacity(stored_points.len() + baseline_by_slide.len());
+
+    for stored_point in stored_points {
+        let baseline_point = baseline_by_slide.remove(&stored_point.slide_index);
+        merged_points.push(crate::audio::SyncPoint {
+            slide_index: stored_point.slide_index,
+            timestamp_ms: stored_point.timestamp_ms,
+            instrumental_timestamp_ms: stored_point
+                .instrumental_timestamp_ms
+                .or_else(|| baseline_point.and_then(|point| point.instrumental_timestamp_ms)),
+        });
+    }
+
+    merged_points.extend(baseline_by_slide.into_values());
+    merged_points.sort_by_key(|point| (point.timestamp_ms, point.slide_index));
+
+    log::debug!(
+        "[get_sync_points] Returning {} merged sync points",
+        merged_points.len()
+    );
+    Ok(merged_points)
 }
 
 pub fn save_sync_points(
@@ -529,13 +651,19 @@ pub fn save_sync_points(
     )?;
 
     let mut stmt = tx.prepare(
-        "INSERT INTO audio_sync_points (hymn_id, slide_index, timestamp_ms) VALUES (?1, ?2, ?3)",
+        "INSERT INTO audio_sync_points (
+            hymn_id,
+            slide_index,
+            timestamp_ms,
+            instrumental_timestamp_ms
+         ) VALUES (?1, ?2, ?3, ?4)",
     )?;
     for point in points {
         stmt.execute(params![
             hymn_id,
             point.slide_index as i64,
-            point.timestamp_ms as i64
+            point.timestamp_ms as i64,
+            point.instrumental_timestamp_ms.map(|value| value as i64),
         ])?;
     }
     drop(stmt);
@@ -552,7 +680,10 @@ pub fn save_sync_points(
 /// 2. Legacy file reference via `legacy_file_id` (reconstructed from files table)
 ///
 /// Used during migration when audio files exist in legacy database but not in modern media directory.
-pub fn resolve_hymn_audio_path(conn: &Connection, hymn_id: i64) -> Result<Option<String>, AppError> {
+pub fn resolve_hymn_audio_path(
+    conn: &Connection,
+    hymn_id: i64,
+) -> Result<Option<String>, AppError> {
     // Try modern audio_path first
     let modern_path = conn.query_row(
         "SELECT audio_path FROM hymns WHERE id = ?1",
@@ -586,4 +717,108 @@ pub fn find_hymn_by_api_music_id(conn: &Connection, api_music_id: i64) -> Option
         |row| row.get(0),
     )
     .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn setup_conn() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        crate::db::migrations::run_migrations(&conn).expect("run migrations");
+        conn
+    }
+
+    fn insert_hymn(conn: &Connection, lyrics_sync: Option<&str>) -> i64 {
+        conn.execute(
+            "INSERT INTO hymns (title, category, lyrics_sync) VALUES (?1, 'hymnal', ?2)",
+            params!["Test Hymn", lyrics_sync],
+        )
+        .expect("insert hymn");
+        conn.last_insert_rowid()
+    }
+
+    #[test]
+    fn get_sync_points_merges_override_rows_with_lyrics_sync_instrumental_timestamps() {
+        let conn = setup_conn();
+        let hymn_id = insert_hymn(
+            &conn,
+            Some(
+                r#"[{"lyric":"Verse 1","order":0,"time":"00:00:03","instrumentalTime":"00:00:05"},{"lyric":"Verse 2","order":1,"time":"00:00:07","instrumentalTime":"00:00:09"}]"#,
+            ),
+        );
+
+        conn.execute(
+            "INSERT INTO audio_sync_points (hymn_id, slide_index, timestamp_ms)
+             VALUES (?1, 1, 3500), (?1, 2, 7500)",
+            params![hymn_id],
+        )
+        .expect("insert override rows");
+
+        let points = get_sync_points(&conn, hymn_id).expect("get sync points");
+        assert_eq!(points.len(), 3, "cover slide plus two lyric slides");
+
+        assert_eq!(points[0].slide_index, 0);
+        assert_eq!(points[0].timestamp_ms, 0);
+        assert_eq!(points[0].instrumental_timestamp_ms, Some(0));
+
+        assert_eq!(points[1].slide_index, 1);
+        assert_eq!(points[1].timestamp_ms, 3500);
+        assert_eq!(points[1].instrumental_timestamp_ms, Some(5000));
+
+        assert_eq!(points[2].slide_index, 2);
+        assert_eq!(points[2].timestamp_ms, 7500);
+        assert_eq!(points[2].instrumental_timestamp_ms, Some(9000));
+    }
+
+    #[test]
+    fn save_sync_points_persists_instrumental_timestamp_ms() {
+        let mut conn = setup_conn();
+        let hymn_id = insert_hymn(&conn, None);
+
+        save_sync_points(
+            &mut conn,
+            hymn_id,
+            &[crate::audio::SyncPoint {
+                slide_index: 1,
+                timestamp_ms: 3000,
+                instrumental_timestamp_ms: Some(5000),
+            }],
+        )
+        .expect("save sync points");
+
+        let saved: (i64, Option<i64>) = conn
+            .query_row(
+                "SELECT timestamp_ms, instrumental_timestamp_ms
+                 FROM audio_sync_points
+                 WHERE hymn_id = ?1 AND slide_index = 1",
+                params![hymn_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read saved sync point");
+
+        assert_eq!(saved.0, 3000);
+        assert_eq!(saved.1, Some(5000));
+    }
+
+    #[test]
+    fn get_sync_points_keeps_later_slide_indexes_when_zero_time_gap_entries_exist() {
+        let conn = setup_conn();
+        let hymn_id = insert_hymn(
+            &conn,
+            Some(
+                r#"[{"lyric":"Verse 1","order":1,"time":"00:00:09","instrumentalTime":"00:00:09"},{"lyric":"Verse 2","order":2,"time":"00:00:20","instrumentalTime":"00:00:20"},{"lyric":"","order":3,"time":"00:00:00","instrumentalTime":"00:00:00","showSlide":0},{"lyric":"Verse 3","order":4,"time":"00:00:30","instrumentalTime":"00:00:30"}]"#,
+            ),
+        );
+
+        let points = get_sync_points(&conn, hymn_id).expect("get sync points");
+        assert_eq!(
+            points
+                .iter()
+                .map(|point| (point.slide_index, point.timestamp_ms))
+                .collect::<Vec<_>>(),
+            vec![(0, 0), (1, 9000), (2, 20000), (3, 25000), (4, 30000)]
+        );
+    }
 }

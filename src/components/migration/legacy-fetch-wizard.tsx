@@ -217,6 +217,7 @@ export function LegacyFetchProgressCard({
     done: t("settings.legacyFetch.stepDone"),
   };
   const translatedStep = progress?.step ? (stepLabelMap[progress.step] ?? progress.step) : "...";
+  const groupedErrors = report ? groupLegacyFetchErrors(report.errors) : [];
 
   return (
     <Card>
@@ -336,9 +337,28 @@ export function LegacyFetchProgressCard({
                     <span className="ml-1 font-medium">{(report.durationMs / 1000).toFixed(1)}s</span>
                   </div>
                 </div>
-                {report.errors.length > 0 && (
-                  <div className="mt-2 text-xs text-destructive">
-                    {t("settings.legacyFetch.reportErrors", { count: report.errors.length })}
+                {groupedErrors.length > 0 && (
+                  <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium text-destructive">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span>{t("settings.legacyFetch.reportErrors", { count: report.errors.length })}</span>
+                    </div>
+                    <ul className="max-h-40 space-y-2 overflow-y-auto pr-1 text-xs text-foreground">
+                      {groupedErrors.map((error, index) => (
+                        <li
+                          key={`${error.message}-${index}`}
+                          className="flex items-start gap-2 rounded-md bg-background/70 px-2 py-1.5"
+                        >
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                          <span className="min-w-0 flex-1 break-words">{error.message}</span>
+                          {error.count > 1 && (
+                            <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                              {error.count}x
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </>
@@ -379,4 +399,19 @@ export function LegacyFetchProgressCard({
       </CardContent>
     </Card>
   );
+}
+
+function groupLegacyFetchErrors(errors: Array<{ message: string }>) {
+  const grouped = new Map<string, number>();
+
+  for (const error of errors) {
+    const message = error.message.trim();
+    if (!message || message.startsWith("NO_CONTENT_AVAILABLE:")) {
+      continue;
+    }
+
+    grouped.set(message, (grouped.get(message) ?? 0) + 1);
+  }
+
+  return Array.from(grouped.entries()).map(([message, count]) => ({ message, count }));
 }

@@ -242,7 +242,9 @@ pub fn list_schedule_departments(conn: &Connection) -> Result<Vec<ScheduleDepart
     }
 
     for department in &mut departments {
-        department.members = members_by_department.remove(&department.id).unwrap_or_default();
+        department.members = members_by_department
+            .remove(&department.id)
+            .unwrap_or_default();
     }
 
     Ok(departments)
@@ -254,10 +256,14 @@ pub fn upsert_schedule_department(
 ) -> Result<ScheduleDepartment, AppError> {
     ensure_people_per_day(input.people_per_day)?;
     if input.icon.trim().is_empty() {
-        return Err(AppError::Internal("Schedule department icon is required.".into()));
+        return Err(AppError::Internal(
+            "Schedule department icon is required.".into(),
+        ));
     }
     if input.color.trim().is_empty() {
-        return Err(AppError::Internal("Schedule department color is required.".into()));
+        return Err(AppError::Internal(
+            "Schedule department color is required.".into(),
+        ));
     }
 
     let code = trim_opt(input.code.as_deref());
@@ -275,10 +281,9 @@ pub fn upsert_schedule_department(
                 |row| row.get(0),
             )
             .map_err(|error| match error {
-                rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!(
-                    "Schedule department with id {} not found",
-                    id
-                )),
+                rusqlite::Error::QueryReturnedNoRows => {
+                    AppError::NotFound(format!("Schedule department with id {} not found", id))
+                }
                 other => AppError::Database(other),
             })?;
         let updated = conn.execute(
@@ -599,7 +604,8 @@ pub fn replace_schedule_month_days(
                 continue;
             }
 
-            if let Some(existing_day_department_id) = existing_day_department_ids.get(department_id) {
+            if let Some(existing_day_department_id) = existing_day_department_ids.get(department_id)
+            {
                 tx.execute(
                     "UPDATE schedule_day_departments
                      SET updated_at = datetime('now')
@@ -765,10 +771,7 @@ pub fn generate_schedule_month(
                 .get(&target.department_id)
                 .map(|state| {
                     state.people_per_day == target.people_per_day
-                        && are_consecutive_service_dates(
-                            &state.service_date,
-                            &target.service_date,
-                        )
+                        && are_consecutive_service_dates(&state.service_date, &target.service_date)
                 })
                 .unwrap_or(false);
 
@@ -855,7 +858,9 @@ pub fn get_schedule_month_detail(
 
     let mut day_departments_by_day: HashMap<i64, Vec<ScheduleDayDepartment>> = HashMap::new();
     for mut day_department in day_departments {
-        day_department.department = departments_by_id.get(&day_department.department_id).cloned();
+        day_department.department = departments_by_id
+            .get(&day_department.department_id)
+            .cloned();
         day_departments_by_day
             .entry(day_department.schedule_day_id)
             .or_default()
@@ -1155,7 +1160,10 @@ mod tests {
         replace_department_members(
             conn,
             department.id,
-            &members.iter().map(|member| (*member).to_owned()).collect::<Vec<_>>(),
+            &members
+                .iter()
+                .map(|member| (*member).to_owned())
+                .collect::<Vec<_>>(),
         )
         .expect("replace department members");
 
@@ -1225,7 +1233,10 @@ mod tests {
         assert_eq!(detail.month.year, 2026);
         assert_eq!(detail.month.month, 3);
         assert!(!detail.departments.is_empty(), "seeded departments missing");
-        assert!(detail.days.is_empty(), "new schedule month should not have days");
+        assert!(
+            detail.days.is_empty(),
+            "new schedule month should not have days"
+        );
     }
 
     #[test]
@@ -1270,7 +1281,8 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
-        let department = setup_schedule_department(&conn, "gen_rotation", 1, &["Ana", "Bia", "Carol"]);
+        let department =
+            setup_schedule_department(&conn, "gen_rotation", 1, &["Ana", "Bia", "Carol"]);
         let month = get_or_create_schedule_month(&conn, 2026, 3).expect("create month");
         replace_schedule_month_days(
             &conn,
@@ -1360,7 +1372,8 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
-        let department = setup_schedule_department(&conn, "gen_group_repeat", 1, &["Ana", "Bia", "Carol"]);
+        let department =
+            setup_schedule_department(&conn, "gen_group_repeat", 1, &["Ana", "Bia", "Carol"]);
         upsert_schedule_department(
             &conn,
             &ScheduleDepartmentInput {
@@ -1429,7 +1442,8 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
-        let department = setup_schedule_department(&conn, "gen_group_no_repeat", 1, &["Ana", "Bia", "Carol"]);
+        let department =
+            setup_schedule_department(&conn, "gen_group_no_repeat", 1, &["Ana", "Bia", "Carol"]);
         upsert_schedule_department(
             &conn,
             &ScheduleDepartmentInput {
@@ -1487,7 +1501,8 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
-        let department = setup_schedule_department(&conn, "gen_skip_manual", 1, &["Ana", "Bia", "Carol"]);
+        let department =
+            setup_schedule_department(&conn, "gen_skip_manual", 1, &["Ana", "Bia", "Carol"]);
         let month = get_or_create_schedule_month(&conn, 2026, 3).expect("create month");
         replace_schedule_month_days(
             &conn,
@@ -1657,11 +1672,15 @@ mod tests {
         );
         assert!(detail.days[0].departments[0].manual_override);
         assert_eq!(detail.days[0].label.as_deref(), Some("Morning worship"));
-        assert_eq!(detail.days[0].responsible_department_id, Some(department.id));
+        assert_eq!(
+            detail.days[0].responsible_department_id,
+            Some(department.id)
+        );
     }
 
     #[test]
-    fn reset_schedule_day_department_manual_override_clears_manual_flag_without_removing_assignments() {
+    fn reset_schedule_day_department_manual_override_clears_manual_flag_without_removing_assignments(
+    ) {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
@@ -1756,7 +1775,8 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
-        let department = setup_schedule_department(&conn, "propagate_default", 1, &["Ana", "Bia", "Carol"]);
+        let department =
+            setup_schedule_department(&conn, "propagate_default", 1, &["Ana", "Bia", "Carol"]);
         let month = get_or_create_schedule_month(&conn, 2026, 8).expect("create month");
         replace_schedule_month_days(
             &conn,
@@ -1816,7 +1836,8 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         crate::db::migrations::run_migrations(&conn).expect("run migrations");
 
-        let department = setup_schedule_department(&conn, "generate_default", 1, &["Ana", "Bia", "Carol"]);
+        let department =
+            setup_schedule_department(&conn, "generate_default", 1, &["Ana", "Bia", "Carol"]);
         let month = get_or_create_schedule_month(&conn, 2026, 9).expect("create month");
         replace_schedule_month_days(
             &conn,
@@ -1888,7 +1909,8 @@ mod tests {
 
         reorder_schedule_departments(&conn, &reordered_ids).expect("reorder departments");
 
-        let reordered_departments = list_schedule_departments(&conn).expect("reordered departments");
+        let reordered_departments =
+            list_schedule_departments(&conn).expect("reordered departments");
         assert_eq!(
             reordered_departments
                 .iter()

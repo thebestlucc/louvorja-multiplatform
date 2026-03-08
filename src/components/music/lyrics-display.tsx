@@ -1,39 +1,39 @@
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/utils";
+import type { VisibleHymnLyricItem } from "../../lib/hymn-slides";
 
 interface LyricsDisplayProps {
-  lyrics: string;
-  activeStanza: number;
-  onStanzaClick?: (index: number) => void;
+  items: VisibleHymnLyricItem[];
+  activeSlideIndex: number;
+  onStanzaClick?: (slideIndex: number) => void;
 }
 
-export function LyricsDisplay({ lyrics, activeStanza, onStanzaClick }: LyricsDisplayProps) {
-  const stanzas = lyrics.split("\n\n").filter((s) => s.trim().length > 0);
+export function LyricsDisplay({ items, activeSlideIndex, onStanzaClick }: LyricsDisplayProps) {
   const activeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [activeStanza]);
+  }, [activeSlideIndex]);
 
-  if (stanzas.length === 0) {
+  if (items.length === 0) {
     return <p className="text-sm text-muted-foreground">No lyrics available</p>;
   }
 
   return (
     <div className="space-y-3">
-      {stanzas.map((stanza, i) => (
+      {items.map((item) => (
         <div
-          key={i}
-          ref={i === activeStanza ? activeRef : undefined}
+          key={item.slideIndex}
+          ref={item.slideIndex === activeSlideIndex ? activeRef : undefined}
           className={cn(
             "cursor-pointer rounded-md border p-3 text-sm transition-colors",
-            i === activeStanza
+            item.slideIndex === activeSlideIndex
               ? "border-primary bg-primary/10 text-foreground"
               : "border-transparent text-muted-foreground hover:bg-surface-hover",
           )}
-          onClick={() => onStanzaClick?.(i)}
+          onClick={() => onStanzaClick?.(item.slideIndex)}
         >
-          <p className="whitespace-pre-line">{stanza.trim()}</p>
+          <p className="whitespace-pre-line">{item.text}</p>
         </div>
       ))}
     </div>

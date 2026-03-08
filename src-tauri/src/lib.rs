@@ -6,6 +6,7 @@ mod display;
 mod error;
 mod legacy_fetch;
 mod migration;
+pub mod presentation_bridge;
 mod projection;
 mod state;
 mod streaming;
@@ -19,15 +20,16 @@ use tauri::{Emitter, Manager};
 fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::utils::config::BackgroundThrottlingPolicy;
 
-    let window = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-        .title("LouvorJA Multiplatform")
-        .inner_size(1200.0, 800.0)
-        .min_inner_size(1000.0, 700.0)
-        .background_throttling(BackgroundThrottlingPolicy::Disabled)
-        .resizable(true)
-        .visible(false) // Start invisible, show after setup
-        .build()
-        .map_err(|e| format!("Failed to create main window: {e}"))?;
+    let window =
+        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+            .title("LouvorJA Multiplatform")
+            .inner_size(1200.0, 800.0)
+            .min_inner_size(1000.0, 700.0)
+            .background_throttling(BackgroundThrottlingPolicy::Disabled)
+            .resizable(true)
+            .visible(false) // Start invisible, show after setup
+            .build()
+            .map_err(|e| format!("Failed to create main window: {e}"))?;
 
     // On macOS, we might want to hide the window title bar for a more modern look
     #[cfg(target_os = "macos")]
@@ -35,15 +37,17 @@ fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
         // let _ = window.set_title_bar_style(tauri::TitleBarStyle::Overlay);
     }
 
-    window.show().map_err(|e| format!("Failed to show main window: {e}"))?;
+    window
+        .show()
+        .map_err(|e| format!("Failed to show main window: {e}"))?;
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Specta builder
-    let specta_builder = tauri_specta::Builder::<tauri::Wry>::new()
-        .commands(tauri_specta::collect_commands![
+    let specta_builder =
+        tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
             // Music
             commands::music::get_hymn,
             commands::music::search_hymns,
@@ -117,9 +121,12 @@ pub fn run() {
             commands::schedules::reset_schedule_day_department_manual_override,
             // Audio
             commands::audio::audio_play,
+            commands::audio::audio_play_variants,
             commands::audio::audio_play_alert,
             commands::audio::audio_pause,
             commands::audio::audio_resume,
+            commands::audio::audio_set_output_muted,
+            commands::audio::audio_switch_variant,
             commands::audio::audio_stop,
             commands::audio::audio_seek,
             commands::audio::audio_set_volume,
@@ -154,6 +161,13 @@ pub fn run() {
             commands::settings::get_all_settings,
             commands::settings::clear_database,
             commands::settings::update_global_shortcut,
+            // Presentation Bridge
+            commands::presentation_bridge::bridge_status,
+            commands::presentation_bridge::bridge_start,
+            commands::presentation_bridge::bridge_stop,
+            commands::presentation_bridge::bridge_apply_config,
+            commands::presentation_bridge::bridge_register_autostart,
+            commands::presentation_bridge::bridge_unregister_autostart,
             // Timer
             commands::timer::start_timer,
             commands::timer::pause_timer,
@@ -212,7 +226,9 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
-    { builder = builder.plugin(tauri_nspanel::init()); }
+    {
+        builder = builder.plugin(tauri_nspanel::init());
+    }
     builder
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -226,6 +242,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(specta_builder.invoke_handler())
@@ -327,9 +344,11 @@ pub fn run() {
                         .unwrap_or_else(|| default_str.to_string());
 
                     if !combo_str.is_empty() {
-                        if let Ok(normalized) =
-                            commands::settings::register_global_shortcut(action, &combo_str, app.handle())
-                        {
+                        if let Ok(normalized) = commands::settings::register_global_shortcut(
+                            action,
+                            &combo_str,
+                            app.handle(),
+                        ) {
                             shortcuts_map.insert(action.to_string(), normalized);
                         }
                     }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { PlayingQueueView } from "../../src/components/operator/playing-queue";
+import { PlayingQueueView } from "../../src/components/playing-now/playing-queue";
 
 // Mock helper to find text in React tree
 function getText(node: ReactNode): string {

@@ -10,18 +10,18 @@ Enhance the `useQueueStore` to support active playing states and ensure robust q
 - [x] `clearQueue` resets state to initial values.
 
 ## Task: T-002 - Create Playing Queue Component
-Create a UI component for the Operator screen that lists the music in the queue.
+Create a UI component for the Playing now screen that lists the music in the queue.
 
 ### Acceptance Criteria
 - [x] Renders list of items with titles and types.
 - [x] Highlights the active item.
 - [x] Integration with `setCurrentIndex`.
 
-## Task: T-003 - Integrate with Operator Screen
-Add the `PlayingQueue` component to the Operator layout.
+## Task: T-003 - Integrate with Playing now Screen
+Add the `PlayingQueue` component to the Playing now layout.
 
 ### Acceptance Criteria
-- [x] `PlayingQueue` is visible on `/operator`.
+- [x] `PlayingQueue` is visible on `/playing-now`.
 - [x] Layout remains responsive.
 
 ## Task: T-004 - Update Audio Store for Auto-Next

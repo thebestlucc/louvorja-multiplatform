@@ -20,7 +20,7 @@
 
 ### What is LouvorJA?
 
-LouvorJA is a desktop application used by churches for worship service management. It handles hymn/lyrics display, Bible verse projection, presentation authoring, audio playback with slide synchronization, multi-monitor output (operator/projector/return monitor), worship service scheduling, and live HTTP streaming for remote viewers.
+LouvorJA is a desktop application used by churches for worship service management. It handles hymn/lyrics display, Bible verse projection, presentation authoring, audio playback with slide synchronization, multi-monitor output (Playing now/projector/return monitor), worship service scheduling, and live HTTP streaming for remote viewers.
 
 ### Why Migrate?
 
@@ -121,12 +121,12 @@ The existing Tauri project is a minimal scaffolding with:
 **Routing** — TanStack Router provides type-safe routing with file-based route generation. Desktop apps have complex nested layouts (sidebar + content + slide preview) that benefit from TanStack Router's layout route system.
 
 **State Management (two layers):**
-- **Zustand** for client-only UI state: current slide index, view mode, panel states, theme, operator preferences. Small footprint, no boilerplate, works well with React 19.
+- **Zustand** for client-only UI state: current slide index, view mode, panel states, theme, Playing now preferences. Small footprint, no boilerplate, works well with React 19.
 - **TanStack Query** for all Rust backend data access. Every Tauri `invoke()` call is wrapped in a TanStack Query `queryFn`, providing caching, invalidation, optimistic updates, and loading/error states. This replaces the Delphi TDataSet/TClientDataSet pattern.
 
 **Component Library** — Radix UI primitives (unstyled, accessible) styled with Tailwind CSS v4. The Delphi Ribbon UI is reimagined as a sidebar navigation + command palette (Cmd+K).
 
-**Slide Rendering** — DOM-based rendering using React components and CSS transforms/transitions. This allows the same rendering code to work across operator view, projector window, return monitor, and HTTP streaming output.
+**Slide Rendering** — DOM-based rendering using React components and CSS transforms/transitions. This allows the same rendering code to work across the Playing now view, projector window, return monitor, and HTTP streaming output.
 
 ### 3.3 Backend Architecture
 
@@ -175,10 +175,10 @@ src-tauri/src/
 
 ### 3.4 Inter-Window Communication
 
-The main window (operator) controls everything. Projector and return windows are separate Tauri webview windows. Communication flows through Rust:
+The main window (Playing now) controls everything. Projector and return windows are separate Tauri webview windows. Communication flows through Rust:
 
 ```
-Operator Window (React)
+Playing now Window (React)
    │
    │ invoke("set_current_slide", { slideData })
    ▼
@@ -211,7 +211,7 @@ Complete mapping of the original Delphi application (33 forms + 1 data module) t
 | Audio-slide synchronization (BASS byte-position) | `audio/sync.rs` with millisecond-precision timestamps |
 | Record/edit slide timing during playback | `audio-sync-editor.tsx` — tap to set timestamps while audio plays |
 | Slide types: cover, lyrics, pause | Slide content JSON with `type` field |
-| Operator controls for slide progression | Keyboard navigation (arrows, space, PgUp/PgDn) + UI controls |
+| Playing now controls for slide progression | Keyboard navigation (arrows, space, PgUp/PgDn) + UI controls |
 | Performer feedback screen (current/next lyrics) | Return monitor webview window at `/return` route |
 | TXT and XML slide format import | Rust import commands for legacy formats |
 
@@ -241,7 +241,7 @@ Complete mapping of the original Delphi application (33 forms + 1 data module) t
 | Automatic monitor positioning | `WebviewWindow::builder()` with position/size from monitor info |
 | Fade-out animations on closure | CSS transitions in webview windows |
 | Configurable monitor assignments | `monitor_configs` table + settings UI |
-| 3 window types: operator, projector, return | 3 routes: `/` (operator), `/projector`, `/return` |
+| 3 window types: Playing now, projector, return | 3 routes: `/playing-now` (Playing now), `/projector`, `/return` |
 
 **Monitor placement workaround** (Tauri limitation):
 1. Detect monitors via `available_monitors()`
@@ -806,7 +806,7 @@ search_bible(query: String, version_id: i64) -> Vec<SearchResult>
 
 ### Phase 6 — Multi-Monitor Display System (Weeks 16–18)
 
-**Goal:** Full multi-monitor support with operator, projector, and return monitor views.
+**Goal:** Full multi-monitor support with Playing now, projector, and return monitor views.
 
 **Deliverables:**
 - Monitor detection and configuration UI — detect all connected monitors, assign roles

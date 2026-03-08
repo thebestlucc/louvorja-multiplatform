@@ -8,7 +8,7 @@ Plugins evaluated for future refactoring or new features. Each entry notes the r
 
 ### `tauri-plugin-window-state`
 **Purpose:** Automatically saves and restores window position/size across sessions.
-**Relevance:** LouvorJA opens multiple windows (main, projector, return, operator). Currently no window state is persisted — users must resize/reposition on every launch.
+**Relevance:** LouvorJA opens multiple windows (main/Playing now, projector, return). Currently no window state is persisted — users must resize/reposition on every launch.
 **Suggested use:** Persist main window geometry. Projector/return windows intentionally go fullscreen so they may be excluded via `StateFlags`.
 **Install:** `pnpm tauri add window-state`
 
@@ -93,7 +93,7 @@ Plugins evaluated for future refactoring or new features. Each entry notes the r
 
 ### `tauri-plugin-positioner`
 **Purpose:** Place windows at predefined screen positions (e.g., `TopRight`, `TrayLeft`).
-**Relevance:** Could help with operator screen or tray popup positioning. Currently projector/return windows are manually positioned based on monitor bounds via `open_fullscreen_window()`.
+**Relevance:** Could help with the Playing now screen or tray popup positioning. Currently projector/return windows are manually positioned based on monitor bounds via `open_fullscreen_window()`.
 **Trade-off:** LouvorJA's fullscreen logic is custom and intentional. This plugin is more useful for small popup windows (e.g., a quick lyrics overlay widget).
 **Install:** `pnpm tauri add positioner`
 

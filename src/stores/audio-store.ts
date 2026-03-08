@@ -3,10 +3,25 @@ import { listen } from "@tauri-apps/api/event";
 import { catcher, catcherSync } from "../lib/catcher";
 import type { AudioStatusPayload, SyncPoint } from "../lib/bindings";
 import type { PlaybackStatus, PlaybackMode } from "../types/audio";
+import {
+  findSlideAtPosition,
+  resolvePlaybackModeSwitchPosition,
+  resolvePlaybackSeekLockAction,
+} from "../lib/audio-sync";
 import { usePresentationStore } from "./presentation-store";
 import { useDisplayStore } from "./display-store";
 import { projectSlideIndex } from "../lib/projection-playback";
-import { audioPlay, audioPause, audioResume, audioStop, audioSeek, audioSetVolume } from "../lib/tauri";
+import {
+  audioPlay,
+  audioPlayVariants,
+  audioPause,
+  audioResume,
+  audioSetOutputMuted,
+  audioStop,
+  audioSeek,
+  audioSetVolume,
+  audioSwitchVariant,
+} from "../lib/tauri";
 
 interface AudioStoreState {
   status: PlaybackStatus;
@@ -14,6 +29,7 @@ interface AudioStoreState {
   positionMs: number;
   durationMs: number;
   volume: number;
+  outputMuted: boolean;
   playbackMode: PlaybackMode;
   syncPoints: SyncPoint[];
   statusSubscription: (() => void) | null;
@@ -29,6 +45,7 @@ interface AudioStoreState {
   setPosition: (ms: number) => void;
   setDuration: (ms: number) => void;
   setVolume: (volume: number) => void;
+  setOutputMuted: (muted: boolean) => Promise<void>;
   setPlaybackMode: (mode: PlaybackMode) => void;
   setSyncPoints: (points: SyncPoint[]) => void;
   setOnFinished: (callback: (() => void) | null) => void;
@@ -39,32 +56,72 @@ interface AudioStoreState {
   reset: () => void;
 
   // Centralized Audio Actions
-  play: (filePath: string, positionMs?: number) => Promise<void>;
+  play: (filePath: string, positionMs?: number, preserveLivePosition?: boolean) => Promise<void>;
+  playVariants: (
+    sungFilePath: string,
+    karaokeFilePath: string,
+    activeMode: "sung" | "karaoke",
+    positionMs?: number,
+  ) => Promise<void>;
+  switchVariant: (
+    activeMode: "sung" | "karaoke",
+    activeFilePath: string,
+  ) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   stop: () => Promise<void>;
   seek: (ms: number) => Promise<void>;
 }
 
-function findSlideAtPosition(syncPoints: SyncPoint[], positionMs: number): number {
-  let slide = -1;
-  for (const point of syncPoints) {
-    if (positionMs >= point.timestampMs) {
-      slide = point.slideIndex;
-    } else {
-      break;
-    }
-  }
-  // Before the first sync point → title/cover slide (index 0)
-  return slide >= 0 ? slide : 0;
-}
+export const useAudioStore = create<AudioStoreState>((set, get) => {
+  let projectedSlideInFlight = false;
+  let queuedProjectionSlide: number | null = null;
 
-export const useAudioStore = create<AudioStoreState>((set, get) => ({
+  const queueProjectedSlide = (slideIndex: number) => {
+    if (slideIndex < 0) {
+      return;
+    }
+
+    queuedProjectionSlide = slideIndex;
+    if (projectedSlideInFlight) {
+      return;
+    }
+
+    projectedSlideInFlight = true;
+    void (async () => {
+      while (queuedProjectionSlide != null) {
+        const nextSlide = queuedProjectionSlide;
+        queuedProjectionSlide = null;
+        await catcher(projectSlideIndex(nextSlide), { notify: false });
+      }
+      projectedSlideInFlight = false;
+    })();
+  };
+
+  const syncPlaybackSlide = (slideIndex: number) => {
+    const state = get();
+    if (slideIndex < 0 || slideIndex === state.lastSyncSlide) {
+      return;
+    }
+
+    set({ lastSyncSlide: slideIndex });
+    usePresentationStore.getState().setActiveSlideIndex(slideIndex);
+
+    const displayState = useDisplayStore.getState();
+    if (
+      displayState.currentProjectionType !== null
+    ) {
+      queueProjectedSlide(slideIndex);
+    }
+  };
+
+  return ({
   status: "idle",
   currentFile: null,
   positionMs: 0,
   durationMs: 0,
   volume: 1,
+  outputMuted: false,
   playbackMode: "sung",
   syncPoints: [],
   statusSubscription: null,
@@ -80,27 +137,18 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     await audioSetVolume(volume);
     set({ volume });
   },
-  setPlaybackMode: (mode) => set({ playbackMode: mode }),
-  setSyncPoints: (points) => {
-    console.log("[audio-store] setSyncPoints called with", points.length, "points:", points);
-    const sorted = [...points].sort((a, b) => a.timestampMs - b.timestampMs);
-    set({ syncPoints: sorted, lastSyncSlide: -1 });
+  setOutputMuted: async (muted) => {
+    await audioSetOutputMuted(muted);
+    set({ outputMuted: muted });
   },
+  setPlaybackMode: (mode) => set({ playbackMode: mode }),
+  setSyncPoints: (points) => set({ syncPoints: [...points], lastSyncSlide: -1 }),
   setOnFinished: (callback) => set({ onFinished: callback }),
   syncToPosition: (positionMs: number) => {
     const state = get();
     if (state.syncPoints.length === 0) return;
-    const slideIndex = findSlideAtPosition(state.syncPoints, positionMs);
-    if (slideIndex >= 0 && slideIndex !== state.lastSyncSlide) {
-      set({ lastSyncSlide: slideIndex });
-      usePresentationStore.getState().setActiveSlideIndex(slideIndex);
-      // Only project if projection is explicitly active
-      const displayState = useDisplayStore.getState();
-      if (displayState.currentProjectionType !== null &&
-          (displayState.projectorWindowOpen || displayState.returnWindowOpen)) {
-        void projectSlideIndex(slideIndex);
-      }
-    }
+    const slideIndex = findSlideAtPosition(state.syncPoints, positionMs, state.playbackMode);
+    syncPlaybackSlide(slideIndex);
   },
   startStatusSubscription: () => {
     const state = get();
@@ -109,36 +157,6 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     }
 
     const subscriptionToken = state.subscriptionToken + 1;
-
-    let projectedSlideInFlight = false;
-    let queuedSlide: number | null = null;
-
-    const queueSlideProjection = (slideIndex: number) => {
-      const state = get();
-      console.log("[audio-store] queueSlideProjection called with slideIndex=", slideIndex, "lastSyncSlide=", state.lastSyncSlide);
-      if (slideIndex < 0 || slideIndex === state.lastSyncSlide) {
-        return;
-      }
-
-      set({ lastSyncSlide: slideIndex });
-      queuedSlide = slideIndex;
-
-      if (projectedSlideInFlight) {
-        return;
-      }
-
-      projectedSlideInFlight = true;
-      void (async () => {
-        while (queuedSlide != null) {
-          const nextSlide = queuedSlide;
-          queuedSlide = null;
-          console.log("[audio-store] Syncing slide:", nextSlide);
-          usePresentationStore.getState().setActiveSlideIndex(nextSlide);
-          await catcher(projectSlideIndex(nextSlide), { notify: false });
-        }
-        projectedSlideInFlight = false;
-      })();
-    };
 
     const applyPayload = (payload: AudioStatusPayload) => {
       if (get().subscriptionToken !== subscriptionToken) {
@@ -150,16 +168,12 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       // Handle seek lock: ignore stale payloads from before a recent seek
       let seekLock = currentState.seekLock;
       if (seekLock) {
-        if (Date.now() >= seekLock.expiresAtMs) {
+        const seekLockAction = resolvePlaybackSeekLockAction(payload.positionMs, seekLock);
+        if (seekLockAction === "expired" || seekLockAction === "release") {
           seekLock = null;
           set({ seekLock: null });
-        } else if (Math.abs(payload.positionMs - seekLock.targetMs) > 400) {
-          // Payload is likely stale (prior to the seek), ignore it
+        } else if (seekLockAction === "ignore") {
           return;
-        } else {
-          // Payload has caught up to the seek
-          seekLock = null;
-          set({ seekLock: null });
         }
       }
 
@@ -178,20 +192,18 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       });
 
       if ((payload.isPlaying || payload.isPaused) && currentState.syncPoints.length > 0) {
-        const targetSlide = findSlideAtPosition(currentState.syncPoints, payload.positionMs);
-        console.log("[audio-store] Sync check: positionMs=", payload.positionMs, "targetSlide=", targetSlide, "syncPoints=", currentState.syncPoints.length);
-        if (targetSlide >= 0) {
-          queueSlideProjection(targetSlide);
-        }
-      } else if (payload.isPlaying || payload.isPaused) {
-        console.log("[audio-store] No sync points available, syncPoints.length=", currentState.syncPoints.length);
+        const targetSlide = findSlideAtPosition(
+          currentState.syncPoints,
+          payload.positionMs,
+          currentState.playbackMode,
+        );
+        syncPlaybackSlide(targetSlide);
       }
 
       if (!payload.isPlaying && !payload.isPaused) {
         const finishedCallback = get().onFinished;
         get().stopStatusSubscription();
         if (finishedCallback) {
-          console.log("[audio-store] Playback finished, calling onFinished callback");
           finishedCallback();
         }
       }
@@ -218,6 +230,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     if (statusSubscription) {
       catcherSync(statusSubscription, { notify: false });
     }
+    queuedProjectionSlide = null;
     set({
       statusSubscription: null,
       subscriptionToken: subscriptionToken + 1,
@@ -230,12 +243,14 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     if (statusSubscription) {
       catcherSync(statusSubscription, { notify: false });
     }
+    queuedProjectionSlide = null;
     set({
       status: "idle",
       currentFile: null,
       positionMs: 0,
       durationMs: 0,
       volume: 1,
+      outputMuted: false,
       playbackMode: "sung",
       syncPoints: [],
       statusSubscription: null,
@@ -245,9 +260,41 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     });
   },
 
-  play: async (filePath: string, positionMs?: number) => {
+  play: async (filePath: string, positionMs?: number, preserveLivePosition?: boolean) => {
+    const targetMs = positionMs != null ? resolvePlaybackModeSwitchPosition(positionMs) : undefined;
+    if (targetMs != null && targetMs > 0) {
+      set({
+        positionMs: targetMs,
+        currentFile: filePath,
+        seekLock: { targetMs, expiresAtMs: Date.now() + 1000 },
+      });
+    }
     get().startStatusSubscription();
-    await audioPlay(filePath, positionMs);
+    await audioPlay(filePath, targetMs, preserveLivePosition ?? false);
+  },
+  playVariants: async (
+    sungFilePath: string,
+    karaokeFilePath: string,
+    activeMode: "sung" | "karaoke",
+    positionMs?: number,
+  ) => {
+    const targetMs = positionMs != null ? resolvePlaybackModeSwitchPosition(positionMs) : undefined;
+    const activeFilePath = activeMode === "karaoke" ? karaokeFilePath : sungFilePath;
+    if (targetMs != null && targetMs > 0) {
+      set({
+        positionMs: targetMs,
+        currentFile: activeFilePath,
+        seekLock: { targetMs, expiresAtMs: Date.now() + 1000 },
+      });
+    } else {
+      set({ currentFile: activeFilePath });
+    }
+    get().startStatusSubscription();
+    await audioPlayVariants(sungFilePath, karaokeFilePath, activeMode, targetMs);
+  },
+  switchVariant: async (activeMode: "sung" | "karaoke", activeFilePath: string) => {
+    set({ currentFile: activeFilePath });
+    await audioSwitchVariant(activeMode);
   },
   pause: async () => {
     await audioPause();
@@ -271,4 +318,5 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     get().syncToPosition(ms);
     await audioSeek(ms);
   }
-}));
+  });
+});

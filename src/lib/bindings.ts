@@ -532,9 +532,17 @@ async resetScheduleDayDepartmentManualOverride(scheduleDayDepartmentId: number) 
     else return { status: "error", error: e  as any };
 }
 },
-async audioPlay(filePath: string, positionMs: number | null) : Promise<Result<null, AppErrorResponse>> {
+async audioPlay(filePath: string, positionMs: number | null, preserveLivePosition: boolean | null) : Promise<Result<null, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("audio_play", { filePath, positionMs }) };
+    return { status: "ok", data: await TAURI_INVOKE("audio_play", { filePath, positionMs, preserveLivePosition }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async audioPlayVariants(sungFilePath: string, karaokeFilePath: string, activeMode: string, positionMs: number | null) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("audio_play_variants", { sungFilePath, karaokeFilePath, activeMode, positionMs }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -559,6 +567,22 @@ async audioPause() : Promise<Result<null, AppErrorResponse>> {
 async audioResume() : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("audio_resume") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async audioSetOutputMuted(muted: boolean) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("audio_set_output_muted", { muted }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async audioSwitchVariant(activeMode: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("audio_switch_variant", { activeMode }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -807,6 +831,54 @@ async clearDatabase() : Promise<Result<ClearDatabaseResult, AppErrorResponse>> {
 async updateGlobalShortcut(action: string, shortcutStr: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_global_shortcut", { action, shortcutStr }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bridgeStatus() : Promise<Result<BridgeManagerStatus, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bridge_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bridgeStart() : Promise<Result<BridgeManagerStatus, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bridge_start") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bridgeStop() : Promise<Result<BridgeManagerStatus, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bridge_stop") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bridgeApplyConfig(config: BridgeConfig) : Promise<Result<BridgeApplyConfigResult, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bridge_apply_config", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bridgeRegisterAutostart() : Promise<Result<boolean, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bridge_register_autostart") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bridgeUnregisterAutostart() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bridge_unregister_autostart") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1183,6 +1255,14 @@ export type AudioStatusPayload = { positionMs: number; durationMs: number; isPla
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string }
 export type BibleVersion = { id: number; name: string; abbreviation: string; language: string; filePath: string | null }
 export type Book = { name: string; chapterCount: number }
+export type BridgeApplyConfigResult = { config: BridgeConfig; status: BridgeStatus | null; running: boolean; decision: BridgeConfigApplyDecision }
+export type BridgeConfig = { enabled: boolean; startWithOs: boolean; targetApp: BridgeTargetApp; shortcutNext: string; shortcutPrev: string }
+export type BridgeConfigApplyDecision = "apply-live" | "restart-required"
+export type BridgeManagerStatus = { config: BridgeConfig; status: BridgeStatus | null; running: boolean }
+export type BridgeMode = "managed" | "independent"
+export type BridgeStartupSource = "spawned-by-app" | "started-by-os" | "started-manually"
+export type BridgeStatus = { version: string; pid: number; sessionId: string; mode: BridgeMode; startupSource: BridgeStartupSource; targetApp: BridgeTargetApp; shortcutsRegistered: boolean; adapterHealthy: boolean }
+export type BridgeTargetApp = "power-point-windows"
 export type ClearDatabaseResult = { success: boolean }
 export type Collection = { id: number; name: string; description: string | null; year: number | null; coverPath: string | null; autoCoverPath: string | null; songCount: number; sourceType: string; apiAlbumId: number; createdAt: string; updatedAt: string }
 export type CollectionSearchResult = { kind: string; collectionId: number; songId: number; collectionName: string; title: string; coverPath: string | null; snippet: string }
@@ -1263,7 +1343,7 @@ export type ServiceWithItems = { service: Service; items: ServiceItem[] }
 export type Setting = { key: string; value: string }
 export type Slide = { id: number; presentationId: number; slideIndex: number; slideType: string; content: string; notes: string | null; transition: string | null }
 export type SlideContent = { slideType: string; text: string | null; title: string | null; subtitle: string | null; label: string | null; videoPath: string | null; backgroundImage: string | null; backgroundColor: string | null; audioPath: string | null; autoPlay: boolean | null; loop: boolean | null; muted: boolean | null; mode: string | null; textColor: string | null; textSize: number | null }
-export type SlideContext = { next: SlideContent | null; index: number; total: number; title: string }
+export type SlideContext = { next: SlideContent | null; index: number; total: number; title: string; currentSlideStartMs: number | null; nextSlideStartMs: number | null; audioDurationMs: number | null }
 export type StreamingInfo = { isRunning: boolean; ip: string | null; port: number; urls: StreamingUrls | null; connections: number; broadcastEnabled: boolean }
 export type StreamingUrls = { music: string; bible: string; returnMonitor: string }
 export type SyncPoint = { slideIndex: number; timestampMs: number; instrumentalTimestampMs?: number | null }

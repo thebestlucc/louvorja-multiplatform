@@ -340,10 +340,16 @@ pub fn import_bible_domain(
         };
         let mut rows = match select_versions.query([]) {
             Ok(r) => r,
-            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+            Err(rusqlite::Error::SqliteFailure(ref err, _))
+                if err.code == rusqlite::ErrorCode::DatabaseCorrupt =>
+            {
                 eprintln!("[bible_importer] SQLITE_CORRUPT executing bible_version SELECT; committing empty result");
                 tx.commit()?;
-                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported: 0, skipped: 0 });
+                return Ok(MigrationDomainReport {
+                    domain: DOMAIN_BIBLE.to_string(),
+                    imported: 0,
+                    skipped: 0,
+                });
             }
             Err(e) => return Err(AppError::Database(e)),
         };
@@ -362,7 +368,9 @@ pub fn import_bible_domain(
                 Err(rusqlite::Error::SqliteFailure(ref err, _))
                     if err.code == rusqlite::ErrorCode::DatabaseCorrupt =>
                 {
-                    eprintln!("[bible_importer] SQLITE_CORRUPT reading source bible_version; stopping");
+                    eprintln!(
+                        "[bible_importer] SQLITE_CORRUPT reading source bible_version; stopping"
+                    );
                     break;
                 }
                 Err(e) => return Err(AppError::Database(e)),
@@ -401,19 +409,31 @@ pub fn import_bible_domain(
         };
         let mut select_verses = match source.prepare(verse_sql) {
             Ok(stmt) => stmt,
-            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+            Err(rusqlite::Error::SqliteFailure(ref err, _))
+                if err.code == rusqlite::ErrorCode::DatabaseCorrupt =>
+            {
                 eprintln!("[bible_importer] SQLITE_CORRUPT preparing bible_verse SELECT; committing versions only");
                 tx.commit()?;
-                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported, skipped });
+                return Ok(MigrationDomainReport {
+                    domain: DOMAIN_BIBLE.to_string(),
+                    imported,
+                    skipped,
+                });
             }
             Err(e) => return Err(AppError::Database(e)),
         };
         let mut rows = match select_verses.query([]) {
             Ok(r) => r,
-            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == rusqlite::ErrorCode::DatabaseCorrupt => {
+            Err(rusqlite::Error::SqliteFailure(ref err, _))
+                if err.code == rusqlite::ErrorCode::DatabaseCorrupt =>
+            {
                 eprintln!("[bible_importer] SQLITE_CORRUPT executing bible_verse SELECT; committing versions only");
                 tx.commit()?;
-                return Ok(MigrationDomainReport { domain: DOMAIN_BIBLE.to_string(), imported, skipped });
+                return Ok(MigrationDomainReport {
+                    domain: DOMAIN_BIBLE.to_string(),
+                    imported,
+                    skipped,
+                });
             }
             Err(e) => return Err(AppError::Database(e)),
         };

@@ -25,6 +25,7 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings, clearDatabase,
+  getBridgeStatus, startBridge, stopBridge, applyBridgeConfig, registerBridgeAutostart, unregisterBridgeAutostart,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
   restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
@@ -42,6 +43,7 @@ import type {
   ScheduleDayInput,
   ScheduleDepartmentInput,
   ScheduleGenerationRequest,
+  BridgeConfig,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
 
@@ -89,6 +91,9 @@ export const queryKeys = {
   settings: {
     all: ["settings"] as const,
     detail: (key: string) => ["settings", key] as const,
+  },
+  presentationBridge: {
+    status: ["presentationBridge", "status"] as const,
   },
   legacyFetch: {
     progress: (runId: string) => ["legacyFetch", "progress", runId] as const,
@@ -220,11 +225,7 @@ export function useProjectSlide() {
 export function useSyncPoints(hymnId: number) {
   return useQuery({
     queryKey: queryKeys.syncPoints.byHymn(hymnId),
-    queryFn: async () => {
-      const points = await getSyncPoints(hymnId);
-      console.log("[queries] getSyncPoints for hymnId", hymnId, "returned", points.length, "points:", points);
-      return points;
-    },
+    queryFn: () => getSyncPoints(hymnId),
     enabled: hymnId > 0,
   });
 }
@@ -862,6 +863,56 @@ export function useClearDatabase() {
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
       queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
     },
+  });
+}
+
+export function usePresentationBridgeStatus(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.presentationBridge.status,
+    queryFn: () => getBridgeStatus(),
+    enabled: options?.enabled,
+  });
+}
+
+export function useStartPresentationBridge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => startBridge(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.presentationBridge.status });
+    },
+  });
+}
+
+export function useStopPresentationBridge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => stopBridge(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.presentationBridge.status });
+    },
+  });
+}
+
+export function useApplyPresentationBridgeConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (config: BridgeConfig) => applyBridgeConfig(config),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.presentationBridge.status });
+    },
+  });
+}
+
+export function useRegisterPresentationBridgeAutostart() {
+  return useMutation({
+    mutationFn: () => registerBridgeAutostart(),
+  });
+}
+
+export function useUnregisterPresentationBridgeAutostart() {
+  return useMutation({
+    mutationFn: () => unregisterBridgeAutostart(),
   });
 }
 

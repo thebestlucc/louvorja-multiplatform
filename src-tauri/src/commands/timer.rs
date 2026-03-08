@@ -94,6 +94,9 @@ fn project_utility_cover(
         index: 0,
         total: 1,
         title: context_title,
+        current_slide_start_ms: None,
+        next_slide_start_ms: None,
+        audio_duration_ms: None,
     };
 
     crate::commands::display::set_current_slide(

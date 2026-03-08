@@ -1,6 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Play, Pause, Square, Volume2, VolumeX } from "lucide-react";
 import { useAudio } from "../../hooks/use-audio";
+import {
+  resolvePlaybackTargetFile,
+  resolvePlaybackVariantPaths,
+  resolveReplayStartPosition,
+} from "../../lib/audio-sync";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
 import type { PlaybackMode } from "../../types/audio";
@@ -26,6 +31,8 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
   const { t } = useTranslation();
   const {
     play,
+    playVariants,
+    switchVariant,
     stop,
     resume,
     pause,
@@ -40,10 +47,8 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
     setPlaybackMode,
   } = useAudio();
 
-  // Determine which audio file this component should play based on mode
-  const targetFile = playbackMode === "karaoke" 
-    ? (playbackPath ?? filePath) 
-    : filePath;
+  const variantPaths = resolvePlaybackVariantPaths(filePath, playbackPath);
+  const targetFile = resolvePlaybackTargetFile(playbackMode, filePath, playbackPath);
 
   // Check if THIS hymn's audio is currently active (playing or paused)
   const isThisHymnActive = currentFile === filePath || currentFile === playbackPath;
@@ -66,7 +71,21 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
         await stop();
       }
       await onBeforePlay?.();
-      await play(targetFile);
+      const startMs = isThisHymnActive
+        ? resolveReplayStartPosition(positionMs, durationMs)
+        : 0;
+      if (variantPaths) {
+        await playVariants(
+          variantPaths.sungPath,
+          variantPaths.karaokePath,
+          playbackMode === "karaoke" ? "karaoke" : "sung",
+          startMs,
+        );
+        return;
+      }
+      if (targetFile) {
+        await play(targetFile, startMs);
+      }
     }
   };
 
@@ -74,9 +93,25 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
     await stop();
   };
 
-  const handleSeek = (value: number[]) => {
+  const handleSeek = async (value: number[]) => {
     if (value[0] != null && isThisHymnActive) {
-      seek(value[0]);
+      if (status === "idle") {
+        if (variantPaths) {
+          await playVariants(
+            variantPaths.sungPath,
+            variantPaths.karaokePath,
+            playbackMode === "karaoke" ? "karaoke" : "sung",
+            value[0],
+          );
+          return;
+        }
+        if (targetFile) {
+          await play(targetFile, value[0]);
+        }
+        return;
+      }
+
+      await seek(value[0]);
     }
   };
 
@@ -96,12 +131,23 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
     setPlaybackMode(mode);
     
     // If THIS hymn is currently playing/paused, switch the file while preserving timestamp
-    if (isThisHymnActive) {
-      const nextFile = mode === "karaoke" ? (playbackPath ?? filePath) : filePath;
+    if (mode !== "silent" && isThisHymnActive) {
+      if (variantPaths) {
+        const activeFilePath = mode === "karaoke"
+          ? variantPaths.karaokePath
+          : variantPaths.sungPath;
+        await switchVariant(mode, activeFilePath);
+        return;
+      }
+
+      const nextFile = resolvePlaybackTargetFile(mode, filePath, playbackPath);
       if (nextFile !== currentFile) {
         // Capture current position before switching
         const currentPos = positionMs;
-        await play(nextFile, currentPos);
+        const preserveLivePosition = isPlaying || isPaused;
+        if (nextFile) {
+          await play(nextFile, currentPos, preserveLivePosition);
+        }
         
         // If it was paused, pause the new one too (play() starts playing)
         if (isPaused) {
@@ -123,7 +169,9 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
           min={0}
           max={displayDuration || 1}
           step={100}
-          onValueChange={handleSeek}
+          onValueChange={(value) => {
+            void handleSeek(value);
+          }}
           disabled={!isThisHymnActive}
           className="flex-1"
         />

@@ -144,6 +144,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (26)", [])?;
     }
 
+    if current_version < 27 {
+        migrate_v27(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (27)", [])?;
+    }
+
     Ok(())
 }
 
@@ -579,11 +584,7 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
     }
 
     // Skip if hymns already has data — either already imported or user has their own hymns
-    let hymn_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM hymns",
-        [],
-        |row| row.get(0),
-    )?;
+    let hymn_count: i64 = conn.query_row("SELECT COUNT(*) FROM hymns", [], |row| row.get(0))?;
     if hymn_count > 0 {
         return Ok(());
     }
@@ -597,7 +598,8 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
     //   categories_albums(id_category, id_album, id_language)
     //   lyrics(id_lyric, id_music, lyric, "order", show_slide, id_language)
     //   files(id_file, name, dir)
-    conn.execute_batch("
+    conn.execute_batch(
+        "
         INSERT INTO hymns (number, title, album, lyrics, audio_path, category)
         SELECT
             am.track,
@@ -632,25 +634,27 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
         INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
         SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
         FROM hymns;
-    ")?;
+    ",
+    )?;
 
     // Import legacy bible data if legacy tables exist and new bible_verses is sparse
-    if !table_exists(conn, "bible_verse")? || !table_exists(conn, "bible_book")? || !table_exists(conn, "bible_version")? {
+    if !table_exists(conn, "bible_verse")?
+        || !table_exists(conn, "bible_book")?
+        || !table_exists(conn, "bible_version")?
+    {
         return Ok(());
     }
 
-    let new_verse_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM bible_verses",
-        [],
-        |row| row.get(0),
-    )?;
+    let new_verse_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM bible_verses", [], |row| row.get(0))?;
     // ARA seed (migrate_v3) has ~100 verses; full bible has 31000+.
     // Skip if we already have a substantial bible imported.
     if new_verse_count > 1000 {
         return Ok(());
     }
 
-    conn.execute_batch("
+    conn.execute_batch(
+        "
         INSERT OR IGNORE INTO bible_versions (name, abbreviation, language)
         SELECT name, abbreviation, id_language
         FROM bible_version
@@ -672,7 +676,8 @@ fn migrate_v13(conn: &Connection) -> Result<(), AppError> {
         INSERT INTO bible_fts(bible_fts) VALUES('delete-all');
         INSERT INTO bible_fts(rowid, text, book)
         SELECT id, text, book FROM bible_verses;
-    ")?;
+    ",
+    )?;
 
     Ok(())
 }
@@ -710,12 +715,7 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, A
 fn migrate_v14(conn: &Connection) -> Result<(), AppError> {
     // Add legacy_file_id column to preserve references to legacy files table
     // This allows resolving audio/image paths from the legacy database
-    add_column_if_missing(
-        conn,
-        "hymns",
-        "legacy_file_id",
-        "INTEGER",
-    )?;
+    add_column_if_missing(conn, "hymns", "legacy_file_id", "INTEGER")?;
 
     // If legacy tables exist and audio_path is populated, try to capture the file IDs
     if table_exists(conn, "musics")? && table_exists(conn, "files")? {
@@ -767,7 +767,12 @@ fn migrate_v16(conn: &Connection) -> Result<(), AppError> {
     )?;
 
     // Extend collections with source_type and api_album_id
-    add_column_if_missing(conn, "collections", "source_type", "TEXT NOT NULL DEFAULT 'file'")?;
+    add_column_if_missing(
+        conn,
+        "collections",
+        "source_type",
+        "TEXT NOT NULL DEFAULT 'file'",
+    )?;
     add_column_if_missing(conn, "collections", "api_album_id", "INTEGER")?;
 
     // Extend hymns with api_music_id
@@ -779,7 +784,7 @@ fn migrate_v16(conn: &Connection) -> Result<(), AppError> {
 fn migrate_v17(conn: &Connection) -> Result<(), AppError> {
     // Index to speed up filtering API albums from the Hinário tab
     conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS collection_hymns_hymn_idx ON collection_hymns(hymn_id);"
+        "CREATE INDEX IF NOT EXISTS collection_hymns_hymn_idx ON collection_hymns(hymn_id);",
     )?;
     Ok(())
 }
@@ -792,21 +797,20 @@ fn migrate_v18(conn: &Connection) -> Result<(), AppError> {
              SELECT ch.hymn_id FROM collection_hymns ch
              JOIN collections c ON c.id = ch.collection_id
              WHERE c.api_album_id IS NOT NULL
-         );"
+         );",
     )?;
 
     // 2. Mark everything else as 'hymnal' (the default for the Hinário tab)
-    // Also, if they have no album name, give them the default hymnal name 
+    // Also, if they have no album name, give them the default hymnal name
     // to ensure they appear in the Hinário Cards view.
     conn.execute_batch(
         "UPDATE hymns SET category = 'hymnal' WHERE category IS NULL OR category = '';
          UPDATE hymns SET album = 'Hinário Adventista' 
-         WHERE category = 'hymnal' AND (album IS NULL OR album = '');"
+         WHERE category = 'hymnal' AND (album IS NULL OR album = '');",
     )?;
 
     Ok(())
 }
-
 
 fn migrate_v19(conn: &Connection) -> Result<(), AppError> {
     // Rebuild all FTS indexes to fix desynchronization and include new search documents
@@ -1089,6 +1093,16 @@ fn migrate_v26(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v27(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "audio_sync_points",
+        "instrumental_timestamp_ms",
+        "INTEGER",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1121,7 +1135,13 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 26);
+        assert_eq!(schema_version, 27);
+
+        assert!(
+            column_exists(&conn, "audio_sync_points", "instrumental_timestamp_ms",)
+                .expect("instrumental_timestamp_ms column exists"),
+            "missing instrumental_timestamp_ms column",
+        );
 
         assert!(
             column_exists(&conn, "schedule_departments", "shuffle_on_generate")
@@ -1134,13 +1154,19 @@ mod tests {
             "missing group_dates_in_print column"
         );
         assert!(
-            column_exists(&conn, "schedule_departments", "repeat_members_in_grouped_dates")
-                .expect("repeat_members_in_grouped_dates column exists"),
+            column_exists(
+                &conn,
+                "schedule_departments",
+                "repeat_members_in_grouped_dates"
+            )
+            .expect("repeat_members_in_grouped_dates column exists"),
             "missing repeat_members_in_grouped_dates column"
         );
 
         let department_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM schedule_departments", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM schedule_departments", [], |row| {
+                row.get(0)
+            })
             .expect("department count");
         assert_eq!(department_count, 7);
 
@@ -1207,8 +1233,10 @@ mod tests {
             (24, migrate_v24),
             (25, migrate_v25),
             (26, migrate_v26),
+            (27, migrate_v27),
         ] {
-            migration(&conn).unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
+            migration(&conn)
+                .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
         }
     }
 }

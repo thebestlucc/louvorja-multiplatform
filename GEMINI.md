@@ -2,7 +2,7 @@
 
 This file provides comprehensive repository-level guidance for Gemini Code Assist. It integrates architectural patterns, critical development rules, and the current project state.
 
-> **Primary Reference:** For the full technical specification and patterns, see [`CLAUDE.md`](./CLAUDE.md) and [`PRD.md`](./PRD.md).
+> **Primary Reference:** For current repository patterns and active documentation entrypoints, see [`CLAUDE.md`](./CLAUDE.md), [`docs/README.md`](./docs/README.md), and [`PROGRESS.md`](./PROGRESS.md).
 
 ---
 
@@ -11,7 +11,7 @@ This file provides comprehensive repository-level guidance for Gemini Code Assis
 **LouvorJA Multiplatform** is a church worship management desktop application.
 - **Stack:** Tauri 2.9.4 + React 19 + Rust (stable).
 - **Goal:** Cross-platform (Windows, macOS, Linux) migration from legacy Delphi.
-- **Key Features:** Hymnal search (FTS5), Presentation editor (.slja), Bible projection, Multi-monitor output (Operator/Projector/Return), Audio synchronization (rodio), SSE Live Streaming, Timer/Clock projections, Spotlight (Cmd+K).
+- **Key Features:** Hymnal search (FTS5), Presentation editor (.slja), Bible projection, Multi-monitor output (Playing now/Projector/Return), Audio synchronization (rodio), SSE Live Streaming, Timer/Clock projections, Spotlight (Cmd+K).
 
 ---
 
@@ -94,7 +94,7 @@ This file provides comprehensive repository-level guidance for Gemini Code Assis
 
 ## 6. Development Workflow
 
-1.  **Research:** Check `PRD.md` and `PROGRESS.md` for feature context.
+1.  **Research:** Check `docs/README.md`, `PROGRESS.md`, and the relevant `docs/phase-*`, `docs/pre-dev/`, or `docs/plans/` package for feature context.
 2.  **Implementation:** Follow the "New Tauri commands checklist" (Section 2).
 3.  **i18n:** Ensure all 3 languages are updated.
 4.  **Verification:** Run `pnpm test:unit`, `pnpm lint:i18n`, and ensure the build passes.

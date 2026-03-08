@@ -19,7 +19,7 @@ Current pain points:
 1. Deliver a production-usable utilities module with timer/chronometer, clock, lottery/randomizer, and text formatting.
 2. Support live projection for utility outputs without breaking ongoing slide workflows.
 3. Provide fast keyboard access through command palette coverage and a shortcuts help surface.
-4. Complete theme and UI polish for consistent readability in operator and projection contexts.
+4. Complete theme and UI polish for consistent readability in Playing now and projection contexts.
 
 ## 4. Non-Goals
 

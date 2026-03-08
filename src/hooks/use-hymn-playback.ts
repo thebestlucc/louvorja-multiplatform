@@ -6,72 +6,22 @@ import { useQueueStore } from "../stores/queue-store";
 import { getSyncPoints as fetchSyncPoints } from "../lib/tauri";
 import { catcher } from "../lib/catcher";
 import type { Hymn, SlideContent } from "../lib/bindings";
+import { buildHymnSlides } from "../lib/hymn-slides";
 
-export function hymnToSlides(title: string, lyrics: string | null, album: string | null, coverPath?: string | null): SlideContent[] {
-  const slides: SlideContent[] = [];
-
-  // Cover slide
-  slides.push({
-    slideType: "cover",
+export function hymnToSlides(
+  title: string,
+  lyrics: string | null,
+  album: string | null,
+  coverPath?: string | null,
+  lyricsSync?: string | null,
+): SlideContent[] {
+  return buildHymnSlides({
     title,
-    subtitle: album ?? null,
-    backgroundImage: coverPath ?? null,
-    text: null,
-    label: null,
-    videoPath: null,
-    backgroundColor: null,
-    audioPath: null,
-    autoPlay: null,
-    loop: null,
-    muted: null,
-    mode: null,
-    textColor: null,
-    textSize: null,
+    lyrics,
+    album,
+    coverPath,
+    lyricsSync,
   });
-
-  if (lyrics) {
-    const stanzas = lyrics.split("\n\n").filter((s) => s.trim().length > 0);
-    stanzas.forEach((stanza, i) => {
-      slides.push({
-        slideType: "lyrics",
-        text: stanza.trim(),
-        label: `${i + 1}/${stanzas.length}`,
-        backgroundImage: coverPath ?? null,
-        title: null,
-        subtitle: null,
-        videoPath: null,
-        backgroundColor: null,
-        audioPath: null,
-        autoPlay: null,
-        loop: null,
-        muted: null,
-        mode: null,
-        textColor: null,
-        textSize: null,
-      });
-    });
-  }
-
-  // End pause slide
-  slides.push({
-    slideType: "pause",
-    text: null,
-    title: null,
-    subtitle: null,
-    label: null,
-    videoPath: null,
-    backgroundImage: null,
-    backgroundColor: null,
-    audioPath: null,
-    autoPlay: null,
-    loop: null,
-    muted: null,
-    mode: null,
-    textColor: null,
-    textSize: null,
-  });
-
-  return slides;
 }
 
 export function useHymnPlayback() {
@@ -84,7 +34,13 @@ export function useHymnPlayback() {
   const addToQueue = useQueueStore((state) => state.addToQueue);
 
   const bindHymnToPlaybackQueue = useCallback(async (hymn: Hymn, startIndex: number = 0) => {
-    const generatedSlides = hymnToSlides(hymn.title, hymn.lyrics, hymn.album, hymn.coverPath);
+    const generatedSlides = hymnToSlides(
+      hymn.title,
+      hymn.lyrics,
+      hymn.album,
+      hymn.coverPath,
+      hymn.lyricsSync,
+    );
     if (generatedSlides.length === 0) return;
 
     const clampedIndex = Math.max(0, Math.min(startIndex, generatedSlides.length - 1));
@@ -102,7 +58,7 @@ export function useHymnPlayback() {
     await catcher(async () => {
       clearQueue();
       addToQueue([{ id: crypto.randomUUID(), hymn, type: "audio" }], true);
-      void router.navigate({ to: "/operator" });
+      void router.navigate({ to: "/playing-now" });
     }, { notify: false });
   }, [router, clearQueue, addToQueue]);
 
@@ -110,7 +66,7 @@ export function useHymnPlayback() {
     await catcher(async () => {
       clearQueue();
       addToQueue([{ id: crypto.randomUUID(), hymn, type: "playback" }], true);
-      void router.navigate({ to: "/operator" });
+      void router.navigate({ to: "/playing-now" });
     }, { notify: false });
   }, [router, clearQueue, addToQueue]);
 
@@ -118,7 +74,7 @@ export function useHymnPlayback() {
     await catcher(async () => {
       clearQueue();
       addToQueue([{ id: crypto.randomUUID(), hymn, type: "projection" }], true);
-      void router.navigate({ to: "/operator" });
+      void router.navigate({ to: "/playing-now" });
     }, { notify: false });
   }, [router, clearQueue, addToQueue]);
 

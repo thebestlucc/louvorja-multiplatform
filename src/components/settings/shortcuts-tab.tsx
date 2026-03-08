@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, X, Circle } from "lucide-react";
+import { catcher } from "../../lib/catcher";
 import {
   SHORTCUT_DEFINITIONS,
   SHORTCUT_CATEGORY_ORDER,
@@ -8,7 +9,24 @@ import {
   keyboardEventToShortcutCombo,
   normalizeShortcutCombo,
 } from "../../lib/shortcut-definitions";
-import { useAllSettings, useSetting, useSetShortcut } from "../../lib/queries";
+import {
+  useAllSettings,
+  useApplyPresentationBridgeConfig,
+  usePresentationBridgeStatus,
+  useSetting,
+  useSetShortcut,
+} from "../../lib/queries";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import type { BridgeConfig } from "../../lib/bindings";
+
+const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
+  enabled: false,
+  startWithOs: false,
+  targetApp: "power-point-windows",
+  shortcutNext: "Alt+Right",
+  shortcutPrev: "Alt+Left",
+};
 
 // A single shortcut recording cell (local or global layer)
 function ShortcutCell({
@@ -163,6 +181,16 @@ function ShortcutActionRow({
 export function ShortcutsTab() {
   const { t } = useTranslation();
   const { data: allSettings = [] } = useAllSettings();
+  const bridgeStatusQuery = usePresentationBridgeStatus();
+  const applyBridgeConfig = useApplyPresentationBridgeConfig();
+  const bridgeConfig = bridgeStatusQuery.data?.config ?? DEFAULT_BRIDGE_CONFIG;
+  const [bridgeShortcutNext, setBridgeShortcutNext] = useState(bridgeConfig.shortcutNext);
+  const [bridgeShortcutPrev, setBridgeShortcutPrev] = useState(bridgeConfig.shortcutPrev);
+
+  useEffect(() => {
+    setBridgeShortcutNext(bridgeConfig.shortcutNext);
+    setBridgeShortcutPrev(bridgeConfig.shortcutPrev);
+  }, [bridgeConfig.shortcutNext, bridgeConfig.shortcutPrev]);
 
   // Build a flat map of default bindings for conflict detection.
   // Key format: "id.layer" → combo string.
@@ -206,6 +234,60 @@ export function ShortcutsTab() {
           {t("settings.shortcuts.description")}
         </p>
       </div>
+
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium">{t("settings.bridge.shortcutsTitle")}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settings.bridge.shortcutsDescription")}
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {t("settings.bridge.nextShortcut")}
+              </label>
+              <Input
+                value={bridgeShortcutNext}
+                onChange={(event) => setBridgeShortcutNext(event.target.value)}
+                placeholder={t("settings.bridge.nextShortcutPlaceholder")}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {t("settings.bridge.previousShortcut")}
+              </label>
+              <Input
+                value={bridgeShortcutPrev}
+                onChange={(event) => setBridgeShortcutPrev(event.target.value)}
+                placeholder={t("settings.bridge.previousShortcutPlaceholder")}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              disabled={applyBridgeConfig.isPending}
+              onClick={() => {
+                void catcher(
+                  applyBridgeConfig.mutateAsync({
+                    ...bridgeConfig,
+                    shortcutNext: bridgeShortcutNext.trim() || "Alt+Right",
+                    shortcutPrev: bridgeShortcutPrev.trim() || "Alt+Left",
+                  }),
+                  { notify: true },
+                );
+              }}
+            >
+              {t("settings.bridge.saveShortcuts")}
+            </Button>
+          </div>
+        </div>
+      </section>
 
       {/* Column headers */}
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 px-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">

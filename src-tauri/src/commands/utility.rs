@@ -89,14 +89,12 @@ pub fn copy_video_to_media(
     }
 
     let app_clone = app.clone();
-    std::thread::spawn(move || {
-        match do_copy_video_work(&video_path, &app_clone) {
-            Ok(rel_path) => {
-                let _ = app_clone.emit("video-copy-complete", (presentation_id, rel_path));
-            }
-            Err(e) => {
-                let _ = app_clone.emit("video-copy-error", (presentation_id, e.to_string()));
-            }
+    std::thread::spawn(move || match do_copy_video_work(&video_path, &app_clone) {
+        Ok(rel_path) => {
+            let _ = app_clone.emit("video-copy-complete", (presentation_id, rel_path));
+        }
+        Err(e) => {
+            let _ = app_clone.emit("video-copy-error", (presentation_id, e.to_string()));
         }
     });
 

@@ -217,6 +217,12 @@ pub struct SlideContext {
     pub index: i32,
     pub total: i32,
     pub title: String,
+    #[specta(type = Option<f64>)]
+    pub current_slide_start_ms: Option<u64>,
+    #[specta(type = Option<f64>)]
+    pub next_slide_start_ms: Option<u64>,
+    #[specta(type = Option<f64>)]
+    pub audio_duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

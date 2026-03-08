@@ -81,7 +81,7 @@ function PresentationDetail() {
       // Update local UI state
       setActiveSlideIndex(0);
 
-      void router.navigate({ to: "/operator" });
+      void router.navigate({ to: "/playing-now" });
     }, { notify: true });
   }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationSlides, setPresentationActiveSlideIndex, router]);
 

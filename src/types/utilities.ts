@@ -136,6 +136,9 @@ export function createUtilityProjectionPayload({
       index: 0,
       total: 1,
       title: safeContextTitle,
+      currentSlideStartMs: null,
+      nextSlideStartMs: null,
+      audioDurationMs: null,
     },
   };
 }

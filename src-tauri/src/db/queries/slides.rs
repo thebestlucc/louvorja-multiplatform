@@ -350,9 +350,10 @@ mod tests {
             );
 
             CREATE VIRTUAL TABLE collections_fts USING fts5(
-              entity_type,
+              entity_type UNINDEXED,
               collection_id UNINDEXED,
               song_id UNINDEXED,
+              cover_path UNINDEXED,
               collection_name,
               title,
               description,
@@ -366,7 +367,8 @@ mod tests {
 
     fn insert_song_for_presentation(conn: &Connection, presentation_id: i64) {
         let collection_id =
-            insert_collection(conn, "Collection", Some("desc"), None, None, "manual", None).expect("collection");
+            insert_collection(conn, "Collection", Some("desc"), None, None, "manual", None)
+                .expect("collection");
         let order = next_collection_song_order(conn, collection_id).expect("next order");
         insert_collection_song(
             conn,

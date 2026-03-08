@@ -11,11 +11,12 @@ pub fn init_db(app_data_dir: &Path) -> Result<Pool<SqliteConnectionManager>, App
     std::fs::create_dir_all(app_data_dir)?;
     let db_path = app_data_dir.join("louvorja.db");
 
-    let manager = SqliteConnectionManager::file(db_path)
-        .with_init(|c| {
-            c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;")
-                .map_err(Into::into)
-        });
+    let manager = SqliteConnectionManager::file(db_path).with_init(|c| {
+        c.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;",
+        )
+        .map_err(Into::into)
+    });
 
     let pool = Pool::new(manager).map_err(|e| AppError::Internal(e.to_string()))?;
 

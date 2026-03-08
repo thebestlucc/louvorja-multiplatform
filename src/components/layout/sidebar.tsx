@@ -28,7 +28,7 @@ const navItems = [
   { to: "/bible", icon: BookOpen, labelKey: "nav.bible" },
   { to: "/presentations", icon: Presentation, labelKey: "nav.presentations" },
   { to: "/services", icon: ListChecks, labelKey: "nav.services" },
-  { to: "/operator", icon: MonitorPlay, labelKey: "nav.operator" },
+  { to: "/playing-now", icon: MonitorPlay, labelKey: "nav.playingNow" },
   { to: "/utilities", icon: Wrench, labelKey: "nav.utilities" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
   { to: "/help", icon: CircleHelp, labelKey: "nav.help" },

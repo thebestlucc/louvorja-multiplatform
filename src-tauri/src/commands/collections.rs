@@ -664,7 +664,12 @@ pub fn add_hymn_to_collection(
         .db
         .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::collections::insert_collection_hymn(&conn, collection_id, hymn_id, item_order)
+    crate::db::queries::collections::insert_collection_hymn(
+        &conn,
+        collection_id,
+        hymn_id,
+        item_order,
+    )
 }
 
 #[tauri::command]

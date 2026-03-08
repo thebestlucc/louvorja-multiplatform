@@ -17,6 +17,7 @@ import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoverPicker } from "../../components/media/cover-picker";
+import { buildVisibleHymnLyricItems } from "../../lib/hymn-slides";
 
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
@@ -68,7 +69,15 @@ function HymnDetail() {
 
   const generatedSlides = useMemo(() => {
     if (!hymn) return [];
-    return hymnToSlides(hymn.title, hymn.lyrics, hymn.album, hymn.coverPath);
+    return hymnToSlides(hymn.title, hymn.lyrics, hymn.album, hymn.coverPath, hymn.lyricsSync);
+  }, [hymn]);
+
+  const visibleLyricItems = useMemo(() => {
+    if (!hymn) return [];
+    return buildVisibleHymnLyricItems({
+      lyrics: hymn.lyrics,
+      lyricsSync: hymn.lyricsSync,
+    });
   }, [hymn]);
 
   const bindHymnToPlaybackQueue = useCallback(async (startIndex: number) => {
@@ -371,15 +380,15 @@ function HymnDetail() {
       {/* Right Sidebar: Lyrics */}
       <div className="w-80 shrink-0 overflow-auto rounded-lg border border-border bg-card p-4">
         <h3 className="mb-3 text-sm font-medium">{t("hymn.lyrics")}</h3>
-        {hymn.lyrics ? (
+        {visibleLyricItems.length > 0 ? (
           <LyricsDisplay
-            lyrics={hymn.lyrics}
-            activeStanza={isProjecting ? Math.max(0, localActiveIndex - 1) : localActiveIndex}
-            onStanzaClick={(i) => {
+            items={visibleLyricItems}
+            activeSlideIndex={isProjecting ? localActiveIndex : localActiveIndex}
+            onStanzaClick={(slideIndex) => {
               if (isProjecting) {
-                void projectHymnSlide(i + 1);
+                void projectHymnSlide(slideIndex);
               } else {
-                setLocalActiveIndex(i + 1);
+                setLocalActiveIndex(slideIndex);
               }
             }}
           />
@@ -452,4 +461,3 @@ function HymnDetail() {
     </div>
   );
 }
-

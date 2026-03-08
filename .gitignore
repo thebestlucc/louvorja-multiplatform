@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 .tmp-test-dist
+.pnpm-store/
+.tanstack/
+src-tauri/target/
+src-tauri/binaries/
 
 # SQLite database files — never commit runtime data to the repo
 *.db

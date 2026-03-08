@@ -2,7 +2,7 @@
 
 ## 1. Implementation Objective
 
-Implement the remaining utilities feature set and operator polish so LouvorJA can handle timer/clock/lottery/text workflows natively, with projection support and keyboard-first operation.
+Implement the remaining utilities feature set and Playing now polish so LouvorJA can handle timer/clock/lottery/text workflows natively, with projection support and keyboard-first operation.
 
 ## 2. Baseline Gaps (Current Code)
 
