@@ -15,7 +15,7 @@ User clicks "Cantado" / "Playback" / "Só Slides"
   └── useHymnPlayback().handleStart[Cantado|Playback|SlidesOnly](hymn)
         ├── clearQueue()              → useQueueStore: items=[], currentIndex=-1
         ├── addToQueue([item])        → useQueueStore: currentIndex=0  ← TRIGGER
-        └── router.navigate("/operator")
+        └── router.navigate("/playing-now")
 ```
 
 Item types:
@@ -27,7 +27,7 @@ Item types:
 
 ## Core Orchestrator (`src/hooks/use-playback-coordinator.ts`)
 
-The `/operator` route mounts this hook, which watches `currentIndex`. Any change fires `playItem(index)`:
+The `/playing-now` route mounts this hook, which watches `currentIndex`. Any change fires `playItem(index)`:
 
 ```
 playItem(index)
@@ -58,7 +58,7 @@ playItem(index)
        projectSlideIndex(0)  [src/lib/projection-playback.ts:72]
          → invoke("set_current_slide")
          → Rust: app.emit("slide-changed", &slide_data)
-         → ProjectorView, OperatorScreen, ReturnView listen and render
+         → ProjectorView, PlayingNowScreen, ReturnView listen and render
 ```
 
 Guards:
@@ -131,7 +131,7 @@ handlePlay()
         → full audio_play chain (see above)
 ```
 
-### Operator screen (`src/routes/operator/index.tsx:304`)
+### Playing now screen (`src/routes/playing-now/index.tsx:304`)
 
 ```
 togglePlayPause()  [src/hooks/use-audio.ts:7]
@@ -144,10 +144,10 @@ togglePlayPause()  [src/hooks/use-audio.ts:7]
 ## Manual Queue Navigation
 
 ```
-PlayingQueue [src/components/operator/playing-queue.tsx:60]
+PlayingQueue [src/components/playing-now/playing-queue.tsx:60]
   onItemClick  →  useQueueStore.setCurrentIndex(i)
 
-OperatorScreen skip buttons [operator/index.tsx:285/334]
+PlayingNowScreen skip buttons [playing-now/index.tsx:285/334]
   prevQueueItem() / nextQueueItem()
     →  useQueueStore.prev() / next()
     →  set({ currentIndex: currentIndex ± 1 })
@@ -158,7 +158,7 @@ OperatorScreen skip buttons [operator/index.tsx:285/334]
 
 ---
 
-## Slide Navigation (Operator Prev/Next Slide)
+## Slide Navigation (Playing now Prev/Next Slide)
 
 ```
 ChevronRight/Left  →  useSlides().nextSlide() / prevSlide()  [src/hooks/use-slides.ts:103]
@@ -183,10 +183,10 @@ ChevronRight/Left  →  useSlides().nextSlide() / prevSlide()  [src/hooks/use-sl
 | Event | Emitter (Rust) | Listeners (Frontend) |
 |---|---|---|
 | `audio-status` | `commands/audio.rs` background thread (50ms) | `audio-store.ts` `startStatusSubscription()` |
-| `slide-changed` | `commands/display.rs` `set_current_slide()` | `OperatorScreen`, `ProjectorView`, `ReturnView` |
-| `slide-cleared` | `commands/display.rs` `clear_current_slide()` | `OperatorScreen` |
-| `slide-context` | `commands/display.rs` `set_slide_context()` | `OperatorScreen` |
-| `overlay-changed` | `commands/display.rs` toggle_*_screen() | `OperatorScreen`, `ProjectorView` |
+| `slide-changed` | `commands/display.rs` `set_current_slide()` | `PlayingNowScreen`, `ProjectorView`, `ReturnView` |
+| `slide-cleared` | `commands/display.rs` `clear_current_slide()` | `PlayingNowScreen` |
+| `slide-context` | `commands/display.rs` `set_slide_context()` | `PlayingNowScreen` |
+| `overlay-changed` | `commands/display.rs` toggle_*_screen() | `PlayingNowScreen`, `ProjectorView` |
 
 ---
 
@@ -231,5 +231,5 @@ User click
 | `src/hooks/use-slides.ts` | `goToSlide`, `nextSlide`, `prevSlide`, audio-seek sync |
 | `src-tauri/src/commands/audio.rs` | `audio_play/pause/resume/stop/seek` + 50ms stream |
 | `src-tauri/src/audio/player.rs` | `AudioPlayer` (rodio `Sink` wrapper) |
-| `src/routes/operator/index.tsx` | Operator UI — slide/queue controls, event listeners |
-| `src/components/operator/playing-queue.tsx` | Queue list, `setCurrentIndex` on click |
+| `src/routes/playing-now/index.tsx` | Playing now UI — slide/queue controls, event listeners |
+| `src/components/playing-now/playing-queue.tsx` | Queue list, `setCurrentIndex` on click |

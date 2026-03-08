@@ -74,19 +74,33 @@ pub fn import_hymns_domain(
              ORDER BY m.id_music ASC",
         ) {
             Ok(stmt) => stmt,
-            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == ErrorCode::DatabaseCorrupt => {
+            Err(rusqlite::Error::SqliteFailure(ref err, _))
+                if err.code == ErrorCode::DatabaseCorrupt =>
+            {
                 eprintln!("[hymn_importer] SQLITE_CORRUPT preparing SELECT; source DB has bad pages — committing empty result");
                 tx.commit()?;
-                return Ok(MigrationDomainReport { domain: "hymns".to_string(), imported: 0, skipped: 0 });
+                return Ok(MigrationDomainReport {
+                    domain: "hymns".to_string(),
+                    imported: 0,
+                    skipped: 0,
+                });
             }
             Err(e) => return Err(AppError::Database(e)),
         };
         let mut rows = match select_hymns.query([]) {
             Ok(r) => r,
-            Err(rusqlite::Error::SqliteFailure(ref err, _)) if err.code == ErrorCode::DatabaseCorrupt => {
-                eprintln!("[hymn_importer] SQLITE_CORRUPT executing SELECT; committing empty result");
+            Err(rusqlite::Error::SqliteFailure(ref err, _))
+                if err.code == ErrorCode::DatabaseCorrupt =>
+            {
+                eprintln!(
+                    "[hymn_importer] SQLITE_CORRUPT executing SELECT; committing empty result"
+                );
                 tx.commit()?;
-                return Ok(MigrationDomainReport { domain: "hymns".to_string(), imported: 0, skipped: 0 });
+                return Ok(MigrationDomainReport {
+                    domain: "hymns".to_string(),
+                    imported: 0,
+                    skipped: 0,
+                });
             }
             Err(e) => return Err(AppError::Database(e)),
         };
@@ -117,14 +131,14 @@ pub fn import_hymns_domain(
 
             is_cancelled(cancel_flag)?;
             let changed = insert_hymn.execute(params![
-                row.get::<_, i64>(0)?,         // id_music → id
-                row.get::<_, Option<i64>>(1)?, // number (track in hymnal album, or NULL)
-                row.get::<_, String>(2)?,       // name → title
+                row.get::<_, i64>(0)?,            // id_music → id
+                row.get::<_, Option<i64>>(1)?,    // number (track in hymnal album, or NULL)
+                row.get::<_, String>(2)?,         // name → title
                 row.get::<_, Option<String>>(3)?, // album name
                 row.get::<_, Option<String>>(4)?, // concatenated lyrics
                 row.get::<_, Option<String>>(5)?, // category slug
-                row.get::<_, String>(6)?,       // created_at
-                row.get::<_, String>(7)?        // updated_at
+                row.get::<_, String>(6)?,         // created_at
+                row.get::<_, String>(7)?          // updated_at
             ])?;
 
             if changed == 1 {

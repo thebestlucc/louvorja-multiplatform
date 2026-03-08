@@ -10,7 +10,7 @@ graph TD
             Collections["collections/\nindex, $collectionId"]
             Presentations["presentations/\nindex, $presentationId"]
             Services["services/\nindex, $serviceId"]
-            Operator["operator/\n(Operator Screen)"]
+            PlayingNow["playing-now/\n(Playing now screen)"]
             Spotlight["spotlight\n(Cmd Palette)"]
             Projector["projector\n(Bare Route)"]
             Return["return\n(Bare Route)"]
@@ -113,10 +113,10 @@ graph TD
         VideoCopy["video-copy-complete/error"]
     end
 
-    Root -->|renders| Dashboard & Hymnal & Collections & Presentations & Services & Operator & Projector & Return & Spotlight
+    Root -->|renders| Dashboard & Hymnal & Collections & Presentations & Services & PlayingNow & Projector & Return & Spotlight
     Hymnal -->|uses| AudioStore & PresentationStore
     Presentations -->|uses| PresentationStore
-    Operator -->|uses| PresentationStore & DisplayStore
+    PlayingNow -->|uses| PresentationStore & DisplayStore
     Music -->|uses| UseAudio & UseHymnPlayback
     Slides -->|uses| UseSlides
     Display -->|uses| UseMonitors

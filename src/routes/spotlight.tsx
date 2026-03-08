@@ -224,6 +224,13 @@ function SpotlightWindow() {
     { id: "bible", icon: BookOpen, label: t("nav.bible"), to: "/bible" },
     { id: "presentations", icon: Presentation, label: t("nav.presentations"), to: "/presentations" },
     { id: "services", icon: ListChecks, label: t("nav.services"), to: "/services" },
+    {
+      id: "playing-now",
+      icon: MonitorPlay,
+      label: t("nav.playingNow"),
+      to: "/playing-now",
+      keywords: ["playing now", "now playing"],
+    },
     { id: "utilities", icon: Wrench, label: t("nav.utilities"), to: "/utilities" },
     { id: "settings", icon: Settings, label: t("nav.settings"), to: "/settings" },
     { id: "help", icon: CircleHelp, label: t("nav.help"), to: "/help" },
@@ -244,7 +251,11 @@ function SpotlightWindow() {
   ];
 
   const filteredNav = hasQuery
-    ? navItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
+    ? navItems.filter((item) => {
+        const searchTerms = [item.label, ...(item.keywords ?? [])];
+        const normalizedQuery = query.toLowerCase();
+        return searchTerms.some((term) => term.toLowerCase().includes(normalizedQuery));
+      })
     : navItems;
 
   const filteredActions = hasQuery

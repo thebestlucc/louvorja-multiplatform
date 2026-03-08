@@ -1,6 +1,6 @@
 use crate::db::models::{
     ScheduleAssignmentInput, ScheduleDayInput, ScheduleDepartment, ScheduleDepartmentInput,
-    ScheduleMonthDetail, ScheduleGenerationRequest,
+    ScheduleGenerationRequest, ScheduleMonthDetail,
 };
 use crate::error::AppError;
 use crate::state::AppState;
@@ -96,7 +96,8 @@ pub fn save_schedule_month_days(
         .db
         .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let schedule_month = crate::db::queries::schedules::get_or_create_schedule_month(&conn, year, month)?;
+    let schedule_month =
+        crate::db::queries::schedules::get_or_create_schedule_month(&conn, year, month)?;
     crate::db::queries::schedules::replace_schedule_month_days(&conn, schedule_month.id, &days)?;
     crate::db::queries::schedules::get_schedule_month_detail(&conn, year, month)
 }

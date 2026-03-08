@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Fix broken projection IPC by collapsing to same-process windows, add operator screen, hymn 4-actions, legacy DB import, fix logo persistence, fix alt+tab visibility.
+**Goal:** Fix broken projection IPC by collapsing to same-process windows, add the Playing now screen, hymn 4-actions, legacy DB import, fix logo persistence, fix alt+tab visibility.
 
 **Architecture:**
 - Projector/return windows move from separate child OS processes to regular `WebviewWindowBuilder` windows in the main Tauri process. This fixes the fundamental IPC bug (events now flow naturally via `app.emit()`), eliminates 190 lines of dead code (`projector_process.rs`), and simplifies the entire projection pipeline.
@@ -200,28 +200,28 @@ git commit -m "refactor: collapse projector/return to same-process windows, fix 
 
 ---
 
-## Task 2: Create Operator Screen Route — 45 min
+## Task 2: Create Playing now Screen Route — 45 min
 
-**Goal:** A `/operator` route accessible from the sidebar that shows what is currently being projected, with slide navigation and audio play/pause controls. Works whether or not projection screens are open. Does NOT auto-open projection screens.
+**Goal:** A `/playing-now` route accessible from the sidebar that shows what is currently being projected, with slide navigation and audio play/pause controls. Works whether or not projection screens are open. Does NOT auto-open projection screens.
 
 **Files:**
-- Create: `src/routes/operator/route.tsx`
-- Create: `src/routes/operator/index.tsx`
+- Create: `src/routes/playing-now/route.tsx`
+- Create: `src/routes/playing-now/index.tsx`
 - Modify: sidebar component (add nav link)
-- Modify: `src/__root.tsx` — ensure `/operator` is NOT in BARE_ROUTES (it has sidebar/header)
+- Modify: `src/__root.tsx` — ensure `/playing-now` is NOT in BARE_ROUTES (it has sidebar/header)
 - Modify: `src/locales/en.json`, `pt.json`, `es.json`
 
-**Step 1: Create `src/routes/operator/route.tsx`**
+**Step 1: Create `src/routes/playing-now/route.tsx`**
 
 ```tsx
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-export const Route = createFileRoute("/operator")({ component: () => <Outlet /> });
+export const Route = createFileRoute("/playing-now")({ component: () => <Outlet /> });
 ```
 
-**Step 2: Create `src/routes/operator/index.tsx`**
+**Step 2: Create `src/routes/playing-now/index.tsx`**
 
 Key design:
-- Listens to Tauri events `"slide-changed"`, `"overlay-changed"`, `"slide-cleared"`, `"utility-projection"` — these work because the operator is in the main process
+- Listens to Tauri events `"slide-changed"`, `"overlay-changed"`, `"slide-cleared"`, `"utility-projection"` — these work because the Playing now screen is in the main process
 - Shows a scaled-down preview of the current slide (aspect ratio 16:9)
 - Shows overlay state (black/logo screen indicators)
 - Shows slide position counter (from `usePresentationStore`)
@@ -246,9 +246,9 @@ import { Button } from "../../components/ui/button";
 import { ChevronLeft, ChevronRight, Play, Pause, MonitorPlay } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export const Route = createFileRoute("/operator/")({ component: OperatorScreen });
+export const Route = createFileRoute("/playing-now/")({ component: PlayingNowScreen });
 
-function OperatorScreen() {
+function PlayingNowScreen() {
   const [slide, setSlide] = useState<SlideContent | null>(null);
   const [overlay, setOverlay] = useState<OverlayState>({ blackScreen: false, logoScreen: false });
   const [fadeKey, setFadeKey] = useState(0);
@@ -356,7 +356,7 @@ function OperatorScreen() {
 
 **Step 3: Add to sidebar**
 
-Read the sidebar component first. Add a nav link to `/operator` using `<Link to="/operator">` with a `MonitorPlay` icon from lucide-react and the translated label. Follow the exact same pattern as other nav items in the sidebar.
+Read the sidebar component first. Add a nav link to `/playing-now` using `<Link to="/playing-now">` with a `MonitorPlay` icon from lucide-react and the translated label. Follow the exact same pattern as other nav items in the sidebar.
 
 **Step 4: Regenerate route tree and type-check**
 ```bash
@@ -368,19 +368,19 @@ npx tsc --noEmit 2>&1 | tail -10
 
 ```json
 // en.json
-"nav": { "operator": "Operator" }
+"nav": { "playingNow": "Playing now" }
 
 // pt.json
-"nav": { "operator": "Operador" }
+"nav": { "playingNow": "Tocando agora" }
 
 // es.json
-"nav": { "operator": "Operador" }
+"nav": { "playingNow": "Reproduciendo ahora" }
 ```
 
 **Step 6: Commit**
 ```bash
-git add src/routes/operator/ src/components/layout/ src/locales/
-git commit -m "feat: add operator screen route with slide preview and controls"
+git add src/routes/playing-now/ src/components/layout/ src/locales/
+git commit -m "feat: add Playing now screen route with slide preview and controls"
 ```
 
 ---
@@ -742,7 +742,7 @@ git commit -m "fix: ensure logo image path is visible and editable in settings"
 
 **Add to General patterns:**
 ```
-- **Operator screen:** The `/operator` route (sidebar nav) shows what's currently projected. It listens to Tauri events (`slide-changed`, `overlay-changed`, etc.) directly — these work because `/operator` is in the main process. Controls call `useSlides().prevSlide()/nextSlide()` and `useAudio().togglePlayPause()`. It does NOT open projection screens automatically.
+- **Playing now screen:** The `/playing-now` route (sidebar nav) shows what's currently projected. It listens to Tauri events (`slide-changed`, `overlay-changed`, etc.) directly — these work because `/playing-now` is in the main process. Controls call `useSlides().prevSlide()/nextSlide()` and `useAudio().togglePlayPause()`. It does NOT open projection screens automatically.
 - **Hymn 4 actions:** Hymn detail and card have 4 explicit buttons: Cantado (sung), Playback (karaoke), Só slides (silent, no audio), Ver letra (LyricsModal). The `PlaybackMode` type covers the first 3; the 4th opens a `@radix-ui/react-dialog`.
 - **Legacy DB import:** `migrate_v13` in `migrations.rs` detects Delphi-schema tables (`musics`, `lyrics`, `albums`, `files`) and imports into `hymns`. Idempotent: skips if `hymns` table already has data, or if `musics` table doesn't exist.
 ```
@@ -765,7 +765,7 @@ git commit -m "docs: update CLAUDE.md with projection overhaul patterns (Phase 1
 | Task | Files Changed | Impact |
 |------|--------------|--------|
 | 1 | `display.rs`, `lib.rs`, `main.rs`, delete `projector_process.rs` | Same-process windows, events work, alt+tab works |
-| 2 | `routes/operator/`, sidebar, locales | New operator screen |
+| 2 | `routes/playing-now/`, sidebar, locales | New Playing now screen |
 | 3 | `lyrics-modal.tsx`, `$hymnId.tsx`, `hymn-card.tsx`, locales | Hymn 4 actions + lyrics modal |
 | 4 | `db/migrations.rs` | Auto-import legacy Delphi DB |
 | 5 | `routes/settings/`, `projector-view.tsx` | Logo config UI verification/fix |

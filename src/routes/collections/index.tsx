@@ -183,7 +183,7 @@ function CollectionsIndex() {
           }));
           addToQueue(queueItems, true);
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
-          void router.navigate({ to: "/operator" });
+          void router.navigate({ to: "/playing-now" });
         }
       } else {
         const detail = await getCollection(collection.id);
@@ -206,7 +206,7 @@ function CollectionsIndex() {
           }));
           addToQueue(queueItems, true);
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
-          void router.navigate({ to: "/operator" });
+          void router.navigate({ to: "/playing-now" });
         }
       }
     }, { notify: true, fallbackMessage: t("collections.playFailed") });

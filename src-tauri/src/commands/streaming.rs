@@ -4,7 +4,7 @@ use crate::state::{AppState, StreamingState};
 use crate::streaming::StreamingInfo;
 use tauri::{AppHandle, Manager};
 
-fn streaming_slide_title(slide: &SlideContent) -> String {
+pub(crate) fn streaming_slide_title(slide: &SlideContent) -> String {
     slide
         .title
         .clone()
@@ -12,7 +12,29 @@ fn streaming_slide_title(slide: &SlideContent) -> String {
         .unwrap_or_default()
 }
 
-fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
+pub(crate) fn is_empty_hymn_gap_slide(slide: &SlideContent) -> bool {
+    matches!(slide.slide_type.as_str(), "text" | "lyrics")
+        && slide
+            .text
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .is_empty()
+        && slide
+            .title
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .is_empty()
+        && slide
+            .label
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .is_empty()
+}
+
+pub(crate) fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
     let is_image = slide.slide_type == "image";
     let text_value = slide.text.as_deref().unwrap_or("");
     let video_path = slide.video_path.as_deref().unwrap_or("");
@@ -47,19 +69,88 @@ fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
     })
 }
 
-fn build_return_stream_payload(
+pub(crate) fn build_music_stream_payload(
+    current: &SlideContent,
+    context: Option<&SlideContext>,
+) -> serde_json::Value {
+    let current_title = streaming_slide_title(current);
+    let mut payload = streaming_slide_payload(current);
+
+    if let Some(ctx) = context {
+        if is_empty_hymn_gap_slide(current) || (!ctx.title.is_empty() && ctx.title == current_title)
+        {
+            if let Some(map) = payload.as_object_mut() {
+                map.insert("index".to_string(), serde_json::json!(ctx.index));
+                map.insert("total".to_string(), serde_json::json!(ctx.total));
+                map.insert("contextTitle".to_string(), serde_json::json!(ctx.title));
+                map.insert(
+                    "currentSlideStartMs".to_string(),
+                    serde_json::json!(ctx.current_slide_start_ms),
+                );
+                map.insert(
+                    "nextSlideStartMs".to_string(),
+                    serde_json::json!(ctx.next_slide_start_ms),
+                );
+                map.insert(
+                    "audioDurationMs".to_string(),
+                    serde_json::json!(ctx.audio_duration_ms),
+                );
+            }
+        }
+    }
+
+    payload
+}
+
+pub(crate) fn empty_streaming_music_payload() -> serde_json::Value {
+    serde_json::json!({
+        "slideType": "",
+        "slide_type": "",
+        "type": "",
+        "videoPath": "",
+        "video_path": "",
+        "label": "",
+        "text": "",
+        "title": "",
+        "subtitle": "",
+        "backgroundImage": "",
+        "background_image": "",
+        "backgroundColor": "",
+        "background_color": "",
+        "textColor": "",
+        "text_color": "",
+        "textSize": 0,
+        "text_size": 0,
+        "fontSize": 0,
+        "index": 0,
+        "total": 0,
+        "contextTitle": "",
+        "currentSlideStartMs": null,
+        "nextSlideStartMs": null,
+        "audioDurationMs": null,
+        "audioPath": "",
+        "audio_path": "",
+        "src": "",
+    })
+}
+
+pub(crate) fn build_return_stream_payload(
     current: &SlideContent,
     context: Option<&SlideContext>,
 ) -> serde_json::Value {
     let current_title = streaming_slide_title(current);
     if let Some(ctx) = context {
-        if !ctx.title.is_empty() && ctx.title == current_title {
+        if is_empty_hymn_gap_slide(current) || (!ctx.title.is_empty() && ctx.title == current_title)
+        {
             return serde_json::json!({
                 "current": streaming_slide_payload(current),
                 "next": ctx.next.as_ref().map(streaming_slide_payload),
                 "index": ctx.index,
                 "total": ctx.total,
                 "title": ctx.title,
+                "currentSlideStartMs": ctx.current_slide_start_ms,
+                "nextSlideStartMs": ctx.next_slide_start_ms,
+                "audioDurationMs": ctx.audio_duration_ms,
             });
         }
     }
@@ -70,6 +161,22 @@ fn build_return_stream_payload(
         "index": 0,
         "total": 1,
         "title": current_title,
+        "currentSlideStartMs": null,
+        "nextSlideStartMs": null,
+        "audioDurationMs": null,
+    })
+}
+
+pub(crate) fn empty_return_stream_payload() -> serde_json::Value {
+    serde_json::json!({
+        "current": null,
+        "next": null,
+        "index": 0,
+        "total": 0,
+        "title": "",
+        "currentSlideStartMs": null,
+        "nextSlideStartMs": null,
+        "audioDurationMs": null,
     })
 }
 
@@ -105,19 +212,7 @@ fn sync_streaming_projection_state(
             });
             server.broadcast_bible(&bible_json.to_string());
         } else {
-            let music_json = serde_json::json!({
-                "slideType": slide_data.slide_type,
-                "videoPath": slide_data.video_path.as_deref().unwrap_or(""),
-                "label": slide_data.label.as_deref().unwrap_or(""),
-                "text": slide_data.text.as_deref().unwrap_or(""),
-                "title": slide_data.title.as_deref().unwrap_or(""),
-                "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
-                "backgroundImage": slide_data.background_image.as_deref().unwrap_or(""),
-                "backgroundColor": slide_data.background_color.as_deref().unwrap_or(""),
-                "textColor": slide_data.text_color.as_deref().unwrap_or(""),
-                "textSize": slide_data.text_size.unwrap_or(0),
-                "audioPath": slide_data.audio_path.as_deref().unwrap_or(""),
-            });
+            let music_json = build_music_stream_payload(&slide_data, slide_context.as_ref());
             server.broadcast_music(&music_json.to_string());
 
             let bible_json = serde_json::json!({
@@ -132,19 +227,7 @@ fn sync_streaming_projection_state(
         return;
     }
 
-    let music_json = serde_json::json!({
-        "slideType": "",
-        "videoPath": "",
-        "label": "",
-        "text": "",
-        "title": "",
-        "subtitle": "",
-        "backgroundImage": "",
-        "backgroundColor": "",
-        "textColor": "",
-        "textSize": 0,
-        "audioPath": "",
-    });
+    let music_json = empty_streaming_music_payload();
     server.broadcast_music(&music_json.to_string());
 
     let bible_json = serde_json::json!({
@@ -153,13 +236,7 @@ fn sync_streaming_projection_state(
     });
     server.broadcast_bible(&bible_json.to_string());
 
-    let return_json = serde_json::json!({
-        "current": null,
-        "next": null,
-        "index": 0,
-        "total": 0,
-        "title": "",
-    });
+    let return_json = empty_return_stream_payload();
     server.broadcast_return(&return_json.to_string());
 }
 

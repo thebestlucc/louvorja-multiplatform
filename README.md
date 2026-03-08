@@ -9,7 +9,7 @@ A cross-platform church worship management desktop application built with **Taur
 - **Audio Playback** -- Play audio files with slide synchronization via rodio engine
 - **Bible** -- Full-text search across Bible versions with verse projection
 - **Worship Services** -- Service scheduling with drag-and-drop timeline and item projection
-- **Multi-Monitor** -- Projector, return monitor, and operator screens with per-monitor assignment
+- **Multi-Monitor** -- Projector, return monitor, and Playing now screen with per-monitor assignment
 - **Live Streaming** -- HTTP server with SSE for remote viewers (music, bible, return channels)
 - **Video/Multimedia** -- Video slides with managed media paths
 - **Projector Output** -- Dedicated projector window with fullscreen support, real-time slide events, black/logo overlays
@@ -130,20 +130,23 @@ src-tauri/src/                  # Rust backend
 └── video/                      # Video path + metadata helpers
 
 docs/                           # Documentation
-├── phase-*/                    # Phase packages (PRD, SPECS, TASKS, HANDOFF)
+├── archive/                    # Archived legacy docs and generated reports
 ├── installation/               # User installation guides (3 platforms × 3 languages)
-├── code-signing-guide.md       # Code signing setup for maintainers
-└── pre-dev/                    # Pre-development planning documents
+├── phase-*/                    # Feature packages (PRD, SPECS, TASKS, HANDOFF, LEARNINGS)
+├── plans/                      # Scoped implementation plans and design notes
+├── pre-dev/                    # Pre-development planning documents
+└── *.md                        # Cross-cutting reference and maintainer guides
 CLAUDE.md                       # AI assistant context and patterns
 ```
 
 ## Documentation Map
 
-- Live delivery tracker: [PROGRESS.md](./PROGRESS.md)
 - Documentation index: [docs/README.md](./docs/README.md)
+- Live delivery tracker: [PROGRESS.md](./PROGRESS.md)
 - Installation guides: [docs/installation/](./docs/installation/)
-- Code signing guide: [docs/code-signing-guide.md](./docs/code-signing-guide.md)
-- Phase packages (PRD, SPECS, TASKS, HANDOFF): [docs/](./docs/) (see `phase-*` directories)
+- Maintainer and user guides: [docs/code-signing-guide.md](./docs/code-signing-guide.md), [docs/USER_GUIDE.md](./docs/USER_GUIDE.md), [docs/MIGRATION_GUIDE.md](./docs/MIGRATION_GUIDE.md)
+- Active feature packages: [docs/](./docs/) (see `phase-*`, `pre-dev/`, and `plans/`)
+- Archived legacy/generated docs: [docs/archive/](./docs/archive/)
 - Latest completed handoffs:
   - [docs/phase-11-hymn-crud-collections/HANDOFF.md](./docs/phase-11-hymn-crud-collections/HANDOFF.md)
   - [docs/phase-12-monitor-screen-assignment/HANDOFF.md](./docs/phase-12-monitor-screen-assignment/HANDOFF.md)
@@ -168,11 +171,11 @@ CLAUDE.md                       # AI assistant context and patterns
 
 Current delivery status is maintained in [PROGRESS.md](./PROGRESS.md).
 
-See [docs/README.md](./docs/README.md) and `docs/phase-*` for phase decisions and implementation records.
+See [docs/README.md](./docs/README.md) for the current documentation taxonomy and source-of-truth rules.
 
 ## Contributing
 
-1. Read the relevant phase package in `docs/phase-*` before starting work on a phase
+1. Read [docs/README.md](./docs/README.md), then the relevant `docs/phase-*`, `docs/pre-dev/`, or `docs/plans/` package before starting work
 2. Follow existing code patterns (see `CLAUDE.md` for documented conventions)
 3. Use `pnpm` as the package manager
 4. Ensure `pnpm build` and `cargo build` pass before submitting PRs

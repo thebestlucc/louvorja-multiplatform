@@ -1,3 +1,8 @@
+use crate::commands::streaming::{
+    build_music_stream_payload, build_return_stream_payload, empty_return_stream_payload,
+    empty_streaming_music_payload, is_empty_hymn_gap_slide, streaming_slide_payload,
+    streaming_slide_title,
+};
 use crate::db::models::{MonitorConfig, MonitorInfo, OverlayState, SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
@@ -12,103 +17,8 @@ use tauri::{AppHandle, Emitter, Manager};
 const MONITORS_CHANGED_EVENT: &str = "monitors-changed";
 const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
-fn streaming_slide_title(slide: &SlideContent) -> String {
-    slide
-        .title
-        .clone()
-        .or_else(|| slide.label.clone())
-        .unwrap_or_default()
-}
-
 fn is_live_utility_slide(slide: &SlideContent) -> bool {
     slide.slide_type == "cover" && matches!(slide.label.as_deref(), Some("timer" | "clock"))
-}
-
-fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
-    let is_image = slide.slide_type == "image";
-    let text_value = slide.text.as_deref().unwrap_or("");
-    let video_path = slide.video_path.as_deref().unwrap_or("");
-    let background_image = slide.background_image.as_deref().unwrap_or("");
-    let background_color = slide.background_color.as_deref().unwrap_or("");
-    let text_color = slide.text_color.as_deref().unwrap_or("");
-    let audio_path = slide.audio_path.as_deref().unwrap_or("");
-    let text_size = slide.text_size.unwrap_or(0);
-
-    serde_json::json!({
-        "slideType": slide.slide_type,
-        "slide_type": slide.slide_type,
-        "type": slide.slide_type,
-        "videoPath": video_path,
-        "video_path": video_path,
-        "label": slide.label.as_deref().unwrap_or(""),
-        "text": text_value,
-        "title": slide.title.as_deref().unwrap_or(""),
-        "subtitle": slide.subtitle.as_deref().unwrap_or(""),
-        "backgroundImage": background_image,
-        "background_image": background_image,
-        "backgroundColor": background_color,
-        "background_color": background_color,
-        "textColor": text_color,
-        "text_color": text_color,
-        "textSize": text_size,
-        "text_size": text_size,
-        "fontSize": text_size,
-        "audioPath": audio_path,
-        "audio_path": audio_path,
-        "src": if is_image { text_value } else { "" },
-    })
-}
-
-fn empty_streaming_music_payload() -> serde_json::Value {
-    serde_json::json!({
-        "slideType": "",
-        "slide_type": "",
-        "type": "",
-        "videoPath": "",
-        "video_path": "",
-        "label": "",
-        "text": "",
-        "title": "",
-        "subtitle": "",
-        "backgroundImage": "",
-        "background_image": "",
-        "backgroundColor": "",
-        "background_color": "",
-        "textColor": "",
-        "text_color": "",
-        "textSize": 0,
-        "text_size": 0,
-        "fontSize": 0,
-        "audioPath": "",
-        "audio_path": "",
-        "src": "",
-    })
-}
-
-fn build_return_stream_payload(
-    current: &SlideContent,
-    context: Option<&SlideContext>,
-) -> serde_json::Value {
-    let current_title = streaming_slide_title(current);
-    if let Some(ctx) = context {
-        if !ctx.title.is_empty() && ctx.title == current_title {
-            return serde_json::json!({
-                "current": streaming_slide_payload(current),
-                "next": ctx.next.as_ref().map(streaming_slide_payload),
-                "index": ctx.index,
-                "total": ctx.total,
-                "title": ctx.title,
-            });
-        }
-    }
-
-    serde_json::json!({
-        "current": streaming_slide_payload(current),
-        "next": null,
-        "index": 0,
-        "total": 1,
-        "title": current_title,
-    })
 }
 
 pub fn stable_monitor_id(monitor: &tauri::Monitor) -> String {
@@ -200,7 +110,9 @@ fn monitor_display_score(
     score += scale_delta * 100;
 
     if !normalized_tauri_name.is_empty() {
-        if normalized_tauri_name == normalized_friendly_name || normalized_tauri_name == normalized_display_name {
+        if normalized_tauri_name == normalized_friendly_name
+            || normalized_tauri_name == normalized_display_name
+        {
             score -= 20_000_000;
         } else if normalized_friendly_name.contains(&normalized_tauri_name)
             || normalized_display_name.contains(&normalized_tauri_name)
@@ -456,24 +368,26 @@ pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppErr
             let is_primary = primary_monitor_id
                 .as_ref()
                 .map_or(i == 0, |primary_id| primary_id == &monitor_id);
-            let external_display_info = external_display_mapping
-                .get(i)
-                .and_then(|mapped_index| mapped_index.and_then(|index| external_displays.get(index)));
+            let external_display_info = external_display_mapping.get(i).and_then(|mapped_index| {
+                mapped_index.and_then(|index| external_displays.get(index))
+            });
             let tauri_name = tauri_names
                 .get(i)
                 .cloned()
                 .unwrap_or_else(|| format!("Monitor {}", i + 1));
             let friendly_name = external_display_info
                 .and_then(|display| normalize_monitor_label(&display.friendly_name));
-            let name = friendly_name
-                .clone()
-                .unwrap_or_else(|| tauri_name.clone());
+            let name = friendly_name.clone().unwrap_or_else(|| tauri_name.clone());
             let manufacturer = friendly_name
                 .as_deref()
                 .and_then(detect_manufacturer)
                 .or_else(|| detect_manufacturer(&tauri_name));
-            let model = extract_model(friendly_name.as_ref().map(|s| s.as_str()), manufacturer.as_deref());
-            let connection_type = infer_connection_type(Some(&tauri_name), friendly_name.as_deref());
+            let model = extract_model(
+                friendly_name.as_ref().map(|s| s.as_str()),
+                manufacturer.as_deref(),
+            );
+            let connection_type =
+                infer_connection_type(Some(&tauri_name), friendly_name.as_deref());
             MonitorInfo {
                 id: monitor_id,
                 name,
@@ -538,7 +452,7 @@ fn open_fullscreen_window(
                             && m_size.width == parsed.width
                             && m_size.height == parsed.height;
                         if matched {
-                             eprintln!("[display] Fuzzy candidate match: {:?}", m.name());
+                            eprintln!("[display] Fuzzy candidate match: {:?}", m.name());
                         }
                         matched
                     })
@@ -546,12 +460,10 @@ fn open_fullscreen_window(
 
                 if !candidates.is_empty() {
                     // Pick the one closest to original position
-                    return candidates
-                        .into_iter()
-                        .min_by_key(|m| {
-                            let p = m.position();
-                            (p.x - parsed.x).abs() + (p.y - parsed.y).abs()
-                        });
+                    return candidates.into_iter().min_by_key(|m| {
+                        let p = m.position();
+                        (p.x - parsed.x).abs() + (p.y - parsed.y).abs()
+                    });
                 }
             }
             None
@@ -613,7 +525,10 @@ fn open_fullscreen_window(
         let _ = window.set_fullscreen(true);
         std::thread::sleep(std::time::Duration::from_millis(150));
         if window.is_fullscreen().unwrap_or(false) {
-            eprintln!("[display] Window {label} entered fullscreen on attempt {}.", i + 1);
+            eprintln!(
+                "[display] Window {label} entered fullscreen on attempt {}.",
+                i + 1
+            );
             return Ok(());
         }
     }
@@ -648,9 +563,15 @@ pub fn open_projector_window(
         let mut final_target_id = monitor_id.clone();
         let mut target_monitor_found = false;
         for i in 0..10 {
-            eprintln!("[display] Monitor detection attempt {} for projector...", i + 1);
+            eprintln!(
+                "[display] Monitor detection attempt {} for projector...",
+                i + 1
+            );
             if let Ok(monitors) = app.available_monitors() {
-                if monitors.iter().any(|m| stable_monitor_id(m) == final_target_id) {
+                if monitors
+                    .iter()
+                    .any(|m| stable_monitor_id(m) == final_target_id)
+                {
                     eprintln!("[display] Exact monitor found: {final_target_id}");
                     target_monitor_found = true;
                     break;
@@ -672,16 +593,26 @@ pub fn open_projector_window(
                         break;
                     }
                 }
-                
+
                 // Special fallback for wireless displays: if no match found but exactly ONE external display exists,
                 // and we are seeking an external display (not primary), use it.
-                let external_monitors: Vec<_> = monitors.iter().filter(|m| {
-                     let primary_id = app.primary_monitor().ok().flatten().map(|pm| stable_monitor_id(&pm));
-                     primary_id.as_ref() != Some(&stable_monitor_id(m))
-                }).collect();
+                let external_monitors: Vec<_> = monitors
+                    .iter()
+                    .filter(|m| {
+                        let primary_id = app
+                            .primary_monitor()
+                            .ok()
+                            .flatten()
+                            .map(|pm| stable_monitor_id(&pm));
+                        primary_id.as_ref() != Some(&stable_monitor_id(m))
+                    })
+                    .collect();
 
                 if !target_monitor_found && external_monitors.len() == 1 {
-                    eprintln!("[display] FALLBACK: Only one external monitor found, using it: {:?}", external_monitors[0].name());
+                    eprintln!(
+                        "[display] FALLBACK: Only one external monitor found, using it: {:?}",
+                        external_monitors[0].name()
+                    );
                     final_target_id = stable_monitor_id(external_monitors[0]);
                     target_monitor_found = true;
                     break;
@@ -691,7 +622,10 @@ pub fn open_projector_window(
         }
 
         if !target_monitor_found {
-            eprintln!("[display] Projector monitor {} not found after 10 retries.", monitor_id);
+            eprintln!(
+                "[display] Projector monitor {} not found after 10 retries.",
+                monitor_id
+            );
             let _ = app.emit("projector-state-changed", false);
             if let Some(state) = app.try_state::<crate::state::AppState>() {
                 if let Ok(mut open) = state.projector_open.lock() {
@@ -702,7 +636,11 @@ pub fn open_projector_window(
         }
 
         if let Err(e) = open_fullscreen_window(
-            &app, "projector", "/projector", "LouvorJA - Projector", &final_target_id,
+            &app,
+            "projector",
+            "/projector",
+            "LouvorJA - Projector",
+            &final_target_id,
         ) {
             eprintln!("[display] Failed to open projector window: {e}");
             // Roll back optimistic state
@@ -757,9 +695,15 @@ pub fn open_return_window(
         let mut final_target_id = monitor_id.clone();
         let mut target_monitor_found = false;
         for i in 0..10 {
-            eprintln!("[display] Monitor detection attempt {} for return...", i + 1);
+            eprintln!(
+                "[display] Monitor detection attempt {} for return...",
+                i + 1
+            );
             if let Ok(monitors) = app.available_monitors() {
-                if monitors.iter().any(|m| stable_monitor_id(m) == final_target_id) {
+                if monitors
+                    .iter()
+                    .any(|m| stable_monitor_id(m) == final_target_id)
+                {
                     target_monitor_found = true;
                     break;
                 }
@@ -785,7 +729,10 @@ pub fn open_return_window(
         }
 
         if !target_monitor_found {
-            eprintln!("[display] Return monitor {} not found after 10 retries.", monitor_id);
+            eprintln!(
+                "[display] Return monitor {} not found after 10 retries.",
+                monitor_id
+            );
             let _ = app.emit("return-state-changed", false);
             if let Some(state) = app.try_state::<crate::state::AppState>() {
                 if let Ok(mut open) = state.return_open.lock() {
@@ -796,7 +743,11 @@ pub fn open_return_window(
         }
 
         if let Err(e) = open_fullscreen_window(
-            &app, "return", "/return", "LouvorJA - Return Monitor", &final_target_id,
+            &app,
+            "return",
+            "/return",
+            "LouvorJA - Return Monitor",
+            &final_target_id,
         ) {
             eprintln!("[display] Failed to open return window: {e}");
             // Roll back optimistic state
@@ -859,13 +810,21 @@ pub fn set_current_slide(
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
         match context.clone() {
-            Some(ctx) if !ctx.title.is_empty() && ctx.title == current_title => ctx,
+            Some(ctx)
+                if is_empty_hymn_gap_slide(&slide_data)
+                    || (!ctx.title.is_empty() && ctx.title == current_title) =>
+            {
+                ctx
+            }
             _ => {
                 let fallback = SlideContext {
                     next: None,
                     index: 0,
                     total: 1,
                     title: current_title,
+                    current_slide_start_ms: None,
+                    next_slide_start_ms: None,
+                    audio_duration_ms: None,
                 };
                 *context = Some(fallback.clone());
                 fallback
@@ -891,7 +850,9 @@ pub fn set_current_slide(
 
             server.broadcast_music(&empty_streaming_music_payload().to_string());
         } else {
-            server.broadcast_music(&streaming_slide_payload(&slide_data).to_string());
+            server.broadcast_music(
+                &build_music_stream_payload(&slide_data, Some(&slide_context)).to_string(),
+            );
 
             let clear_bible = serde_json::json!({
                 "reference": "",
@@ -955,13 +916,7 @@ pub fn clear_current_slide(
         });
         server.broadcast_bible(&bible_json.to_string());
 
-        let return_json = serde_json::json!({
-            "current": null,
-            "next": null,
-            "index": 0,
-            "total": 0,
-            "title": "",
-        });
+        let return_json = empty_return_stream_payload();
         server.broadcast_return(&return_json.to_string());
     }
 
@@ -990,8 +945,12 @@ pub fn set_slide_context(
 
     // Broadcast to return monitor SSE
     if let Ok(server) = streaming_state.server.lock() {
-        // Get current slide for the "current" panel
         let current_slide = state.current_slide.lock().ok().and_then(|s| s.clone());
+
+        if let Some(slide) = current_slide.as_ref() {
+            let music_json = build_music_stream_payload(slide, Some(&context_data));
+            server.broadcast_music(&music_json.to_string());
+        }
 
         let json = serde_json::json!({
             "current": current_slide.as_ref().map(streaming_slide_payload),
@@ -999,6 +958,9 @@ pub fn set_slide_context(
             "index": context_data.index,
             "total": context_data.total,
             "title": context_data.title,
+            "currentSlideStartMs": context_data.current_slide_start_ms,
+            "nextSlideStartMs": context_data.next_slide_start_ms,
+            "audioDurationMs": context_data.audio_duration_ms,
         });
         server.broadcast_return(&json.to_string());
     }
@@ -1115,4 +1077,3 @@ pub fn get_monitor_configs(
         .map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::settings::get_monitor_configs(&conn)
 }
-

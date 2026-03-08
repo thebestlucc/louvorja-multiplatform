@@ -147,9 +147,65 @@ body {
   color: rgba(255, 255, 255, 0.6);
 }
 .status.error { color: #ef4444; }
+.gap-indicator {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  z-index: 4;
+  width: min(50vw, 460px);
+  transform: translateX(-50%);
+  display: none;
+  pointer-events: none;
+}
+.gap-indicator-shell {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  padding: 10px 12px;
+  backdrop-filter: blur(10px);
+}
+.gap-indicator-track {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.gap-indicator-bar {
+  position: absolute;
+  inset: 0 auto 0 -36%;
+  width: 36%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0),
+    rgba(167, 243, 208, 0.85),
+    rgba(255, 255, 255, 1)
+  );
+  box-shadow: 0 0 18px rgba(167, 243, 208, 0.45);
+  animation: gap-indicator-flow 1.55s ease-in-out infinite;
+}
+@keyframes gap-indicator-flow {
+  0% {
+    transform: translateX(0);
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(380%);
+    opacity: 0.55;
+  }
+}
 @media (max-width: 900px) {
   .return-root { padding: 8px; }
   .text-wrap.with-panel { padding: 16px 20px; }
+  .gap-indicator {
+    width: min(82vw, 360px);
+    bottom: 14px;
+  }
 }
 </style>
 </head>
@@ -158,6 +214,13 @@ body {
   <div class="frame current">
     <img id="cur-bg" class="bg-image" alt="">
     <div id="cur-overlay" class="bg-overlay"></div>
+    <div id="cur-gap-indicator" class="gap-indicator" aria-hidden="true">
+      <div class="gap-indicator-shell">
+        <div class="gap-indicator-track">
+          <div id="cur-gap-indicator-bar" class="gap-indicator-bar"></div>
+        </div>
+      </div>
+    </div>
     <div id="cur-panel" class="panel">
       <div id="cur-label" class="label"></div>
       <img id="cur-image" class="image-media" alt="">
@@ -197,14 +260,14 @@ body {
 
 <script>
 let es = null;
-let utilityEs = null;
 let reconnectTimer = null;
-let utilityReconnectTimer = null;
 let uiLanguage = "pt";
 let lastRealPayload = null;
+let lastCoverPayload = null;
 let lastUtilityEvent = null;
 let activeUtilitySessionId = null;
 let clockTimer = null;
+let lastAudioPlayback = null;
 
 const I18N = {
   pt: {
@@ -268,6 +331,21 @@ function safeText(value) {
 function safeNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeAudioPlaybackPayload(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const positionMs = safeNumber(raw.positionMs ?? raw.position_ms);
+  const durationMs = safeNumber(raw.durationMs ?? raw.duration_ms);
+  return {
+    positionMs: positionMs ?? 0,
+    durationMs,
+    isPlaying: Boolean(raw.isPlaying),
+    isPaused: Boolean(raw.isPaused)
+  };
 }
 
 function encodePathSegment(value) {
@@ -340,6 +418,114 @@ function normalizeSlidePayload(raw) {
     textSize: safeNumber(textSize) ?? 0,
     audioPath: typeof audioPath === "string" ? audioPath : ""
   };
+}
+
+function hasVisualSlide(slide) {
+  if (!slide) return false;
+  const slideType = getSlideType(slide);
+  if (slideType !== "cover" && slideType !== "lyrics" && slideType !== "text") {
+    return false;
+  }
+  return Boolean(toStreamingMediaUrl(slide.backgroundImage))
+    || safeText(slide.backgroundColor).length > 0;
+}
+
+function isGapSlide(slide) {
+  if (!slide) return false;
+  const slideType = getSlideType(slide);
+  if (slideType !== "text" && slideType !== "lyrics") {
+    return false;
+  }
+  return safeText(slide.text).length === 0
+    && safeText(slide.title).length === 0
+    && safeText(slide.label).length === 0;
+}
+
+function resolveCoverVisualPayload(slide) {
+  if (!slide || !isGapSlide(slide) || !lastCoverPayload) {
+    return slide;
+  }
+
+  return {
+    ...slide,
+    backgroundImage: slide.backgroundImage || lastCoverPayload.backgroundImage,
+    backgroundColor: slide.backgroundColor || lastCoverPayload.backgroundColor,
+    textColor: slide.textColor || lastCoverPayload.textColor,
+    textSize: slide.textSize || lastCoverPayload.textSize,
+  };
+}
+
+function extractGapTiming(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  return {
+    currentSlideStartMs: safeNumber(payload.currentSlideStartMs ?? payload.current_slide_start_ms),
+    nextSlideStartMs: safeNumber(payload.nextSlideStartMs ?? payload.next_slide_start_ms),
+    audioDurationMs: safeNumber(payload.audioDurationMs ?? payload.audio_duration_ms)
+  };
+}
+
+function setCurrentGapIndicatorVisible(visible) {
+  document.getElementById("cur-gap-indicator").style.display = visible ? "block" : "none";
+}
+
+function setCurrentGapIndicatorProgress(progressRatio) {
+  const bar = document.getElementById("cur-gap-indicator-bar");
+  if (!bar) return;
+
+  if (progressRatio == null) {
+    bar.style.animation = "gap-indicator-flow 1.55s ease-in-out infinite";
+    bar.style.left = "-36%";
+    bar.style.transform = "";
+    bar.style.width = "36%";
+    return;
+  }
+
+  const percent = Math.max(10, Math.min(100, Math.round(progressRatio * 100)));
+  bar.style.animation = "none";
+  bar.style.left = "0";
+  bar.style.transform = "none";
+  bar.style.width = percent + "%";
+}
+
+function resolveGapProgressRatio(timing, audioPlayback) {
+  if (!timing || !audioPlayback) {
+    return null;
+  }
+
+  const startMs = timing.currentSlideStartMs;
+  const endMs = timing.nextSlideStartMs != null
+    ? timing.nextSlideStartMs
+    : (timing.audioDurationMs != null ? timing.audioDurationMs : audioPlayback.durationMs);
+  if (startMs == null || endMs == null || endMs <= startMs) {
+    return null;
+  }
+
+  const clampedPositionMs = Math.min(Math.max(audioPlayback.positionMs, startMs), endMs);
+  return (clampedPositionMs - startMs) / (endMs - startMs);
+}
+
+function updateCurrentGapIndicator(payload) {
+  const slide = resolveCoverVisualPayload(normalizeSlidePayload(payload && payload.current ? payload.current : payload));
+  if (!slide || !isGapSlide(slide)) {
+    setCurrentGapIndicatorVisible(false);
+    return;
+  }
+
+  setCurrentGapIndicatorVisible(true);
+  setCurrentGapIndicatorProgress(resolveGapProgressRatio(extractGapTiming(payload), lastAudioPlayback));
+}
+
+function applyAudioPlayback(payload) {
+  lastAudioPlayback = normalizeAudioPlaybackPayload(payload);
+  if (lastUtilityEvent) {
+    return;
+  }
+  if (lastRealPayload) {
+    updateCurrentGapIndicator(lastRealPayload);
+  }
 }
 
 function payloadSupportsUtility(payload, kind) {
@@ -432,9 +618,13 @@ function resolveFontSize(sourceSize, mode, variant) {
 function applyPanel(prefix, payload, mode) {
   resetPanel(prefix);
 
-  const slide = normalizeSlidePayload(payload);
+  const slide = resolveCoverVisualPayload(normalizeSlidePayload(payload));
   if (!slide) {
     return;
+  }
+
+  if (mode === "current" && hasVisualSlide(slide)) {
+    lastCoverPayload = slide;
   }
 
   const slideType = getSlideType(slide);
@@ -543,6 +733,7 @@ function applyPanel(prefix, payload, mode) {
 
 function setCurrentStatus(key, isError) {
   resetPanel("cur");
+  setCurrentGapIndicatorVisible(false);
   const status = document.getElementById("cur-status");
   status.textContent = tr(key);
   status.className = isError ? "status error" : "status";
@@ -595,7 +786,9 @@ function applyPayload(payload, persistRealPayload) {
 
   if (normalizedPayload.current) {
     applyPanel("cur", normalizedPayload.current, "current");
+    updateCurrentGapIndicator(normalizedPayload);
   } else {
+    setCurrentGapIndicatorVisible(false);
     setCurrentStatus("waitingContent", false);
   }
 
@@ -721,6 +914,7 @@ function applyUtilityEvent(eventPayload, replayOnly) {
     ? (normalizeSlidePayload(lastRealPayload.current || lastRealPayload) || {})
     : {};
 
+  setCurrentGapIndicatorVisible(false);
   applyPanel("cur", {
     slideType: "cover",
     videoPath: "",
@@ -744,6 +938,10 @@ function handleReturnStreamMessage(data) {
   if (!data || typeof data !== "object") return;
   if (data.utilityProjection && typeof data.utilityProjection === "object") {
     applyUtilityEvent(data.utilityProjection, false);
+    return;
+  }
+  if (data.audioPlayback && typeof data.audioPlayback === "object") {
+    applyAudioPlayback(data.audioPlayback);
     return;
   }
   applyPayload(data, true);
@@ -808,6 +1006,15 @@ async function fetchUtilitySnapshot() {
   } catch (_) {}
 }
 
+async function fetchAudioSnapshot() {
+  try {
+    const response = await fetch("/state/audio", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyAudioPlayback(data);
+  } catch (_) {}
+}
+
 async function isServerAvailable() {
   try {
     const response = await fetch("/status", { cache: "no-store" });
@@ -825,14 +1032,6 @@ function scheduleReconnect() {
   }, 1500);
 }
 
-function scheduleUtilityReconnect() {
-  if (utilityReconnectTimer) return;
-  utilityReconnectTimer = setTimeout(function () {
-    utilityReconnectTimer = null;
-    connectUtility();
-  }, 1500);
-}
-
 async function connectIfAvailable() {
   await refreshUiLanguage();
   if (es) return;
@@ -843,13 +1042,16 @@ async function connectIfAvailable() {
     return;
   }
   connect();
-  connectUtility();
 }
 
 function connect() {
   if (es) return;
   es = new EventSource("/sse/return");
-  es.onopen = function () { void fetchSnapshot(); };
+  es.onopen = function () {
+    void fetchSnapshot();
+    void fetchUtilitySnapshot();
+    void fetchAudioSnapshot();
+  };
   es.onmessage = function (event) {
     try {
       handleReturnStreamMessage(JSON.parse(event.data));
@@ -862,24 +1064,6 @@ function connect() {
     }
     setCurrentStatus("disconnectedReconnecting", true);
     scheduleReconnect();
-  };
-}
-
-function connectUtility() {
-  if (utilityEs) return;
-  utilityEs = new EventSource("/sse/utility");
-  utilityEs.onopen = function () { void fetchUtilitySnapshot(); };
-  utilityEs.onmessage = function (event) {
-    try {
-      applyUtilityEvent(JSON.parse(event.data), false);
-    } catch (_) {}
-  };
-  utilityEs.onerror = function () {
-    if (utilityEs) {
-      utilityEs.close();
-      utilityEs = null;
-    }
-    scheduleUtilityReconnect();
   };
 }
 
@@ -896,9 +1080,7 @@ setInterval(function() { void refreshUiLanguage(); }, 30000);
 window.addEventListener("beforeunload", function () {
   if (clockTimer) clearInterval(clockTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (utilityReconnectTimer) clearTimeout(utilityReconnectTimer);
   if (es) es.close();
-  if (utilityEs) utilityEs.close();
 });
 </script>
 </body>

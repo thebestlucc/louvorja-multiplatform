@@ -1,8 +1,8 @@
-use specta::Type;
-use crate::audio::SyncPoint;
+use crate::audio::{AudioVariant, SyncPoint};
 use crate::error::AppError;
-use crate::state::{AppState, AudioState};
+use crate::state::{AppState, AudioState, StreamingState};
 use serde::Serialize;
+use specta::Type;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;
@@ -11,6 +11,16 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const AUDIO_STATUS_EVENT: &str = "audio-status";
 const AUDIO_STATUS_EMIT_INTERVAL_MS: u64 = 50;
+
+fn parse_audio_variant(mode: &str) -> Result<AudioVariant, AppError> {
+    match mode.trim() {
+        "sung" => Ok(AudioVariant::Sung),
+        "karaoke" => Ok(AudioVariant::Karaoke),
+        other => Err(AppError::Internal(format!(
+            "Unsupported playback mode for variant switching: {other}"
+        ))),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +55,27 @@ fn emit_audio_status(app: &AppHandle, state: &AudioState) -> Result<AudioStatusP
     let payload = snapshot_audio_status(state)?;
     app.emit(AUDIO_STATUS_EVENT, &payload)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
+    broadcast_streaming_audio_status(app, &payload);
     Ok(payload)
+}
+
+fn broadcast_streaming_audio_status(app: &AppHandle, payload: &AudioStatusPayload) {
+    let Some(streaming_state) = app.try_state::<StreamingState>() else {
+        return;
+    };
+    let Ok(server) = streaming_state.server.lock() else {
+        return;
+    };
+
+    if let Ok(payload_json) = serde_json::to_string(payload) {
+        server.set_audio_status(&payload_json);
+    }
+
+    let envelope = serde_json::json!({
+        "audioPlayback": payload,
+    });
+    server.broadcast_music_transient(&envelope.to_string());
+    server.broadcast_return_transient(&envelope.to_string());
 }
 
 fn stop_audio_status_stream(state: &AudioState) -> Result<(), AppError> {
@@ -103,6 +133,7 @@ fn start_audio_status_stream(app: &AppHandle, state: &AudioState) -> Result<(), 
 
             if should_emit {
                 let _ = app_handle.emit(AUDIO_STATUS_EVENT, &payload);
+                broadcast_streaming_audio_status(&app_handle, &payload);
                 previous_payload = Some(payload.clone());
             }
 
@@ -120,6 +151,7 @@ fn start_audio_status_stream(app: &AppHandle, state: &AudioState) -> Result<(), 
 pub fn audio_play(
     file_path: String,
     position_ms: Option<u64>,
+    preserve_live_position: Option<bool>,
     app: AppHandle,
     state: tauri::State<'_, AudioState>,
 ) -> Result<(), AppError> {
@@ -129,13 +161,70 @@ pub fn audio_play(
             .player
             .lock()
             .map_err(|e| AppError::Internal(e.to_string()))?;
-        player.play(&resolved_path, position_ms)?;
-        // Store the original (unresolved) path so the frontend can identify
-        // which file is playing using the same relative path it passed in.
-        player.set_input_path(&file_path);
+        player.play(
+            &resolved_path,
+            &file_path,
+            position_ms,
+            preserve_live_position.unwrap_or(false),
+        )?;
     }
 
     start_audio_status_stream(&app, &state)?;
+    let _ = emit_audio_status(&app, &state)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn audio_play_variants(
+    sung_file_path: String,
+    karaoke_file_path: String,
+    active_mode: String,
+    position_ms: Option<u64>,
+    app: AppHandle,
+    state: tauri::State<'_, AudioState>,
+) -> Result<(), AppError> {
+    let sung_resolved_path = resolve_audio_path(&sung_file_path, &app)?;
+    let karaoke_resolved_path = resolve_audio_path(&karaoke_file_path, &app)?;
+    let active_variant = parse_audio_variant(&active_mode)?;
+
+    {
+        let mut player = state
+            .player
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        player.play_variants(
+            &sung_resolved_path,
+            &sung_file_path,
+            &karaoke_resolved_path,
+            &karaoke_file_path,
+            active_variant,
+            position_ms,
+        )?;
+    }
+
+    start_audio_status_stream(&app, &state)?;
+    let _ = emit_audio_status(&app, &state)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn audio_switch_variant(
+    active_mode: String,
+    app: AppHandle,
+    state: tauri::State<'_, AudioState>,
+) -> Result<(), AppError> {
+    let active_variant = parse_audio_variant(&active_mode)?;
+
+    {
+        let mut player = state
+            .player
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        player.switch_variant(active_variant)?;
+    }
+
     let _ = emit_audio_status(&app, &state)?;
     Ok(())
 }
@@ -177,6 +266,23 @@ pub fn audio_resume(app: AppHandle, state: tauri::State<'_, AudioState>) -> Resu
     player.resume();
     drop(player);
     start_audio_status_stream(&app, &state)?;
+    let _ = emit_audio_status(&app, &state)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn audio_set_output_muted(
+    muted: bool,
+    app: AppHandle,
+    state: tauri::State<'_, AudioState>,
+) -> Result<(), AppError> {
+    let mut player = state
+        .player
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    player.set_output_muted(muted);
+    drop(player);
     let _ = emit_audio_status(&app, &state)?;
     Ok(())
 }

@@ -173,6 +173,9 @@ function ServiceEditor() {
         index: itemIndex >= 0 ? itemIndex : 0,
         total: items.length,
         title: item.title,
+        currentSlideStartMs: null,
+        nextSlideStartMs: null,
+        audioDurationMs: null,
       });
     }, { notify: true });
   }, [items]);

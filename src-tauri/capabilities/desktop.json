@@ -14,6 +14,15 @@
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
     "store:default",
-    "autostart:default"
+    "autostart:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/presentation-bridge",
+          "sidecar": true
+        }
+      ]
+    }
   ]
 }

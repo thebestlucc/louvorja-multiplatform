@@ -288,12 +288,11 @@ number,title,author,album,category
 
 ## Reference Documents
 
-- **Full Plan:** `docs/DATABASE_POPULATE_PLAN.md` (18 sections, 600+ lines)
+- **Full Plan:** `docs/archive/legacy/DATABASE_POPULATE_PLAN.md` (18 sections, 600+ lines)
 - **Tasks:** `docs/phase-04-database-populate/TASKS.md` (detailed checklist)
 - **Existing:** `docs/MIGRATION_GUIDE.md`, `scripts/seed-hymns.sql`
 
 ---
 
 **Status:** ✅ Ready to Implement  
-**Questions?** See `docs/DATABASE_POPULATE_PLAN.md` for full details.
-
+**Questions?** See `docs/archive/legacy/DATABASE_POPULATE_PLAN.md` for full details.

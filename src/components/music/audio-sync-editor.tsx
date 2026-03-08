@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Circle, Trash2, Save, RotateCcw, Clock, Square } from "lucide-react";
 import { useAudio } from "../../hooks/use-audio";
 import { useSaveSyncPoints } from "../../lib/queries";
+import { getActiveTimestamp, sortSyncPointsForMode } from "../../lib/audio-sync";
 import { Button } from "../ui/button";
 import type { SyncPoint, SlideContent } from "../../lib/bindings";
 
@@ -30,27 +31,32 @@ export function AudioSyncEditor({
   onClose,
 }: AudioSyncEditorProps) {
   const { t } = useTranslation();
-  const { positionMs, durationMs, status } = useAudio();
+  const { positionMs, durationMs, status, playbackMode } = useAudio();
   const saveMutation = useSaveSyncPoints();
 
-  const [points, setPoints] = useState<SyncPoint[]>(
-    [...initialPoints].sort((a, b) => a.timestampMs - b.timestampMs),
-  );
+  const [points, setPoints] = useState<SyncPoint[]>([...initialPoints]);
   const [isRecording, setIsRecording] = useState(false);
 
   const isPlaying = status === "playing";
+  const activeMode = playbackMode === "karaoke" ? "karaoke" : "sung";
+  const displayPoints = sortSyncPointsForMode(points, activeMode);
 
   const handleRecordSlide = useCallback((slideIndex: number) => {
     setPoints((prev) => {
-      const filtered = prev.filter((p) => p.slideIndex !== slideIndex);
+      const existing = prev.find((point) => point.slideIndex === slideIndex);
+      const filtered = prev.filter((point) => point.slideIndex !== slideIndex);
       const newPoint: SyncPoint = {
         slideIndex,
-        timestampMs: positionMs,
-        instrumentalTimestampMs: null, // Keep existing or default to null for now
+        timestampMs: activeMode === "karaoke"
+          ? (existing?.timestampMs ?? positionMs)
+          : positionMs,
+        instrumentalTimestampMs: activeMode === "karaoke"
+          ? positionMs
+          : (existing?.instrumentalTimestampMs ?? null),
       };
-      return [...filtered, newPoint].sort((a, b) => a.timestampMs - b.timestampMs);
+      return sortSyncPointsForMode([...filtered, newPoint], activeMode);
     });
-  }, [positionMs]);
+  }, [activeMode, positionMs]);
 
   const handleRemovePoint = (slideIndex: number) => {
     setPoints((prev) => prev.filter((p) => p.slideIndex !== slideIndex));
@@ -76,14 +82,15 @@ export function AudioSyncEditor({
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        {points.map((point) => {
-          const percent = durationMs > 0 ? (point.timestampMs / durationMs) * 100 : 0;
+        {displayPoints.map((point) => {
+          const activeTimestamp = getActiveTimestamp(point, activeMode);
+          const percent = durationMs > 0 ? (activeTimestamp / durationMs) * 100 : 0;
           return (
             <div
-              key={`${point.slideIndex}-${point.timestampMs}`}
+              key={`${point.slideIndex}-${activeTimestamp}-${activeMode}`}
               className="absolute top-0 -translate-x-1/2"
               style={{ left: `${percent}%` }}
-              title={`Slide ${point.slideIndex + 1} @ ${formatTime(point.timestampMs)}`}
+              title={`Slide ${point.slideIndex + 1} @ ${formatTime(activeTimestamp)}`}
             >
               <div className="mt-1 h-4 w-1 bg-accent rounded-full border border-surface shadow-sm" />
             </div>
@@ -118,6 +125,9 @@ export function AudioSyncEditor({
             <RotateCcw className="mr-1 h-3 w-3" />
             {t("audio.clearAll")}
           </Button>
+          <span className="rounded-full border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+            Sync lane: {t(`audio.${activeMode}`)}
+          </span>
         </div>
         <div className="text-sm font-medium tabular-nums text-muted-foreground bg-muted px-2 py-1 rounded-md">
           {formatTime(positionMs)} / {formatTime(durationMs)}
@@ -135,9 +145,10 @@ export function AudioSyncEditor({
         
         <div className="max-h-60 overflow-y-auto divide-y divide-border">
           {Array.from({ length: totalSlides }).map((_, slideIndex) => {
-            const point = points.find(p => p.slideIndex === slideIndex);
+            const point = points.find((p) => p.slideIndex === slideIndex);
             const slide = slides[slideIndex];
             const slideText = slide?.text || (slideIndex === 0 ? "Título / Capa" : "...");
+            const activeTimestamp = point ? getActiveTimestamp(point, activeMode) : null;
             
             return (
               <div 
@@ -154,7 +165,7 @@ export function AudioSyncEditor({
                 <div className="text-right tabular-nums">
                   {point ? (
                     <span className="font-medium text-primary">
-                      {formatTime(point.timestampMs)}
+                      {formatTime(activeTimestamp ?? 0)}
                     </span>
                   ) : (
                     <span className="text-muted-foreground/40">--:--</span>

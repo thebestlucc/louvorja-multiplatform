@@ -35,6 +35,9 @@ import type {
   StreamingInfo,
   TimerMode,
   TimerStateData,
+  BridgeApplyConfigResult,
+  BridgeConfig,
+  BridgeManagerStatus,
   VideoMetadata,
   UpdateInfo,
   LegacyFetchOptions,
@@ -255,8 +258,30 @@ export async function getMonitorConfigs(): Promise<MonitorConfig[]> {
 }
 
 // Audio
-export async function audioPlay(filePath: string, positionMs?: number | null): Promise<void> {
-  return tauriInvoke<void>("audio_play", { filePath, positionMs: positionMs ?? null });
+export async function audioPlay(
+  filePath: string,
+  positionMs?: number | null,
+  preserveLivePosition?: boolean | null,
+): Promise<void> {
+  return tauriInvoke<void>("audio_play", {
+    filePath,
+    positionMs: positionMs ?? null,
+    preserveLivePosition: preserveLivePosition ?? null,
+  });
+}
+
+export async function audioPlayVariants(
+  sungFilePath: string,
+  karaokeFilePath: string,
+  activeMode: "sung" | "karaoke",
+  positionMs?: number | null,
+): Promise<void> {
+  return tauriInvoke<void>("audio_play_variants", {
+    sungFilePath,
+    karaokeFilePath,
+    activeMode,
+    positionMs: positionMs ?? null,
+  });
 }
 
 export async function audioPlayAlert(filePath?: string | null, volume?: number | null): Promise<void> {
@@ -272,6 +297,14 @@ export async function audioPause(): Promise<void> {
 
 export async function audioResume(): Promise<void> {
   return tauriInvoke<void>("audio_resume");
+}
+
+export async function audioSetOutputMuted(muted: boolean): Promise<void> {
+  return tauriInvoke<void>("audio_set_output_muted", { muted });
+}
+
+export async function audioSwitchVariant(activeMode: "sung" | "karaoke"): Promise<void> {
+  return tauriInvoke<void>("audio_switch_variant", { activeMode });
 }
 
 export async function audioStop(): Promise<void> {
@@ -505,6 +538,30 @@ export async function getAllSettings(): Promise<Setting[]> {
 
 export async function clearDatabase(): Promise<{ success: boolean }> {
   return tauriInvoke<{ success: boolean }>("clear_database");
+}
+
+export async function getBridgeStatus(): Promise<BridgeManagerStatus> {
+  return tauriInvoke<BridgeManagerStatus>("bridge_status");
+}
+
+export async function startBridge(): Promise<BridgeManagerStatus> {
+  return tauriInvoke<BridgeManagerStatus>("bridge_start");
+}
+
+export async function stopBridge(): Promise<BridgeManagerStatus> {
+  return tauriInvoke<BridgeManagerStatus>("bridge_stop");
+}
+
+export async function applyBridgeConfig(config: BridgeConfig): Promise<BridgeApplyConfigResult> {
+  return tauriInvoke<BridgeApplyConfigResult>("bridge_apply_config", { config });
+}
+
+export async function registerBridgeAutostart(): Promise<boolean> {
+  return tauriInvoke<boolean>("bridge_register_autostart");
+}
+
+export async function unregisterBridgeAutostart(): Promise<void> {
+  return tauriInvoke<void>("bridge_unregister_autostart");
 }
 
 // Legacy Fetch (From LouvorJA Server)

@@ -52,7 +52,7 @@ The following are defined in Ring Standards and MUST not be duplicated:
 |------|------------|---------|
 | Hymn | Song with lyrics and metadata | Hymnal, Projection |
 | Slide | Visual presentation unit | Presentation, Slides |
-| Operator | Control interface | Operator Screen |
+| Playing now | Control interface | Playing now screen |
 | Projector | Presentation window | Projector Screen |
 
 ---

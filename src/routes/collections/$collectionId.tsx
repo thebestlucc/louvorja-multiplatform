@@ -306,7 +306,7 @@ function CollectionDetail() {
       setPlaybackMode("silent");
     }
 
-    void router.navigate({ to: "/operator" });
+    void router.navigate({ to: "/playing-now" });
   };
 
   return (

@@ -65,7 +65,7 @@ export function PlayingQueue() {
       currentIndex={currentIndex} 
       onItemClick={setCurrentIndex}
       onRemoveItem={removeFromQueue}
-      emptyMessage={t("operator.queueEmpty")}
+      emptyMessage={t("playingNow.queueEmpty")}
     />
   );
 }

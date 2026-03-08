@@ -7,6 +7,7 @@ license = ""
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
+default-run = "lja_multiplatform"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -62,7 +63,10 @@ objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+global-hotkey = "0.7"
+tao = "0.34"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"

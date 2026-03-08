@@ -1,6 +1,6 @@
 use serde::Serialize;
-use specta::Type;
 use specta::datatype::reference::Reference;
+use specta::Type;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -32,11 +32,17 @@ pub struct AppErrorResponse {
 }
 
 impl specta::Type for AppError {
-    fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::DataType {
+    fn inline(
+        type_map: &mut specta::TypeCollection,
+        generics: specta::Generics,
+    ) -> specta::DataType {
         AppErrorResponse::inline(type_map, generics)
     }
 
-    fn reference(type_map: &mut specta::TypeCollection, _generics: &[specta::DataType]) -> Reference {
+    fn reference(
+        type_map: &mut specta::TypeCollection,
+        _generics: &[specta::DataType],
+    ) -> Reference {
         AppErrorResponse::reference(type_map, &[])
     }
 }

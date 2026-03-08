@@ -16,7 +16,7 @@ import { Route as UtilitiesRouteRouteImport } from './routes/utilities/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as ServicesRouteRouteImport } from './routes/services/route'
 import { Route as PresentationsRouteRouteImport } from './routes/presentations/route'
-import { Route as OperatorRouteRouteImport } from './routes/operator/route'
+import { Route as PlayingNowRouteRouteImport } from './routes/playing-now/route'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as HymnalRouteRouteImport } from './routes/hymnal/route'
 import { Route as HelpRouteRouteImport } from './routes/help/route'
@@ -27,7 +27,7 @@ import { Route as UtilitiesIndexRouteImport } from './routes/utilities/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
 import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
-import { Route as OperatorIndexRouteImport } from './routes/operator/index'
+import { Route as PlayingNowIndexRouteImport } from './routes/playing-now/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as HymnalIndexRouteImport } from './routes/hymnal/index'
 import { Route as CollectionsIndexRouteImport } from './routes/collections/index'
@@ -80,9 +80,9 @@ const PresentationsRouteRoute = PresentationsRouteRouteImport.update({
   path: '/presentations',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OperatorRouteRoute = OperatorRouteRouteImport.update({
-  id: '/operator',
-  path: '/operator',
+const PlayingNowRouteRoute = PlayingNowRouteRouteImport.update({
+  id: '/playing-now',
+  path: '/playing-now',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
@@ -135,10 +135,10 @@ const PresentationsIndexRoute = PresentationsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PresentationsRouteRoute,
 } as any)
-const OperatorIndexRoute = OperatorIndexRouteImport.update({
+const PlayingNowIndexRoute = PlayingNowIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => OperatorRouteRoute,
+  getParentRoute: () => PlayingNowRouteRoute,
 } as any)
 const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   id: '/',
@@ -229,7 +229,7 @@ export interface FileRoutesByFullPath {
   '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRouteWithChildren
-  '/operator': typeof OperatorRouteRouteWithChildren
+  '/playing-now': typeof PlayingNowRouteRouteWithChildren
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
@@ -253,7 +253,7 @@ export interface FileRoutesByFullPath {
   '/collections/': typeof CollectionsIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
-  '/operator/': typeof OperatorIndexRoute
+  '/playing-now/': typeof PlayingNowIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -281,7 +281,7 @@ export interface FileRoutesByTo {
   '/collections': typeof CollectionsIndexRoute
   '/hymnal': typeof HymnalIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
-  '/operator': typeof OperatorIndexRoute
+  '/playing-now': typeof PlayingNowIndexRoute
   '/presentations': typeof PresentationsIndexRoute
   '/services': typeof ServicesIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -295,7 +295,7 @@ export interface FileRoutesById {
   '/help': typeof HelpRouteRoute
   '/hymnal': typeof HymnalRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRouteWithChildren
-  '/operator': typeof OperatorRouteRouteWithChildren
+  '/playing-now': typeof PlayingNowRouteRouteWithChildren
   '/presentations': typeof PresentationsRouteRouteWithChildren
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
@@ -319,7 +319,7 @@ export interface FileRoutesById {
   '/collections/': typeof CollectionsIndexRoute
   '/hymnal/': typeof HymnalIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
-  '/operator/': typeof OperatorIndexRoute
+  '/playing-now/': typeof PlayingNowIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -334,7 +334,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/hymnal'
     | '/onboarding'
-    | '/operator'
+    | '/playing-now'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -358,7 +358,7 @@ export interface FileRouteTypes {
     | '/collections/'
     | '/hymnal/'
     | '/onboarding/'
-    | '/operator/'
+    | '/playing-now/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
@@ -386,7 +386,7 @@ export interface FileRouteTypes {
     | '/collections'
     | '/hymnal'
     | '/onboarding'
-    | '/operator'
+    | '/playing-now'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -399,7 +399,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/hymnal'
     | '/onboarding'
-    | '/operator'
+    | '/playing-now'
     | '/presentations'
     | '/services'
     | '/settings'
@@ -423,7 +423,7 @@ export interface FileRouteTypes {
     | '/collections/'
     | '/hymnal/'
     | '/onboarding/'
-    | '/operator/'
+    | '/playing-now/'
     | '/presentations/'
     | '/services/'
     | '/settings/'
@@ -437,7 +437,7 @@ export interface RootRouteChildren {
   HelpRouteRoute: typeof HelpRouteRoute
   HymnalRouteRoute: typeof HymnalRouteRouteWithChildren
   OnboardingRouteRoute: typeof OnboardingRouteRouteWithChildren
-  OperatorRouteRoute: typeof OperatorRouteRouteWithChildren
+  PlayingNowRouteRoute: typeof PlayingNowRouteRouteWithChildren
   PresentationsRouteRoute: typeof PresentationsRouteRouteWithChildren
   ServicesRouteRoute: typeof ServicesRouteRouteWithChildren
   SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
@@ -498,11 +498,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PresentationsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/operator': {
-      id: '/operator'
-      path: '/operator'
-      fullPath: '/operator'
-      preLoaderRoute: typeof OperatorRouteRouteImport
+    '/playing-now': {
+      id: '/playing-now'
+      path: '/playing-now'
+      fullPath: '/playing-now'
+      preLoaderRoute: typeof PlayingNowRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -575,12 +575,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PresentationsIndexRouteImport
       parentRoute: typeof PresentationsRouteRoute
     }
-    '/operator/': {
-      id: '/operator/'
+    '/playing-now/': {
+      id: '/playing-now/'
       path: '/'
-      fullPath: '/operator/'
-      preLoaderRoute: typeof OperatorIndexRouteImport
-      parentRoute: typeof OperatorRouteRoute
+      fullPath: '/playing-now/'
+      preLoaderRoute: typeof PlayingNowIndexRouteImport
+      parentRoute: typeof PlayingNowRouteRoute
     }
     '/onboarding/': {
       id: '/onboarding/'
@@ -754,16 +754,16 @@ const OnboardingRouteRouteWithChildren = OnboardingRouteRoute._addFileChildren(
   OnboardingRouteRouteChildren,
 )
 
-interface OperatorRouteRouteChildren {
-  OperatorIndexRoute: typeof OperatorIndexRoute
+interface PlayingNowRouteRouteChildren {
+  PlayingNowIndexRoute: typeof PlayingNowIndexRoute
 }
 
-const OperatorRouteRouteChildren: OperatorRouteRouteChildren = {
-  OperatorIndexRoute: OperatorIndexRoute,
+const PlayingNowRouteRouteChildren: PlayingNowRouteRouteChildren = {
+  PlayingNowIndexRoute: PlayingNowIndexRoute,
 }
 
-const OperatorRouteRouteWithChildren = OperatorRouteRoute._addFileChildren(
-  OperatorRouteRouteChildren,
+const PlayingNowRouteRouteWithChildren = PlayingNowRouteRoute._addFileChildren(
+  PlayingNowRouteRouteChildren,
 )
 
 interface PresentationsRouteRouteChildren {
@@ -834,7 +834,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpRouteRoute: HelpRouteRoute,
   HymnalRouteRoute: HymnalRouteRouteWithChildren,
   OnboardingRouteRoute: OnboardingRouteRouteWithChildren,
-  OperatorRouteRoute: OperatorRouteRouteWithChildren,
+  PlayingNowRouteRoute: PlayingNowRouteRouteWithChildren,
   PresentationsRouteRoute: PresentationsRouteRouteWithChildren,
   ServicesRouteRoute: ServicesRouteRouteWithChildren,
   SettingsRouteRoute: SettingsRouteRouteWithChildren,

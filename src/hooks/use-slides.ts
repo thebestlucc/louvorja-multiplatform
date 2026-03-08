@@ -4,8 +4,11 @@ import { setSlideContext } from "../lib/tauri";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useAudioStore } from "../stores/audio-store";
 import { catcher } from "../lib/catcher";
+import { resolveSlideSeekTimestamp as resolveSlideSeekTimestampForMode } from "../lib/audio-sync";
+import { buildProjectionSlideContext } from "../lib/projection-playback";
 
 import type { SlideContent, SyncPoint } from "../lib/bindings";
+import type { PlaybackMode } from "../types/audio";
 import { projectSlideWithType } from "../lib/projection-playback";
 
 export function useSlides() {
@@ -43,12 +46,7 @@ export function useSlides() {
     ) => {
       const projectionType = getProjectionType();
       await projectSlideWithType(slide, projectionType);
-      await setSlideContext({
-        next,
-        index,
-        total,
-        title,
-      });
+      await setSlideContext(buildProjectionSlideContext(next, index, total, title));
     },
     [getProjectionType],
   );
@@ -64,7 +62,11 @@ export function useSlides() {
       return;
     }
 
-    const timestampMs = resolveSlideSeekTimestamp(audioState.syncPoints, index);
+    const timestampMs = resolveSlideSeekTimestamp(
+      audioState.syncPoints,
+      index,
+      audioState.playbackMode,
+    );
     if (timestampMs == null) {
       return;
     }
@@ -85,7 +87,7 @@ export function useSlides() {
     async (index: number, options?: { seekAudio?: boolean }) => {
       const state = usePresentationStore.getState();
       if (index >= 0 && index < state.slides.length) {
-        // Only seek audio if explicitly requested (e.g., from operator sync-aware navigation).
+        // Only seek audio if explicitly requested (e.g., from Playing now sync-aware navigation).
         // Default: don't seek audio when user clicks a slide/verse in the UI.
         if (options?.seekAudio) {
           await seekAudioToSlideSyncPoint(index);
@@ -131,32 +133,12 @@ export function useSlides() {
   };
 }
 
-export function resolveSlideSeekTimestamp(syncPoints: SyncPoint[], slideIndex: number): number | null {
-  let bestMatch: SyncPoint | null = null;
-  let nearestFuture: SyncPoint | null = null;
-
-  for (const point of syncPoints) {
-    if (point.slideIndex === slideIndex) {
-      return point.timestampMs;
-    }
-    if (point.slideIndex < slideIndex) {
-      if (bestMatch == null || point.slideIndex > bestMatch.slideIndex) {
-        bestMatch = point;
-      }
-      continue;
-    }
-    if (point.slideIndex > slideIndex && nearestFuture == null) {
-      nearestFuture = point;
-    }
-  }
-
-  if (bestMatch) {
-    return bestMatch.timestampMs;
-  }
-  if (nearestFuture) {
-    return nearestFuture.timestampMs;
-  }
-  return null;
+export function resolveSlideSeekTimestamp(
+  syncPoints: SyncPoint[],
+  slideIndex: number,
+  mode: PlaybackMode = "sung",
+): number | null {
+  return resolveSlideSeekTimestampForMode(syncPoints, slideIndex, mode);
 }
 
 /** Extract a display title from a slide for the return monitor */

@@ -114,6 +114,9 @@ export function useBible() {
         index: 0,
         total: slides.length,
         title,
+        currentSlideStartMs: null,
+        nextSlideStartMs: null,
+        audioDurationMs: null,
       });
     }, { notify: true });
   }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides]);

@@ -95,6 +95,7 @@ pub struct StreamingServer {
     pub return_broadcaster: Arc<SseBroadcaster>,
     pub utility_broadcaster: Arc<SseBroadcaster>,
     pub ui_broadcaster: Arc<SseBroadcaster>,
+    latest_audio_status: Arc<Mutex<Option<String>>>,
     ui_language: Arc<Mutex<String>>,
     media_root: Arc<Mutex<Option<PathBuf>>>,
     listener: Option<Arc<TcpListener>>,
@@ -131,6 +132,7 @@ impl StreamingServer {
             return_broadcaster: Arc::new(SseBroadcaster::new()),
             utility_broadcaster: Arc::new(SseBroadcaster::new()),
             ui_broadcaster: Arc::new(SseBroadcaster::new()),
+            latest_audio_status: Arc::new(Mutex::new(None)),
             ui_language: Arc::new(Mutex::new("pt".to_string())),
             media_root: Arc::new(Mutex::new(None)),
             listener: None,
@@ -191,6 +193,7 @@ impl StreamingServer {
         let return_bc = Arc::clone(&self.return_broadcaster);
         let utility_bc = Arc::clone(&self.utility_broadcaster);
         let ui_bc = Arc::clone(&self.ui_broadcaster);
+        let latest_audio_status = Arc::clone(&self.latest_audio_status);
         let ui_language = Arc::clone(&self.ui_language);
         let media_root = Arc::clone(&self.media_root);
 
@@ -210,6 +213,8 @@ impl StreamingServer {
                         let running = Arc::clone(&is_running);
                         let language = Arc::clone(&ui_language);
                         let media_root_for_connection = Arc::clone(&media_root);
+                        let latest_audio_status_for_connection =
+                            Arc::clone(&latest_audio_status);
 
                         thread::spawn(move || {
                             let context = ConnectionContext {
@@ -218,6 +223,7 @@ impl StreamingServer {
                                 return_bc: &ret,
                                 utility_bc: &utility,
                                 ui_bc: &ui,
+                                latest_audio_status: &latest_audio_status_for_connection,
                                 ui_language: &language,
                                 media_root: &media_root_for_connection,
                                 is_running: &running,
@@ -316,6 +322,12 @@ impl StreamingServer {
             self.utility_broadcaster.broadcast(data);
         }
     }
+
+    pub fn set_audio_status(&self, data: &str) {
+        if let Ok(mut latest_audio_status) = self.latest_audio_status.lock() {
+            *latest_audio_status = Some(data.to_string());
+        }
+    }
 }
 
 // --- Connection handler ---
@@ -326,6 +338,7 @@ struct ConnectionContext<'a> {
     return_bc: &'a Arc<SseBroadcaster>,
     utility_bc: &'a Arc<SseBroadcaster>,
     ui_bc: &'a Arc<SseBroadcaster>,
+    latest_audio_status: &'a Arc<Mutex<Option<String>>>,
     ui_language: &'a Arc<Mutex<String>>,
     media_root: &'a Arc<Mutex<Option<PathBuf>>>,
     is_running: &'a Arc<AtomicBool>,
@@ -372,6 +385,18 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
                 r#"{"phase":"stop","sessionId":"","kind":"","valueMs":0,"use24Hour":true,"showDate":false}"#
                     .to_string()
             });
+            serve_json(&mut stream, &body);
+        }
+        "/state/audio" => {
+            let body = context
+                .latest_audio_status
+                .lock()
+                .ok()
+                .and_then(|value| value.clone())
+                .unwrap_or_else(|| {
+                    r#"{"positionMs":0,"durationMs":0,"isPlaying":false,"isPaused":false,"volume":1,"currentFile":null}"#
+                        .to_string()
+                });
             serve_json(&mut stream, &body);
         }
         "/state/ui" => {

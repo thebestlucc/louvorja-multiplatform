@@ -173,6 +173,9 @@ pub fn project_bible_verse(
         index: 0,
         total: 1,
         title: reference.clone(),
+        current_slide_start_ms: None,
+        next_slide_start_ms: None,
+        audio_duration_ms: None,
     };
     {
         let mut context = state
@@ -361,6 +364,9 @@ pub fn navigate_bible_verse(
         index: 0,
         total: 1,
         title: new_reference.clone(),
+        current_slide_start_ms: None,
+        next_slide_start_ms: None,
+        audio_duration_ms: None,
     };
     {
         let mut context = state

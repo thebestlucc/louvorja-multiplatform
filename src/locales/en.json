@@ -207,7 +207,7 @@
           "title": "Streaming"
         },
         "utilities": {
-          "description": "Timers, clock, and lottery can be projected and synchronized with operator screens.",
+          "description": "Timers, clock, and lottery can be projected and synchronized with the Playing now screen.",
           "title": "Utility tools"
         }
       },
@@ -279,7 +279,7 @@
     "help": "Help",
     "home": "Home",
     "hymnal": "Hymnal",
-    "operator": "Now Playing",
+    "playingNow": "Playing now",
     "presentations": "Presentations",
     "services": "Services",
     "settings": "Settings",
@@ -322,7 +322,7 @@
       "title": "Let's configure your first run"
     }
   },
-  "operator": {
+  "playingNow": {
     "blackScreenActive": "Black screen active",
     "clearQueue": "Clear queue",
     "logoScreenActive": "Logo screen active",
@@ -463,6 +463,37 @@
     "autoStartDesc": "Automatically start the streaming server when the app opens",
     "autoStartOff": "Disabled",
     "autoStartOn": "Enabled",
+    "bridge": {
+      "description": "Control the standalone presentation bridge without mixing it with LouvorJA's own startup behavior.",
+      "disableAction": "Disable bridge",
+      "disableAutostartAction": "Disable bridge autostart",
+      "enableAction": "Enable bridge",
+      "enabled": "Presentation bridge",
+      "enabledDesc": "Allow LouvorJA to manage the standalone bridge that owns external next/previous shortcuts.",
+      "enableAutostartAction": "Enable bridge autostart",
+      "nextShortcut": "Next shortcut",
+      "nextShortcutPlaceholder": "Alt+Right",
+      "previousShortcut": "Previous shortcut",
+      "previousShortcutPlaceholder": "Alt+Left",
+      "refreshAction": "Refresh status",
+      "restartRequired": "Restart the bridge to apply lifecycle changes.",
+      "saveShortcuts": "Save bridge shortcuts",
+      "shortcutsDescription": "Edit the bridge-owned global shortcuts used for external next and previous slide control.",
+      "shortcutsTitle": "Presentation bridge shortcuts",
+      "startAction": "Start bridge",
+      "startWithOs": "Start presentation bridge with OS",
+      "startWithOsDesc": "Register presentation-bridge to start independently at login.",
+      "startWithOsWindowsOnly": "Bridge autostart registration is currently available on Windows only.",
+      "statusError": "Error",
+      "statusNotRunning": "Not running",
+      "statusRunningIndependent": "Running (independent)",
+      "statusRunningManaged": "Running (managed)",
+      "statusVersionMismatch": "Version mismatch",
+      "stopAction": "Stop bridge",
+      "targetApp": "Target app",
+      "targetAppPowerPointWindows": "PowerPoint (Windows)",
+      "title": "Presentation bridge"
+    },
     "collections": "Collections",
     "collectionsAutoCheck": "Auto-check source on open",
     "collectionsAutoCheckDesc": "Automatically validate song source hash and modified timestamp when opening a collection.",
@@ -740,7 +771,7 @@
   },
   "utilities": {
     "clock": {
-      "description": "Live clock view for operator timing.",
+      "description": "Live clock view for timing on the Playing now screen.",
       "hideDate": "Hide date",
       "hour12": "12-hour",
       "hour24": "24-hour",

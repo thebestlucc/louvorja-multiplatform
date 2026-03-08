@@ -300,9 +300,8 @@ fn upsert_collection_hymn_search_document(
          WHERE h.id = ?2",
     )?;
 
-    let (title, lyrics, author, album, collection_name, collection_description, cover_path) = stmt.query_row(
-        params![collection_id, hymn_id],
-        |row| {
+    let (title, lyrics, author, album, collection_name, collection_description, cover_path) = stmt
+        .query_row(params![collection_id, hymn_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -312,8 +311,7 @@ fn upsert_collection_hymn_search_document(
                 row.get::<_, String>(5)?,
                 row.get::<_, Option<String>>(6)?,
             ))
-        },
-    )?;
+        })?;
 
     let body = format!("{} {} {} {}", lyrics, author, album, collection_description);
 
@@ -386,8 +384,6 @@ fn reindex_collection_song_documents(
 
     Ok(())
 }
-
-
 
 pub fn reindex_collection_song_documents_by_presentation(
     conn: &Connection,
@@ -875,11 +871,7 @@ pub fn delete_collection_hymn(
     Ok(())
 }
 
-
-pub fn find_collection_by_api_album_id(
-    conn: &Connection,
-    api_album_id: i64,
-) -> Option<i64> {
+pub fn find_collection_by_api_album_id(conn: &Connection, api_album_id: i64) -> Option<i64> {
     conn.query_row(
         "SELECT id FROM collections WHERE api_album_id = ?1",
         params![api_album_id],
@@ -979,7 +971,7 @@ mod tests {
     fn test_upsert_collection_search_document() {
         let conn = setup_conn();
         let coll_id = insert_test_collection(&conn);
-        
+
         // This call previously panicked due to parameter mismatch
         upsert_collection_search_document(&conn, coll_id).unwrap();
 
@@ -989,20 +981,14 @@ mod tests {
     }
 
     fn insert_test_collection(conn: &Connection) -> i64 {
-        conn.execute(
-            "INSERT INTO collections (name) VALUES ('Test Album')",
-            [],
-        )
-        .unwrap();
+        conn.execute("INSERT INTO collections (name) VALUES ('Test Album')", [])
+            .unwrap();
         conn.last_insert_rowid()
     }
 
     fn insert_test_hymn(conn: &Connection, title: &str) -> i64 {
-        conn.execute(
-            "INSERT INTO hymns (title) VALUES (?1)",
-            params![title],
-        )
-        .unwrap();
+        conn.execute("INSERT INTO hymns (title) VALUES (?1)", params![title])
+            .unwrap();
         conn.last_insert_rowid()
     }
 
@@ -1018,12 +1004,20 @@ mod tests {
         // First insert — should indicate "newly created"
         let first = insert_collection_hymn(&conn, coll_id, hymn_id, 1);
         assert!(first.is_ok());
-        assert_eq!(first.unwrap(), true, "first insert should return true (new link)");
+        assert_eq!(
+            first.unwrap(),
+            true,
+            "first insert should return true (new link)"
+        );
 
         // Second insert (duplicate) — should indicate "already existed"
         let second = insert_collection_hymn(&conn, coll_id, hymn_id, 1);
         assert!(second.is_ok());
-        assert_eq!(second.unwrap(), false, "duplicate insert should return false (already existed)");
+        assert_eq!(
+            second.unwrap(),
+            false,
+            "duplicate insert should return false (already existed)"
+        );
     }
 
     /// Fix 5: item_order should be updated when re-importing the same hymn-collection link.
@@ -1058,6 +1052,9 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(updated_order, 5, "item_order should be updated on re-import");
+        assert_eq!(
+            updated_order, 5,
+            "item_order should be updated on re-import"
+        );
     }
 }

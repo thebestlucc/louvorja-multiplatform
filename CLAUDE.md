@@ -84,7 +84,7 @@ src/                          # Frontend (React)
 │   ├── hymnal/               # route.tsx, index.tsx, $hymnId.tsx
 │   ├── presentations/        # route.tsx, index.tsx, $presentationId.tsx
 │   ├── services/             # route.tsx, index.tsx, $serviceId.tsx
-│   └── operator/             # Operator screen (slide preview + controls)
+│   └── playing-now/          # Playing now screen (slide preview + controls)
 ├── stores/                   # Zustand stores (presentation-store, display-store, audio-store, ui-store, queue-store, theme-store)
 └── types/                    # TypeScript type definitions
 
@@ -250,14 +250,14 @@ src-tauri/src/                # Backend (Rust)
 - **Service-aware update guard:** `UpdateNotification` subscribes to `usePresentationStore` via `.subscribe()` + `getState()`. Suppresses banner when `isProjectorOpen || isPlayingService || activeServiceId !== null`. Status bar indicator uses lightweight pub-sub callback (`onUpdateDeferredChange`) instead of a full store.
 - **Pastoral error messaging:** `classifyUpdateError()` in `lib/update-errors.ts` pattern-matches error strings into 4 categories (network/disk/permission/generic), each with i18n keys for title/why/action/reassurance. Toasts use `duration: Infinity` so users must dismiss manually.
 - **Version display:** `getVersion()` from `@tauri-apps/api/app` called once in `useEffect`, shown in status bar left side as `v{version}`.
-- **Operator screen:** The `/operator` route shows what's currently projected. It listens to Tauri events (`slide-changed`, `overlay-changed`, `slide-cleared`) directly (main process, events work). Controls call `useSlides().prevSlide()/nextSlide()` and `useAudio().togglePlayPause()`. Does NOT auto-open projection screens.
+- **Playing now screen:** The `/playing-now` route shows what's currently projected. It listens to Tauri events (`slide-changed`, `overlay-changed`, `slide-cleared`) directly (main process, events work). Controls call `useSlides().prevSlide()/nextSlide()` and `useAudio().togglePlayPause()`. Does NOT auto-open projection screens.
 - **Hymn 4 actions:** Hymn detail page has 4 explicit buttons: Cantado (sung mode + project), Playback (karaoke mode + project), Só slides (silent, no audio), Ver letra (LyricsModal). `LyricsModal` in `components/music/lyrics-modal.tsx` uses Radix `Dialog`.
 - **Legacy DB import:** `migrate_v13` in `migrations.rs` detects Delphi-schema tables (`musics`, `lyrics`, `albums`, `files`) and imports them into `hymns`. Idempotent: skips if `hymns` already has rows or if `musics` table is absent.
 - **Tauri plugin-store:** For NEW preferences only (UI state, layout). Existing SQLite settings stay in SQLite. Use `src/lib/store.ts` helpers (`getPreference`/`setPreference`/`deletePreference`). Add `store:default` to `desktop.json` capabilities.
 - **Clipboard:** Use `src/lib/clipboard.ts` `copyToClipboard()` — wraps `@tauri-apps/plugin-clipboard-manager`. Requires `clipboard-manager:allow-write-text` + `clipboard-manager:allow-read-text` in `desktop.json`. Never use `navigator.clipboard` directly (fails in Tauri webview without HTTPS).
 - **Global shortcuts:** Registered in `lib.rs` `setup()` via `GlobalShortcutExt::on_shortcut()`, emitted as `"global-shortcut"` Tauri events with string payload. Listened in `use-keyboard.ts` second `useEffect`. Use `Alt+` modifier for global shortcuts to avoid interfering with typing.
 - **Plugin capabilities split:** `pnpm tauri add` may add permissions to `default.json` OR `desktop.json` depending on when each file was created. Always verify `desktop.json` after adding plugins — missing permissions cause silent plugin failures (e.g., clipboard `NotAllowedError`).
-- **Playing Queue pattern:** `useQueueStore` manages the ordered list of hymns for continuous playback. `use-playback-coordinator.ts` hook syncs queue index changes → auto-starts audio + slides. `useAudioStore` exposes an `onFinished` callback to trigger `queueStore.next()` on song completion. `PlayingQueue` component lives on the `/operator` route.
+- **Playing Queue pattern:** `useQueueStore` manages the ordered list of hymns for continuous playback. `use-playback-coordinator.ts` hook syncs queue index changes → auto-starts audio + slides. `useAudioStore` exposes an `onFinished` callback to trigger `queueStore.next()` on song completion. `PlayingQueue` component lives on the `/playing-now` route.
 
 ## Phase Status
 

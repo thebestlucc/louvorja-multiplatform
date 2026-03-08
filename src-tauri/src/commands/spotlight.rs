@@ -35,24 +35,25 @@ mod macos {
                 let pos = m.position();
                 let size = m.size();
                 let scale = m.scale_factor();
-                (size.width / scale, size.height / scale, pos.x / scale, pos.y / scale)
+                (
+                    size.width / scale,
+                    size.height / scale,
+                    pos.x / scale,
+                    pos.y / scale,
+                )
             })
             .or_else(|| {
-                win.app_handle()
-                    .primary_monitor()
-                    .ok()
-                    .flatten()
-                    .map(|m| {
-                        let pos = m.position();
-                        let size = m.size();
-                        let scale = m.scale_factor();
-                        (
-                            size.width as f64 / scale,
-                            size.height as f64 / scale,
-                            pos.x as f64 / scale,
-                            pos.y as f64 / scale,
-                        )
-                    })
+                win.app_handle().primary_monitor().ok().flatten().map(|m| {
+                    let pos = m.position();
+                    let size = m.size();
+                    let scale = m.scale_factor();
+                    (
+                        size.width as f64 / scale,
+                        size.height as f64 / scale,
+                        pos.x as f64 / scale,
+                        pos.y as f64 / scale,
+                    )
+                })
             });
 
         let (screen_w, screen_h, screen_x, screen_y) = bounds.unwrap_or((1440.0, 900.0, 0.0, 0.0));
@@ -90,7 +91,10 @@ mod macos {
 
         // NonactivatingPanel: accepts key events without stealing app-level focus.
         panel.set_style_mask(
-            StyleMask::empty().nonactivating_panel().full_size_content_view().into(),
+            StyleMask::empty()
+                .nonactivating_panel()
+                .full_size_content_view()
+                .into(),
         );
 
         // Register windowDidResignKey → auto-hide.
