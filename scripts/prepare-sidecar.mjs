@@ -7,26 +7,7 @@ const release = process.argv.includes("--release");
 const manifestPath = join(root, "src-tauri", "Cargo.toml");
 const requestedTargetTriple = process.env.SIDE_CAR_TARGET_TRIPLE?.trim();
 
-const rustc = spawnSync("rustc", ["-vV"], {
-  cwd: root,
-  encoding: "utf8",
-});
-
-if (rustc.status !== 0) {
-  process.stderr.write(rustc.stderr || "Failed to detect Rust target triple.\n");
-  process.exit(rustc.status ?? 1);
-}
-
-const hostLine = rustc.stdout
-  .split("\n")
-  .find((line) => line.startsWith("host: "));
-
-if (!hostLine) {
-  process.stderr.write("Unable to parse host target triple from `rustc -vV`.\n");
-  process.exit(1);
-}
-
-const hostTriple = hostLine.replace("host: ", "").trim();
+const hostTriple = requestedTargetTriple ? null : detectHostTriple(root);
 const targetTriple = requestedTargetTriple || hostTriple;
 const isWindowsTarget = targetTriple.includes("windows");
 const executableName = isWindowsTarget ? "presentation-bridge.exe" : "presentation-bridge";
@@ -46,12 +27,14 @@ if (release) {
   cargoArgs.push("--release");
 }
 
-if (targetTriple !== hostTriple) {
+if (requestedTargetTriple) {
+  cargoArgs.push("--target", targetTriple);
+} else if (targetTriple !== hostTriple) {
   cargoArgs.push("--target", targetTriple);
 }
 
 const profileDir = release ? "release" : "debug";
-const builtBinary = targetTriple === hostTriple
+const builtBinary = !requestedTargetTriple && targetTriple === hostTriple
   ? join(root, "src-tauri", "target", profileDir, executableName)
   : join(root, "src-tauri", "target", targetTriple, profileDir, executableName);
 const binariesDir = join(root, "src-tauri", "binaries");
@@ -75,3 +58,26 @@ if (cargo.status !== 0) {
 }
 copyFileSync(builtBinary, stagedBinary);
 process.stdout.write(`Prepared sidecar for ${targetTriple}: ${stagedBinary}\n`);
+
+function detectHostTriple(cwd) {
+  const rustc = spawnSync("rustc", ["-vV"], {
+    cwd,
+    encoding: "utf8",
+  });
+
+  if (rustc.status !== 0) {
+    process.stderr.write(rustc.stderr || "Failed to detect Rust target triple.\n");
+    process.exit(rustc.status ?? 1);
+  }
+
+  const hostLine = rustc.stdout
+    .split("\n")
+    .find((line) => line.startsWith("host: "));
+
+  if (!hostLine) {
+    process.stderr.write("Unable to parse host target triple from `rustc -vV`.\n");
+    process.exit(1);
+  }
+
+  return hostLine.replace("host: ", "").trim();
+}
