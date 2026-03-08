@@ -190,6 +190,54 @@ async removeHymnFromCollection(collectionId: number, hymnId: number) : Promise<R
     else return { status: "error", error: e  as any };
 }
 },
+async getContentSyncSummary() : Promise<Result<ContentSyncSummary, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_content_sync_summary") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async planContentSync() : Promise<Result<ContentSyncPlan, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plan_content_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async startContentSync() : Promise<Result<string, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_content_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getContentSyncProgress(runId: string) : Promise<Result<ContentSyncProgress, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_content_sync_progress", { runId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelContentSync(runId: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_content_sync", { runId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getContentSyncReport(runId: string) : Promise<Result<ContentSyncReport | null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_content_sync_report", { runId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getBibleVersions() : Promise<Result<BibleVersion[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_bible_versions") };
@@ -1269,6 +1317,17 @@ export type CollectionSearchResult = { kind: string; collectionId: number; songI
 export type CollectionSong = { id: number; collectionId: number; sourcePath: string; sourceFormat: string; sourceHash: string | null; sourceMtimeMs: number; cachePresentationId: number; syncStatus: CollectionSongSyncStatus; lastSyncAt: string | null; itemOrder: number; createdAt: string; updatedAt: string; cachePresentationTitle: string | null }
 export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "error"
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
+export type ContentSyncFallbackAction = "start_full_sync"
+export type ContentSyncPlan = { mode: ContentSyncRunMode; summary: ContentSyncSummary; items: ContentSyncPlanItem[] }
+export type ContentSyncPlanItem = { id: string; entityType: string; remoteId: number | null; localId: number | null; action: ContentSyncPlanItemAction; status: ContentSyncPlanItemStatus; reason: string | null }
+export type ContentSyncPlanItemAction = "create_hymn" | "update_hymn" | "create_album" | "update_album" | "relink_collection_hymn" | "repair_media" | "delete_remote_managed_hymn" | "delete_remote_managed_album" | "full_sync_fallback"
+export type ContentSyncPlanItemStatus = "pending" | "running" | "completed" | "skipped" | "failed"
+export type ContentSyncProgress = { runId: string; step: string; status: ContentSyncRunStatus; percent: number; message: string | null; itemsTotal: number; itemsProcessed: number }
+export type ContentSyncReport = { runId: string; mode: ContentSyncRunMode; status: ContentSyncRunStatus; requestedVersion: number | null; completedVersion: number | null; appliedCount: number; skippedCount: number; failedCount: number; fallbackUsed: boolean; resultJson: string | null; errorJson: string | null; createdAt: string; finishedAt: string | null; message: string | null }
+export type ContentSyncRunMode = "check" | "selective" | "full" | "repair"
+export type ContentSyncRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled"
+export type ContentSyncSummary = { mode: ContentSyncSummaryMode; currentVersion: number | null; remoteVersion: number | null; hasUpdates: boolean; changedHymnCount: number; changedAlbumCount: number; missingAssetCount: number; fallbackAction: ContentSyncFallbackAction | null; lastCheckedAt: string | null; lastSyncedAt: string | null; lastSyncStatus: ContentSyncRunStatus | null; lastError: string | null }
+export type ContentSyncSummaryMode = "smart" | "degraded"
 /**
  * Check if the API has a newer db_version than what we have stored locally.
  * Returns `{ has_new_version: bool, new_version: Option<i64> }`.

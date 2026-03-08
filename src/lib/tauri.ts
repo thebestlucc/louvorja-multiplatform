@@ -45,6 +45,12 @@ import type {
   LegacyFetchReport,
   ApiParams,
 } from "./bindings";
+import type {
+  ContentSyncPlan,
+  ContentSyncProgress,
+  ContentSyncReport,
+  ContentSyncSummary,
+} from "../types/content-sync";
 import type { TextFormat } from "../types/utilities";
 
 export async function tauriInvoke<T>(
@@ -587,6 +593,30 @@ export async function fetchLegacyParams(): Promise<ApiParams> {
 
 export async function checkDbVersion(): Promise<{ hasNewVersion: boolean; newVersion: number | null }> {
   return tauriInvoke<{ hasNewVersion: boolean; newVersion: number | null }>("check_db_version");
+}
+
+export async function getContentSyncSummary(): Promise<ContentSyncSummary> {
+  return tauriInvoke<ContentSyncSummary>("get_content_sync_summary");
+}
+
+export async function planContentSync(): Promise<ContentSyncPlan> {
+  return tauriInvoke<ContentSyncPlan>("plan_content_sync");
+}
+
+export async function startContentSync(): Promise<string> {
+  return tauriInvoke<string>("start_content_sync");
+}
+
+export async function getContentSyncProgress(runId: string): Promise<ContentSyncProgress> {
+  return tauriInvoke<ContentSyncProgress>("get_content_sync_progress", { runId });
+}
+
+export async function cancelContentSync(runId: string): Promise<void> {
+  return tauriInvoke<void>("cancel_content_sync", { runId });
+}
+
+export async function getContentSyncReport(runId: string): Promise<ContentSyncReport | null> {
+  return tauriInvoke<ContentSyncReport | null>("get_content_sync_report", { runId });
 }
 
 export async function restoreHymnFromApi(hymnId: number, language: string): Promise<void> {

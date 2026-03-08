@@ -149,6 +149,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (27)", [])?;
     }
 
+    if current_version < 28 {
+        migrate_v28(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (28)", [])?;
+    }
+
     Ok(())
 }
 
@@ -1103,6 +1108,59 @@ fn migrate_v27(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v28(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS content_sync_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            content_version INTEGER,
+            last_checked_at TEXT,
+            last_synced_at TEXT,
+            last_sync_status TEXT,
+            last_error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS content_sync_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            remote_id INTEGER NOT NULL,
+            local_id INTEGER,
+            remote_version INTEGER,
+            content_hash TEXT,
+            lyrics_hash TEXT,
+            image_version TEXT,
+            audio_version TEXT,
+            playback_version TEXT,
+            updated_at TEXT,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_local_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(entity_type, remote_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_content_sync_entities_type_remote
+            ON content_sync_entities(entity_type, remote_id);
+
+        CREATE TABLE IF NOT EXISTS content_sync_runs (
+            id TEXT PRIMARY KEY,
+            mode TEXT NOT NULL,
+            status TEXT NOT NULL,
+            requested_version INTEGER,
+            completed_version INTEGER,
+            planned_changes_json TEXT,
+            result_json TEXT,
+            error_json TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            finished_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_content_sync_runs_status_created_at
+            ON content_sync_runs(status, created_at DESC);
+        ",
+    )?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1135,7 +1193,18 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 27);
+        assert_eq!(schema_version, 28);
+
+        for table in [
+            "content_sync_state",
+            "content_sync_entities",
+            "content_sync_runs",
+        ] {
+            assert!(
+                table_exists(&conn, table).expect("table exists"),
+                "missing table {table}"
+            );
+        }
 
         assert!(
             column_exists(&conn, "audio_sync_points", "instrumental_timestamp_ms",)
@@ -1203,7 +1272,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v26() {
+    fn fresh_migration_chain_stepwise_reaches_v28() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1234,6 +1303,7 @@ mod tests {
             (25, migrate_v25),
             (26, migrate_v26),
             (27, migrate_v27),
+            (28, migrate_v28),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));

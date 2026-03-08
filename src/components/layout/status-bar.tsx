@@ -9,6 +9,7 @@ import { StreamingControls } from "../streaming/streaming-controls";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useStreamingStatus, useTimerState } from "../../lib/queries";
 import { formatUtilityTimer } from "../../types/utilities";
+import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import { cn } from "../../lib/utils";
 
@@ -25,6 +26,7 @@ export function StatusBar() {
   const { data: status } = useStreamingStatus();
   const { data: timerState } = useTimerState();
   const legacyFetchProgress = useLegacyFetchStore((s) => s.progress);
+  const contentSyncProgress = useContentSyncStore((s) => s.progress);
   
   const isRunning = status?.isRunning ?? false;
   const hasTimerProgress = Boolean(
@@ -48,6 +50,9 @@ export function StatusBar() {
   const isSyncing = legacyFetchProgress && 
     ["fetching", "importing", "downloading"].includes(legacyFetchProgress.status);
   const showSyncIndicator = isSyncing && !isOnSettings;
+  const contentSyncRunning = contentSyncProgress
+    && ["pending", "running"].includes(contentSyncProgress.status);
+  const showContentSyncIndicator = Boolean(contentSyncRunning && !isOnSettings);
 
   return (
     <footer className="flex h-8 items-center justify-between border-t border-border bg-surface px-3 text-[11px] text-muted-foreground">
@@ -57,6 +62,21 @@ export function StatusBar() {
       </span>
 
       <div className="flex items-center gap-3">
+        {showContentSyncIndicator && (
+          <button
+            onClick={() => navigate({ to: "/settings", search: { tab: "migration" } })}
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-emerald-400 hover:bg-white/10"
+            title={t("settings.contentSync.title")}
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>
+              {t("settings.contentSync.statusBar", {
+                current: contentSyncProgress?.itemsProcessed ?? 0,
+                total: contentSyncProgress?.itemsTotal ?? 0,
+              })}
+            </span>
+          </button>
+        )}
         {showSyncIndicator && (
           <button
             onClick={() => navigate({ to: "/settings", search: { tab: "migration" } })}

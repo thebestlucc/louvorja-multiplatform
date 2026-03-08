@@ -8,9 +8,10 @@
 //!
 //! Interacts with `AppState` to store run status and emits progress events to the frontend.
 
+use crate::content_sync::importer;
 use crate::error::AppError;
 use crate::legacy_fetch::{
-    fetcher, importer, new_run_id, LegacyFetchError, LegacyFetchOptions, LegacyFetchProgress,
+    fetcher, new_run_id, LegacyFetchError, LegacyFetchOptions, LegacyFetchProgress,
     LegacyFetchReport, LegacyFetchRunState, LegacyFetchStatus, LegacyFetchSubTask,
 };
 use crate::state::AppState;
@@ -337,15 +338,6 @@ fn update_global_progress(
     }
 }
 
-fn extract_year_from_url(url: &str) -> Option<i32> {
-    let filename = url.split('/').last()?.split('.').next()?;
-    if filename.len() == 4 && filename.chars().all(|c| c.is_ascii_digit()) {
-        filename.parse::<i32>().ok()
-    } else {
-        None
-    }
-}
-
 async fn run_legacy_fetch_background(
     app: AppHandle,
     run_id: String,
@@ -544,65 +536,28 @@ async fn run_legacy_fetch_background(
                 d
             };
 
-            let (audio_res, playback_res, cover_res) = {
+            let media = {
                 let _permit = sem_h.acquire().await.ok();
-                tokio::join!(
-                    async {
-                        if options_h.download_audio {
-                            importer::download_media_file(
-                                detailed_item.url_music.as_ref(),
-                                &media_dir_h,
-                                "audio",
-                                detailed_item.id_music,
-                                "mp3",
-                            )
-                            .await
-                        } else {
-                            None
-                        }
-                    },
-                    async {
-                        if options_h.download_audio {
-                            importer::download_media_file(
-                                detailed_item.url_instrumental_music.as_ref(),
-                                &media_dir_h,
-                                "playback",
-                                detailed_item.id_music,
-                                "mp3",
-                            )
-                            .await
-                        } else {
-                            None
-                        }
-                    },
-                    async {
-                        if options_h.download_images {
-                            importer::download_media_file(
-                                detailed_item.url_image.as_ref(),
-                                &media_dir_h,
-                                "images",
-                                detailed_item.id_music,
-                                "jpg",
-                            )
-                            .await
-                        } else {
-                            None
-                        }
-                    }
+                importer::download_music_media(
+                    &detailed_item,
+                    &media_dir_h,
+                    options_h.download_audio,
+                    options_h.download_images,
                 )
+                .await
             };
 
-            if audio_res.is_some() {
+            if media.has_audio_download() {
                 audio_h.fetch_add(1, Ordering::Relaxed);
             }
-            if playback_res.is_some() {
+            if media.has_playback_download() {
                 audio_h.fetch_add(1, Ordering::Relaxed);
             }
-            if cover_res.is_some() {
+            if media.has_cover_download() {
                 images_h.fetch_add(1, Ordering::Relaxed);
             }
 
-            db_batch.push((detailed_item, audio_res, playback_res, cover_res));
+            db_batch.push((detailed_item, media));
 
             let is_last_item =
                 current_index + 1 >= queue.len() && page >= last_page_num.unwrap_or(0);
@@ -613,13 +568,13 @@ async fn run_legacy_fetch_background(
                 if let Ok(mut db) = state.db.get() {
                     if let Ok(tx) = db.transaction() {
                         let mut db_changed = false;
-                        for (item, a, p, c) in db_batch.drain(..) {
+                        for (item, media) in db_batch.drain(..) {
                             let db_res = importer::import_music_to_db(
                                 &tx,
                                 &item,
-                                a.as_deref(),
-                                p.as_deref(),
-                                c.as_deref(),
+                                media.audio_path.as_deref(),
+                                media.playback_path.as_deref(),
+                                media.cover_path.as_deref(),
                                 options_h.replace_existing,
                                 Some(options_h.language.to_hymnal_name()),
                                 Some(item.id_music),
@@ -764,41 +719,24 @@ async fn run_legacy_fetch_background(
             let mut collection_id_opt = None;
 
             if let Ok(g) = state.db.get() {
-                if let Some(cid) = crate::db::queries::collections::find_collection_by_api_album_id(
-                    &g,
-                    album.id_album,
-                ) {
-                    collection_id_opt = Some(cid);
-                } else {
-                    let cover = if options_a.download_images {
-                        let _permit = sem_a.acquire().await.ok();
-                        importer::download_media_file(
-                            album.url_image.as_ref(),
-                            &media_dir_a,
-                            "album_covers",
-                            album.id_album,
-                            "jpg",
-                        )
+                let cover = {
+                    let _permit = sem_a.acquire().await.ok();
+                    importer::download_album_cover(&album, &media_dir_a, options_a.download_images)
                         .await
-                    } else {
-                        None
-                    };
-                    let release_year =
-                        extract_year_from_url(album.url_image.as_deref().unwrap_or(""));
-                    let _d_permit = dsem_a.acquire().await.ok();
-                    if let Ok(cid) = crate::db::queries::collections::insert_collection(
-                        &g,
-                        &album.name,
-                        None,
-                        release_year,
-                        cover.as_deref(),
-                        "api",
-                        Some(album.id_album),
-                    ) {
+                };
+                let release_year =
+                    importer::extract_year_from_url(album.url_image.as_deref().unwrap_or(""));
+                let _d_permit = dsem_a.acquire().await.ok();
+                if let Ok((cid, created)) =
+                    importer::upsert_api_album_collection(&g, &album, cover.as_deref(), release_year)
+                {
+                    if created {
                         albums_created_a.fetch_add(1, Ordering::Relaxed);
-                        let _ = app_a.emit("data-changed", ());
-                        collection_id_opt = Some(cid);
                     }
+                    if created || cover.is_some() {
+                        let _ = app_a.emit("data-changed", ());
+                    }
+                    collection_id_opt = Some(cid);
                 }
             }
 
@@ -896,66 +834,29 @@ async fn run_legacy_fetch_background(
                             d
                         };
 
-                        let (audio_res, playback_res, cover_res) = {
+                        let media = {
                             let _permit = sem_clone.acquire().await.ok();
-                            tokio::join!(
-                                async {
-                                    if options_clone.download_audio {
-                                        importer::download_media_file(
-                                            detailed_item.url_music.as_ref(),
-                                            &media_dir_clone,
-                                            "audio",
-                                            detailed_item.id_music,
-                                            "mp3",
-                                        )
-                                        .await
-                                    } else {
-                                        None
-                                    }
-                                },
-                                async {
-                                    if options_clone.download_audio {
-                                        importer::download_media_file(
-                                            detailed_item.url_instrumental_music.as_ref(),
-                                            &media_dir_clone,
-                                            "playback",
-                                            detailed_item.id_music,
-                                            "mp3",
-                                        )
-                                        .await
-                                    } else {
-                                        None
-                                    }
-                                },
-                                async {
-                                    if options_clone.download_images {
-                                        importer::download_media_file(
-                                            detailed_item.url_image.as_ref(),
-                                            &media_dir_clone,
-                                            "images",
-                                            detailed_item.id_music,
-                                            "jpg",
-                                        )
-                                        .await
-                                    } else {
-                                        None
-                                    }
-                                }
+                            importer::download_music_media(
+                                &detailed_item,
+                                &media_dir_clone,
+                                options_clone.download_audio,
+                                options_clone.download_images,
                             )
+                            .await
                         };
 
-                        if audio_res.is_some() {
+                        if media.has_audio_download() {
                             audio_clone.fetch_add(1, Ordering::Relaxed);
                         }
-                        if playback_res.is_some() {
+                        if media.has_playback_download() {
                             audio_clone.fetch_add(1, Ordering::Relaxed);
                         }
-                        if cover_res.is_some() {
+                        if media.has_cover_download() {
                             images_clone.fetch_add(1, Ordering::Relaxed);
                         }
 
                         processed_clone.fetch_add(1, Ordering::Relaxed);
-                        (detailed_item, audio_res, playback_res, cover_res, mi as i64)
+                        (detailed_item, media, mi as i64)
                     });
                     m_current_index += 1;
                 }
@@ -972,42 +873,26 @@ async fn run_legacy_fetch_background(
                 if let Ok(mut g) = db_state.db.get() {
                     if let Ok(tx) = g.transaction() {
                         let mut db_changed = false;
-                        for (detailed_item, audio_res, playback_res, cover_res, mi) in song_results
-                        {
-                            let hymn_id_res = importer::import_music_to_db(
+                        for (detailed_item, media, mi) in song_results {
+                            let hymn_id_res = importer::import_music_and_link_to_collection(
                                 &tx,
+                                collection_id,
                                 &detailed_item,
-                                audio_res.as_deref(),
-                                playback_res.as_deref(),
-                                cover_res.as_deref(),
+                                &media,
                                 options_a.replace_existing,
                                 Some(&album.name),
-                                Some(detailed_item.id_music),
                                 Some("album"),
+                                mi,
                             );
                             match hymn_id_res {
-                                Ok((imported, Some(hymn_id))) => {
+                                Ok((imported, _, linked)) => {
                                     if imported {
                                         db_changed = true;
                                     }
-                                    let track_order = detailed_item.track.unwrap_or(mi);
-                                    if let Ok(true) =
-                                        crate::db::queries::collections::insert_collection_hymn(
-                                            &tx,
-                                            collection_id,
-                                            hymn_id,
-                                            track_order,
-                                        )
-                                    {
+                                    if linked {
                                         linked_a.fetch_add(1, Ordering::Relaxed);
                                         db_changed = true;
                                     }
-                                }
-                                Ok((_, None)) => {
-                                    log::error!(
-                                        "Failed to import album song {}: db returned None",
-                                        detailed_item.id_music
-                                    );
                                 }
                                 Err(e) => {
                                     log::error!(
@@ -1184,7 +1069,6 @@ pub async fn restore_hymn_from_api(
     app: AppHandle,
 ) -> Result<(), AppError> {
     use crate::legacy_fetch::fetcher::fetch_music_detail;
-    use crate::legacy_fetch::importer::import_music_to_db;
 
     let (api_music_id, album_name): (i64, Option<String>) = {
         let conn = state
@@ -1219,40 +1103,18 @@ pub async fn restore_hymn_from_api(
         .map_err(|e| AppError::Internal(e.to_string()))?
         .join("media");
 
-    let (audio_res, playback_res, cover_res) = tokio::join!(
-        crate::legacy_fetch::importer::download_media_file(
-            detail.url_music.as_ref(),
-            &data_dir,
-            "audio",
-            api_music_id,
-            "mp3"
-        ),
-        crate::legacy_fetch::importer::download_media_file(
-            detail.url_instrumental_music.as_ref(),
-            &data_dir,
-            "playback",
-            api_music_id,
-            "mp3"
-        ),
-        crate::legacy_fetch::importer::download_media_file(
-            detail.url_image.as_ref(),
-            &data_dir,
-            "images",
-            api_music_id,
-            "jpg"
-        )
-    );
+    let media = importer::download_music_media(&detail, &data_dir, true, true).await;
 
     let conn = state
         .db
         .get()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    import_music_to_db(
+    importer::import_music_to_db(
         &conn,
         &detail,
-        audio_res.as_deref(),
-        playback_res.as_deref(),
-        cover_res.as_deref(),
+        media.audio_path.as_deref(),
+        media.playback_path.as_deref(),
+        media.cover_path.as_deref(),
         true,
         album_name.as_deref(),
         Some(api_music_id),
@@ -1278,7 +1140,6 @@ pub async fn restore_album_from_api(
     app: AppHandle,
 ) -> Result<(), AppError> {
     use crate::legacy_fetch::fetcher::{fetch_album_musics_page, fetch_music_detail};
-    use crate::legacy_fetch::importer::import_music_to_db;
 
     let (api_album_id, album_name): (i64, String) = {
         let conn = state
@@ -1339,54 +1200,18 @@ pub async fn restore_album_from_api(
             detailed_item.track = music.track;
         }
 
-        let audio_path = crate::legacy_fetch::importer::download_media_file(
-            detailed_item.url_music.as_ref(),
-            &data_dir,
-            "audio",
-            detailed_item.id_music,
-            "mp3",
-        )
-        .await;
-        let playback_path = crate::legacy_fetch::importer::download_media_file(
-            detailed_item.url_instrumental_music.as_ref(),
-            &data_dir,
-            "playback",
-            detailed_item.id_music,
-            "mp3",
-        )
-        .await;
-        let cover_path = crate::legacy_fetch::importer::download_media_file(
-            detailed_item.url_image.as_ref(),
-            &data_dir,
-            "images",
-            detailed_item.id_music,
-            "jpg",
-        )
-        .await;
+        let media = importer::download_music_media(&detailed_item, &data_dir, true, true).await;
 
-        let _ = import_music_to_db(
+        let _ = importer::import_music_and_link_to_collection(
             &conn,
+            collection_id,
             &detailed_item,
-            audio_path.as_deref(),
-            playback_path.as_deref(),
-            cover_path.as_deref(),
+            &media,
             true,
             Some(&album_name),
-            Some(detailed_item.id_music),
             Some("album"),
+            mi as i64,
         );
-
-        if let Some(hymn_id) =
-            crate::db::queries::music::find_hymn_by_api_music_id(&conn, detailed_item.id_music)
-        {
-            let track_order = detailed_item.track.unwrap_or(mi as i64);
-            let _ = crate::db::queries::collections::insert_collection_hymn(
-                &conn,
-                collection_id,
-                hymn_id,
-                track_order,
-            );
-        }
     }
 
     let _ = app.emit("data-changed", ());
