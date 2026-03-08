@@ -115,6 +115,9 @@ jobs:
           TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SKIP_FRONTEND_BUILD: "true"
         run: node .github/scripts/inject-updater-config.mjs
+      - name: Build presentation bridge sidecar
+        shell: bash
+        run: node scripts/prepare-sidecar.mjs --release
       - name: Build and publish bundles
         uses: tauri-apps/tauri-action@v0
         env:
