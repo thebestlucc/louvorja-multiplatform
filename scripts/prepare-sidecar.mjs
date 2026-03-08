@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 const root = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const release = process.argv.includes("--release");
 const manifestPath = join(root, "src-tauri", "Cargo.toml");
+const requestedTargetTriple = process.env.SIDE_CAR_TARGET_TRIPLE?.trim();
 
 const rustc = spawnSync("rustc", ["-vV"], {
   cwd: root,
@@ -25,9 +26,11 @@ if (!hostLine) {
   process.exit(1);
 }
 
-const targetTriple = hostLine.replace("host: ", "").trim();
-const executableName = process.platform === "win32" ? "presentation-bridge.exe" : "presentation-bridge";
-const stagedName = process.platform === "win32"
+const hostTriple = hostLine.replace("host: ", "").trim();
+const targetTriple = requestedTargetTriple || hostTriple;
+const isWindowsTarget = targetTriple.includes("windows");
+const executableName = isWindowsTarget ? "presentation-bridge.exe" : "presentation-bridge";
+const stagedName = isWindowsTarget
   ? `presentation-bridge-${targetTriple}.exe`
   : `presentation-bridge-${targetTriple}`;
 
@@ -43,8 +46,14 @@ if (release) {
   cargoArgs.push("--release");
 }
 
+if (targetTriple !== hostTriple) {
+  cargoArgs.push("--target", targetTriple);
+}
+
 const profileDir = release ? "release" : "debug";
-const builtBinary = join(root, "src-tauri", "target", profileDir, executableName);
+const builtBinary = targetTriple === hostTriple
+  ? join(root, "src-tauri", "target", profileDir, executableName)
+  : join(root, "src-tauri", "target", targetTriple, profileDir, executableName);
 const binariesDir = join(root, "src-tauri", "binaries");
 const stagedBinary = join(binariesDir, stagedName);
 
@@ -65,4 +74,4 @@ if (cargo.status !== 0) {
   process.exit(cargo.status ?? 1);
 }
 copyFileSync(builtBinary, stagedBinary);
-process.stdout.write(`Prepared sidecar: ${stagedBinary}\n`);
+process.stdout.write(`Prepared sidecar for ${targetTriple}: ${stagedBinary}\n`);
