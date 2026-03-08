@@ -27,6 +27,7 @@ import {
   getSetting, setSetting, getAllSettings, clearDatabase,
   getBridgeStatus, startBridge, stopBridge, applyBridgeConfig, registerBridgeAutostart, unregisterBridgeAutostart,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
+  getContentSyncSummary, planContentSync, startContentSync, getContentSyncProgress, cancelContentSync, getContentSyncReport,
   restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
@@ -99,6 +100,12 @@ export const queryKeys = {
     progress: (runId: string) => ["legacyFetch", "progress", runId] as const,
     report: (runId: string) => ["legacyFetch", "report", runId] as const,
     params: ["legacyFetch", "params"] as const,
+  },
+  contentSync: {
+    summary: ["contentSync", "summary"] as const,
+    plan: ["contentSync", "plan"] as const,
+    progress: (runId: string) => ["contentSync", "progress", runId] as const,
+    report: (runId: string) => ["contentSync", "report", runId] as const,
   },
   updater: {
     info: ["updater", "info"] as const,
@@ -924,6 +931,76 @@ export function useFetchLegacyParams(options?: { enabled?: boolean }) {
     enabled: options?.enabled ?? true,
     retry: 1,
     staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+export function useContentSyncSummary(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.contentSync.summary,
+    queryFn: () => getContentSyncSummary(),
+    enabled: options?.enabled ?? true,
+    retry: false,
+    staleTime: 1000 * 30,
+  });
+}
+
+export function usePlanContentSync(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.contentSync.plan,
+    queryFn: () => planContentSync(),
+    enabled: options?.enabled ?? true,
+    retry: false,
+  });
+}
+
+export function useStartContentSync() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => startContentSync(),
+    onSuccess: (runId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.progress(runId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.report(runId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.summary });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.plan });
+    },
+  });
+}
+
+export function useContentSyncProgress(runId: string | null, options?: { enabled?: boolean }) {
+  const enabled = Boolean(runId && (options?.enabled ?? true));
+  return useQuery({
+    queryKey: queryKeys.contentSync.progress(runId ?? ""),
+    queryFn: () => getContentSyncProgress(runId ?? ""),
+    enabled,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "pending" || status === "running") {
+        return 500;
+      }
+      return false;
+    },
+    refetchIntervalInBackground: true,
+  });
+}
+
+export function useContentSyncReport(runId: string | null, options?: { enabled?: boolean }) {
+  const enabled = Boolean(runId && (options?.enabled ?? true));
+  return useQuery({
+    queryKey: queryKeys.contentSync.report(runId ?? ""),
+    queryFn: () => getContentSyncReport(runId ?? ""),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useCancelContentSync() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => cancelContentSync(runId),
+    onSuccess: (_, runId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.progress(runId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.report(runId) });
+    },
   });
 }
 

@@ -7,9 +7,13 @@ import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database } from "lucide-react";
 import {
+  useCancelContentSync,
   useCancelLegacyFetch,
   useApplyPresentationBridgeConfig,
   useClearDatabase,
+  useContentSyncProgress,
+  useContentSyncReport,
+  useContentSyncSummary,
   useCopyImageToMedia,
   useFetchLegacyParams,
   useLegacyFetchProgress,
@@ -21,12 +25,15 @@ import {
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
+  useStartContentSync,
   useStartPresentationBridge,
   useStartLegacyFetch,
   useStopPresentationBridge,
   useUnregisterPresentationBridgeAutostart,
 } from "../../lib/queries";
+import { ContentSyncReportCard } from "../../components/content-sync/content-sync-report";
 import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
+import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import type {
   BridgeConfig,
@@ -1219,6 +1226,26 @@ function StreamingSection() {
 function MigrationSection() {
   const { t } = useTranslation();
 
+  const contentSyncRunId = useContentSyncStore((s) => s.runId);
+  const setContentSyncRunId = useContentSyncStore((s) => s.setRunId);
+  const contentSyncStoreProgress = useContentSyncStore((s) => s.progress);
+  const contentSyncStoreReport = useContentSyncStore((s) => s.report);
+  const resetContentSync = useContentSyncStore((s) => s.resetRun);
+  const contentSyncSummaryQuery = useContentSyncSummary();
+  const startContentSyncMutation = useStartContentSync();
+  const cancelContentSyncMutation = useCancelContentSync();
+  const contentSyncProgressQuery = useContentSyncProgress(contentSyncRunId, { enabled: Boolean(contentSyncRunId) });
+  const contentSyncShouldLoadReport = Boolean(
+    contentSyncRunId
+      && contentSyncProgressQuery.data
+      && !["pending", "running"].includes(contentSyncProgressQuery.data.status),
+  );
+  const contentSyncReportQuery = useContentSyncReport(contentSyncRunId, { enabled: contentSyncShouldLoadReport });
+  const contentSyncProgress = contentSyncStoreProgress ?? contentSyncProgressQuery.data;
+  const contentSyncReport = contentSyncStoreReport ?? contentSyncReportQuery.data;
+  const contentSyncIsRunning = contentSyncProgress
+    && ["pending", "running"].includes(contentSyncProgress.status);
+
   const legacyFetchRunId = useLegacyFetchStore((s) => s.runId);
   const setLegacyFetchRunId = useLegacyFetchStore((s) => s.setRunId);
   const legacyFetchStoreProgress = useLegacyFetchStore((s) => s.progress);
@@ -1256,6 +1283,26 @@ function MigrationSection() {
     }
   };
 
+  const handleStartContentSync = async () => {
+    const [runId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
+    if (error) {
+      notify.error(error.message);
+      return;
+    }
+    if (runId) {
+      setContentSyncRunId(runId);
+    }
+  };
+
+  const handleCancelContentSync = () => {
+    if (!contentSyncRunId) return;
+    cancelContentSyncMutation.mutate(contentSyncRunId);
+  };
+
+  const handleContentSyncDone = () => {
+    resetContentSync();
+  };
+
   const handleStartLegacyFetch = async (options: LegacyFetchOptions) => {
     setConnectionError(null);
     const [runId, error] = await catcher(startLegacyFetchMutation.mutateAsync(options), { notify: false });
@@ -1284,32 +1331,89 @@ function MigrationSection() {
   };
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
-      <div className="mb-4 flex items-center gap-2">
-        <Cloud className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-medium">{t("settings.legacyFetch.title")}</h2>
-      </div>
-      <p className="mb-4 text-sm text-muted-foreground">{t("settings.legacyFetch.description")}</p>
+    <div className="space-y-6">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Cloud className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.contentSync.title")}</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {t("settings.contentSync.description")}
+        </p>
 
-      {!legacyFetchShowProgress ? (
-        <LegacyFetchWizard
-          onStartFetch={handleStartLegacyFetch}
-          loading={startLegacyFetchMutation.isPending}
-          connectionStatus={connectionStatus}
-          connectionError={connectionError}
-          onTestConnection={handleTestConnection}
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
+          <Badge variant="secondary">
+            {t("settings.contentSync.mode")}: {contentSyncSummaryQuery.data?.mode ?? t("settings.contentSync.unknown")}
+          </Badge>
+          <Badge variant="secondary">
+            {t("settings.contentSync.currentVersion")}: {contentSyncSummaryQuery.data?.currentVersion ?? t("settings.contentSync.unknown")}
+          </Badge>
+          <Badge variant="secondary">
+            {t("settings.contentSync.remoteVersion")}: {contentSyncSummaryQuery.data?.remoteVersion ?? t("settings.contentSync.unknown")}
+          </Badge>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void contentSyncSummaryQuery.refetch()}
+            disabled={contentSyncSummaryQuery.isFetching}
+          >
+            {t("settings.contentSync.checkNow")}
+          </Button>
+          <Button
+            onClick={() => void handleStartContentSync()}
+            disabled={startContentSyncMutation.isPending || Boolean(contentSyncIsRunning)}
+          >
+            {startContentSyncMutation.isPending
+              ? t("settings.contentSync.starting")
+              : t("settings.contentSync.startSync")}
+          </Button>
+          {contentSyncIsRunning ? (
+            <Button variant="outline" onClick={handleCancelContentSync}>
+              {t("settings.contentSync.cancel")}
+            </Button>
+          ) : null}
+          {(contentSyncProgress || contentSyncReport) ? (
+            <Button variant="ghost" onClick={handleContentSyncDone}>
+              {t("settings.contentSync.clearRun")}
+            </Button>
+          ) : null}
+        </div>
+
+        <ContentSyncReportCard
+          progress={contentSyncProgress ?? null}
+          report={contentSyncReport ?? null}
         />
-      ) : (
-        <LegacyFetchProgressCard
-          progress={legacyFetchProgress ?? null}
-          report={legacyFetchReport ?? null}
-          cancelling={legacyFetchCancelling}
-          onCancel={handleCancelLegacyFetch}
-          onDone={handleLegacyFetchDone}
-          onRetry={handleLegacyFetchRetry}
-        />
-      )}
-    </section>
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Cloud className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.legacyFetch.title")}</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">{t("settings.legacyFetch.description")}</p>
+
+        {!legacyFetchShowProgress ? (
+          <LegacyFetchWizard
+            onStartFetch={handleStartLegacyFetch}
+            loading={startLegacyFetchMutation.isPending}
+            connectionStatus={connectionStatus}
+            connectionError={connectionError}
+            onTestConnection={handleTestConnection}
+          />
+        ) : (
+          <LegacyFetchProgressCard
+            progress={legacyFetchProgress ?? null}
+            report={legacyFetchReport ?? null}
+            cancelling={legacyFetchCancelling}
+            onCancel={handleCancelLegacyFetch}
+            onDone={handleLegacyFetchDone}
+            onRetry={handleLegacyFetchRetry}
+          />
+        )}
+      </section>
+    </div>
   );
 }
 

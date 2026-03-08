@@ -18,6 +18,7 @@ import { Input } from "../../components/ui/input";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoverPicker } from "../../components/media/cover-picker";
 import { buildVisibleHymnLyricItems } from "../../lib/hymn-slides";
+import { ConfirmationDialog } from "../../components/schedules/confirmation-dialog";
 
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
@@ -45,6 +46,7 @@ function HymnDetail() {
   const { bindHymnToPlaybackQueue: bindHymnToQueue, handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
   const [showSyncEditor, setShowSyncEditor] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [isProjecting, setIsProjecting] = useState(false);
   const [isQueueBoundToHymn, setIsQueueBoundToHymn] = useState(false);
   const [localActiveIndex, setLocalActiveIndex] = useState(0);
@@ -183,6 +185,20 @@ function HymnDetail() {
     await handleStartSlidesOnly(hymn);
   };
 
+  const handleDelete = async () => {
+    if (deleteMutation.isPending) return;
+
+    const [_, error] = await catcher(deleteMutation.mutateAsync(id), {
+      notify: true,
+      fallbackMessage: t("hymnal.deleteFailed", { error: "" }),
+    });
+
+    if (!error) {
+      setDeleteOpen(false);
+      void navigate({ to: "/hymnal" });
+    }
+  };
+
   return (
     <div className="flex h-full gap-4">
       {/* Left Sidebar: Slides */}
@@ -300,17 +316,8 @@ function HymnDetail() {
             variant="ghost"
             size="sm"
             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={async () => {
-              if (confirm(t("hymn.deleteConfirm"))) {
-                const [_, error] = await catcher(deleteMutation.mutateAsync(id), {
-                  notify: true,
-                  fallbackMessage: t("hymnal.deleteFailed", { error: "" }),
-                });
-                if (!error) {
-                  void navigate({ to: "/hymnal" });
-                }
-              }
-            }}
+            disabled={deleteMutation.isPending}
+            onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -458,6 +465,17 @@ function HymnDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog
+        open={deleteOpen}
+        title={t("actions.delete")}
+        description={t("hymn.deleteConfirm")}
+        confirmLabel={t("actions.delete")}
+        cancelLabel={t("actions.cancel")}
+        isPending={deleteMutation.isPending}
+        onOpenChange={setDeleteOpen}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

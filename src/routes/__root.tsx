@@ -2,7 +2,6 @@ import { createRootRoute, Outlet, redirect, useRouter, useRouterState } from "@t
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
@@ -16,16 +15,18 @@ import { useMonitorsControl } from "../hooks/use-monitors";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
-import { queryKeys, useMonitorConfigs, useMonitors } from "../lib/queries";
+import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
+import { queryKeys, useContentSyncSummary, useMonitorConfigs, useMonitors, useStartContentSync } from "../lib/queries";
 import { setMonitorConfig } from "../lib/tauri";
 import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
+import { useContentSyncStore } from "../stores/content-sync-store";
 import { useLegacyFetchStore } from "../stores/legacy-fetch-store";
 import { catcher } from "../lib/catcher";
-import { checkDbVersion } from "../lib/tauri";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
 import type { LegacyFetchProgress, LegacyFetchReport } from "../lib/bindings";
+import type { ContentSyncProgress, ContentSyncReport } from "../types/content-sync";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -116,6 +117,15 @@ function RootLayout() {
   const setLegacyFetchProgress = useLegacyFetchStore((s) => s.setProgress);
   const setLegacyFetchReport = useLegacyFetchStore((s) => s.setReport);
   const prevLegacyFetchStatusRef = useRef<string | undefined>(undefined);
+  const contentSyncPromptSummary = useContentSyncStore((s) => s.promptSummary);
+  const contentSyncPromptOpen = useContentSyncStore((s) => s.isPromptOpen);
+  const openContentSyncPrompt = useContentSyncStore((s) => s.openPrompt);
+  const closeContentSyncPrompt = useContentSyncStore((s) => s.closePrompt);
+  const setContentSyncRunId = useContentSyncStore((s) => s.setRunId);
+  const setContentSyncProgress = useContentSyncStore((s) => s.setProgress);
+  const setContentSyncReport = useContentSyncStore((s) => s.setReport);
+  const startContentSyncMutation = useStartContentSync();
+  const contentSyncSummaryQuery = useContentSyncSummary({ enabled: !isBareRoute });
 
   useEffect(() => {
     const unlistenProgress = listen<LegacyFetchProgress>("legacy-fetch-progress", (event) => {
@@ -152,6 +162,27 @@ function RootLayout() {
       unlistenReport.then((unlisten) => unlisten());
     };
   }, [queryClient, setLegacyFetchProgress, setLegacyFetchReport]);
+
+  useEffect(() => {
+    const unlistenProgress = listen<ContentSyncProgress>("content-sync-progress", (event) => {
+      const store = useContentSyncStore.getState();
+      if (!store.runId || event.payload.runId === store.runId) {
+        setContentSyncProgress(event.payload);
+      }
+    }).catch(() => () => {});
+
+    const unlistenReport = listen<ContentSyncReport>("content-sync-report", (event) => {
+      const store = useContentSyncStore.getState();
+      if (!store.runId || event.payload.runId === store.runId) {
+        setContentSyncReport(event.payload);
+      }
+    }).catch(() => () => {});
+
+    return () => {
+      unlistenProgress.then((unlisten) => unlisten());
+      unlistenReport.then((unlisten) => unlisten());
+    };
+  }, [setContentSyncProgress, setContentSyncReport]);
 
   useEffect(() => {
     if (isBareRoute) {
@@ -194,22 +225,14 @@ function RootLayout() {
     })();
   }, [isBareRoute, monitorConfigs, monitorConfigsLoaded, monitors, monitorsLoaded, queryClient]);
 
-  // Check for new hymnal data version on mount (runs once, only when not on bare routes)
-  const { t } = useTranslation();
   useEffect(() => {
-    if (isBareRoute) return;
-    void (async () => {
-      await catcher(async () => {
-        const result = await checkDbVersion();
-        if (result.hasNewVersion) {
-          toast.info(t("settings.legacyFetch.newVersionAvailable"), {
-            description: t("settings.legacyFetch.newVersionDescription"),
-          });
-        }
-      });
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally run once on mount
+    if (isBareRoute) {
+      return;
+    }
+    if (contentSyncSummaryQuery.data?.hasUpdates) {
+      openContentSyncPrompt(contentSyncSummaryQuery.data);
+    }
+  }, [contentSyncSummaryQuery.data, isBareRoute, openContentSyncPrompt]);
 
   usePlaybackCoordinator();
   useKeyboard({ enabled: !isBareRoute });
@@ -277,6 +300,18 @@ function RootLayout() {
     return <Outlet />;
   }
 
+  const handleStartContentSync = async () => {
+    const [runId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (runId) {
+      setContentSyncRunId(runId);
+      closeContentSyncPrompt();
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
@@ -288,6 +323,21 @@ function RootLayout() {
         <StatusBar />
       </div>
       <KeyboardShortcutsPanel />
+      <ContentSyncModal
+        open={contentSyncPromptOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeContentSyncPrompt();
+          }
+        }}
+        summary={contentSyncPromptSummary}
+        onStartSync={() => void handleStartContentSync()}
+        onOpenSettings={() => {
+          closeContentSyncPrompt();
+          void router.navigate({ to: "/settings", search: { tab: "migration" } });
+        }}
+        isStarting={startContentSyncMutation.isPending}
+      />
       <UpdateNotification />
       <AppToaster />
     </div>

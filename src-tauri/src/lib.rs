@@ -1,6 +1,7 @@
 mod archive;
 mod audio;
 mod commands;
+mod content_sync;
 mod db;
 mod display;
 mod error;
@@ -73,6 +74,13 @@ pub fn run() {
             commands::collections::get_collection_hymns,
             commands::collections::add_hymn_to_collection,
             commands::collections::remove_hymn_from_collection,
+            // Content Sync
+            commands::content_sync::get_content_sync_summary,
+            commands::content_sync::plan_content_sync,
+            commands::content_sync::start_content_sync,
+            commands::content_sync::get_content_sync_progress,
+            commands::content_sync::cancel_content_sync,
+            commands::content_sync::get_content_sync_report,
             // Bible
             commands::bible::get_bible_versions,
             commands::bible::get_books,
@@ -262,6 +270,7 @@ pub fn run() {
                 timer: Mutex::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
+                content_sync: Mutex::new(crate::content_sync::ContentSyncRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 current_slide: Mutex::new(None),
                 projector_open: Mutex::new(false),

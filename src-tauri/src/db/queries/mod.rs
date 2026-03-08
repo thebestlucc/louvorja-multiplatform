@@ -1,5 +1,6 @@
 pub mod bible;
 pub mod collections;
+pub mod content_sync;
 pub mod liturgy;
 pub mod music;
 pub mod schedules;

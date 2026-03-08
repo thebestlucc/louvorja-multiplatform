@@ -1,4 +1,5 @@
 use crate::audio::AudioPlayer;
+use crate::content_sync::ContentSyncRuntimeState;
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::legacy_fetch::LegacyFetchRuntimeState;
@@ -178,6 +179,7 @@ pub struct AppState {
     pub timer: Mutex<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
+    pub content_sync: Mutex<ContentSyncRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: Mutex<Option<SlideContent>>,
     pub projector_open: Mutex<bool>,
