@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "node scripts/prepare-sidecar.mjs && pnpm dev",
-    "beforeBuildCommand": "pnpm build && node scripts/prepare-sidecar.mjs --release"
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "macOSPrivateApi": true,
@@ -28,9 +28,6 @@
     "active": true,
     "createUpdaterArtifacts": false,
     "targets": "all",
-    "externalBin": [
-      "binaries/presentation-bridge"
-    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

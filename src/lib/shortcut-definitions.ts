@@ -8,7 +8,6 @@ export interface ShortcutDefinition {
   labelKey: string; // i18n key, e.g. "shortcuts.items.nextSlide"
   defaultLocal?: string; // key combo for in-app (e.g. "ArrowRight", "F5", "Shift+F5")
   defaultGlobal?: string; // key combo for OS-level (e.g. "Alt+Right")
-  globalOwner?: "app" | "bridge";
 }
 
 export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
@@ -17,14 +16,14 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     category: "slides",
     labelKey: "shortcuts.items.nextSlide",
     defaultLocal: "ArrowRight",
-    globalOwner: "bridge",
+    defaultGlobal: "Alt+Right",
   },
   {
     id: "slides-prev",
     category: "slides",
     labelKey: "shortcuts.items.previousSlide",
     defaultLocal: "ArrowLeft",
-    globalOwner: "bridge",
+    defaultGlobal: "Alt+Left",
   },
   {
     id: "slides-clear",
@@ -50,7 +49,6 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     labelKey: "shortcuts.items.toggleBlack",
     defaultLocal: "b",
     defaultGlobal: "Alt+B",
-    globalOwner: "app",
   },
   {
     id: "display-logo",
@@ -58,7 +56,6 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     labelKey: "shortcuts.items.toggleLogo",
     defaultLocal: "l",
     defaultGlobal: "Alt+L",
-    globalOwner: "app",
   },
   {
     id: "app-command-palette",
@@ -66,7 +63,6 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     labelKey: "shortcuts.items.openCommandPalette",
     defaultLocal: "Meta+k",
     defaultGlobal: "CmdOrCtrl+Shift+K",
-    globalOwner: "app",
   },
   {
     id: "app-shortcuts-help",
@@ -74,7 +70,6 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     labelKey: "shortcuts.items.openShortcutsHelp",
     defaultLocal: "Meta+/",
     defaultGlobal: "Alt+H",
-    globalOwner: "app",
   },
 ];
 

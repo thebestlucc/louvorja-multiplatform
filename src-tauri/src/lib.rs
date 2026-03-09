@@ -7,7 +7,6 @@ mod display;
 mod error;
 mod legacy_fetch;
 mod migration;
-pub mod presentation_bridge;
 mod projection;
 mod state;
 mod streaming;
@@ -169,13 +168,6 @@ pub fn run() {
             commands::settings::get_all_settings,
             commands::settings::clear_database,
             commands::settings::update_global_shortcut,
-            // Presentation Bridge
-            commands::presentation_bridge::bridge_status,
-            commands::presentation_bridge::bridge_start,
-            commands::presentation_bridge::bridge_stop,
-            commands::presentation_bridge::bridge_apply_config,
-            commands::presentation_bridge::bridge_register_autostart,
-            commands::presentation_bridge::bridge_unregister_autostart,
             // Timer
             commands::timer::start_timer,
             commands::timer::pause_timer,
@@ -250,7 +242,6 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(specta_builder.invoke_handler())
