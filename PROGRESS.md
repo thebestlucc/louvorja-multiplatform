@@ -48,15 +48,13 @@ The repository has continued to move after the last numbered phase. These stream
 | Playing Queue and Playing now playback controls | COMPLETE | Commits `4439e87` and `e8a836a`; `src/components/playing-now/playing-queue.tsx`; `src/hooks/use-playback-coordinator.ts`; `src/routes/playing-now/index.tsx`; `tests/components/playing-queue.test.tsx`; `tests/stores/queue-store.test.ts` |
 | Monthly Department Schedules with print workflow | COMPLETE | Commits `af7cfcf`, `a931981`, `5904bd6`, `e7c4c0c`, `2fdd1cf`, and `d0d6e88`; `src/routes/utilities/schedules.tsx`; `src-tauri/src/commands/schedules.rs`; `src-tauri/src/db/queries/schedules.rs`; `tests/schedules/calendar-helpers.test.ts`; `tests/schedules/department-labels.test.ts`; `tests/schedules/print-layout.test.ts` |
 | Spotlight and shortcut UX refinement | COMPLETE | Commits `be7ca00`, `f2c057e`, and `88c3b73`; `src/routes/spotlight.tsx`; `src-tauri/src/commands/spotlight.rs`; `src/hooks/use-keyboard.ts`; `src/lib/shortcut-definitions.ts`; `tests/spotlight-shortcuts.test.ts` |
-| Presentation bridge / external presentation control | IN PROGRESS | T-001 through T-009 implementation is present in the current worktree: `docs/plans/2026-03-07-external-presentation-control.md`; `docs/plans/2026-03-07-presentation-bridge-lifecycle-design.md`; `docs/pre-dev/presentation-bridge/`; `scripts/prepare-sidecar.mjs`; `src-tauri/src/bin/presentation-bridge.rs`; `src-tauri/src/presentation_bridge/`; `src-tauri/src/commands/presentation_bridge.rs`; `src/routes/settings/index.tsx`; `src/components/settings/shortcuts-tab.tsx`; verified with `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo check --manifest-path src-tauri/Cargo.toml --bin presentation-bridge`, `pnpm build`, and `pnpm lint:i18n`; pending Windows manual acceptance from `docs/pre-dev/presentation-bridge/subtasks/T-009/ST-009-1-powerpoint-adapter-and-e2e.md` |
 | Lyrics sync playback stabilization | IN PROGRESS | Current working tree and plans: `docs/plans/2026-03-07-lyrics-sync-playback-fix.md`; `docs/plans/2026-03-07-lyrics-sync-playback-fix-tasks.md`; `src-tauri/src/audio/player.rs`; `src-tauri/src/commands/audio.rs`; `src/components/music/audio-sync-editor.tsx`; `src/components/music/lyrics-display.tsx`; `src/hooks/use-hymn-playback.ts`; `src/stores/audio-store.ts`; `tests/stores/audio-store.test.ts`; `tests/lib/audio-sync.test.ts` |
 
 ## Current Evidence (Audited in This Update)
 
 - Git history after `2026-03-04` shows committed product work on the Playing now queue, monthly schedules, print preview, spotlight behavior, and release/CI hardening.
-- The current worktree contains active implementation for `presentation-bridge` and lyrics/audio synchronization follow-up work that has not yet been closed by a dedicated handoff.
-- `presentation-bridge` is implemented through the planned T-009 code slice, including the sidecar, lifecycle modes, bridge-owned shortcuts, settings UI, PowerPoint adapter, and current Windows loopback IPC branch; the remaining closure item is manual acceptance on a Windows host.
-- The current verification snapshot still passes despite those active changes, so the repository is not in a broken baseline state as of `2026-03-08`.
+- The current worktree contains lyrics/audio synchronization follow-up work that has not yet been closed by a dedicated handoff.
+- The current verification snapshot still passes despite that active work, so the repository is not in a broken baseline state as of `2026-03-08`.
 
 ## Historical Closure Notes
 

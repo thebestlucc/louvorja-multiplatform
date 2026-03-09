@@ -118,6 +118,12 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     import("@tauri-apps/api/event").then(({ listen }) => {
       listen<string>("global-shortcut", (event) => {
         switch (event.payload) {
+          case "slides-next":
+            nextSlide();
+            break;
+          case "slides-prev":
+            prevSlide();
+            break;
           case "display-black":
             toggleBlackScreen();
             break;
@@ -136,5 +142,5 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     return () => {
       unlisten?.();
     };
-  }, [enabled, toggleBlackScreen, toggleLogoScreen]);
+  }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen]);
 }

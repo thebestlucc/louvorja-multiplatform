@@ -33,7 +33,7 @@ test("spotlight definition uses the expected local and global defaults", () => {
   assert.equal(spotlight.defaultGlobal, "CmdOrCtrl+Shift+K");
 });
 
-test("bridge-owned slide navigation shortcuts are not exposed as app global bindings", () => {
+test("slide navigation shortcuts remain available as app global bindings", () => {
   const nextSlide = SHORTCUT_DEFINITIONS.find(
     (definition) => definition.id === "slides-next",
   );
@@ -47,12 +47,9 @@ test("bridge-owned slide navigation shortcuts are not exposed as app global bind
   assert.ok(nextSlide);
   assert.ok(previousSlide);
   assert.ok(blackScreen);
-  assert.equal(nextSlide.defaultGlobal, undefined);
-  assert.equal(previousSlide.defaultGlobal, undefined);
-  assert.equal(nextSlide.globalOwner, "bridge");
-  assert.equal(previousSlide.globalOwner, "bridge");
+  assert.equal(nextSlide.defaultGlobal, "Alt+Right");
+  assert.equal(previousSlide.defaultGlobal, "Alt+Left");
   assert.equal(blackScreen.defaultGlobal, "Alt+B");
-  assert.equal(blackScreen.globalOwner, "app");
 });
 
 test("matches Meta+k for both macOS and control-based keyboard events", () => {

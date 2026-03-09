@@ -59,15 +59,6 @@ jobs:
         with:
           setup-node: "false"
           install-frontend-deps: "false"
-      - name: Seed presentation bridge sidecar placeholder
-        shell: bash
-        run: |
-          triple="$(rustc -vV | sed -n 's/^host: //p')"
-          mkdir -p src-tauri/binaries
-          case "$triple" in
-            *windows*) touch "src-tauri/binaries/presentation-bridge-${triple}.exe" ;;
-            *) touch "src-tauri/binaries/presentation-bridge-${triple}" ;;
-          esac
       - name: Rust check
         shell: bash
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
@@ -86,27 +77,22 @@ jobs:
             platform: macos-latest
             args: "--target aarch64-apple-darwin"
             rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
-            target_triple: "aarch64-apple-darwin"
           - name: macos-x86_64
             platform: macos-latest
             args: "--target x86_64-apple-darwin"
             rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
-            target_triple: "x86_64-apple-darwin"
           - name: linux-x86_64
             platform: ubuntu-22.04
             args: ""
             rust_targets: ""
-            target_triple: "x86_64-unknown-linux-gnu"
           - name: linux-aarch64
             platform: ubuntu-22.04-arm
             args: ""
             rust_targets: ""
-            target_triple: "aarch64-unknown-linux-gnu"
           - name: windows-x86_64
             platform: windows-latest
             args: ""
             rust_targets: ""
-            target_triple: "x86_64-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -129,11 +115,6 @@ jobs:
           TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SKIP_FRONTEND_BUILD: "true"
         run: node .github/scripts/inject-updater-config.mjs
-      - name: Build presentation bridge sidecar
-        shell: bash
-        env:
-          SIDE_CAR_TARGET_TRIPLE: ${{ matrix.target_triple }}
-        run: node scripts/prepare-sidecar.mjs --release
       - name: Build and publish bundles
         uses: tauri-apps/tauri-action@v0
         env:

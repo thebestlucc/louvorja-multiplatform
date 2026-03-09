@@ -8,7 +8,6 @@ pub mod legacy_fetch;
 pub mod liturgy;
 pub mod migration;
 pub mod music;
-pub mod presentation_bridge;
 pub mod schedules;
 pub mod settings;
 pub mod slides;

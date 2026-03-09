@@ -35,9 +35,6 @@ import type {
   StreamingInfo,
   TimerMode,
   TimerStateData,
-  BridgeApplyConfigResult,
-  BridgeConfig,
-  BridgeManagerStatus,
   VideoMetadata,
   UpdateInfo,
   LegacyFetchOptions,
@@ -544,30 +541,6 @@ export async function getAllSettings(): Promise<Setting[]> {
 
 export async function clearDatabase(): Promise<{ success: boolean }> {
   return tauriInvoke<{ success: boolean }>("clear_database");
-}
-
-export async function getBridgeStatus(): Promise<BridgeManagerStatus> {
-  return tauriInvoke<BridgeManagerStatus>("bridge_status");
-}
-
-export async function startBridge(): Promise<BridgeManagerStatus> {
-  return tauriInvoke<BridgeManagerStatus>("bridge_start");
-}
-
-export async function stopBridge(): Promise<BridgeManagerStatus> {
-  return tauriInvoke<BridgeManagerStatus>("bridge_stop");
-}
-
-export async function applyBridgeConfig(config: BridgeConfig): Promise<BridgeApplyConfigResult> {
-  return tauriInvoke<BridgeApplyConfigResult>("bridge_apply_config", { config });
-}
-
-export async function registerBridgeAutostart(): Promise<boolean> {
-  return tauriInvoke<boolean>("bridge_register_autostart");
-}
-
-export async function unregisterBridgeAutostart(): Promise<void> {
-  return tauriInvoke<void>("bridge_unregister_autostart");
 }
 
 // Legacy Fetch (From LouvorJA Server)

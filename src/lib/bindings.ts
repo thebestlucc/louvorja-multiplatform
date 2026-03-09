@@ -884,54 +884,6 @@ async updateGlobalShortcut(action: string, shortcutStr: string) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
-async bridgeStatus() : Promise<Result<BridgeManagerStatus, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("bridge_status") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async bridgeStart() : Promise<Result<BridgeManagerStatus, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("bridge_start") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async bridgeStop() : Promise<Result<BridgeManagerStatus, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("bridge_stop") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async bridgeApplyConfig(config: BridgeConfig) : Promise<Result<BridgeApplyConfigResult, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("bridge_apply_config", { config }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async bridgeRegisterAutostart() : Promise<Result<boolean, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("bridge_register_autostart") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async bridgeUnregisterAutostart() : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("bridge_unregister_autostart") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async startTimer(mode: string, durationMs: number | null) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("start_timer", { mode, durationMs }) };
@@ -1303,14 +1255,6 @@ export type AudioStatusPayload = { positionMs: number; durationMs: number; isPla
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string }
 export type BibleVersion = { id: number; name: string; abbreviation: string; language: string; filePath: string | null }
 export type Book = { name: string; chapterCount: number }
-export type BridgeApplyConfigResult = { config: BridgeConfig; status: BridgeStatus | null; running: boolean; decision: BridgeConfigApplyDecision }
-export type BridgeConfig = { enabled: boolean; startWithOs: boolean; targetApp: BridgeTargetApp; shortcutNext: string; shortcutPrev: string }
-export type BridgeConfigApplyDecision = "apply-live" | "restart-required"
-export type BridgeManagerStatus = { config: BridgeConfig; status: BridgeStatus | null; running: boolean }
-export type BridgeMode = "managed" | "independent"
-export type BridgeStartupSource = "spawned-by-app" | "started-by-os" | "started-manually"
-export type BridgeStatus = { version: string; pid: number; sessionId: string; mode: BridgeMode; startupSource: BridgeStartupSource; targetApp: BridgeTargetApp; shortcutsRegistered: boolean; adapterHealthy: boolean }
-export type BridgeTargetApp = "power-point-windows"
 export type ClearDatabaseResult = { success: boolean }
 export type Collection = { id: number; name: string; description: string | null; year: number | null; coverPath: string | null; autoCoverPath: string | null; songCount: number; sourceType: string; apiAlbumId: number; createdAt: string; updatedAt: string }
 export type CollectionSearchResult = { kind: string; collectionId: number; songId: number; collectionName: string; title: string; coverPath: string | null; snippet: string }

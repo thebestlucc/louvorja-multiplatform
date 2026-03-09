@@ -9,7 +9,6 @@ import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, 
 import {
   useCancelContentSync,
   useCancelLegacyFetch,
-  useApplyPresentationBridgeConfig,
   useClearDatabase,
   useContentSyncProgress,
   useContentSyncReport,
@@ -20,23 +19,17 @@ import {
   useLegacyFetchReport,
   useMonitorConfigs,
   useMonitors,
-  usePresentationBridgeStatus,
-  useRegisterPresentationBridgeAutostart,
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
   useStartContentSync,
-  useStartPresentationBridge,
   useStartLegacyFetch,
-  useStopPresentationBridge,
-  useUnregisterPresentationBridgeAutostart,
 } from "../../lib/queries";
 import { ContentSyncReportCard } from "../../components/content-sync/content-sync-report";
 import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
 import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import type {
-  BridgeConfig,
   LegacyFetchOptions,
   MonitorConfig,
 } from "../../lib/bindings";
@@ -94,15 +87,6 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentT
   { id: "migration", labelKey: "settings.tabs.migration", icon: Upload },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
 ];
-
-const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
-  enabled: false,
-  startWithOs: false,
-  targetApp: "power-point-windows",
-  shortcutNext: "Alt+Right",
-  shortcutPrev: "Alt+Left",
-};
-const BRIDGE_RUNTIME_VERSION = "0.1.0";
 
 function SettingsIndex() {
   const { t } = useTranslation();
@@ -278,8 +262,6 @@ function GeneralSection() {
         </div>
       </section>
 
-      <PresentationBridgeSection />
-
       {/* Video / ffprobe */}
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="mb-4 flex items-center gap-2">
@@ -338,193 +320,6 @@ function GeneralSection() {
         </div>
       </section>
     </div>
-  );
-}
-
-function PresentationBridgeSection() {
-  const { t } = useTranslation();
-  const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
-  const bridgeStatusQuery = usePresentationBridgeStatus();
-  const applyBridgeConfig = useApplyPresentationBridgeConfig();
-  const startBridgeMutation = useStartPresentationBridge();
-  const stopBridgeMutation = useStopPresentationBridge();
-  const registerAutostart = useRegisterPresentationBridgeAutostart();
-  const unregisterAutostart = useUnregisterPresentationBridgeAutostart();
-
-  const bridgeConfig = bridgeStatusQuery.data?.config ?? DEFAULT_BRIDGE_CONFIG;
-  const bridgeStatus = bridgeStatusQuery.data?.status ?? null;
-
-  const bridgeStatusBadge = useMemo(() => {
-    if (bridgeStatusQuery.isError) {
-      return {
-        label: t("settings.bridge.statusError"),
-        variant: "destructive" as const,
-      };
-    }
-
-    if (!bridgeStatusQuery.data?.running || !bridgeStatus) {
-      return {
-        label: t("settings.bridge.statusNotRunning"),
-        variant: "secondary" as const,
-      };
-    }
-
-    if (bridgeStatus.version !== BRIDGE_RUNTIME_VERSION) {
-      return {
-        label: t("settings.bridge.statusVersionMismatch"),
-        variant: "destructive" as const,
-      };
-    }
-
-    return bridgeStatus.mode === "managed"
-      ? {
-          label: t("settings.bridge.statusRunningManaged"),
-          variant: "default" as const,
-        }
-      : {
-          label: t("settings.bridge.statusRunningIndependent"),
-          variant: "outline" as const,
-        };
-  }, [bridgeStatus, bridgeStatusQuery.data?.running, bridgeStatusQuery.isError, t]);
-
-  const handleBridgeConfigUpdate = async (
-    nextConfig: BridgeConfig,
-    options?: { syncAutostart?: boolean },
-  ) => {
-    const [result, error] = await catcher(async () => {
-      const response = await applyBridgeConfig.mutateAsync(nextConfig);
-
-      if (options?.syncAutostart && isWindows) {
-        if (nextConfig.startWithOs) {
-          await registerAutostart.mutateAsync();
-        } else {
-          await unregisterAutostart.mutateAsync();
-        }
-      }
-
-      return response;
-    }, { notify: true });
-
-    if (!error && result?.decision === "restart-required") {
-      notify.info(t("settings.bridge.restartRequired"));
-    }
-  };
-
-  const handleBridgeStartStop = async () => {
-    await catcher(
-      bridgeStatusQuery.data?.running
-        ? () => stopBridgeMutation.mutateAsync()
-        : () => startBridgeMutation.mutateAsync(),
-      { notify: true },
-    );
-  };
-
-  return (
-    <section className="rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-medium">{t("settings.bridge.title")}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("settings.bridge.description")}
-            </p>
-          </div>
-          <Badge variant={bridgeStatusBadge.variant}>{bridgeStatusBadge.label}</Badge>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-sm font-medium">{t("settings.bridge.enabled")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("settings.bridge.enabledDesc")}
-            </p>
-            <Button
-              className="mt-3"
-              size="sm"
-              variant={bridgeConfig.enabled ? "default" : "outline"}
-              disabled={applyBridgeConfig.isPending}
-              onClick={() => void handleBridgeConfigUpdate({
-                ...bridgeConfig,
-                enabled: !bridgeConfig.enabled,
-              })}
-            >
-              {bridgeConfig.enabled
-                ? t("settings.bridge.disableAction")
-                : t("settings.bridge.enableAction")}
-            </Button>
-          </div>
-
-          <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-sm font-medium">{t("settings.bridge.startWithOs")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isWindows
-                ? t("settings.bridge.startWithOsDesc")
-                : t("settings.bridge.startWithOsWindowsOnly")}
-            </p>
-            <Button
-              className="mt-3"
-              size="sm"
-              variant={bridgeConfig.startWithOs ? "default" : "outline"}
-              disabled={!isWindows || applyBridgeConfig.isPending}
-              onClick={() => void handleBridgeConfigUpdate({
-                ...bridgeConfig,
-                startWithOs: !bridgeConfig.startWithOs,
-              }, { syncAutostart: true })}
-            >
-              {bridgeConfig.startWithOs
-                ? t("settings.bridge.disableAutostartAction")
-                : t("settings.bridge.enableAutostartAction")}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">{t("settings.bridge.targetApp")}</label>
-            <Select
-              value={bridgeConfig.targetApp}
-              onValueChange={(value) => {
-                if (value !== "power-point-windows") return;
-                void handleBridgeConfigUpdate({
-                  ...bridgeConfig,
-                  targetApp: value,
-                });
-              }}
-            >
-              <SelectTrigger className="w-72">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="power-point-windows">
-                  {t("settings.bridge.targetAppPowerPointWindows")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void bridgeStatusQuery.refetch()}
-              disabled={bridgeStatusQuery.isFetching}
-            >
-              {t("settings.bridge.refreshAction")}
-            </Button>
-            <Button
-              size="sm"
-              variant={bridgeStatusQuery.data?.running ? "outline" : "default"}
-              onClick={() => void handleBridgeStartStop()}
-              disabled={startBridgeMutation.isPending || stopBridgeMutation.isPending}
-            >
-              {bridgeStatusQuery.data?.running
-                ? t("settings.bridge.stopAction")
-                : t("settings.bridge.startAction")}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
