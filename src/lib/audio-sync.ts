@@ -148,7 +148,6 @@ export function resolveSlideTimingWindow(
   points: SyncPoint[],
   slideIndex: number,
   mode: PlaybackMode,
-  durationMs?: number | null,
 ): SlideTimingWindow {
   const startMs = resolveSlideSeekTimestamp(points, slideIndex, mode);
   let endMs: number | null = null;
@@ -159,10 +158,6 @@ export function resolveSlideTimingWindow(
       endMs = exactNextStart;
       break;
     }
-  }
-
-  if (endMs == null && durationMs != null && Number.isFinite(durationMs) && durationMs > 0) {
-    endMs = Math.floor(durationMs);
   }
 
   return { startMs, endMs };

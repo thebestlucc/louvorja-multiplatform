@@ -490,32 +490,38 @@ function setCurrentGapIndicatorProgress(progressRatio) {
   bar.style.width = percent + "%";
 }
 
+function hasGapTimingWindow(timing) {
+  if (!timing) {
+    return false;
+  }
+
+  const startMs = timing.currentSlideStartMs;
+  const endMs = timing.nextSlideStartMs;
+  return startMs != null && endMs != null && endMs > startMs;
+}
+
 function resolveGapProgressRatio(timing, audioPlayback) {
-  if (!timing || !audioPlayback) {
+  if (!hasGapTimingWindow(timing) || !audioPlayback) {
     return null;
   }
 
   const startMs = timing.currentSlideStartMs;
-  const endMs = timing.nextSlideStartMs != null
-    ? timing.nextSlideStartMs
-    : (timing.audioDurationMs != null ? timing.audioDurationMs : audioPlayback.durationMs);
-  if (startMs == null || endMs == null || endMs <= startMs) {
-    return null;
-  }
+  const endMs = timing.nextSlideStartMs;
 
   const clampedPositionMs = Math.min(Math.max(audioPlayback.positionMs, startMs), endMs);
   return (clampedPositionMs - startMs) / (endMs - startMs);
 }
 
 function updateCurrentGapIndicator(payload) {
+  const timing = extractGapTiming(payload);
   const slide = resolveCoverVisualPayload(normalizeSlidePayload(payload && payload.current ? payload.current : payload));
-  if (!slide || !isGapSlide(slide)) {
+  if (!slide || !isGapSlide(slide) || !hasGapTimingWindow(timing)) {
     setCurrentGapIndicatorVisible(false);
     return;
   }
 
   setCurrentGapIndicatorVisible(true);
-  setCurrentGapIndicatorProgress(resolveGapProgressRatio(extractGapTiming(payload), lastAudioPlayback));
+  setCurrentGapIndicatorProgress(resolveGapProgressRatio(timing, lastAudioPlayback));
 }
 
 function applyAudioPlayback(payload) {

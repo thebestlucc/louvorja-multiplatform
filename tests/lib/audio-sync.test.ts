@@ -53,8 +53,23 @@ describe("audio sync helper", () => {
     });
     assert.deepEqual(resolveSlideTimingWindow(syncPoints, 2, "karaoke", 15_000), {
       startMs: 9_000,
-      endMs: 15_000,
+      endMs: null,
     });
+  });
+
+  test("does not create a fake timing target for the final empty lyric slide", () => {
+    const finalGapSyncPoints: SyncPoint[] = [
+      { slideIndex: 0, timestampMs: 0, instrumentalTimestampMs: 0 },
+      { slideIndex: 1, timestampMs: 1_000, instrumentalTimestampMs: 5_000 },
+    ];
+
+    const timingWindow = resolveSlideTimingWindow(finalGapSyncPoints, 2, "karaoke", 15_000);
+
+    assert.deepEqual(timingWindow, {
+      startMs: 5_000,
+      endMs: null,
+    });
+    assert.equal(resolveProgressRatio(timingWindow.startMs, timingWindow.endMs, 8_000), null);
   });
 
   test("mode switches keep the current elapsed time instead of snapping to a sync point", () => {
