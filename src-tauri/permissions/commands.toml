@@ -1,0 +1,219 @@
+# Permission definitions for LouvorJA commands
+
+[[permission]]
+identifier = "allow-music-commands"
+description = "Allows all music related commands"
+commands = [
+    "get_hymn",
+    "search_hymns",
+    "search_all_hymns",
+    "get_albums",
+    "get_hymns_by_album",
+    "create_hymn",
+    "update_hymn",
+    "delete_hymn",
+    "get_hymn_audio_path"
+]
+
+[[permission]]
+identifier = "allow-collection-commands"
+description = "Allows all collection management commands"
+commands = [
+    "get_collections",
+    "search_collections",
+    "get_collection",
+    "create_collection",
+    "update_collection",
+    "delete_collection",
+    "import_collection_song",
+    "check_collection_song_sync",
+    "resync_collection_song",
+    "remove_collection_song",
+    "reorder_collection_songs",
+    "get_collection_hymns",
+    "add_hymn_to_collection",
+    "remove_hymn_from_collection"
+]
+
+[[permission]]
+identifier = "allow-bible-commands"
+description = "Allows all Bible related commands"
+commands = [
+    "get_bible_versions",
+    "get_books",
+    "get_verses",
+    "get_verse_range",
+    "search_bible",
+    "project_bible_verse",
+    "import_bible_version",
+    "navigate_bible_verse"
+]
+
+[[permission]]
+identifier = "allow-slide-commands"
+description = "Allows all slide and presentation commands"
+commands = [
+    "get_presentations",
+    "get_presentation",
+    "create_presentation",
+    "update_presentation",
+    "delete_presentation",
+    "get_slides",
+    "create_slide",
+    "update_slide",
+    "delete_slide",
+    "reorder_slides",
+    "import_slja",
+    "export_slja"
+]
+
+[[permission]]
+identifier = "allow-audio-commands"
+description = "Allows all audio playback and sync commands"
+commands = [
+    "audio_play",
+    "audio_play_variants",
+    "audio_play_alert",
+    "audio_pause",
+    "audio_resume",
+    "audio_set_output_muted",
+    "audio_switch_variant",
+    "audio_stop",
+    "audio_seek",
+    "audio_set_volume",
+    "audio_get_position",
+    "audio_get_status",
+    "get_sync_points",
+    "save_sync_points"
+]
+
+[[permission]]
+identifier = "allow-display-commands"
+description = "Allows monitor and window management commands"
+commands = [
+    "get_available_monitors",
+    "open_projector_window",
+    "close_projector_window",
+    "open_return_window",
+    "close_return_window",
+    "set_current_slide",
+    "get_current_slide",
+    "clear_current_slide",
+    "set_slide_context",
+    "get_slide_context",
+    "toggle_black_screen",
+    "toggle_logo_screen",
+    "get_overlay_state",
+    "set_monitor_config",
+    "get_monitor_configs"
+]
+
+[[permission]]
+identifier = "allow-utility-commands"
+description = "Allows miscellaneous utility commands"
+commands = [
+    "run_lottery",
+    "format_text",
+    "copy_video_to_media",
+    "copy_image_to_media",
+    "get_video_metadata",
+    "resolve_media_path",
+    "start_timer",
+    "pause_timer",
+    "resume_timer",
+    "reset_timer",
+    "adjust_countdown_timer",
+    "get_timer_state",
+    "add_lap",
+    "start_countdown_projection",
+    "start_stopwatch_projection",
+    "stop_utility_projection",
+    "start_clock_projection",
+    "spotlight_open",
+    "spotlight_select",
+    "spotlight_hide"
+]
+
+[[permission]]
+identifier = "allow-system-commands"
+description = "Allows settings, sync, and migration commands"
+commands = [
+    "get_setting",
+    "set_setting",
+    "get_all_settings",
+    "clear_database",
+    "update_global_shortcut",
+    "get_content_sync_summary",
+    "plan_content_sync",
+    "start_content_sync",
+    "get_content_sync_progress",
+    "cancel_content_sync",
+    "get_content_sync_report",
+    "get_services",
+    "get_service",
+    "create_service",
+    "update_service",
+    "delete_service",
+    "add_service_item",
+    "remove_service_item",
+    "reorder_service_items",
+    "duplicate_service",
+    "update_service_item",
+    "start_streaming_server",
+    "stop_streaming_server",
+    "get_streaming_status",
+    "set_streaming_broadcast",
+    "start_migration",
+    "get_migration_progress",
+    "cancel_migration",
+    "get_migration_report",
+    "start_legacy_fetch",
+    "get_legacy_fetch_progress",
+    "cancel_legacy_fetch",
+    "get_legacy_fetch_report",
+    "fetch_legacy_params",
+    "check_db_version",
+    "restore_hymn_from_api",
+    "restore_album_from_api"
+]
+
+[[permission]]
+identifier = "allow-schedule-commands"
+description = "Allows all schedule management commands"
+commands = [
+    "list_schedule_departments",
+    "save_schedule_department",
+    "delete_schedule_department",
+    "reorder_schedule_departments",
+    "replace_schedule_department_members",
+    "get_schedule_month",
+    "save_schedule_month_days",
+    "generate_schedule_month",
+    "set_schedule_day_responsible_department",
+    "save_schedule_day_assignments",
+    "update_schedule_day_department_people_per_day",
+    "reset_schedule_day_department_manual_override"
+]
+
+[[permission]]
+identifier = "allow-projection-view-only"
+description = "Minimal commands needed for projector/return windows"
+commands = [
+    "get_current_slide",
+    "get_slide_context",
+    "get_overlay_state",
+    "get_timer_state"
+]
+
+[[permission]]
+identifier = "allow-spotlight-commands"
+description = "Minimal commands needed for spotlight search window"
+commands = [
+    "search_hymns",
+    "search_all_hymns",
+    "search_collections",
+    "search_bible",
+    "spotlight_select",
+    "spotlight_hide",
+    "get_available_monitors"
+]

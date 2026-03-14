@@ -1,12 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for LouvorJA",
+  "description": "Default permissions for LouvorJA main window",
   "windows": [
     "main"
   ],
   "permissions": [
-    "core:default",
     "core:window:allow-create",
     "core:window:allow-close",
     "core:window:allow-set-position",
@@ -17,14 +16,26 @@
     "core:window:allow-set-focus",
     "core:window:allow-available-monitors",
     "core:window:allow-current-monitor",
-    "core:event:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "core:webview:default",
     "core:webview:allow-create-webview-window",
     "core:webview:allow-print",
-    "opener:default",
-    "dialog:default",
-    "updater:default"
+    "opener:allow-open",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm",
+    "updater:allow-check",
+    "updater:allow-install",
+    "allow-music-commands",
+    "allow-collection-commands",
+    "allow-bible-commands",
+    "allow-slide-commands",
+    "allow-audio-commands",
+    "allow-display-commands",
+    "allow-utility-commands",
+    "allow-system-commands",
+    "allow-schedule-commands"
   ]
 }
