@@ -10,6 +10,7 @@ mod migration;
 mod projection;
 mod state;
 mod streaming;
+mod utils;
 mod video;
 
 use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
