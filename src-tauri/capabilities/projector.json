@@ -9,8 +9,12 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "core:window:default",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-show",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
     "core:path:allow-resolve-directory",
-    "core:path:allow-join"
+    "core:path:allow-join",
+    "allow-projection-view-only"
   ]
 }
