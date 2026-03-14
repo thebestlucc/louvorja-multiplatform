@@ -3,7 +3,8 @@
 [[permission]]
 identifier = "allow-music-commands"
 description = "Allows all music related commands"
-commands = [
+[permission.commands]
+allow = [
     "get_hymn",
     "search_hymns",
     "search_all_hymns",
@@ -18,7 +19,8 @@ commands = [
 [[permission]]
 identifier = "allow-collection-commands"
 description = "Allows all collection management commands"
-commands = [
+[permission.commands]
+allow = [
     "get_collections",
     "search_collections",
     "get_collection",
@@ -38,7 +40,8 @@ commands = [
 [[permission]]
 identifier = "allow-bible-commands"
 description = "Allows all Bible related commands"
-commands = [
+[permission.commands]
+allow = [
     "get_bible_versions",
     "get_books",
     "get_verses",
@@ -52,7 +55,8 @@ commands = [
 [[permission]]
 identifier = "allow-slide-commands"
 description = "Allows all slide and presentation commands"
-commands = [
+[permission.commands]
+allow = [
     "get_presentations",
     "get_presentation",
     "create_presentation",
@@ -70,7 +74,8 @@ commands = [
 [[permission]]
 identifier = "allow-audio-commands"
 description = "Allows all audio playback and sync commands"
-commands = [
+[permission.commands]
+allow = [
     "audio_play",
     "audio_play_variants",
     "audio_play_alert",
@@ -90,7 +95,8 @@ commands = [
 [[permission]]
 identifier = "allow-display-commands"
 description = "Allows monitor and window management commands"
-commands = [
+[permission.commands]
+allow = [
     "get_available_monitors",
     "open_projector_window",
     "close_projector_window",
@@ -111,7 +117,8 @@ commands = [
 [[permission]]
 identifier = "allow-utility-commands"
 description = "Allows miscellaneous utility commands"
-commands = [
+[permission.commands]
+allow = [
     "run_lottery",
     "format_text",
     "copy_video_to_media",
@@ -137,7 +144,8 @@ commands = [
 [[permission]]
 identifier = "allow-system-commands"
 description = "Allows settings, sync, and migration commands"
-commands = [
+[permission.commands]
+allow = [
     "get_setting",
     "set_setting",
     "get_all_settings",
@@ -180,7 +188,8 @@ commands = [
 [[permission]]
 identifier = "allow-schedule-commands"
 description = "Allows all schedule management commands"
-commands = [
+[permission.commands]
+allow = [
     "list_schedule_departments",
     "save_schedule_department",
     "delete_schedule_department",
@@ -198,7 +207,8 @@ commands = [
 [[permission]]
 identifier = "allow-projection-view-only"
 description = "Minimal commands needed for projector/return windows"
-commands = [
+[permission.commands]
+allow = [
     "get_current_slide",
     "get_slide_context",
     "get_overlay_state",
@@ -208,7 +218,8 @@ commands = [
 [[permission]]
 identifier = "allow-spotlight-commands"
 description = "Minimal commands needed for spotlight search window"
-commands = [
+[permission.commands]
+allow = [
     "search_hymns",
     "search_all_hymns",
     "search_collections",
