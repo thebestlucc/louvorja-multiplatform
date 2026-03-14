@@ -26,12 +26,11 @@ import { usePresentationStore } from "../../stores/presentation-store";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { cn } from "../../lib/utils";
 import {
-  findExactSlideTimestamp,
   resolveProgressRatio,
   resolvePlaybackTargetFile,
   resolvePlaybackVariantPaths,
   resolveReplayStartPosition,
-  resolveSlideSeekTimestamp,
+  resolveSlideTimingWindow,
 } from "../../lib/audio-sync";
 import { Button } from "../../components/ui/button";
 import { Slider } from "../../components/ui/slider";
@@ -64,16 +63,6 @@ function isPlaybackGapSlide(slide: SlideContent | null | undefined) {
   }
 
   return !hasSlideText(slide);
-}
-
-function findNextLyricSlideIndex(slides: SlideContent[], activeIndex: number) {
-  for (let index = activeIndex + 1; index < slides.length; index += 1) {
-    if (hasSlideText(slides[index])) {
-      return index;
-    }
-  }
-
-  return null;
 }
 
 function PlayingNowScreen() {
@@ -246,25 +235,21 @@ function PlayingNowScreen() {
   const isPlaying = audioStatus === "playing";
   const displayedSeekMs = seekPreviewMs ?? positionMs;
   const previewSlide = selectedSlide ?? currentSlide;
-  const showGapIndicator =
+  const isGapIndicatorCandidate =
     hasAudioLoaded
     && (audioStatus === "playing" || audioStatus === "paused")
     && isPlaybackGapSlide(previewSlide);
-  const nextLyricSlideIndex = showGapIndicator
-    ? findNextLyricSlideIndex(slides, activeSlideIndex)
+  const gapTimingWindow = isGapIndicatorCandidate
+    ? resolveSlideTimingWindow(syncPoints, activeSlideIndex, playbackMode)
     : null;
-  const gapStartMs = showGapIndicator
-    ? resolveSlideSeekTimestamp(syncPoints, activeSlideIndex, playbackMode)
-    : null;
-  const gapEndMs = showGapIndicator
-    ? (
-      nextLyricSlideIndex != null
-        ? findExactSlideTimestamp(syncPoints, nextLyricSlideIndex, playbackMode)
-        : durationMs > 0
-          ? durationMs
-          : null
-    )
-    : null;
+  const showGapIndicator = Boolean(
+    gapTimingWindow
+    && gapTimingWindow.startMs != null
+    && gapTimingWindow.endMs != null
+    && gapTimingWindow.endMs > gapTimingWindow.startMs,
+  );
+  const gapStartMs = showGapIndicator ? gapTimingWindow.startMs : null;
+  const gapEndMs = showGapIndicator ? gapTimingWindow.endMs : null;
   const gapProgressRatio = showGapIndicator
     ? resolveProgressRatio(gapStartMs, gapEndMs, positionMs)
     : null;
