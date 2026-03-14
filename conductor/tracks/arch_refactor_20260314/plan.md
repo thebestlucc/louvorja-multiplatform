@@ -4,9 +4,9 @@
 - [x] Task: Implement `src-tauri/src/utils/paths.rs` 8c46042
     - [x] Sub-task: Create `SafePath` struct with validation against `media/` root.
     - [x] Sub-task: Write unit tests for path traversal edge cases.
-- [ ] Task: Refactor Tauri Capabilities
-    - [ ] Sub-task: Audit `src-tauri/capabilities/*.json`.
-    - [ ] Sub-task: Replace `:default` with explicit command lists for each window.
+- [x] Task: Refactor Tauri Capabilities f69dbbf
+    - [x] Sub-task: Audit `src-tauri/capabilities/*.json`.
+    - [x] Sub-task: Replace `:default` with explicit command lists for each window.
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Security Hardening' (Protocol in workflow.md)
 
 ## Phase 2: Display Module Decomposition
