@@ -23,41 +23,43 @@ export function useMediaSource(path: string | null | undefined): string | null {
         return;
       }
 
-      const trimmed = path.trim();
+      // Normalize separators for consistent checks
+      const normalized = path.trim().replace(/\\/g, "/");
+
       if (
-        trimmed.startsWith("data:")
-        || trimmed.startsWith("blob:")
-        || trimmed.startsWith("http://")
-        || trimmed.startsWith("https://")
+        normalized.startsWith("data:")
+        || normalized.startsWith("blob:")
+        || normalized.startsWith("http://")
+        || normalized.startsWith("https://")
       ) {
         if (!cancelled) {
-          setResolvedPath(trimmed);
+          setResolvedPath(normalized);
         }
         return;
       }
 
-      if (mediaSourceCache.has(trimmed)) {
+      if (mediaSourceCache.has(normalized)) {
         if (!cancelled) {
-          setResolvedPath(mediaSourceCache.get(trimmed) ?? null);
+          setResolvedPath(mediaSourceCache.get(normalized) ?? null);
         }
         return;
       }
 
-      if (isAbsolutePath(trimmed)) {
-        const fileUrl = convertFileSrc(trimmed);
-        mediaSourceCache.set(trimmed, fileUrl);
+      if (isAbsolutePath(normalized)) {
+        const fileUrl = convertFileSrc(normalized);
+        mediaSourceCache.set(normalized, fileUrl);
         if (!cancelled) {
           setResolvedPath(fileUrl);
         }
         return;
       }
 
-      if (trimmed.startsWith("media/")) {
+      if (normalized.startsWith("media/")) {
         const [appDir, error] = await catcher(appDataDir(), { notify: false });
         if (!error && appDir) {
-          const absolutePath = await join(appDir, trimmed);
+          const absolutePath = await join(appDir, normalized);
           const fileUrl = convertFileSrc(absolutePath);
-          mediaSourceCache.set(trimmed, fileUrl);
+          mediaSourceCache.set(normalized, fileUrl);
           if (!cancelled) {
             setResolvedPath(fileUrl);
           }
@@ -65,13 +67,13 @@ export function useMediaSource(path: string | null | undefined): string | null {
         }
 
         if (!cancelled) {
-          setResolvedPath(trimmed);
+          setResolvedPath(normalized);
         }
         return;
       }
 
       if (!cancelled) {
-        setResolvedPath(trimmed);
+        setResolvedPath(normalized);
       }
     };
 

@@ -11,8 +11,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-hide",
     "core:window:allow-set-focus",
-    "core:path:allow-resolve-directory",
-    "core:path:allow-join",
+    "core:path:default",
     "allow-spotlight-commands"
   ]
 }

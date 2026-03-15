@@ -13,7 +13,8 @@ interface CoverImageProps {
 }
 
 function isAbsolutePath(path: string): boolean {
-  return path.startsWith("/") || /^[a-zA-Z]:\\/.test(path);
+  // Matches /path or C:\path or C:/path
+  return path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path);
 }
 
 export function CoverImage({ path, title, className, fallback }: CoverImageProps) {
@@ -30,28 +31,30 @@ export function CoverImage({ path, title, className, fallback }: CoverImageProps
         return;
       }
 
-      const trimmed = path.trim();
+      // Normalize separators for consistent checks
+      const normalized = path.trim().replace(/\\/g, "/");
+
       if (
-        trimmed.startsWith("http://") ||
-        trimmed.startsWith("https://") ||
-        trimmed.startsWith("data:") ||
-        trimmed.startsWith("blob:")
+        normalized.startsWith("http://") ||
+        normalized.startsWith("https://") ||
+        normalized.startsWith("data:") ||
+        normalized.startsWith("blob:")
       ) {
         // Covers must come from managed/local media paths only.
         if (!cancelled) setSrc(null);
         return;
       }
 
-      if (isAbsolutePath(trimmed)) {
-        if (!cancelled) setSrc(convertFileSrc(trimmed));
+      if (isAbsolutePath(normalized)) {
+        if (!cancelled) setSrc(convertFileSrc(normalized));
         return;
       }
 
-      if (trimmed.startsWith("media/")) {
+      if (normalized.startsWith("media/")) {
         const [absolute, error] = await catcher(
           async () => {
             const appDir = await appDataDir();
-            return await join(appDir, trimmed);
+            return await join(appDir, normalized);
           },
           { notify: false },
         );
@@ -65,7 +68,9 @@ export function CoverImage({ path, title, className, fallback }: CoverImageProps
         return;
       }
 
-      if (!cancelled) setSrc(trimmed);
+      // Fallback: if it's not a known prefix but could be a filename in media root
+      // Or just use as-is if it's already a valid URI we didn't catch
+      if (!cancelled) setSrc(normalized);
     }
 
     void resolveSrc();
