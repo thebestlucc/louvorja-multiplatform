@@ -1,2 +1,7 @@
-// Display module — monitor detection and projector/return window lifecycle.
-// Full implementation in Phase 6.
+pub mod monitor;
+pub mod window;
+pub mod projection;
+
+pub use monitor::*;
+pub use window::*;
+pub use projection::*;
