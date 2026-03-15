@@ -24,6 +24,8 @@ export const Route = createFileRoute("/return")({
   component: ReturnPage,
 });
 
+export { ReturnPage };
+
 function ReturnPage() {
   const { t, i18n } = useTranslation();
   const [currentSlide, setCurrentSlide] = useState<SlideContent | null>(null);
