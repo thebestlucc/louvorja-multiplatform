@@ -13,8 +13,7 @@
     "core:window:allow-show",
     "core:window:allow-set-size",
     "core:window:allow-set-position",
-    "core:path:allow-resolve-directory",
-    "core:path:allow-join",
+    "core:path:default",
     "allow-projection-view-only"
   ]
 }
