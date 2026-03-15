@@ -1,6 +1,7 @@
 use crate::db::models::VideoMetadata;
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::paths::SafePath;
 use crate::video;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
@@ -213,13 +214,8 @@ pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppErr
         .app_data_dir()
         .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
 
-    let resolved = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path).canonicalize().map_err(|e| {
-            AppError::Internal(format!("Failed to resolve absolute media path: {}", e))
-        })?
-    } else {
-        video::resolve_video_path(&app_data_dir, &path)?
-    };
+    let safe_path = SafePath::new(&app_data_dir);
+    let resolved = safe_path.resolve(&path)?;
 
     video::ensure_supported_video(&resolved)?;
 
@@ -244,13 +240,8 @@ pub async fn get_video_metadata(
         .app_data_dir()
         .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
 
-    let resolved_path = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path).canonicalize().map_err(|e| {
-            AppError::Internal(format!("Failed to resolve absolute video path: {}", e))
-        })?
-    } else {
-        video::resolve_video_path(&app_data_dir, &path)?
-    };
+    let safe_path = SafePath::new(&app_data_dir);
+    let resolved_path = safe_path.resolve(&path)?;
 
     if !resolved_path.exists() {
         return Err(AppError::NotFound(format!(

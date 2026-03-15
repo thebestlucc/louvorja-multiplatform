@@ -1,9 +1,10 @@
-use crate::audio::{AudioVariant, SyncPoint};
+use crate::audio::player::AudioVariant;
+use crate::audio::SyncPoint;
 use crate::error::AppError;
 use crate::state::{AppState, AudioState, StreamingState};
+use crate::utils::paths::SafePath;
 use serde::Serialize;
 use specta::Type;
-use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -386,37 +387,21 @@ fn resolve_audio_path(path: &str, app: &AppHandle) -> Result<String, AppError> {
         return Err(AppError::Internal("Audio path cannot be empty.".into()));
     }
 
-    let raw = PathBuf::from(trimmed);
-    if raw.is_absolute() {
-        let canonical = raw.canonicalize().map_err(|e| {
-            AppError::Internal(format!("Failed to resolve absolute audio path: {}", e))
-        })?;
-        return Ok(canonical.to_string_lossy().to_string());
-    }
-
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
-    let canonical_app_data = app_data_dir
-        .canonicalize()
-        .map_err(|e| AppError::Internal(format!("Failed to resolve app data directory: {}", e)))?;
 
+    let safe_path = SafePath::new(&app_data_dir);
     let normalized = trimmed.replace('\\', "/");
+    
+    // Support paths that already start with "media/" or just raw filenames
     let candidate = if normalized.starts_with("media/") {
-        app_data_dir.join(normalized)
+        normalized
     } else {
-        app_data_dir.join("media").join(normalized)
+        format!("media/{}", normalized)
     };
 
-    let canonical = candidate
-        .canonicalize()
-        .map_err(|e| AppError::Internal(format!("Failed to resolve media audio path: {}", e)))?;
-    if !canonical.starts_with(&canonical_app_data) {
-        return Err(AppError::Internal(
-            "Resolved audio path escapes application data directory.".into(),
-        ));
-    }
-
-    Ok(canonical.to_string_lossy().to_string())
+    let resolved = safe_path.resolve(candidate)?;
+    Ok(resolved.to_string_lossy().to_string())
 }

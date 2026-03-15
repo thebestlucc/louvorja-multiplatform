@@ -248,8 +248,8 @@ function PlayingNowScreen() {
     && gapTimingWindow.endMs != null
     && gapTimingWindow.endMs > gapTimingWindow.startMs,
   );
-  const gapStartMs = showGapIndicator ? gapTimingWindow.startMs : null;
-  const gapEndMs = showGapIndicator ? gapTimingWindow.endMs : null;
+  const gapStartMs = gapTimingWindow && showGapIndicator ? gapTimingWindow.startMs : null;
+  const gapEndMs = gapTimingWindow && showGapIndicator ? gapTimingWindow.endMs : null;
   const gapProgressRatio = showGapIndicator
     ? resolveProgressRatio(gapStartMs, gapEndMs, positionMs)
     : null;
