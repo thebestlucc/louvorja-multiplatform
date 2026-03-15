@@ -10,8 +10,9 @@ use r2d2_sqlite::SqliteConnectionManager;
 use serde::Serialize;
 use specta::Type;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Type)]
@@ -176,23 +177,23 @@ pub struct OverlayRuntimeState {
 
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
-    pub timer: Mutex<TimerRuntimeState>,
+    pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
     pub content_sync: Mutex<ContentSyncRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
-    pub current_slide: Mutex<Option<SlideContent>>,
-    pub projector_open: Mutex<bool>,
-    pub overlay: Mutex<OverlayRuntimeState>,
-    pub return_open: Mutex<bool>,
-    pub slide_context: Mutex<Option<SlideContext>>,
+    pub current_slide: RwLock<Option<SlideContent>>,
+    pub projector_open: AtomicBool,
+    pub overlay: RwLock<OverlayRuntimeState>,
+    pub return_open: AtomicBool,
+    pub slide_context: RwLock<Option<SlideContext>>,
     /// Maps action IDs to their currently registered global shortcut string.
     /// Used by update_global_shortcut to unregister before re-registering.
-    pub global_shortcuts: Mutex<HashMap<String, String>>,
+    pub global_shortcuts: RwLock<HashMap<String, String>>,
 }
 
 pub struct AudioState {
-    pub player: Mutex<AudioPlayer>,
+    pub player: RwLock<AudioPlayer>,
     pub audio_status_stream_stop: Mutex<Option<Sender<()>>>,
 }
 
@@ -223,7 +224,7 @@ impl StreamingState {
 impl AudioState {
     pub fn new() -> Result<Self, AppError> {
         Ok(Self {
-            player: Mutex::new(AudioPlayer::new()?),
+            player: RwLock::new(AudioPlayer::new()?),
             audio_status_stream_stop: Mutex::new(None),
         })
     }
@@ -231,7 +232,7 @@ impl AudioState {
     /// Creates a disabled AudioState when no audio output device is available.
     pub fn disabled() -> Self {
         Self {
-            player: Mutex::new(AudioPlayer::disabled()),
+            player: RwLock::new(AudioPlayer::disabled()),
             audio_status_stream_stop: Mutex::new(None),
         }
     }

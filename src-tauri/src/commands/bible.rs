@@ -163,7 +163,7 @@ pub fn project_bible_verse(
     {
         let mut current = state
             .current_slide
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
@@ -180,7 +180,7 @@ pub fn project_bible_verse(
     {
         let mut context = state
             .slide_context
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *context = Some(slide_context.clone());
     }
@@ -215,7 +215,7 @@ pub fn navigate_bible_verse(
     let current_slide = {
         let current = state
             .current_slide
-            .lock()
+            .read()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         current.clone()
     };
@@ -354,7 +354,7 @@ pub fn navigate_bible_verse(
     {
         let mut current = state
             .current_slide
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
@@ -371,7 +371,7 @@ pub fn navigate_bible_verse(
     {
         let mut context = state
             .slide_context
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *context = Some(slide_context.clone());
     }

@@ -146,7 +146,7 @@ pub fn update_global_shortcut(
 
     let mut shortcuts_map = state
         .global_shortcuts
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     // Unregister the previous shortcut for this action if one exists

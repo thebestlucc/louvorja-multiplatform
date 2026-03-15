@@ -17,7 +17,7 @@ pub fn update_current_slide(
     {
         let mut current = state
             .current_slide
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
@@ -28,7 +28,7 @@ pub fn update_current_slide(
     let slide_context = {
         let mut context = state
             .slide_context
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
         match context.clone() {
@@ -92,7 +92,7 @@ pub fn update_slide_context(
     {
         let mut ctx = state
             .slide_context
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *ctx = Some(context_data.clone());
     }
@@ -100,7 +100,7 @@ pub fn update_slide_context(
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     if let Ok(server) = streaming_state.server.lock() {
-        let current_slide = state.current_slide.lock().ok().and_then(|s| s.clone());
+        let current_slide = state.current_slide.read().ok().and_then(|s| s.clone());
         if let Some(slide) = current_slide.as_ref() {
             let music_json = build_music_stream_payload(slide, Some(&context_data));
             server.broadcast_music(&music_json.to_string());
