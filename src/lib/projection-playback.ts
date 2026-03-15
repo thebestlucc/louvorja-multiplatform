@@ -152,7 +152,6 @@ export function buildProjectionSlideContext(
       audioState.syncPoints,
       index,
       audioState.playbackMode,
-      audioState.durationMs,
     )
     : { startMs: null, endMs: null };
 
