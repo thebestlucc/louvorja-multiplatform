@@ -18,7 +18,7 @@
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Display Refactor' (Protocol in workflow.md)
 
 ## Phase 3: State & Performance
-- [ ] Task: Evaluate `AppState` Mutex usage
-    - [ ] Sub-task: Benchmark current `Mutex` under high-frequency audio position updates.
-    - [ ] Sub-task: Replace targeted `Mutex` with `RwLock` or `Atomic` if necessary.
+- [x] Task: Evaluate `AppState` Mutex usage 698e807
+    - [x] Sub-task: Benchmark current `Mutex` under high-frequency audio position updates.
+    - [x] Sub-task: Replace targeted `Mutex` with `RwLock` or `Atomic` if necessary.
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Performance Check' (Protocol in workflow.md)
