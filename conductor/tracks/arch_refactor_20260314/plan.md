@@ -10,11 +10,11 @@
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Security Hardening' (Protocol in workflow.md)
 
 ## Phase 2: Display Module Decomposition
-- [ ] Task: Initialize `src-tauri/src/display/` sub-directory
-    - [ ] Sub-task: Create `monitor.rs` (scoring and detection logic).
-    - [ ] Sub-task: Create `window.rs` (creation and fullscreen retry logic).
-    - [ ] Sub-task: Create `projection.rs` (slide and context sync logic).
-- [ ] Task: Migrate logic from `commands/display.rs` to new sub-modules.
+- [x] Task: Initialize `src-tauri/src/display/` sub-directory 8cb991b
+    - [x] Sub-task: Create `monitor.rs` (scoring and detection logic).
+    - [x] Sub-task: Create `window.rs` (creation and fullscreen retry logic).
+    - [x] Sub-task: Create `projection.rs` (slide and context sync logic).
+- [x] Task: Migrate logic from `commands/display.rs` to new sub-modules. 8cb991b
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Display Refactor' (Protocol in workflow.md)
 
 ## Phase 3: State & Performance
