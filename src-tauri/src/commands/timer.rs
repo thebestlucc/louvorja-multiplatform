@@ -58,7 +58,7 @@ fn snapshot_timer_state_from_app(app: &AppHandle) -> Result<TimerStateData, AppE
     let state = app.state::<AppState>();
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     normalize_timer_runtime(&mut timer);
     Ok(timer.to_data())
@@ -162,7 +162,7 @@ pub fn start_timer(
 
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     timer.start(timer_mode, normalized_duration);
 
@@ -174,7 +174,7 @@ pub fn start_timer(
 pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     timer.pause();
     Ok(())
@@ -185,7 +185,7 @@ pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     timer.resume();
     Ok(())
@@ -196,7 +196,7 @@ pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 pub fn reset_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     timer.reset();
     Ok(())
@@ -210,7 +210,7 @@ pub fn adjust_countdown_timer(
 ) -> Result<(), AppError> {
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     timer
@@ -223,7 +223,7 @@ pub fn adjust_countdown_timer(
 pub fn get_timer_state(state: tauri::State<'_, AppState>) -> Result<TimerStateData, AppError> {
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     normalize_timer_runtime(&mut timer);
 
@@ -235,7 +235,7 @@ pub fn get_timer_state(state: tauri::State<'_, AppState>) -> Result<TimerStateDa
 pub fn add_lap(state: tauri::State<'_, AppState>) -> Result<u64, AppError> {
     let mut timer = state
         .timer
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     if !matches!(timer.mode, TimerMode::Stopwatch) {

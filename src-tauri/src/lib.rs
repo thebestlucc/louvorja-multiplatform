@@ -14,7 +14,8 @@ mod utils;
 mod video;
 
 use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, RwLock};
 use tauri::{Emitter, Manager};
 
 /// Create the main window dynamically
@@ -259,17 +260,17 @@ pub fn run() {
 
             app.manage(AppState {
                 db: pool.clone(),
-                timer: Mutex::new(TimerRuntimeState::default()),
+                timer: RwLock::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
                 content_sync: Mutex::new(crate::content_sync::ContentSyncRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
-                current_slide: Mutex::new(None),
-                projector_open: Mutex::new(false),
-                overlay: Mutex::new(OverlayRuntimeState::default()),
-                return_open: Mutex::new(false),
-                slide_context: Mutex::new(None),
-                global_shortcuts: Mutex::new(std::collections::HashMap::new()),
+                current_slide: RwLock::new(None),
+                projector_open: AtomicBool::new(false),
+                overlay: RwLock::new(OverlayRuntimeState::default()),
+                return_open: AtomicBool::new(false),
+                slide_context: RwLock::new(None),
+                global_shortcuts: RwLock::new(std::collections::HashMap::new()),
             });
 
             app.manage(AudioState::default());
@@ -333,7 +334,7 @@ pub fn run() {
                 let conn = db_state.db.get().map_err(|e| e.to_string())?;
                 let mut shortcuts_map = db_state
                     .global_shortcuts
-                    .lock()
+                    .write()
                     .map_err(|e| e.to_string())?;
 
                 for (action, default_str) in global_defaults {
@@ -365,16 +366,12 @@ pub fn run() {
                 match window.label() {
                     "projector" => {
                         let state = window.state::<AppState>();
-                        if let Ok(mut open) = state.projector_open.lock() {
-                            *open = false;
-                        }
+                        state.projector_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("projector-state-changed", false);
                     }
                     "return" => {
                         let state = window.state::<AppState>();
-                        if let Ok(mut open) = state.return_open.lock() {
-                            *open = false;
-                        }
+                        state.return_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("return-state-changed", false);
                     }
                     _ => {}

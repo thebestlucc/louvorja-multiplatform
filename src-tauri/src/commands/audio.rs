@@ -38,7 +38,7 @@ pub struct AudioStatusPayload {
 fn snapshot_audio_status(state: &AudioState) -> Result<AudioStatusPayload, AppError> {
     let player = state
         .player
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(AudioStatusPayload {
@@ -159,7 +159,7 @@ pub fn audio_play(
     {
         let mut player = state
             .player
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         player.play(
             &resolved_path,
@@ -191,7 +191,7 @@ pub fn audio_play_variants(
     {
         let mut player = state
             .player
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         player.play_variants(
             &sung_resolved_path,
@@ -220,7 +220,7 @@ pub fn audio_switch_variant(
     {
         let mut player = state
             .player
-            .lock()
+            .write()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         player.switch_variant(active_variant)?;
     }
@@ -238,7 +238,7 @@ pub fn audio_play_alert(
 ) -> Result<(), AppError> {
     let player = state
         .player
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.play_alert(file_path.as_deref(), volume)
 }
@@ -248,7 +248,7 @@ pub fn audio_play_alert(
 pub fn audio_pause(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let player = state
         .player
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.pause();
     drop(player);
@@ -261,7 +261,7 @@ pub fn audio_pause(app: AppHandle, state: tauri::State<'_, AudioState>) -> Resul
 pub fn audio_resume(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let player = state
         .player
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.resume();
     drop(player);
@@ -279,7 +279,7 @@ pub fn audio_set_output_muted(
 ) -> Result<(), AppError> {
     let mut player = state
         .player
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.set_output_muted(muted);
     drop(player);
@@ -292,7 +292,7 @@ pub fn audio_set_output_muted(
 pub fn audio_stop(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
     let mut player = state
         .player
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.stop();
     drop(player);
@@ -310,7 +310,7 @@ pub fn audio_seek(
 ) -> Result<(), AppError> {
     let player = state
         .player
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.seek(position_ms)?;
     drop(player);
@@ -327,7 +327,7 @@ pub fn audio_set_volume(
 ) -> Result<(), AppError> {
     let mut player = state
         .player
-        .lock()
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     player.set_volume(volume);
     drop(player);
@@ -340,7 +340,7 @@ pub fn audio_set_volume(
 pub fn audio_get_position(state: tauri::State<'_, AudioState>) -> Result<u64, AppError> {
     let player = state
         .player
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(player.position_ms())
 }

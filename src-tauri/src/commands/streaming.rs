@@ -259,12 +259,12 @@ pub fn start_streaming_server(
 
     let current_slide = app_state
         .current_slide
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?
         .clone();
     let slide_context = app_state
         .slide_context
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?
         .clone();
 
@@ -315,12 +315,12 @@ pub fn set_streaming_broadcast(
 ) -> Result<(), AppError> {
     let current_slide = app_state
         .current_slide
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?
         .clone();
     let slide_context = app_state
         .slide_context
-        .lock()
+        .read()
         .map_err(|e| AppError::Internal(e.to_string()))?
         .clone();
 

@@ -8,6 +8,7 @@ use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
 use crate::state::{AppState, StreamingState};
 use display_info::DisplayInfo as ExternalDisplayInfo;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use crate::commands::streaming::{
@@ -142,9 +143,7 @@ pub fn open_projector_window(
         let _ = win.set_focus();
         return Ok(());
     }
-    if let Ok(mut open) = state.projector_open.lock() {
-        *open = true;
-    }
+    state.projector_open.store(true, Ordering::Relaxed);
     let _ = app.emit("projector-state-changed", true);
     std::thread::spawn(move || {
         let mut final_target_id = monitor_id.clone();
@@ -187,9 +186,7 @@ pub fn open_projector_window(
         if !target_monitor_found {
             let _ = app.emit("projector-state-changed", false);
             if let Some(state) = app.try_state::<crate::state::AppState>() {
-                if let Ok(mut open) = state.projector_open.lock() {
-                    *open = false;
-                }
+                state.projector_open.store(false, Ordering::Relaxed);
             }
             return;
         }
@@ -203,9 +200,7 @@ pub fn open_projector_window(
         ) {
             eprintln!("[display] Failed to open projector window: {e}");
             if let Some(state) = app.try_state::<crate::state::AppState>() {
-                if let Ok(mut open) = state.projector_open.lock() {
-                    *open = false;
-                }
+                state.projector_open.store(false, Ordering::Relaxed);
             }
             let _ = app.emit("projector-state-changed", false);
         }
@@ -222,9 +217,7 @@ pub fn close_projector_window(
     if let Some(win) = app.get_webview_window("projector") {
         win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
     }
-    if let Ok(mut open) = state.projector_open.lock() {
-        *open = false;
-    }
+    state.projector_open.store(false, Ordering::Relaxed);
     let _ = app.emit("projector-state-changed", false);
     Ok(())
 }
@@ -241,9 +234,7 @@ pub fn open_return_window(
         let _ = win.set_focus();
         return Ok(());
     }
-    if let Ok(mut open) = state.return_open.lock() {
-        *open = true;
-    }
+    state.return_open.store(true, Ordering::Relaxed);
     let _ = app.emit("return-state-changed", true);
     std::thread::spawn(move || {
         let mut final_target_id = monitor_id.clone();
@@ -277,9 +268,7 @@ pub fn open_return_window(
         if !target_monitor_found {
             let _ = app.emit("return-state-changed", false);
             if let Some(state) = app.try_state::<crate::state::AppState>() {
-                if let Ok(mut open) = state.return_open.lock() {
-                    *open = false;
-                }
+                state.return_open.store(false, Ordering::Relaxed);
             }
             return;
         }
@@ -293,9 +282,7 @@ pub fn open_return_window(
         ) {
             eprintln!("[display] Failed to open return window: {e}");
             if let Some(state) = app.try_state::<crate::state::AppState>() {
-                if let Ok(mut open) = state.return_open.lock() {
-                    *open = false;
-                }
+                state.return_open.store(false, Ordering::Relaxed);
             }
             let _ = app.emit("return-state-changed", false);
         }
@@ -312,9 +299,7 @@ pub fn close_return_window(
     if let Some(win) = app.get_webview_window("return") {
         win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
     }
-    if let Ok(mut open) = state.return_open.lock() {
-        *open = false;
-    }
+    state.return_open.store(false, Ordering::Relaxed);
     let _ = app.emit("return-state-changed", false);
     Ok(())
 }
@@ -338,7 +323,7 @@ pub fn set_current_slide(
 pub fn get_current_slide(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<SlideContent>, AppError> {
-    let current = state.current_slide.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let current = state.current_slide.read().map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(current.clone())
 }
 
@@ -351,11 +336,11 @@ pub fn clear_current_slide(
 ) -> Result<(), AppError> {
     stop_live_utility_projection(&state)?;
     {
-        let mut current = state.current_slide.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+        let mut current = state.current_slide.write().map_err(|e| AppError::Internal(e.to_string()))?;
         *current = None;
     }
     {
-        let mut ctx = state.slide_context.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+        let mut ctx = state.slide_context.write().map_err(|e| AppError::Internal(e.to_string()))?;
         *ctx = None;
     }
     let _ = app.emit("slide-cleared", ());
@@ -384,7 +369,7 @@ pub fn set_slide_context(
 pub fn get_slide_context(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<SlideContext>, AppError> {
-    let ctx = state.slide_context.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let ctx = state.slide_context.read().map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(ctx.clone())
 }
 
@@ -394,7 +379,7 @@ pub fn toggle_black_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let mut overlay = state.overlay.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
     overlay.is_black_screen = !overlay.is_black_screen;
     if overlay.is_black_screen {
         overlay.is_logo_screen = false;
@@ -413,7 +398,7 @@ pub fn toggle_logo_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let mut overlay = state.overlay.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
     overlay.is_logo_screen = !overlay.is_logo_screen;
     if overlay.is_logo_screen {
         overlay.is_black_screen = false;
@@ -429,7 +414,7 @@ pub fn toggle_logo_screen(
 #[tauri::command]
 #[specta::specta]
 pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
-    let overlay = state.overlay.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let overlay = state.overlay.read().map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(OverlayState {
         black_screen: overlay.is_black_screen,
         logo_screen: overlay.is_logo_screen,
