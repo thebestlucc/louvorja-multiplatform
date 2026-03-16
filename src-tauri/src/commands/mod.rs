@@ -4,6 +4,7 @@ pub mod clock;
 pub mod collections;
 pub mod content_sync;
 pub mod display;
+pub mod favorites;
 pub mod legacy_fetch;
 pub mod liturgy;
 pub mod migration;

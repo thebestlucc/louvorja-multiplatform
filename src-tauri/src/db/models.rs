@@ -757,6 +757,17 @@ pub struct ContentSyncReport {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Favorite {
+    #[specta(type = i32)]
+    pub id: i64,
+    pub item_type: String,
+    #[specta(type = i32)]
+    pub item_id: i64,
+    pub created_at: String,
+}
+
 impl ContentSyncReport {
     pub fn from_run(run: ContentSyncRun) -> Self {
         #[derive(Deserialize, Default)]
