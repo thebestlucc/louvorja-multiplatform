@@ -8,7 +8,7 @@
 - [x] 5. Add a "Favorites" tab or filter in the Hymnal index route (`src/routes/hymnal/index.tsx`). [7ae7ff1]
 
 ## Phase 2: Interactive Text & Alerts (High Priority)
-- [ ] 1. Create Rust commands and state in `src-tauri/src/commands/display.rs` (or a new module) to hold active alert/ticker state.
+- [x] 1. Create Rust commands and state in `src-tauri/src/commands/display.rs` (or a new module) to hold active alert/ticker state. [b1bfb88]
 - [ ] 2. Update the `SseBroadcaster` and streaming templates (`music.html`, `bible.html`, `return.html`) to receive and render alerts.
 - [ ] 3. Create frontend route `/utilities/interactive-text` with controls for text input, display mode (static/ticker), and projection trigger.
 - [ ] 4. Update the React projector view (`src/routes/projector.tsx` and `return.tsx`) to render the alert overlay on top of existing slides.
