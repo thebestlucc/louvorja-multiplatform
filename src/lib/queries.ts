@@ -24,6 +24,7 @@ import {
   updateScheduleDayDepartmentPeoplePerDay, resetScheduleDayDepartmentManualOverride,
   getMonitorConfigs, setMonitorConfig, identifyMonitors,
   setAlert, clearAlert, toggleBlackScreen, toggleLogoScreen, getOverlayState,
+  scanMediaIntegrity, deleteExcessMedia,
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings, clearDatabase,
@@ -98,6 +99,7 @@ export const queryKeys = {
     detail: (key: string) => ["settings", key] as const,
   },
   overlay: ["overlay"] as const,
+  mediaIntegrity: ["mediaIntegrity"] as const,
   legacyFetch: {
     progress: (runId: string) => ["legacyFetch", "progress", runId] as const,
     report: (runId: string) => ["legacyFetch", "report", runId] as const,
@@ -1309,5 +1311,23 @@ export function useClearAlert() {
 export function useIdentifyMonitors() {
   return useMutation({
     mutationFn: () => identifyMonitors(),
+  });
+}
+
+// Media Integrity
+export function useMediaIntegrity() {
+  return useQuery({
+    queryKey: queryKeys.mediaIntegrity,
+    queryFn: () => scanMediaIntegrity(),
+  });
+}
+
+export function useDeleteExcessMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (paths: string[]) => deleteExcessMedia(paths),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mediaIntegrity });
+    },
   });
 }

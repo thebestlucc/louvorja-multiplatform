@@ -210,6 +210,8 @@ pub fn run() {
             // Utility
             commands::utility::run_lottery,
             commands::utility::format_text,
+            commands::utility::scan_media_integrity,
+            commands::utility::delete_excess_media,
             commands::utility::copy_video_to_media,
             commands::utility::copy_image_to_media,
             commands::utility::get_video_metadata,
