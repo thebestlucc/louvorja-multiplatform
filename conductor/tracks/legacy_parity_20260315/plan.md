@@ -20,5 +20,5 @@
 
 ## Phase 4: Collection Integrity Tools (Medium Priority)
 - [x] 1. Create Rust command `scan_media_integrity` in `src-tauri/src/commands/utility.rs` to check for missing and excess files in the `media/` folder compared to database references. [7cce103]
-- [ ] 2. Create frontend route `/utilities/integrity` to display the scan results (missing files list, excess files list).
-- [ ] 3. Add a "Clean up excess files" action to delete unreferenced media via backend command.
+- [x] 2. Create frontend route `/utilities/integrity` to display the scan results (missing files list, excess files list). [5471288]
+- [x] 3. Add a "Clean up excess files" action to delete unreferenced media via backend command. [5471288]
