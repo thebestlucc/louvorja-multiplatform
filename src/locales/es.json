@@ -246,10 +246,20 @@
     "restoreFromApi": "Restaurar desde API",
     "restoreSuccess": "Himno restaurado desde la API con éxito.",
     "slides": "Diapositivas",
-    "stopProjection": "Detener",
+    "stopProjection": "Parar",
     "title": "Título"
-  },
-  "hymnal": {
+    },
+    "interactiveText": {
+    "clear": "Limpiar Alerta",
+    "displayMode": "Modo de Exhibición",
+    "placeholder": "Escriba el mensaje para proyectar...",
+    "project": "Proyectar Alerta",
+    "static": "Estático",
+    "status": "Estado Actual",
+    "ticker": "Letrero (Ticker)",
+    "title": "Texto Interactivo"
+    },
+    "hymnal": {
     "album": "Álbum",
     "albumPlaceholder": "Álbum",
     "albums": "Álbumes",
@@ -788,6 +798,10 @@
       "hour24": "24 horas",
       "showDate": "Mostrar fecha",
       "title": "Reloj"
+    },
+    "interactiveText": {
+      "description": "Proyecte avisos y letreros (tickers) temporales sobre cualquier pantalla.",
+      "title": "Texto Interativo"
     },
     "lottery": {
       "allPicked": "Todos los elementos disponibles ya fueron sorteados.",

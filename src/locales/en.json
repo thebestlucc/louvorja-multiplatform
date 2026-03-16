@@ -249,6 +249,16 @@
     "stopProjection": "Stop",
     "title": "Title"
   },
+  "interactiveText": {
+    "clear": "Clear Alert",
+    "displayMode": "Display Mode",
+    "placeholder": "Type the message to project...",
+    "project": "Project Alert",
+    "static": "Static",
+    "status": "Current Status",
+    "ticker": "Ticker",
+    "title": "Interactive Text"
+  },
   "hymnal": {
     "album": "Album",
     "albumPlaceholder": "Album",
@@ -788,6 +798,10 @@
       "hour24": "24-hour",
       "showDate": "Show date",
       "title": "Clock"
+    },
+    "interactiveText": {
+      "description": "Project temporary notices and tickers over any screen.",
+      "title": "Interactive Text"
     },
     "lottery": {
       "allPicked": "All available items were already picked.",
