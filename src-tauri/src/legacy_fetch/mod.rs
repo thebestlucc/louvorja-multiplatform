@@ -10,6 +10,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Static API Token for legacy LouvorJA server
+pub const API_TOKEN: &str = "02@v2nFB2Dc";
+
 /// Deserialize a value that may be an integer, a numeric string, an empty string, or null
 /// into `Option<i64>`. Used for API fields like `order` that return `""` instead of `null`.
 fn deserialize_flexible_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
@@ -376,11 +379,27 @@ pub struct LegacyFetchError {
 pub mod fetcher {
     use super::*;
     use crate::error::AppError;
+    use reqwest::Client;
+
+    /// Helper to get an authenticated reqwest client
+    fn get_api_client() -> Client {
+        Client::builder()
+            .use_rustls_tls()
+            .default_headers({
+                let mut headers = reqwest::header::HeaderMap::new();
+                headers.insert("Api-Token", API_TOKEN.parse().unwrap());
+                headers
+            })
+            .build()
+            .unwrap_or_default()
+    }
 
     /// Fetch params from the API
     pub async fn fetch_params() -> Result<ApiParams, AppError> {
         let url = format!("{}/params", API_BASE_URL);
-        let response = reqwest::get(&url)
+        let response = get_api_client()
+            .get(&url)
+            .send()
             .await
             .map_err(|e| AppError::Internal(format!("Failed to fetch params: {}", e)))?;
 
@@ -405,9 +424,11 @@ pub mod fetcher {
         page: i64,
     ) -> Result<PaginatedResponse<ApiAlbum>, AppError> {
         let url = format!("{}/{}/albums?page={}", API_BASE_URL, lang.as_str(), page);
-        let response = reqwest::get(&url).await.map_err(|e| {
-            AppError::Internal(format!("Failed to fetch albums page {}: {}", page, e))
-        })?;
+        let response = get_api_client()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch albums page {}: {}", page, e)))?;
 
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
@@ -459,12 +480,16 @@ pub mod fetcher {
             album_id,
             page
         );
-        let response = reqwest::get(&url).await.map_err(|e| {
-            AppError::Internal(format!(
-                "Failed to fetch album {} musics page {}: {}",
-                album_id, page, e
-            ))
-        })?;
+        let response = get_api_client()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to fetch album {} musics page {}: {}",
+                    album_id, page, e
+                ))
+            })?;
 
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
@@ -553,9 +578,13 @@ pub mod fetcher {
         page: i64,
     ) -> Result<PaginatedResponse<ApiMusic>, AppError> {
         let url = format!("{}/{}/hymnal?page={}", API_BASE_URL, lang.as_str(), page);
-        let response = reqwest::get(&url).await.map_err(|e| {
-            AppError::Internal(format!("Failed to fetch hymnal page {}: {}", page, e))
-        })?;
+        let response = get_api_client()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to fetch hymnal page {}: {}", page, e))
+            })?;
 
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
@@ -600,9 +629,13 @@ pub mod fetcher {
         music_id: i64,
     ) -> Result<ApiMusic, AppError> {
         let url = format!("{}/{}/musics/{}", API_BASE_URL, lang.as_str(), music_id);
-        let response = reqwest::get(&url).await.map_err(|e| {
-            AppError::Internal(format!("Failed to fetch music {}: {}", music_id, e))
-        })?;
+        let response = get_api_client()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to fetch music {}: {}", music_id, e))
+            })?;
 
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
@@ -627,7 +660,9 @@ pub mod fetcher {
 
     /// Download a file from a URL to a local path
     pub async fn download_file(url: &str, target_path: &std::path::Path) -> Result<(), AppError> {
-        let response = reqwest::get(url)
+        let response = get_api_client()
+            .get(url)
+            .send()
             .await
             .map_err(|e| AppError::Internal(format!("Failed to download file: {}", e)))?;
 
