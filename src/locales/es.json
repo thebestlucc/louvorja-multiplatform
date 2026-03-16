@@ -497,6 +497,7 @@
       "completedVersion": "Versión completada",
       "currentVersion": "Versión actual",
       "description": "Revise los cambios remotos de contenido, ejecute la sincronización inteligente y consulte el informe más reciente.",
+      "downloading": "Descargando",
       "downloadingAsset": "Descargando archivo: {{path}}",
       "failed": "Fallidos",
       "fallback": "Fallback",
