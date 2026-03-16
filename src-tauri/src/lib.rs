@@ -91,6 +91,10 @@ pub fn run() {
             commands::bible::project_bible_verse,
             commands::bible::import_bible_version,
             commands::bible::navigate_bible_verse,
+            // Favorites
+            commands::favorites::toggle_favorite,
+            commands::favorites::get_favorites,
+            commands::favorites::is_favorite,
             // Slides
             commands::slides::get_presentations,
             commands::slides::get_presentation,
