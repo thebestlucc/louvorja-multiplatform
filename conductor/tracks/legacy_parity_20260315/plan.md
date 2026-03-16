@@ -4,7 +4,7 @@
 - [x] 1. Add `toggle_favorite` and `get_favorites` Rust commands in `src-tauri/src/commands/favorites.rs`. [7f04397]
 - [x] 2. Register the commands in `src-tauri/src/lib.rs` and update bindings. [b662ca6]
 - [x] 3. Update `src/lib/queries.ts` to include TanStack Query hooks for reading and mutating favorites. [935321e]
-- [ ] 4. Add a favorite toggle button (star icon) to `HymnCard` and Hymn Detail (`$hymnId.tsx`).
+- [x] 4. Add a favorite toggle button (star icon) to `HymnCard` and Hymn Detail (`$hymnId.tsx`). [6e25c0a]
 - [ ] 5. Add a "Favorites" tab or filter in the Hymnal index route (`src/routes/hymnal/index.tsx`).
 
 ## Phase 2: Interactive Text & Alerts (High Priority)
