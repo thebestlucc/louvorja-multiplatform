@@ -182,6 +182,12 @@
     "toggleBlack": "Alternar Tela Preta (B)",
     "toggleLogo": "Alternar Tela de Logo (L)"
   },
+  "favorites": {
+    "add": "Adicionar aos favoritos",
+    "empty": "Nenhum item favoritado ainda.",
+    "remove": "Remover dos favoritos",
+    "title": "Favoritos"
+  },
   "help": {
     "description": "Ajuda rápida para atalhos, projeção e streaming.",
     "documentationTitle": "Arquivos de documentação",

@@ -182,6 +182,12 @@
     "toggleBlack": "Alternar Pantalla Negra (B)",
     "toggleLogo": "Alternar Pantalla de Logo (L)"
   },
+  "favorites": {
+    "add": "Añadir a favoritos",
+    "empty": "No hay elementos favoritos todavía.",
+    "remove": "Eliminar de favoritos",
+    "title": "Favoritos"
+  },
   "help": {
     "description": "Ayuda rápida para atajos, proyección y streaming.",
     "documentationTitle": "Archivos de documentación",
