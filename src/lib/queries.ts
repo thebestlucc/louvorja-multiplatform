@@ -15,6 +15,7 @@ import {
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
+  toggleFavorite, getFavorites, isFavorite,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
@@ -70,6 +71,10 @@ export const queryKeys = {
     verses: (versionId: number, book: string, chapter: number) =>
       ["bible", "verses", versionId, book, chapter] as const,
     search: (query: string, versionId: number | null) => ["bible", "search", query, versionId] as const,
+  },
+  favorites: {
+    all: (itemType: string) => ["favorites", itemType] as const,
+    isFavorite: (itemType: string, itemId: number) => ["favorites", itemType, itemId, "check"] as const,
   },
   presentations: {
     all: ["presentations"] as const,
@@ -579,6 +584,34 @@ export function useImportBible() {
       importBibleVersion(vars.name, vars.abbreviation, vars.language, vars.versesJson),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
+    },
+  });
+}
+
+// Favorites
+export function useFavorites(itemType: string) {
+  return useQuery({
+    queryKey: queryKeys.favorites.all(itemType),
+    queryFn: () => getFavorites(itemType),
+  });
+}
+
+export function useIsFavorite(itemType: string, itemId: number) {
+  return useQuery({
+    queryKey: queryKeys.favorites.isFavorite(itemType, itemId),
+    queryFn: () => isFavorite(itemType, itemId),
+    enabled: itemId > 0,
+  });
+}
+
+export function useToggleFavorite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemType, itemId }: { itemType: string; itemId: number }) =>
+      toggleFavorite(itemType, itemId),
+    onSuccess: (_, { itemType, itemId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.favorites.all(itemType) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.favorites.isFavorite(itemType, itemId) });
     },
   });
 }

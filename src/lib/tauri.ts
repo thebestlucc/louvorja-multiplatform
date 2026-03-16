@@ -17,6 +17,7 @@ import type {
   Book,
   Verse,
   BibleSearchResult,
+  Favorite,
   Service,
   ServiceItem,
   ServiceWithItems,
@@ -405,11 +406,24 @@ export async function getVerses(versionId: number, book: string, chapter: number
 export async function searchBible(query: string, versionId: number | null): Promise<BibleSearchResult[]> {
   return tauriInvoke<BibleSearchResult[]>("search_bible", { query, versionId });
 }
-
 export async function importBibleVersion(name: string, abbreviation: string, language: string, versesJson: string): Promise<number> {
   return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
 }
 
+// Favorites
+export async function toggleFavorite(itemType: string, itemId: number): Promise<boolean> {
+  return tauriInvoke<boolean>("toggle_favorite", { itemType, itemId });
+}
+
+export async function getFavorites(itemType: string): Promise<Favorite[]> {
+  return tauriInvoke<Favorite[]>("get_favorites", { itemType });
+}
+
+export async function isFavorite(itemType: string, itemId: number): Promise<boolean> {
+  return tauriInvoke<boolean>("is_favorite", { itemType, itemId });
+}
+
+// Liturgy
 export async function getServices(): Promise<Service[]> {
   return tauriInvoke<Service[]>("get_services");
 }
