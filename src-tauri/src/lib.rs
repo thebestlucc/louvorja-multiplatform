@@ -5,6 +5,7 @@ mod content_sync;
 mod db;
 mod display;
 mod error;
+mod ftp_sync;
 mod legacy_fetch;
 mod migration;
 mod projection;
