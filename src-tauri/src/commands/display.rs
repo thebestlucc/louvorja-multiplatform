@@ -7,6 +7,7 @@ use crate::display::{
 use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
 use crate::state::{AppState, StreamingState};
+use crate::utils::catcher::catcher;
 use display_info::DisplayInfo as ExternalDisplayInfo;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -47,9 +48,11 @@ pub fn start_monitor_hotplug_watcher(app: AppHandle) {
 #[tauri::command]
 #[specta::specta]
 pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppError> {
-    let monitors = app
-        .available_monitors()
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    let (monitors, err) = catcher(app.available_monitors());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let monitors = monitors.unwrap();
     let external_displays = ExternalDisplayInfo::all().unwrap_or_default();
     let primary_monitor_id = app
         .primary_monitor()
@@ -215,7 +218,10 @@ pub fn close_projector_window(
     app: AppHandle,
 ) -> Result<(), AppError> {
     if let Some(win) = app.get_webview_window("projector") {
-        win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
+        let (_, err) = catcher(win.close());
+        if let Some(e) = err {
+            return Err(e);
+        }
     }
     state.projector_open.store(false, Ordering::Relaxed);
     let _ = app.emit("projector-state-changed", false);
@@ -297,7 +303,10 @@ pub fn close_return_window(
     app: AppHandle,
 ) -> Result<(), AppError> {
     if let Some(win) = app.get_webview_window("return") {
-        win.close().map_err(|e| AppError::Tauri(e.to_string()))?;
+        let (_, err) = catcher(win.close());
+        if let Some(e) = err {
+            return Err(e);
+        }
     }
     state.return_open.store(false, Ordering::Relaxed);
     let _ = app.emit("return-state-changed", false);
@@ -323,7 +332,11 @@ pub fn set_current_slide(
 pub fn get_current_slide(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<SlideContent>, AppError> {
-    let current = state.current_slide.read().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (current, err) = catcher(state.current_slide.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let current = current.unwrap();
     Ok(current.clone())
 }
 
@@ -336,11 +349,19 @@ pub fn clear_current_slide(
 ) -> Result<(), AppError> {
     stop_live_utility_projection(&state)?;
     {
-        let mut current = state.current_slide.write().map_err(|e| AppError::Internal(e.to_string()))?;
+        let (current, err) = catcher(state.current_slide.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut current = current.unwrap();
         *current = None;
     }
     {
-        let mut ctx = state.slide_context.write().map_err(|e| AppError::Internal(e.to_string()))?;
+        let (ctx, err) = catcher(state.slide_context.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut ctx = ctx.unwrap();
         *ctx = None;
     }
     let _ = app.emit("slide-cleared", ());
@@ -369,7 +390,11 @@ pub fn set_slide_context(
 pub fn get_slide_context(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<SlideContext>, AppError> {
-    let ctx = state.slide_context.read().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (ctx, err) = catcher(state.slide_context.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let ctx = ctx.unwrap();
     Ok(ctx.clone())
 }
 
@@ -379,7 +404,11 @@ pub fn toggle_black_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (overlay, err) = catcher(state.overlay.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut overlay = overlay.unwrap();
     overlay.is_black_screen = !overlay.is_black_screen;
     if overlay.is_black_screen {
         overlay.is_logo_screen = false;
@@ -399,7 +428,11 @@ pub fn toggle_logo_screen(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (overlay, err) = catcher(state.overlay.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut overlay = overlay.unwrap();
     overlay.is_logo_screen = !overlay.is_logo_screen;
     if overlay.is_logo_screen {
         overlay.is_black_screen = false;
@@ -416,7 +449,11 @@ pub fn toggle_logo_screen(
 #[tauri::command]
 #[specta::specta]
 pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
-    let overlay = state.overlay.read().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (overlay, err) = catcher(state.overlay.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let overlay = overlay.unwrap();
     Ok(OverlayState {
         black_screen: overlay.is_black_screen,
         logo_screen: overlay.is_logo_screen,
@@ -433,7 +470,11 @@ pub fn set_alert(
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
-    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (overlay, err) = catcher(state.overlay.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut overlay = overlay.unwrap();
     overlay.alert.text = text;
     overlay.alert.is_ticker = is_ticker;
     overlay.alert.is_visible = true;
@@ -461,7 +502,11 @@ pub fn clear_alert(
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
-    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (overlay, err) = catcher(state.overlay.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut overlay = overlay.unwrap();
     overlay.alert.is_visible = false;
 
     let result = OverlayState {
@@ -487,55 +532,91 @@ pub fn set_monitor_config(
     role: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::settings::set_monitor_config(
         &conn,
         &MonitorConfig { id: 0, monitor_id, role, enabled: true },
     )
 }
 
+const IDENTIFY_W: f64 = 200.0;
+const IDENTIFY_H: f64 = 200.0;
+
 #[tauri::command]
 #[specta::specta]
-pub fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
-    let monitors = app
-        .available_monitors()
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+pub async fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
+    let (monitors, err) = catcher(app.available_monitors());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let monitors = monitors.unwrap();
 
+    // Spawn window creation in the background to avoid blocking and stagger them
     for (index, monitor) in monitors.iter().enumerate() {
-        let label = format!("identify-{}", index);
-        let title = format!("Identify Monitor {}", index + 1);
-        let url = format!("/identify?id={}", index + 1);
+        let app_handle = app.clone();
+        let monitor_clone = monitor.clone();
 
-        let position = monitor.position();
-        let size = monitor.size();
-        let scale = monitor.scale_factor();
+        tauri::async_runtime::spawn(async move {
+            // Stagger window creation to reduce resource spikes
+            if index > 0 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(index as u64 * 100)).await;
+            }
 
-        let logical_x = position.x as f64 / scale;
-        let logical_y = position.y as f64 / scale;
-        let logical_w = size.width as f64 / scale;
-        let logical_h = size.height as f64 / scale;
+            let label = format!("identify-{}", index);
+            let title = format!("Identify Monitor {}", index + 1);
+            let url = format!("/identify?id={}", index + 1);
 
-        let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+            // Close existing window if any
+            if let Some(existing) = app_handle.get_webview_window(&label) {
+                let _ = existing.close();
+            }
+
+            let position = monitor_clone.position();
+            let size = monitor_clone.size();
+            let scale = monitor_clone.scale_factor();
+
+            let logical_x = position.x as f64 / scale;
+            let logical_y = position.y as f64 / scale;
+            let logical_w = size.width as f64 / scale;
+            let logical_h = size.height as f64 / scale;
+
+            // Position the window at the bottom-left with a margin
+            let margin = 40.0;
+            let x = logical_x + margin;
+            let y = logical_y + logical_h - IDENTIFY_H - margin;
+
+            let window_result = tauri::WebviewWindowBuilder::new(
+                &app_handle,
+                &label,
+                tauri::WebviewUrl::App(url.into()),
+            )
             .title(&title)
             .visible(false)
             .decorations(false)
             .resizable(false)
             .always_on_top(true)
             .transparent(true)
-            .position(logical_x, logical_y)
-            .inner_size(logical_w, logical_h)
-            .build()
-            .map_err(|e| AppError::Tauri(e.to_string()))?;
+            .shadow(true)
+            .skip_taskbar(true)
+            .visible_on_all_workspaces(true)
+            .position(x, y)
+            .inner_size(IDENTIFY_W, IDENTIFY_H)
+            .build();
 
-        let _ = window.set_size(tauri::Size::Physical(*size));
-        let _ = window.set_position(tauri::Position::Physical(*position));
-        let _ = window.show();
+            if let Ok(window) = window_result {
+                let _ = window.show();
 
-        // Close after 3 seconds
-        let window_clone = window.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(3));
-            let _ = window_clone.close();
+                // Close after 3 seconds
+                let window_clone = window.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                    let _ = window_clone.close();
+                });
+            }
         });
     }
 
@@ -547,6 +628,10 @@ pub fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
 pub fn get_monitor_configs(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<MonitorConfig>, AppError> {
-    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::settings::get_monitor_configs(&conn)
 }

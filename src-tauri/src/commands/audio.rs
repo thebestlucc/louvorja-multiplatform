@@ -2,6 +2,7 @@ use crate::audio::player::AudioVariant;
 use crate::audio::SyncPoint;
 use crate::error::AppError;
 use crate::state::{AppState, AudioState, StreamingState};
+use crate::utils::catcher::catcher;
 use crate::utils::paths::SafePath;
 use serde::Serialize;
 use specta::Type;
@@ -36,24 +37,33 @@ pub struct AudioStatusPayload {
     pub current_file: Option<String>,
 }
 
-fn snapshot_audio_status(state: &AudioState) -> Result<AudioStatusPayload, AppError> {
-    let player = state
-        .player
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+fn snapshot_audio_status(state: &AudioState) -> (Option<AudioStatusPayload>, Option<AppError>) {
+    let (player, err) = catcher(state.player.read());
+    if let Some(e) = err {
+        return (None, Some(e));
+    }
+    let player = player.unwrap();
 
-    Ok(AudioStatusPayload {
-        position_ms: player.position_ms(),
-        duration_ms: player.duration_ms(),
-        is_playing: player.is_playing(),
-        is_paused: player.is_paused(),
-        volume: player.volume(),
-        current_file: player.current_file(),
-    })
+    (
+        Some(AudioStatusPayload {
+            position_ms: player.position_ms(),
+            duration_ms: player.duration_ms(),
+            is_playing: player.is_playing(),
+            is_paused: player.is_paused(),
+            volume: player.volume(),
+            current_file: player.current_file(),
+        }),
+        None,
+    )
 }
 
 fn emit_audio_status(app: &AppHandle, state: &AudioState) -> Result<AudioStatusPayload, AppError> {
-    let payload = snapshot_audio_status(state)?;
+    let (payload, err) = snapshot_audio_status(state);
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let payload = payload.unwrap();
+
     app.emit(AUDIO_STATUS_EVENT, &payload)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
     broadcast_streaming_audio_status(app, &payload);
@@ -64,9 +74,11 @@ fn broadcast_streaming_audio_status(app: &AppHandle, payload: &AudioStatusPayloa
     let Some(streaming_state) = app.try_state::<StreamingState>() else {
         return;
     };
-    let Ok(server) = streaming_state.server.lock() else {
+    let (server, err) = catcher(streaming_state.server.lock());
+    if err.is_some() {
         return;
-    };
+    }
+    let server = server.unwrap();
 
     if let Ok(payload_json) = serde_json::to_string(payload) {
         server.set_audio_status(&payload_json);
@@ -80,10 +92,12 @@ fn broadcast_streaming_audio_status(app: &AppHandle, payload: &AudioStatusPayloa
 }
 
 fn stop_audio_status_stream(state: &AudioState) -> Result<(), AppError> {
-    let mut stream_stop = state
-        .audio_status_stream_stop
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (stream_stop, err) = catcher(state.audio_status_stream_stop.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut stream_stop = stream_stop.unwrap();
+
     if let Some(sender) = stream_stop.take() {
         let _ = sender.send(());
     }
@@ -95,10 +109,11 @@ fn start_audio_status_stream(app: &AppHandle, state: &AudioState) -> Result<(), 
 
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     {
-        let mut stream_stop = state
-            .audio_status_stream_stop
-            .lock()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (stream_stop, err) = catcher(state.audio_status_stream_stop.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut stream_stop = stream_stop.unwrap();
         *stream_stop = Some(stop_tx);
     }
 
@@ -115,10 +130,11 @@ fn start_audio_status_stream(app: &AppHandle, state: &AudioState) -> Result<(), 
             }
 
             let audio_state = app_handle.state::<AudioState>();
-            let payload = match snapshot_audio_status(&audio_state) {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
+            let (payload, err) = snapshot_audio_status(&audio_state);
+            if err.is_some() {
+                continue;
+            }
+            let payload = payload.unwrap();
 
             let should_emit = previous_payload
                 .as_ref()
@@ -158,10 +174,11 @@ pub fn audio_play(
 ) -> Result<(), AppError> {
     let resolved_path = resolve_audio_path(&file_path, &app)?;
     {
-        let mut player = state
-            .player
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (player, err) = catcher(state.player.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut player = player.unwrap();
         player.play(
             &resolved_path,
             &file_path,
@@ -190,10 +207,11 @@ pub fn audio_play_variants(
     let active_variant = parse_audio_variant(&active_mode)?;
 
     {
-        let mut player = state
-            .player
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (player, err) = catcher(state.player.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut player = player.unwrap();
         player.play_variants(
             &sung_resolved_path,
             &sung_file_path,
@@ -219,10 +237,11 @@ pub fn audio_switch_variant(
     let active_variant = parse_audio_variant(&active_mode)?;
 
     {
-        let mut player = state
-            .player
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (player, err) = catcher(state.player.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut player = player.unwrap();
         player.switch_variant(active_variant)?;
     }
 
@@ -237,20 +256,22 @@ pub fn audio_play_alert(
     volume: Option<f32>,
     state: tauri::State<'_, AudioState>,
 ) -> Result<(), AppError> {
-    let player = state
-        .player
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let player = player.unwrap();
     player.play_alert(file_path.as_deref(), volume)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn audio_pause(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
-    let player = state
-        .player
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let player = player.unwrap();
     player.pause();
     drop(player);
     let _ = emit_audio_status(&app, &state)?;
@@ -260,10 +281,11 @@ pub fn audio_pause(app: AppHandle, state: tauri::State<'_, AudioState>) -> Resul
 #[tauri::command]
 #[specta::specta]
 pub fn audio_resume(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
-    let player = state
-        .player
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let player = player.unwrap();
     player.resume();
     drop(player);
     start_audio_status_stream(&app, &state)?;
@@ -278,10 +300,11 @@ pub fn audio_set_output_muted(
     app: AppHandle,
     state: tauri::State<'_, AudioState>,
 ) -> Result<(), AppError> {
-    let mut player = state
-        .player
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut player = player.unwrap();
     player.set_output_muted(muted);
     drop(player);
     let _ = emit_audio_status(&app, &state)?;
@@ -291,10 +314,11 @@ pub fn audio_set_output_muted(
 #[tauri::command]
 #[specta::specta]
 pub fn audio_stop(app: AppHandle, state: tauri::State<'_, AudioState>) -> Result<(), AppError> {
-    let mut player = state
-        .player
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut player = player.unwrap();
     player.stop();
     drop(player);
     stop_audio_status_stream(&state)?;
@@ -309,10 +333,11 @@ pub fn audio_seek(
     app: AppHandle,
     state: tauri::State<'_, AudioState>,
 ) -> Result<(), AppError> {
-    let player = state
-        .player
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let player = player.unwrap();
     player.seek(position_ms)?;
     drop(player);
     let _ = emit_audio_status(&app, &state)?;
@@ -326,10 +351,11 @@ pub fn audio_set_volume(
     app: AppHandle,
     state: tauri::State<'_, AudioState>,
 ) -> Result<(), AppError> {
-    let mut player = state
-        .player
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut player = player.unwrap();
     player.set_volume(volume);
     drop(player);
     let _ = emit_audio_status(&app, &state)?;
@@ -339,10 +365,11 @@ pub fn audio_set_volume(
 #[tauri::command]
 #[specta::specta]
 pub fn audio_get_position(state: tauri::State<'_, AudioState>) -> Result<u64, AppError> {
-    let player = state
-        .player
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (player, err) = catcher(state.player.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let player = player.unwrap();
     Ok(player.position_ms())
 }
 
@@ -351,7 +378,11 @@ pub fn audio_get_position(state: tauri::State<'_, AudioState>) -> Result<u64, Ap
 pub fn audio_get_status(
     state: tauri::State<'_, AudioState>,
 ) -> Result<AudioStatusPayload, AppError> {
-    snapshot_audio_status(&state)
+    let (payload, err) = snapshot_audio_status(&state);
+    if let Some(e) = err {
+        return Err(e);
+    }
+    Ok(payload.unwrap())
 }
 
 #[tauri::command]
@@ -360,10 +391,11 @@ pub fn get_sync_points(
     hymn_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<SyncPoint>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::music::get_sync_points(&conn, hymn_id)
 }
 
@@ -374,10 +406,11 @@ pub fn save_sync_points(
     points: Vec<SyncPoint>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut conn = conn.unwrap();
     crate::db::queries::music::save_sync_points(&mut conn, hymn_id, &points)
 }
 
@@ -387,10 +420,11 @@ fn resolve_audio_path(path: &str, app: &AppHandle) -> Result<String, AppError> {
         return Err(AppError::Internal("Audio path cannot be empty.".into()));
     }
 
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
 
     let safe_path = SafePath::new(&app_data_dir);
     let normalized = trimmed.replace('\\', "/");

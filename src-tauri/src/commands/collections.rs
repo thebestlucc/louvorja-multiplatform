@@ -4,6 +4,7 @@ use crate::db::models::{
 };
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use rusqlite::params;
 use std::collections::HashMap;
 use std::io::Read;
@@ -13,12 +14,16 @@ use tauri::{AppHandle, Manager};
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<Collection>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::collections::get_collections(&conn)
+pub fn get_collections(
+    query: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Collection>, AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::collections::get_collections(&conn, query.as_deref())
 }
 
 #[tauri::command]
@@ -27,10 +32,11 @@ pub fn search_collections(
     query: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<CollectionSearchResult>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::collections::search_collections(&conn, &query, 8)
 }
 
@@ -40,10 +46,11 @@ pub fn get_collection(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionWithSongs, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::collections::get_collection_with_songs(&conn, id)
 }
 
@@ -64,10 +71,11 @@ pub fn create_collection(
     }
     validate_collection_year(year)?;
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     let id = crate::db::queries::collections::insert_collection(
         &tx,
@@ -101,10 +109,11 @@ pub fn update_collection(
     }
     validate_collection_year(year)?;
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::update_collection(
         &tx,
@@ -122,10 +131,11 @@ pub fn update_collection(
 #[tauri::command]
 #[specta::specta]
 pub fn delete_collection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     let collection = crate::db::queries::collections::get_collection_with_songs(&tx, id)?;
     for song in &collection.songs {
@@ -155,10 +165,11 @@ pub fn check_collection_song_sync(
     song_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionSongSyncStatus, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     let song = crate::db::queries::collections::get_collection_song_by_id(&tx, song_id)?;
 
@@ -189,10 +200,11 @@ pub fn resync_collection_song(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionSong, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let existing = crate::db::queries::collections::get_collection_song_by_id(&conn, song_id)?;
     drop(conn);
     import_or_resync_collection_song(
@@ -210,10 +222,11 @@ pub fn remove_collection_song(
     song_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     let existing = crate::db::queries::collections::get_collection_song_by_id(&tx, song_id)?;
     crate::db::queries::collections::remove_collection_song(&tx, song_id)?;
@@ -232,10 +245,11 @@ pub fn reorder_collection_songs(
     song_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::reorder_collection_songs(&tx, collection_id, &song_ids)?;
     refresh_collection_auto_cover(&tx, collection_id)?;
@@ -287,10 +301,11 @@ fn import_or_resync_collection_song(
         }
     }
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::get_collection_by_id(&tx, collection_id)?;
 
@@ -389,10 +404,11 @@ fn derive_cover_from_presentation(
         .collect::<Result<Vec<_>, _>>()?;
 
     for content in contents {
-        let value = match serde_json::from_str::<serde_json::Value>(&content) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
+        let (value, err) = catcher(serde_json::from_str::<serde_json::Value>(&content));
+        if err.is_some() {
+            continue;
+        }
+        let value = value.unwrap();
         let slide_type = value
             .get("type")
             .and_then(|v| v.as_str())
@@ -499,10 +515,11 @@ fn remap_video_paths_in_content(
     content_json: &str,
     media_map: &HashMap<String, String>,
 ) -> Result<String, AppError> {
-    let mut value: serde_json::Value = match serde_json::from_str(content_json) {
-        Ok(value) => value,
-        Err(_) => return Ok(content_json.to_string()),
-    };
+    let (value, err) = catcher(serde_json::from_str::<serde_json::Value>(content_json));
+    if err.is_some() {
+        return Ok(content_json.to_string());
+    }
+    let mut value = value.unwrap();
     let slide_type = value
         .get("type")
         .and_then(|v| v.as_str())
@@ -645,10 +662,11 @@ pub fn get_collection_hymns(
     collection_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::collections::get_collection_hymns(&conn, collection_id)
 }
 
@@ -660,10 +678,11 @@ pub fn add_hymn_to_collection(
     item_order: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<bool, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::collections::insert_collection_hymn(
         &conn,
         collection_id,
@@ -679,9 +698,10 @@ pub fn remove_hymn_from_collection(
     hymn_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::collections::delete_collection_hymn(&conn, collection_id, hymn_id)
 }

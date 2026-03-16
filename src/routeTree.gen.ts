@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SpotlightRouteImport } from './routes/spotlight'
 import { Route as ReturnRouteImport } from './routes/return'
 import { Route as ProjectorRouteImport } from './routes/projector'
+import { Route as IdentifyRouteImport } from './routes/identify'
 import { Route as UtilitiesRouteRouteImport } from './routes/utilities/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as ServicesRouteRouteImport } from './routes/services/route'
@@ -36,6 +37,8 @@ import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
 import { Route as UtilitiesTextRouteImport } from './routes/utilities/text'
 import { Route as UtilitiesSchedulesRouteImport } from './routes/utilities/schedules'
 import { Route as UtilitiesLotteryRouteImport } from './routes/utilities/lottery'
+import { Route as UtilitiesInteractiveTextRouteImport } from './routes/utilities/interactive-text'
+import { Route as UtilitiesIntegrityRouteImport } from './routes/utilities/integrity'
 import { Route as UtilitiesClockRouteImport } from './routes/utilities/clock'
 import { Route as ServicesServiceIdRouteImport } from './routes/services/$serviceId'
 import { Route as PresentationsPresentationIdRouteImport } from './routes/presentations/$presentationId'
@@ -58,6 +61,11 @@ const ReturnRoute = ReturnRouteImport.update({
 const ProjectorRoute = ProjectorRouteImport.update({
   id: '/projector',
   path: '/projector',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IdentifyRoute = IdentifyRouteImport.update({
+  id: '/identify',
+  path: '/identify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UtilitiesRouteRoute = UtilitiesRouteRouteImport.update({
@@ -180,6 +188,17 @@ const UtilitiesLotteryRoute = UtilitiesLotteryRouteImport.update({
   path: '/lottery',
   getParentRoute: () => UtilitiesRouteRoute,
 } as any)
+const UtilitiesInteractiveTextRoute =
+  UtilitiesInteractiveTextRouteImport.update({
+    id: '/interactive-text',
+    path: '/interactive-text',
+    getParentRoute: () => UtilitiesRouteRoute,
+  } as any)
+const UtilitiesIntegrityRoute = UtilitiesIntegrityRouteImport.update({
+  id: '/integrity',
+  path: '/integrity',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
 const UtilitiesClockRoute = UtilitiesClockRouteImport.update({
   id: '/clock',
   path: '/clock',
@@ -234,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
   '/utilities': typeof UtilitiesRouteRouteWithChildren
+  '/identify': typeof IdentifyRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/spotlight': typeof SpotlightRoute
@@ -245,6 +265,8 @@ export interface FileRoutesByFullPath {
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
+  '/utilities/integrity': typeof UtilitiesIntegrityRoute
+  '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
   '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
@@ -262,6 +284,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/help': typeof HelpRouteRoute
+  '/identify': typeof IdentifyRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/spotlight': typeof SpotlightRoute
@@ -273,6 +296,8 @@ export interface FileRoutesByTo {
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
+  '/utilities/integrity': typeof UtilitiesIntegrityRoute
+  '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
   '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
@@ -300,6 +325,7 @@ export interface FileRoutesById {
   '/services': typeof ServicesRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
   '/utilities': typeof UtilitiesRouteRouteWithChildren
+  '/identify': typeof IdentifyRoute
   '/projector': typeof ProjectorRoute
   '/return': typeof ReturnRoute
   '/spotlight': typeof SpotlightRoute
@@ -311,6 +337,8 @@ export interface FileRoutesById {
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
   '/utilities/clock': typeof UtilitiesClockRoute
+  '/utilities/integrity': typeof UtilitiesIntegrityRoute
+  '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
   '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
@@ -339,6 +367,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/settings'
     | '/utilities'
+    | '/identify'
     | '/projector'
     | '/return'
     | '/spotlight'
@@ -350,6 +379,8 @@ export interface FileRouteTypes {
     | '/presentations/$presentationId'
     | '/services/$serviceId'
     | '/utilities/clock'
+    | '/utilities/integrity'
+    | '/utilities/interactive-text'
     | '/utilities/lottery'
     | '/utilities/schedules'
     | '/utilities/text'
@@ -367,6 +398,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/help'
+    | '/identify'
     | '/projector'
     | '/return'
     | '/spotlight'
@@ -378,6 +410,8 @@ export interface FileRouteTypes {
     | '/presentations/$presentationId'
     | '/services/$serviceId'
     | '/utilities/clock'
+    | '/utilities/integrity'
+    | '/utilities/interactive-text'
     | '/utilities/lottery'
     | '/utilities/schedules'
     | '/utilities/text'
@@ -404,6 +438,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/settings'
     | '/utilities'
+    | '/identify'
     | '/projector'
     | '/return'
     | '/spotlight'
@@ -415,6 +450,8 @@ export interface FileRouteTypes {
     | '/presentations/$presentationId'
     | '/services/$serviceId'
     | '/utilities/clock'
+    | '/utilities/integrity'
+    | '/utilities/interactive-text'
     | '/utilities/lottery'
     | '/utilities/schedules'
     | '/utilities/text'
@@ -442,6 +479,7 @@ export interface RootRouteChildren {
   ServicesRouteRoute: typeof ServicesRouteRouteWithChildren
   SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   UtilitiesRouteRoute: typeof UtilitiesRouteRouteWithChildren
+  IdentifyRoute: typeof IdentifyRoute
   ProjectorRoute: typeof ProjectorRoute
   ReturnRoute: typeof ReturnRoute
   SpotlightRoute: typeof SpotlightRoute
@@ -468,6 +506,13 @@ declare module '@tanstack/react-router' {
       path: '/projector'
       fullPath: '/projector'
       preLoaderRoute: typeof ProjectorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/identify': {
+      id: '/identify'
+      path: '/identify'
+      fullPath: '/identify'
+      preLoaderRoute: typeof IdentifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/utilities': {
@@ -636,6 +681,20 @@ declare module '@tanstack/react-router' {
       path: '/lottery'
       fullPath: '/utilities/lottery'
       preLoaderRoute: typeof UtilitiesLotteryRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
+    '/utilities/interactive-text': {
+      id: '/utilities/interactive-text'
+      path: '/interactive-text'
+      fullPath: '/utilities/interactive-text'
+      preLoaderRoute: typeof UtilitiesInteractiveTextRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
+    '/utilities/integrity': {
+      id: '/utilities/integrity'
+      path: '/integrity'
+      fullPath: '/utilities/integrity'
+      preLoaderRoute: typeof UtilitiesIntegrityRouteImport
       parentRoute: typeof UtilitiesRouteRoute
     }
     '/utilities/clock': {
@@ -807,6 +866,8 @@ const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
 
 interface UtilitiesRouteRouteChildren {
   UtilitiesClockRoute: typeof UtilitiesClockRoute
+  UtilitiesIntegrityRoute: typeof UtilitiesIntegrityRoute
+  UtilitiesInteractiveTextRoute: typeof UtilitiesInteractiveTextRoute
   UtilitiesLotteryRoute: typeof UtilitiesLotteryRoute
   UtilitiesSchedulesRoute: typeof UtilitiesSchedulesRoute
   UtilitiesTextRoute: typeof UtilitiesTextRoute
@@ -816,6 +877,8 @@ interface UtilitiesRouteRouteChildren {
 
 const UtilitiesRouteRouteChildren: UtilitiesRouteRouteChildren = {
   UtilitiesClockRoute: UtilitiesClockRoute,
+  UtilitiesIntegrityRoute: UtilitiesIntegrityRoute,
+  UtilitiesInteractiveTextRoute: UtilitiesInteractiveTextRoute,
   UtilitiesLotteryRoute: UtilitiesLotteryRoute,
   UtilitiesSchedulesRoute: UtilitiesSchedulesRoute,
   UtilitiesTextRoute: UtilitiesTextRoute,
@@ -839,6 +902,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRouteRoute: ServicesRouteRouteWithChildren,
   SettingsRouteRoute: SettingsRouteRouteWithChildren,
   UtilitiesRouteRoute: UtilitiesRouteRouteWithChildren,
+  IdentifyRoute: IdentifyRoute,
   ProjectorRoute: ProjectorRoute,
   ReturnRoute: ReturnRoute,
   SpotlightRoute: SpotlightRoute,

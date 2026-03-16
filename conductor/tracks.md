@@ -13,5 +13,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: Legacy Desktop Parity: Interactive Text, Favorites, and Utilities**
   *Link: [./tracks/legacy_parity_20260315/](./tracks/legacy_parity_20260315/)*
 
-- [ ] **Track: Refactor Rust Error Handling to use Catcher Utilities**
+- [x] **Track: Refactor Rust Error Handling to use Catcher Utilities**
   *Link: [./tracks/rust_error_refactor_20260315/](./tracks/rust_error_refactor_20260315/)*
+
+- [ ] **Track: FTP Synchronization: Asset Download and Legacy Connectivity**
+  *Link: [./tracks/ftp_sync_20260316/](./tracks/ftp_sync_20260316/)*

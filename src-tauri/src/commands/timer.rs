@@ -6,6 +6,7 @@ use crate::projection::{
     UtilityProjectionEventPayload,
 };
 use crate::state::{AppState, StreamingState, TimerMode, TimerStateData};
+use crate::utils::catcher::catcher;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -54,14 +55,15 @@ fn format_timer_value(milliseconds: u64, mode: &TimerMode) -> String {
     }
 }
 
-fn snapshot_timer_state_from_app(app: &AppHandle) -> Result<TimerStateData, AppError> {
+fn snapshot_timer_state_from_app(app: &AppHandle) -> (Option<TimerStateData>, Option<AppError>) {
     let state = app.state::<AppState>();
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return (None, Some(e));
+    }
+    let mut timer = timer.unwrap();
     normalize_timer_runtime(&mut timer);
-    Ok(timer.to_data())
+    (Some(timer.to_data()), None)
 }
 
 fn project_utility_cover(
@@ -160,10 +162,11 @@ pub fn start_timer(
         TimerMode::Stopwatch => None,
     };
 
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
     timer.start(timer_mode, normalized_duration);
 
     Ok(())
@@ -172,10 +175,11 @@ pub fn start_timer(
 #[tauri::command]
 #[specta::specta]
 pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
     timer.pause();
     Ok(())
 }
@@ -183,10 +187,11 @@ pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 #[tauri::command]
 #[specta::specta]
 pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
     timer.resume();
     Ok(())
 }
@@ -194,10 +199,11 @@ pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 #[tauri::command]
 #[specta::specta]
 pub fn reset_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
     timer.reset();
     Ok(())
 }
@@ -208,10 +214,11 @@ pub fn adjust_countdown_timer(
     delta_ms: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
 
     timer
         .adjust_countdown_remaining_ms(delta_ms)
@@ -221,10 +228,11 @@ pub fn adjust_countdown_timer(
 #[tauri::command]
 #[specta::specta]
 pub fn get_timer_state(state: tauri::State<'_, AppState>) -> Result<TimerStateData, AppError> {
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
     normalize_timer_runtime(&mut timer);
 
     Ok(timer.to_data())
@@ -233,10 +241,11 @@ pub fn get_timer_state(state: tauri::State<'_, AppState>) -> Result<TimerStateDa
 #[tauri::command]
 #[specta::specta]
 pub fn add_lap(state: tauri::State<'_, AppState>) -> Result<u64, AppError> {
-    let mut timer = state
-        .timer
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (timer, err) = catcher(state.timer.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut timer = timer.unwrap();
 
     if !matches!(timer.mode, TimerMode::Stopwatch) {
         return Err(AppError::Internal(
@@ -296,13 +305,12 @@ pub fn start_countdown_projection(
                 break;
             }
 
-            let timer_state = match snapshot_timer_state_from_app(&app) {
-                Ok(data) => data,
-                Err(_) => {
-                    thread::sleep(Duration::from_millis(200));
-                    continue;
-                }
-            };
+            let (timer_state, err) = snapshot_timer_state_from_app(&app);
+            if err.is_some() {
+                thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+            let timer_state = timer_state.unwrap();
 
             if matches!(timer_state.mode, TimerMode::Countdown)
                 && has_live_timer_value(&timer_state)
@@ -382,13 +390,12 @@ pub fn start_stopwatch_projection(
                 break;
             }
 
-            let timer_state = match snapshot_timer_state_from_app(&app) {
-                Ok(data) => data,
-                Err(_) => {
-                    thread::sleep(Duration::from_millis(50));
-                    continue;
-                }
-            };
+            let (timer_state, err) = snapshot_timer_state_from_app(&app);
+            if err.is_some() {
+                thread::sleep(Duration::from_millis(50));
+                continue;
+            }
+            let timer_state = timer_state.unwrap();
 
             if matches!(timer_state.mode, TimerMode::Stopwatch)
                 && has_live_timer_value(&timer_state)

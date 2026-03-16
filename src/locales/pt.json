@@ -172,6 +172,7 @@
     "closeReturn": "Fechar Monitor de Retorno (Shift+F5)",
     "identifyMonitors": "Identificar Monitores",
     "logoScreen": "Tela de Logo",
+    "monitorLabel": "Monitor",
     "nextSlide": "Próximo",
     "noNextSlide": "Sem próximo slide",
     "openProjector": "Abrir Projetor (F5)",
@@ -253,6 +254,9 @@
   "interactiveText": {
     "clear": "Limpar Alerta",
     "displayMode": "Modo de Exibição",
+    "live": "AO VIVO",
+    "modeStatic": "MODO: ESTÁTICO",
+    "modeTicker": "MODO: LETREIRO",
     "placeholder": "Digite a mensagem para projetar...",
     "project": "Projetar Alerta",
     "static": "Estático",

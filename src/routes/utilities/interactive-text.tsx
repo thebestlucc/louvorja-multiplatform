@@ -58,7 +58,7 @@ function InteractiveTextPage() {
         {isActive && (
           <Badge variant="destructive" className="flex items-center gap-1.5 px-3 py-1 animate-pulse">
             <Activity className="h-3.5 w-3.5" />
-            LIVE
+            {t("interactiveText.live")}
           </Badge>
         )}
       </div>

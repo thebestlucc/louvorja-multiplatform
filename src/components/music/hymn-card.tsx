@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Plus, MoreVertical, MonitorPlay, Play, Music } from "lucide-react";
+import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { usePresentationStore } from "../../stores/presentation-store";
@@ -9,7 +9,6 @@ import type { Hymn } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 import { LyricsModal } from "./lyrics-modal";
 import { useState } from "react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { FavoriteButton } from "./favorite-button";
 
@@ -24,6 +23,10 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
   const addItemMutation = useAddServiceItem();
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
+
+  const hasAudio = Boolean(hymn.audioPath);
+  const hasPlayback = Boolean(hymn.playbackPath);
+  const hasLyrics = Boolean(hymn.lyrics);
 
   const handleAddToService = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -86,33 +89,39 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
               >
                 <MonitorPlay className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
-                title={t("hymn.actionSung")}
-              >
-                <Play className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}
-                title={t("hymn.actionPlayback")}
-              >
-                <Music className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={handleShowLyrics}
-                title={t("hymn.actionShowLyrics")}
-              >
-                <BookOpen className="h-4 w-4" />
-              </Button>
+              {hasAudio && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
+                  title={t("hymn.actionSung")}
+                >
+                  <Play className="h-4 w-4" />
+                </Button>
+              )}
+              {hasPlayback && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}
+                  title={t("hymn.actionPlayback")}
+                >
+                  <Music className="h-4 w-4" />
+                </Button>
+              )}
+              {hasLyrics && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={handleShowLyrics}
+                  title={t("hymn.actionShowLyrics")}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+              )}
               {activeServiceId && (
                 <Button
                   variant="ghost"
@@ -125,37 +134,6 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
                 </Button>
               )}
               <FavoriteButton itemType="hymn" itemId={hymn.id} size="icon" className="h-8 w-8" />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartSlidesOnly(hymn); }}>
-                    <MonitorPlay className="mr-2 h-4 w-4" />
-                    {t("hymn.actionSlidesOnly")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}>
-                    <Play className="mr-2 h-4 w-4" />
-                    {t("hymn.actionSung")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}>
-                    <Music className="mr-2 h-4 w-4" />
-                    {t("hymn.actionPlayback")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleShowLyrics}>
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    {t("hymn.actionShowLyrics")}
-                  </DropdownMenuItem>
-                  {activeServiceId && (
-                    <DropdownMenuItem onClick={handleAddToService}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      {t("services.addToService")}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -166,109 +144,105 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
 
   // Grid view
   return (
-    <Link to="/hymnal/$hymnId" params={{ hymnId: String(hymn.id) }} className="flex flex-col gap-3 group cursor-pointer h-full">
-      <div className="relative aspect-square w-full rounded-md overflow-hidden bg-muted/30 shadow-sm">
+    <div className="flex flex-col gap-3 group h-full relative">
+      <div className="relative aspect-square w-full rounded-md overflow-hidden bg-muted/30 shadow-sm border border-transparent transition-colors group-hover:border-primary/20">
         <CoverImage
           path={hymn.coverPath}
           title={hymn.title}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex flex-col justify-end p-3">
+        
+        {/* Main Click Area */}
+        <Link to="/hymnal/$hymnId" params={{ hymnId: String(hymn.id) }} className="absolute inset-0 z-0" />
+
+        {/* Favorite Button (Top Right) */}
+        <div className="absolute top-2 right-2 z-20">
+          <FavoriteButton
+            itemType="hymn"
+            itemId={hymn.id}
+            size="icon"
+            variant="outline"
+            className="h-8 w-8 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md border-white/10"
+          />
+        </div>
+
+        {/* Action Overlay (Bottom) */}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex flex-col justify-end p-3 z-10">
           <div className="flex items-center justify-center gap-1.5 translate-y-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
             <Button
               size="icon"
               variant="outline"
-              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
+              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartSlidesOnly(hymn); }}
               title={t("hymn.actionSlidesOnly")}
             >
               <MonitorPlay className="h-4 w-4" />
             </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
-              title={t("hymn.actionSung")}
-            >
-              <Play className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}
-              title={t("hymn.actionPlayback")}
-            >
-              <Music className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-              onClick={handleShowLyrics}
-              title={t("hymn.actionShowLyrics")}
-            >
-              <BookOpen className="h-4 w-4" />
-            </Button>
+            {hasAudio && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
+                title={t("hymn.actionSung")}
+              >
+                <Play className="h-4 w-4" />
+              </Button>
+            )}
+            {hasPlayback && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}
+                title={t("hymn.actionPlayback")}
+              >
+                <Music className="h-4 w-4" />
+              </Button>
+            )}
+            {hasLyrics && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                onClick={handleShowLyrics}
+                title={t("hymn.actionShowLyrics")}
+              >
+                <BookOpen className="h-4 w-4" />
+              </Button>
+            )}
             {activeServiceId && (
               <Button
                 size="icon"
                 variant="outline"
-                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background text-primary"
+                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background text-primary border-transparent"
                 onClick={handleAddToService}
                 title={t("services.addToService")}
               >
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            <FavoriteButton
-              itemType="hymn"
-              itemId={hymn.id}
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-            />
           </div>
         </div>
+
         {hymn.number != null && (
-          <div className="absolute top-2 left-2">
-            <Badge variant="outline" className="shadow-sm backdrop-blur-md bg-background/80">
+          <div className="absolute top-2 left-2 pointer-events-none">
+            <Badge variant="outline" className="shadow-sm backdrop-blur-md bg-black/40 text-white border-white/20">
               {hymn.number}
             </Badge>
           </div>
         )}
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-              <Button size="icon" variant="outline" className="h-7 w-7 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={handleShowLyrics}>
-                <BookOpen className="mr-2 h-4 w-4" />
-                {t("hymn.actionShowLyrics")}
-              </DropdownMenuItem>
-              {activeServiceId && (
-                <DropdownMenuItem onClick={handleAddToService}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t("services.addToService")}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </div>
-      <div className="px-1 flex-1 flex flex-col">
-        <p className="line-clamp-2 font-medium text-sm leading-tight text-foreground" title={hymn.title}>
+      
+      <Link to="/hymnal/$hymnId" params={{ hymnId: String(hymn.id) }} className="px-1 flex-1 flex flex-col group/text">
+        <p className="line-clamp-2 font-medium text-sm leading-tight text-foreground group-hover/text:text-primary transition-colors" title={hymn.title}>
           {hymn.title}
         </p>
         {hymn.album && (
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{hymn.album}</p>
         )}
-      </div>
+      </Link>
       <LyricsModal hymn={hymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />
-    </Link>
+    </div>
   );
 }

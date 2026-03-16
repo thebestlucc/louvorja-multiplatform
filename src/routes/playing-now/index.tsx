@@ -176,7 +176,7 @@ function PlayingNowScreen() {
   };
 
   const [currentSlide, setCurrentSlide] = useState<SlideContent | null>(null);
-  const [overlay, setOverlay] = useState<OverlayState>({ blackScreen: false, logoScreen: false });
+  const [overlay, setOverlay] = useState<OverlayState>({ blackScreen: false, logoScreen: false, alert: null });
   // slideIndex/slideTotal from context events (can be different from local store if remote controlled)
   const [contextIndex, setContextIndex] = useState(0);
   const [contextTotal, setContextTotal] = useState(0);

@@ -5,6 +5,7 @@ use crate::db::models::{
 };
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -14,10 +15,11 @@ use tauri::{AppHandle, Emitter, Manager};
 pub fn get_content_sync_summary(
     state: tauri::State<'_, AppState>,
 ) -> Result<ContentSyncSummary, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|error| AppError::Internal(error.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     content_sync::load_summary(&conn)
 }
@@ -27,10 +29,11 @@ pub fn get_content_sync_summary(
 pub fn plan_content_sync(
     state: tauri::State<'_, AppState>,
 ) -> Result<ContentSyncPlan, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|error| AppError::Internal(error.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     let summary = content_sync::load_summary(&conn)?;
     Ok(content_sync::build_degraded_plan(summary))
@@ -43,10 +46,12 @@ pub fn start_content_sync(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, AppError> {
     {
-        let runtime_state = state
-            .content_sync
-            .lock()
-            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let (runtime_state, err) = catcher(state.content_sync.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let runtime_state = runtime_state.unwrap();
+
         if let Some(active_run_id) = runtime_state.active_run_id.as_deref() {
             if let Some(active_run) = runtime_state.runs.get(active_run_id) {
                 if matches!(
@@ -61,10 +66,12 @@ pub fn start_content_sync(
         }
     }
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|error| AppError::Internal(error.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+
     let summary = content_sync::load_summary(&conn)?;
     let plan = content_sync::build_degraded_plan(summary);
     let run_id = content_sync::new_run_id();
@@ -74,10 +81,12 @@ pub fn start_content_sync(
     drop(conn);
 
     {
-        let mut runtime_state = state
-            .content_sync
-            .lock()
-            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let (runtime_state, err) = catcher(state.content_sync.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut runtime_state = runtime_state.unwrap();
+
         runtime_state.active_run_id = Some(run_id.clone());
         runtime_state.runs.insert(
             run_id.clone(),
@@ -105,10 +114,12 @@ pub fn get_content_sync_progress(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<ContentSyncProgress, AppError> {
-    let runtime_state = state
-        .content_sync
-        .lock()
-        .map_err(|error| AppError::Internal(error.to_string()))?;
+    let (runtime_state, err) = catcher(state.content_sync.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let runtime_state = runtime_state.unwrap();
+
     let run = runtime_state.runs.get(&run_id).ok_or_else(|| {
         AppError::NotFound(format!("Content sync run '{}' was not found.", run_id))
     })?;
@@ -122,10 +133,12 @@ pub fn cancel_content_sync(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let runtime_state = state
-        .content_sync
-        .lock()
-        .map_err(|error| AppError::Internal(error.to_string()))?;
+    let (runtime_state, err) = catcher(state.content_sync.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let runtime_state = runtime_state.unwrap();
+
     let run = runtime_state.runs.get(&run_id).ok_or_else(|| {
         AppError::NotFound(format!("Content sync run '{}' was not found.", run_id))
     })?;
@@ -140,10 +153,11 @@ pub fn get_content_sync_report(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<ContentSyncReport>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|error| AppError::Internal(error.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     content_sync::load_report(&conn, &run_id)
 }
@@ -158,18 +172,22 @@ fn emit_progress(
     items_processed: u64,
 ) {
     if let Some(state) = app.try_state::<AppState>() {
-        if let Ok(mut runtime_state) = state.content_sync.lock() {
-            if let Some(progress) = content_sync::update_runtime_progress(
-                &mut runtime_state,
-                run_id,
-                step,
-                status,
-                percent,
-                message,
-                items_processed,
-            ) {
-                let _ = app.emit("content-sync-progress", &progress);
-            }
+        let (runtime_state, err) = catcher(state.content_sync.lock());
+        if err.is_some() {
+            return;
+        }
+        let mut runtime_state = runtime_state.unwrap();
+
+        if let Some(progress) = content_sync::update_runtime_progress(
+            &mut runtime_state,
+            run_id,
+            step,
+            status,
+            percent,
+            message,
+            items_processed,
+        ) {
+            let _ = app.emit("content-sync-progress", &progress);
         }
     }
 }
@@ -287,38 +305,42 @@ fn finish_run(
     message: Option<String>,
 ) {
     if let Some(state) = app.try_state::<AppState>() {
-        let report_result = state
-            .db
-            .get()
-            .map_err(|error| AppError::Internal(error.to_string()))
-            .and_then(|conn| {
-                content_sync::finalize_runtime_run(
-                    &conn,
-                    run_id,
-                    plan,
-                    status.clone(),
-                    applied_count,
-                    skipped_count,
-                    failed_count,
-                    message.clone(),
-                )
-            });
+        let (conn, err) = catcher(state.db.get());
+        if err.is_some() {
+            return;
+        }
+        let conn = conn.unwrap();
+
+        let report_result = content_sync::finalize_runtime_run(
+            &conn,
+            run_id,
+            plan,
+            status.clone(),
+            applied_count,
+            skipped_count,
+            failed_count,
+            message.clone(),
+        );
 
         if let Ok(report) = report_result {
-            if let Ok(mut runtime_state) = state.content_sync.lock() {
-                if let Some(run) = runtime_state.runs.get_mut(run_id) {
-                    run.report = Some(report.clone());
-                    run.progress.status = status.clone();
-                    run.progress.percent = 100.0;
-                    run.progress.message = message.clone();
-                    run.progress.items_processed = run.progress.items_total;
-                }
-                if runtime_state.active_run_id.as_deref() == Some(run_id) {
-                    runtime_state.active_run_id = None;
-                }
-                if let Some(run) = runtime_state.runs.get(run_id) {
-                    let _ = app.emit("content-sync-progress", &run.progress);
-                }
+            let (runtime_state, err) = catcher(state.content_sync.lock());
+            if err.is_some() {
+                return;
+            }
+            let mut runtime_state = runtime_state.unwrap();
+
+            if let Some(run) = runtime_state.runs.get_mut(run_id) {
+                run.report = Some(report.clone());
+                run.progress.status = status.clone();
+                run.progress.percent = 100.0;
+                run.progress.message = message.clone();
+                run.progress.items_processed = run.progress.items_total;
+            }
+            if runtime_state.active_run_id.as_deref() == Some(run_id) {
+                runtime_state.active_run_id = None;
+            }
+            if let Some(run) = runtime_state.runs.get(run_id) {
+                let _ = app.emit("content-sync-progress", &run.progress);
             }
 
             let _ = app.emit("content-sync-report", &report);

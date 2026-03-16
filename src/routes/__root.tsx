@@ -42,7 +42,7 @@ export const Route = createRootRoute({
   component: RootLayout,
 });
 
-const BARE_ROUTES = ["/projector", "/return", "/spotlight"];
+const BARE_ROUTES = ["/projector", "/return", "/spotlight", "/identify"];
 
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -105,7 +105,7 @@ function RootLayout() {
     const unlistenPromise = listen("data-changed", () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     }).catch(() => () => {});
 
     return () => {

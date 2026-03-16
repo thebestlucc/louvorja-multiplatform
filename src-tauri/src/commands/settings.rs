@@ -1,6 +1,7 @@
 use crate::db::models::Setting;
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
+use crate::utils::catcher::catcher;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -22,10 +23,11 @@ pub struct ClearDatabaseResult {
 #[tauri::command]
 #[specta::specta]
 pub fn get_setting(key: String, state: tauri::State<'_, AppState>) -> Result<Setting, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::settings::get_setting(&conn, &key)
 }
 
@@ -38,10 +40,11 @@ pub fn set_setting(
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::settings::set_setting(&conn, &key, &value)?;
     drop(conn);
 
@@ -67,10 +70,11 @@ pub fn set_setting(
 #[tauri::command]
 #[specta::specta]
 pub fn get_all_settings(state: tauri::State<'_, AppState>) -> Result<Vec<Setting>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::settings::get_all_settings(&conn)
 }
 
@@ -144,10 +148,11 @@ pub fn update_global_shortcut(
 ) -> Result<(), AppError> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
-    let mut shortcuts_map = state
-        .global_shortcuts
-        .write()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (shortcuts_map, err) = catcher(state.global_shortcuts.write());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut shortcuts_map = shortcuts_map.unwrap();
 
     // Unregister the previous shortcut for this action if one exists
     if let Some(old_str) = shortcuts_map.get(&action) {
@@ -171,10 +176,11 @@ pub fn update_global_shortcut(
 #[tauri::command]
 #[specta::specta]
 pub fn clear_database(state: tauri::State<'_, AppState>) -> Result<ClearDatabaseResult, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::settings::clear_database(&conn)?;
     Ok(ClearDatabaseResult { success: true })
 }

@@ -2785,6 +2785,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "wait-timeout",
+ "walkdir",
  "which",
  "zip 2.4.2",
 ]

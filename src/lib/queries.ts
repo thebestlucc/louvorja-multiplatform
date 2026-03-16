@@ -15,7 +15,7 @@ import {
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
-  toggleFavorite, getFavorites, isFavorite, getFavoriteHymns,
+  toggleFavorite, getFavorites, isFavorite, getFavoriteHymns, getFavoriteCollections,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
@@ -61,7 +61,7 @@ export const queryKeys = {
     all: ["albums"] as const,
   },
   collections: {
-    all: ["collections"] as const,
+    all: (query?: string) => ["collections", query || ""] as const,
     detail: (id: number) => ["collections", id] as const,
     songs: (id: number) => ["collections", id, "songs"] as const,
     hymns: (id: number) => ["collections", id, "hymns"] as const,
@@ -75,7 +75,7 @@ export const queryKeys = {
     search: (query: string, versionId: number | null) => ["bible", "search", query, versionId] as const,
   },
   favorites: {
-    all: (itemType: string) => ["favorites", itemType] as const,
+    all: (itemType: string, query?: string) => ["favorites", itemType, query || ""] as const,
     isFavorite: (itemType: string, itemId: number) => ["favorites", itemType, itemId, "check"] as const,
   },
   presentations: {
@@ -253,10 +253,10 @@ export function useSaveSyncPoints() {
 }
 
 // Collections
-export function useCollections() {
+export function useCollections(query?: string) {
   return useQuery({
-    queryKey: queryKeys.collections.all,
-    queryFn: () => getCollections(),
+    queryKey: queryKeys.collections.all(query),
+    queryFn: () => getCollections(query),
   });
 }
 
@@ -278,7 +278,7 @@ export function useCreateCollection() {
       coverPath: string | null;
     }) => createCollection(vars.name, vars.description, vars.year, vars.coverPath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -294,7 +294,7 @@ export function useUpdateCollection() {
       coverPath: string | null;
     }) => updateCollection(vars.id, vars.name, vars.description, vars.year, vars.coverPath),
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.id) });
     },
   });
@@ -305,7 +305,7 @@ export function useDeleteCollection() {
   return useMutation({
     mutationFn: (id: number) => deleteCollection(id),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
       queryClient.removeQueries({ queryKey: queryKeys.collections.detail(id) });
     },
   });
@@ -318,7 +318,7 @@ export function useImportCollectionSong() {
       importCollectionSong(vars.collectionId, vars.path),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -332,7 +332,7 @@ export function useCheckCollectionSongSync() {
         queryKeys.collections.songSync(songId),
         status as CollectionSongSyncStatus,
       );
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -343,7 +343,7 @@ export function useResyncCollectionSong() {
     mutationFn: (songId: number) => resyncCollectionSong(songId),
     onSuccess: (song) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(song.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -355,7 +355,7 @@ export function useRemoveCollectionSong() {
       removeCollectionSong(vars.songId),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -387,7 +387,7 @@ export function useAddHymnToCollection() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -400,7 +400,7 @@ export function useRemoveHymnFromCollection() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
     },
   });
 }
@@ -425,7 +425,7 @@ export function useRestoreAlbumFromApi() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
     },
   });
@@ -600,10 +600,17 @@ export function useFavorites(itemType: string) {
   });
 }
 
-export function useFavoriteHymns() {
+export function useFavoriteHymns(query?: string) {
   return useQuery({
-    queryKey: queryKeys.favorites.all("hymn"),
-    queryFn: () => getFavoriteHymns(),
+    queryKey: queryKeys.favorites.all("hymn", query),
+    queryFn: () => getFavoriteHymns(query),
+  });
+}
+
+export function useFavoriteCollections(query?: string) {
+  return useQuery({
+    queryKey: queryKeys.favorites.all("collection", query),
+    queryFn: () => getFavoriteCollections(query),
   });
 }
 
@@ -903,7 +910,7 @@ export function useClearDatabase() {
       // Invalidate all data queries after clearing the database
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.presentations.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });

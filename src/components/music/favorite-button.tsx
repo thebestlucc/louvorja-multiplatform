@@ -2,15 +2,14 @@ import { Star } from "lucide-react";
 import { Button } from "../ui/button";
 import { useToggleFavorite, useIsFavorite } from "../../lib/queries";
 import { cn } from "../../lib/utils";
-import { notify } from "../../lib/notifications";
 import { useTranslation } from "react-i18next";
 import { catcher } from "../../lib/catcher";
 
 interface FavoriteButtonProps {
-  itemType: "hymn" | "bible";
+  itemType: "hymn" | "bible" | "collection";
   itemId: number;
   className?: string;
-  size?: "default" | "sm" | "lg" | "icon";
+  size?: "sm" | "md" | "lg" | "icon";
   variant?: "ghost" | "outline" | "default";
 }
 

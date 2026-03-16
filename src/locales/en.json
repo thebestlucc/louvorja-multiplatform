@@ -172,6 +172,7 @@
     "closeReturn": "Close Return Monitor (Shift+F5)",
     "identifyMonitors": "Identify Monitors",
     "logoScreen": "Logo Screen",
+    "monitorLabel": "Monitor",
     "nextSlide": "Next",
     "noNextSlide": "No next slide",
     "openProjector": "Open Projector (F5)",
@@ -253,6 +254,9 @@
   "interactiveText": {
     "clear": "Clear Alert",
     "displayMode": "Display Mode",
+    "live": "LIVE",
+    "modeStatic": "MODE: STATIC",
+    "modeTicker": "MODE: TICKER",
     "placeholder": "Type the message to project...",
     "project": "Project Alert",
     "static": "Static",
