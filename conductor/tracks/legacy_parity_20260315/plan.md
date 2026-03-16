@@ -11,7 +11,7 @@
 - [x] 1. Create Rust commands and state in `src-tauri/src/commands/display.rs` (or a new module) to hold active alert/ticker state. [b1bfb88]
 - [x] 2. Update the `SseBroadcaster` and streaming templates (`music.html`, `bible.html`, `return.html`) to receive and render alerts. [97b810e]
 - [x] 3. Create frontend route `/utilities/interactive-text` with controls for text input, display mode (static/ticker), and projection trigger. [d3255d4]
-- [ ] 4. Update the React projector view (`src/routes/projector.tsx` and `return.tsx`) to render the alert overlay on top of existing slides.
+- [x] 4. Update the React projector view (`src/routes/projector.tsx` and `return.tsx`) to render the alert overlay on top of existing slides. [81ef9db]
 
 ## Phase 3: Monitor Identification Helper (Medium Priority)
 - [ ] 1. Add Rust command `identify_monitors` in `src-tauri/src/commands/display.rs` that briefly opens a transparent, borderless window on each connected monitor displaying its index number.
