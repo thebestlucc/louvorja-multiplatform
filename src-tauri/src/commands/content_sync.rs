@@ -1,11 +1,13 @@
 use crate::content_sync::{self, ContentSyncRunState};
 use crate::db::models::{
     ContentSyncPlan, ContentSyncProgress, ContentSyncReport, ContentSyncRunStatus,
-    ContentSyncSummary,
+    ContentSyncSummary, ContentSyncPlanItemAction,
 };
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::catcher::catcher;
+use crate::ftp_sync;
+use crate::legacy_fetch;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -211,7 +213,9 @@ fn run_content_sync_background(
     let total_items = plan.items.len() as u64;
     let mut applied_count = 0;
     let mut skipped_count = 0;
-    let failed_count = 0;
+    let mut failed_count = 0;
+    
+    let mut ftp_settings: Option<ftp_sync::credentials::FtpSettings> = None;
 
     let (terminal_status, terminal_message) = if content_sync::plan_requires_full_sync_fallback(&plan)
     {
@@ -260,20 +264,99 @@ fn run_content_sync_background(
             }
 
             let processed = (index + 1) as u64;
+            let percent = if total_items == 0 {
+                100.0
+            } else {
+                processed as f64 / total_items as f64 * 100.0
+            };
+
             emit_progress(
                 &app,
                 &run_id,
                 "executing",
                 ContentSyncRunStatus::Running,
-                if total_items == 0 {
-                    100.0
-                } else {
-                    processed as f64 / total_items as f64 * 100.0
-                },
+                percent,
                 item.reason.clone(),
                 processed,
             );
-            applied_count += 1;
+
+            match item.action {
+                ContentSyncPlanItemAction::RepairMedia => {
+                    // Lazy-fetch FTP credentials
+                    if ftp_settings.is_none() {
+                        let params_res = tauri::async_runtime::block_on(legacy_fetch::fetcher::fetch_params());
+                        if let Ok(params) = params_res {
+                            if let Some(conn_ftp_url) = params.conn_ftp {
+                                let creds_res = tauri::async_runtime::block_on(ftp_sync::credentials::fetch_ftp_credentials(&conn_ftp_url));
+                                if let Ok(settings) = creds_res {
+                                    ftp_settings = Some(settings);
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(ref settings) = ftp_settings {
+                        if let Some(state) = app.try_state::<AppState>() {
+                            if let Ok(conn) = state.db.get() {
+                                let local_id = item.local_id.unwrap_or(0);
+                                let media = match item.entity_type.as_str() {
+                                    "hymn" => crate::db::queries::content_sync::get_hymn_media_paths(&conn, local_id),
+                                    "album" => crate::db::queries::content_sync::get_album_media_paths(&conn, local_id),
+                                    _ => Ok(None),
+                                }.unwrap_or(None);
+
+                                if let Some(media) = media {
+                                    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+                                    
+                                    // Helper to sync if path exists in media struct
+                                    let mut sync_asset = |rel_path: Option<String>| {
+                                        if let Some(path) = rel_path {
+                                            let full_path = app_data_dir.join(&path);
+                                            emit_progress(
+                                                &app,
+                                                &run_id,
+                                                "downloading",
+                                                ContentSyncRunStatus::Running,
+                                                percent,
+                                                Some(format!("Downloading asset: {}", path)),
+                                                processed,
+                                            );
+                                            if let Err(e) = ftp_sync::client::sync_file(settings, &path, &full_path) {
+                                                eprintln!("[sync] FTP download error: {}", e);
+                                                return false;
+                                            }
+                                        }
+                                        true
+                                    };
+
+                                    let mut success = true;
+                                    success &= sync_asset(media.audio_path);
+                                    success &= sync_asset(media.playback_path);
+                                    success &= sync_asset(media.cover_path);
+
+                                    if success {
+                                        applied_count += 1;
+                                    } else {
+                                        failed_count += 1;
+                                    }
+                                } else {
+                                    skipped_count += 1;
+                                }
+                            } else {
+                                failed_count += 1;
+                            }
+                        } else {
+                            failed_count += 1;
+                        }
+                    } else {
+                        skipped_count += 1;
+                    }
+                }
+                _ => {
+                    // For now, other actions just increment applied_count as placeholders
+                    applied_count += 1;
+                }
+            }
         }
 
         (
