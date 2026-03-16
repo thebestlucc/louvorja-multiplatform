@@ -308,6 +308,30 @@ async navigateBibleVerse(direction: string) : Promise<Result<null, AppErrorRespo
     else return { status: "error", error: e  as any };
 }
 },
+async toggleFavorite(itemType: string, itemId: number) : Promise<Result<boolean, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("toggle_favorite", { itemType, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getFavorites(itemType: string) : Promise<Result<Favorite[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_favorites", { itemType }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async isFavorite(itemType: string, itemId: number) : Promise<Result<boolean, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("is_favorite", { itemType, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getPresentations() : Promise<Result<Presentation[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_presentations") };
@@ -1277,6 +1301,7 @@ export type ContentSyncSummaryMode = "smart" | "degraded"
  * Returns `{ has_new_version: bool, new_version: Option<i64> }`.
  */
 export type DbVersionCheckResult = { hasNewVersion: boolean; newVersion: number | null }
+export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
 /**
