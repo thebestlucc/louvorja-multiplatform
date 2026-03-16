@@ -15,8 +15,8 @@
 
 ## Phase 3: Monitor Identification Helper (Medium Priority)
 - [x] 1. Add Rust command `identify_monitors` in `src-tauri/src/commands/display.rs` that briefly opens a transparent, borderless window on each connected monitor displaying its index number. [5c08891]
-- [ ] 2. Update `src/routes/settings/index.tsx` to add an "Identify Monitors" button near the display settings.
-- [ ] 3. Connect the frontend button to the `identify_monitors` backend command.
+- [x] 2. Update `src/routes/settings/index.tsx` to add an "Identify Monitors" button near the display settings. [4251ce6]
+- [x] 3. Connect the frontend button to the `identify_monitors` backend command. [4251ce6]
 
 ## Phase 4: Collection Integrity Tools (Medium Priority)
 - [ ] 1. Create Rust command `scan_media_integrity` in `src-tauri/src/commands/utility.rs` to check for missing and excess files in the `media/` folder compared to database references.
