@@ -804,6 +804,20 @@
       "description": "Projete avisos e letreiros (tickers) temporários sobre qualquer tela.",
       "title": "Texto Interativo"
     },
+    "mediaIntegrity": {
+      "cleanUp": "Limpar arquivos excedentes",
+      "cleanUpConfirm": "Tem certeza que deseja excluir {{count}} arquivos não referenciados? Esta ação não pode ser desfeita.",
+      "cleanUpSuccess": "Arquivos excedentes excluídos com sucesso.",
+      "description": "Verifique se há arquivos de mídia ausentes ou sobrando em sua biblioteca.",
+      "emptyExcess": "Nenhum arquivo excedente encontrado.",
+      "emptyMissing": "Nenhum arquivo ausente encontrado.",
+      "excessFiles": "Arquivos Excedentes",
+      "missingFiles": "Arquivos Ausentes",
+      "scan": "Escanear Biblioteca",
+      "scanning": "Escaneando...",
+      "source": "Origem",
+      "title": "Integridade da Biblioteca"
+    },
     "lottery": {
       "allPicked": "Todos os itens disponíveis já foram sorteados.",
       "clear": "Limpar",

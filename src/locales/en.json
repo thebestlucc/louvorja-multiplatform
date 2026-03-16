@@ -804,6 +804,20 @@
       "description": "Project temporary notices and tickers over any screen.",
       "title": "Interactive Text"
     },
+    "mediaIntegrity": {
+      "cleanUp": "Clean up excess files",
+      "cleanUpConfirm": "Are you sure you want to delete {{count}} unreferenced files? This action cannot be undone.",
+      "cleanUpSuccess": "Excess files deleted successfully.",
+      "description": "Check for missing or leftover media files in your library.",
+      "emptyExcess": "No excess files found.",
+      "emptyMissing": "No missing files found.",
+      "excessFiles": "Excess Files",
+      "missingFiles": "Missing Files",
+      "scan": "Scan Library",
+      "scanning": "Scanning...",
+      "source": "Source",
+      "title": "Library Integrity"
+    },
     "lottery": {
       "allPicked": "All available items were already picked.",
       "clear": "Clear",
