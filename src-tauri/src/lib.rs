@@ -162,6 +162,8 @@ pub fn run() {
             commands::display::toggle_black_screen,
             commands::display::toggle_logo_screen,
             commands::display::get_overlay_state,
+            commands::display::set_alert,
+            commands::display::clear_alert,
             commands::display::set_monitor_config,
             commands::display::get_monitor_configs,
             // Streaming

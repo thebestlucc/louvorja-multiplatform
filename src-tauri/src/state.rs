@@ -166,6 +166,14 @@ impl TimerRuntimeState {
     }
 }
 
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertState {
+    pub text: String,
+    pub is_visible: bool,
+    pub is_ticker: bool,
+}
+
 /// Combined overlay state — single mutex eliminates the ABBA deadlock
 /// that occurred when toggle_black_screen and toggle_logo_screen acquired
 /// is_black_screen and is_logo_screen in opposite order simultaneously.
@@ -173,6 +181,7 @@ impl TimerRuntimeState {
 pub struct OverlayRuntimeState {
     pub is_black_screen: bool,
     pub is_logo_screen: bool,
+    pub alert: AlertState,
 }
 
 pub struct AppState {

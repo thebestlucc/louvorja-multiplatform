@@ -203,11 +203,14 @@ pub struct SlideContent {
     pub text_size: Option<i32>,
 }
 
+use crate::state::AlertState;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OverlayState {
     pub black_screen: bool,
     pub logo_screen: bool,
+    pub alert: Option<AlertState>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

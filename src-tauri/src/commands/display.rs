@@ -387,6 +387,7 @@ pub fn toggle_black_screen(
     let result = OverlayState {
         black_screen: overlay.is_black_screen,
         logo_screen: overlay.is_logo_screen,
+        alert: Some(overlay.alert.clone()),
     };
     let _ = app.emit("overlay-changed", &result);
     Ok(result)
@@ -406,6 +407,7 @@ pub fn toggle_logo_screen(
     let result = OverlayState {
         black_screen: overlay.is_black_screen,
         logo_screen: overlay.is_logo_screen,
+        alert: Some(overlay.alert.clone()),
     };
     let _ = app.emit("overlay-changed", &result);
     Ok(result)
@@ -418,7 +420,48 @@ pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlaySta
     Ok(OverlayState {
         black_screen: overlay.is_black_screen,
         logo_screen: overlay.is_logo_screen,
+        alert: Some(overlay.alert.clone()),
     })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_alert(
+    text: String,
+    is_ticker: bool,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<OverlayState, AppError> {
+    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
+    overlay.alert.text = text;
+    overlay.alert.is_ticker = is_ticker;
+    overlay.alert.is_visible = true;
+
+    let result = OverlayState {
+        black_screen: overlay.is_black_screen,
+        logo_screen: overlay.is_logo_screen,
+        alert: Some(overlay.alert.clone()),
+    };
+    let _ = app.emit("overlay-changed", &result);
+    Ok(result)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_alert(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<OverlayState, AppError> {
+    let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
+    overlay.alert.is_visible = false;
+
+    let result = OverlayState {
+        black_screen: overlay.is_black_screen,
+        logo_screen: overlay.is_logo_screen,
+        alert: Some(overlay.alert.clone()),
+    };
+    let _ = app.emit("overlay-changed", &result);
+    Ok(result)
 }
 
 #[tauri::command]

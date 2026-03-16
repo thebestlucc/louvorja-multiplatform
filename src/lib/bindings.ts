@@ -828,6 +828,22 @@ async getOverlayState() : Promise<Result<OverlayState, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+async setAlert(text: string, isTicker: boolean) : Promise<Result<OverlayState, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_alert", { text, isTicker }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async clearAlert() : Promise<Result<OverlayState, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_alert") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async setMonitorConfig(monitorId: string, role: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_monitor_config", { monitorId, role }) };
@@ -1309,6 +1325,7 @@ export type ContentSyncSummaryMode = "smart" | "degraded"
  * Returns `{ has_new_version: bool, new_version: Option<i64> }`.
  */
 export type DbVersionCheckResult = { hasNewVersion: boolean; newVersion: number | null }
+export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
@@ -1360,7 +1377,7 @@ export type MigrationReport = { runId: string; status: string; startedAt: string
 export type MigrationRunInfo = { runId: string; startedAt: string; sourcePath: string }
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
-export type OverlayState = { blackScreen: boolean; logoScreen: boolean }
+export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
 export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }
