@@ -164,6 +164,7 @@ pub fn run() {
             commands::display::get_overlay_state,
             commands::display::set_alert,
             commands::display::clear_alert,
+            commands::display::identify_monitors,
             commands::display::set_monitor_config,
             commands::display::get_monitor_configs,
             // Streaming

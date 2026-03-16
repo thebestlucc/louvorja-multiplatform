@@ -22,7 +22,7 @@ import {
   replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
   updateScheduleDayDepartmentPeoplePerDay, resetScheduleDayDepartmentManualOverride,
-  getMonitorConfigs, setMonitorConfig,
+  getMonitorConfigs, setMonitorConfig, identifyMonitors,
   setAlert, clearAlert, toggleBlackScreen, toggleLogoScreen, getOverlayState,
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
@@ -1303,5 +1303,11 @@ export function useClearAlert() {
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.overlay, data);
     },
+  });
+}
+
+export function useIdentifyMonitors() {
+  return useMutation({
+    mutationFn: () => identifyMonitors(),
   });
 }
