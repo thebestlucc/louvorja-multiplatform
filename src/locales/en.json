@@ -170,6 +170,7 @@
     "blackScreen": "Black Screen",
     "closeProjector": "Close Projector (F5)",
     "closeReturn": "Close Return Monitor (Shift+F5)",
+    "identifyMonitors": "Identify Monitors",
     "logoScreen": "Logo Screen",
     "nextSlide": "Next",
     "noNextSlide": "No next slide",
