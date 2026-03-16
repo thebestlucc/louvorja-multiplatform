@@ -804,6 +804,20 @@
       "description": "Proyecte avisos y letreros (tickers) temporales sobre cualquier pantalla.",
       "title": "Texto Interativo"
     },
+    "mediaIntegrity": {
+      "cleanUp": "Limpiar archivos excedentes",
+      "cleanUpConfirm": "¿Está seguro de que desea eliminar {{count}} archivos no referenciados? Esta acción no se puede deshacer.",
+      "cleanUpSuccess": "Archivos excedentes eliminados con éxito.",
+      "description": "Verifique si hay archivos de medios faltantes o sobrantes en su biblioteca.",
+      "emptyExcess": "No se encontraron archivos excedentes.",
+      "emptyMissing": "No se encontraron archivos faltantes.",
+      "excessFiles": "Archivos Excedentes",
+      "missingFiles": "Archivos Faltantes",
+      "scan": "Escanear Biblioteca",
+      "scanning": "Escaneando...",
+      "source": "Origen",
+      "title": "Integridad de la Biblioteca"
+    },
     "lottery": {
       "allPicked": "Todos los elementos disponibles ya fueron sorteados.",
       "clear": "Limpiar",
