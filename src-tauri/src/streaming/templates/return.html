@@ -207,6 +207,32 @@ body {
     bottom: 14px;
   }
 }
+
+.alert-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: bold;
+  font-size: 24px;
+  padding: 8px 16px;
+  display: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.alert-overlay.ticker .alert-content {
+  display: inline-block;
+  padding-left: 100%;
+  animation: ticker-scroll 15s linear infinite;
+}
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
 </style>
 </head>
 <body>
@@ -256,6 +282,10 @@ body {
       <div id="next-empty" class="next-empty"></div>
     </div>
   </div>
+</div>
+
+<div id="alert-overlay" class="alert-overlay">
+  <div id="alert-content" class="alert-content"></div>
 </div>
 
 <script>
@@ -953,6 +983,63 @@ function handleReturnStreamMessage(data) {
   applyPayload(data, true);
 }
 
+function applyAlert(payload) {
+  if (!payload || typeof payload !== "object") return;
+  const overlay = document.getElementById("alert-overlay");
+  const content = document.getElementById("alert-content");
+  if (!overlay || !content) return;
+
+  const isVisible = Boolean(payload.isVisible ?? payload.is_visible);
+  const isTicker = Boolean(payload.isTicker ?? payload.is_ticker);
+  const text = safeText(payload.text);
+
+  if (!isVisible || !text) {
+    overlay.style.display = "none";
+    return;
+  }
+
+  content.textContent = text;
+  overlay.style.display = "block";
+  if (isTicker) {
+    overlay.classList.add("ticker");
+    const duration = Math.max(10, Math.min(60, text.length / 5));
+    content.style.animationDuration = duration + "s";
+  } else {
+    overlay.classList.remove("ticker");
+    content.style.animationDuration = "";
+  }
+}
+
+let alertEs = null;
+function connectAlert() {
+  if (alertEs) return;
+  alertEs = new EventSource("/sse/alert");
+  alertEs.onopen = function() {
+    void fetchAlertSnapshot();
+  };
+  alertEs.onmessage = function(event) {
+    try {
+      applyAlert(JSON.parse(event.data));
+    } catch (_) {}
+  };
+  alertEs.onerror = function() {
+    if (alertEs) {
+      alertEs.close();
+      alertEs = null;
+    }
+    setTimeout(connectAlert, 3000);
+  };
+}
+
+async function fetchAlertSnapshot() {
+  try {
+    const response = await fetch("/state/alert", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    applyAlert(data);
+  } catch (_) {}
+}
+
 function applyStaticText() {
   document.title = tr("pageTitle");
   document.getElementById("next-badge").textContent = tr("nextSlide");
@@ -1057,6 +1144,7 @@ function connect() {
     void fetchSnapshot();
     void fetchUtilitySnapshot();
     void fetchAudioSnapshot();
+    connectAlert();
   };
   es.onmessage = function (event) {
     try {
@@ -1087,6 +1175,7 @@ window.addEventListener("beforeunload", function () {
   if (clockTimer) clearInterval(clockTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (es) es.close();
+  if (alertEs) alertEs.close();
 });
 </script>
 </body>

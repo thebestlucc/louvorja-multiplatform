@@ -93,6 +93,7 @@ pub struct StreamingServer {
     pub music_broadcaster: Arc<SseBroadcaster>,
     pub bible_broadcaster: Arc<SseBroadcaster>,
     pub return_broadcaster: Arc<SseBroadcaster>,
+    pub alert_broadcaster: Arc<SseBroadcaster>,
     pub utility_broadcaster: Arc<SseBroadcaster>,
     pub ui_broadcaster: Arc<SseBroadcaster>,
     latest_audio_status: Arc<Mutex<Option<String>>>,
@@ -130,6 +131,7 @@ impl StreamingServer {
             music_broadcaster: Arc::new(SseBroadcaster::new()),
             bible_broadcaster: Arc::new(SseBroadcaster::new()),
             return_broadcaster: Arc::new(SseBroadcaster::new()),
+            alert_broadcaster: Arc::new(SseBroadcaster::new()),
             utility_broadcaster: Arc::new(SseBroadcaster::new()),
             ui_broadcaster: Arc::new(SseBroadcaster::new()),
             latest_audio_status: Arc::new(Mutex::new(None)),
@@ -191,6 +193,7 @@ impl StreamingServer {
         let music_bc = Arc::clone(&self.music_broadcaster);
         let bible_bc = Arc::clone(&self.bible_broadcaster);
         let return_bc = Arc::clone(&self.return_broadcaster);
+        let alert_bc = Arc::clone(&self.alert_broadcaster);
         let utility_bc = Arc::clone(&self.utility_broadcaster);
         let ui_bc = Arc::clone(&self.ui_broadcaster);
         let latest_audio_status = Arc::clone(&self.latest_audio_status);
@@ -208,6 +211,7 @@ impl StreamingServer {
                         let music = Arc::clone(&music_bc);
                         let bible = Arc::clone(&bible_bc);
                         let ret = Arc::clone(&return_bc);
+                        let alert = Arc::clone(&alert_bc);
                         let utility = Arc::clone(&utility_bc);
                         let ui = Arc::clone(&ui_bc);
                         let running = Arc::clone(&is_running);
@@ -221,6 +225,7 @@ impl StreamingServer {
                                 music_bc: &music,
                                 bible_bc: &bible,
                                 return_bc: &ret,
+                                alert_bc: &alert,
                                 utility_bc: &utility,
                                 ui_bc: &ui,
                                 latest_audio_status: &latest_audio_status_for_connection,
@@ -250,6 +255,7 @@ impl StreamingServer {
         self.music_broadcaster.disconnect_all();
         self.bible_broadcaster.disconnect_all();
         self.return_broadcaster.disconnect_all();
+        self.alert_broadcaster.disconnect_all();
         self.utility_broadcaster.disconnect_all();
         self.ui_broadcaster.disconnect_all();
         self.listener = None;
@@ -271,6 +277,7 @@ impl StreamingServer {
             (self.music_broadcaster.connection_count()
                 + self.bible_broadcaster.connection_count()
                 + self.return_broadcaster.connection_count()
+                + self.alert_broadcaster.connection_count()
                 + self.utility_broadcaster.connection_count()
                 + self.ui_broadcaster.connection_count()) as u32
         } else {
@@ -317,6 +324,12 @@ impl StreamingServer {
         }
     }
 
+    pub fn broadcast_alert(&self, data: &str) {
+        if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
+            self.alert_broadcaster.broadcast(data);
+        }
+    }
+
     pub fn broadcast_utility(&self, data: &str) {
         if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
             self.utility_broadcaster.broadcast(data);
@@ -336,6 +349,7 @@ struct ConnectionContext<'a> {
     music_bc: &'a Arc<SseBroadcaster>,
     bible_bc: &'a Arc<SseBroadcaster>,
     return_bc: &'a Arc<SseBroadcaster>,
+    alert_bc: &'a Arc<SseBroadcaster>,
     utility_bc: &'a Arc<SseBroadcaster>,
     ui_bc: &'a Arc<SseBroadcaster>,
     latest_audio_status: &'a Arc<Mutex<Option<String>>>,
@@ -380,6 +394,12 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
             });
             serve_json(&mut stream, &body);
         }
+        "/state/alert" => {
+            let body = context.alert_bc.latest_payload().unwrap_or_else(|| {
+                r#"{"text":"","isVisible":false,"isTicker":false}"#.to_string()
+            });
+            serve_json(&mut stream, &body);
+        }
         "/state/utility" => {
             let body = context.utility_bc.latest_payload().unwrap_or_else(|| {
                 r#"{"phase":"stop","sessionId":"","kind":"","valueMs":0,"use24Hour":true,"showDate":false}"#
@@ -413,6 +433,7 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         "/sse/music" => serve_sse(stream, context.music_bc, context.is_running),
         "/sse/bible" => serve_sse(stream, context.bible_bc, context.is_running),
         "/sse/return" => serve_sse(stream, context.return_bc, context.is_running),
+        "/sse/alert" => serve_sse(stream, context.alert_bc, context.is_running),
         "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running),
         "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running),
         _ if path.starts_with("/media/") => serve_media(stream, &path, context.media_root),

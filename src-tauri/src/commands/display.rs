@@ -431,6 +431,7 @@ pub fn set_alert(
     is_ticker: bool,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
     let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
     overlay.alert.text = text;
@@ -443,6 +444,13 @@ pub fn set_alert(
         alert: Some(overlay.alert.clone()),
     };
     let _ = app.emit("overlay-changed", &result);
+
+    if let Ok(server) = streaming_state.server.lock() {
+        if let Ok(payload) = serde_json::to_string(&overlay.alert) {
+            server.broadcast_alert(&payload);
+        }
+    }
+
     Ok(result)
 }
 
@@ -451,6 +459,7 @@ pub fn set_alert(
 pub fn clear_alert(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
     let mut overlay = state.overlay.write().map_err(|e| AppError::Internal(e.to_string()))?;
     overlay.alert.is_visible = false;
@@ -461,6 +470,13 @@ pub fn clear_alert(
         alert: Some(overlay.alert.clone()),
     };
     let _ = app.emit("overlay-changed", &result);
+
+    if let Ok(server) = streaming_state.server.lock() {
+        if let Ok(payload) = serde_json::to_string(&overlay.alert) {
+            server.broadcast_alert(&payload);
+        }
+    }
+
     Ok(result)
 }
 
