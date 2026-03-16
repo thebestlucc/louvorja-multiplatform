@@ -309,7 +309,7 @@ fn run_content_sync_background(
                                     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
                                     
                                     // Helper to sync if path exists in media struct
-                                    let mut sync_asset = |rel_path: Option<String>| {
+                                    let sync_asset = |rel_path: Option<String>| {
                                         if let Some(path) = rel_path {
                                             let full_path = app_data_dir.join(&path);
                                             emit_progress(
