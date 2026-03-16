@@ -844,6 +844,14 @@ async clearAlert() : Promise<Result<OverlayState, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+async identifyMonitors() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("identify_monitors") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async setMonitorConfig(monitorId: string, role: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_monitor_config", { monitorId, role }) };

@@ -254,6 +254,10 @@ export async function clearAlert(): Promise<OverlayState> {
   return tauriInvoke<OverlayState>("clear_alert");
 }
 
+export async function identifyMonitors(): Promise<void> {
+  return tauriInvoke<void>("identify_monitors");
+}
+
 export async function setSlideContext(contextData: SlideContext): Promise<void> {
   return tauriInvoke<void>("set_slide_context", { contextData });
 }

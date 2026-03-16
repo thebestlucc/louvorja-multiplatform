@@ -496,6 +496,54 @@ pub fn set_monitor_config(
 
 #[tauri::command]
 #[specta::specta]
+pub fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
+    let monitors = app
+        .available_monitors()
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    for (index, monitor) in monitors.iter().enumerate() {
+        let label = format!("identify-{}", index);
+        let title = format!("Identify Monitor {}", index + 1);
+        let url = format!("/identify?id={}", index + 1);
+
+        let position = monitor.position();
+        let size = monitor.size();
+        let scale = monitor.scale_factor();
+
+        let logical_x = position.x as f64 / scale;
+        let logical_y = position.y as f64 / scale;
+        let logical_w = size.width as f64 / scale;
+        let logical_h = size.height as f64 / scale;
+
+        let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+            .title(&title)
+            .visible(false)
+            .decorations(false)
+            .resizable(false)
+            .always_on_top(true)
+            .transparent(true)
+            .position(logical_x, logical_y)
+            .inner_size(logical_w, logical_h)
+            .build()
+            .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+        let _ = window.set_size(tauri::Size::Physical(*size));
+        let _ = window.set_position(tauri::Position::Physical(*position));
+        let _ = window.show();
+
+        // Close after 3 seconds
+        let window_clone = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            let _ = window_clone.close();
+        });
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn get_monitor_configs(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<MonitorConfig>, AppError> {
