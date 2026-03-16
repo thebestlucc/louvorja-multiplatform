@@ -12,6 +12,7 @@ import {
   useCollections,
   useCreateCollection,
   useDeleteCollection,
+  useFavoriteCollections,
   useImportCollectionSong,
 } from "../../lib/queries";
 import type { Collection } from "../../lib/bindings";
@@ -21,6 +22,8 @@ import { usePresentationStore } from "../../stores/presentation-store";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { CoverImage } from "../../components/media/cover-image";
+import { FavoriteButton } from "../../components/music/favorite-button";
+import { Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +50,12 @@ function getCreationYear(createdAt: string): number | null {
 function CollectionsIndex() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { data, isLoading } = useCollections();
+
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+
+  const { data, isLoading: isAllLoading } = useCollections(deferredSearch);
+  const { data: favoriteCollections, isLoading: isFavoritesLoading } = useFavoriteCollections(deferredSearch);
   const createMutation = useCreateCollection();
   const deleteMutation = useDeleteCollection();
   const importSongMutation = useImportCollectionSong();
@@ -59,15 +67,14 @@ function CollectionsIndex() {
 
   const [tab, setTab] = useState<"albums" | "custom">("albums");
   const [view, setView] = useState<"list" | "grid">("grid");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [year, setYear] = useState("");
-  const [search, setSearch] = useState("");
   const [uploadPaths, setUploadPaths] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const deferredSearch = useDeferredValue(search);
   const descriptionLimit = 280;
   const currentYear = new Date().getFullYear() + 1;
   const normalizedName = name.trim();
@@ -86,20 +93,15 @@ function CollectionsIndex() {
     !yearInvalid &&
     !createMutation.isPending;
 
+  const isLoading = showFavoritesOnly ? isFavoritesLoading : isAllLoading;
+
   const filtered = useMemo(() => {
-    const value = deferredSearch.trim().toLowerCase();
-    const all = data ?? [];
-    const byTab = all.filter((entry) =>
+    const source = showFavoritesOnly ? (favoriteCollections || []) : (data || []);
+    
+    return source.filter((entry) =>
       tab === "albums" ? entry.sourceType === "api" : entry.sourceType !== "api"
     );
-    if (!value) return byTab;
-    return byTab.filter((entry) => {
-      return (
-        entry.name.toLowerCase().includes(value) ||
-        (entry.description ?? "").toLowerCase().includes(value)
-      );
-    });
-  }, [data, deferredSearch, tab]);
+  }, [data, favoriteCollections, tab, showFavoritesOnly]);
 
   const resetCreateForm = () => {
     setName("");
@@ -419,10 +421,29 @@ function CollectionsIndex() {
           </button>
         </div>
         <div className="flex items-center gap-2 bg-muted/20 p-1 rounded-md border">
-          <Button variant={view === "list" ? "outline" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setView("list")} title="List view">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8 transition-all",
+              showFavoritesOnly ? "text-yellow-500 shadow-sm bg-yellow-500/5" : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            title={t("favorites.title")}
+          >
+            <Star className={cn("h-4 w-4", showFavoritesOnly && "fill-current")} />
+          </Button>
+          <div className="w-px h-4 bg-border mx-1" />
+          <Button variant="ghost" size="icon" className={cn(
+            "h-8 w-8 transition-all",
+            view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          )} onClick={() => setView("list")} title="List view">
             <ListIcon className="h-4 w-4" />
           </Button>
-          <Button variant={view === "grid" ? "outline" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setView("grid")} title="Grid view">
+          <Button variant="ghost" size="icon" className={cn(
+            "h-8 w-8 transition-all",
+            view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          )} onClick={() => setView("grid")} title="Grid view">
             <LayoutGrid className="h-4 w-4" />
           </Button>
         </div>
@@ -507,6 +528,7 @@ function CollectionsIndex() {
                               </div>
   
                               <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pr-0 sm:pr-2 pointer-events-auto w-full sm:w-auto mt-2 sm:mt-0 border-t sm:border-t-0 pt-2 sm:pt-0">
+                                <FavoriteButton itemType="collection" itemId={collection.id} size="icon" className="h-8 w-8" />
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
@@ -564,6 +586,15 @@ function CollectionsIndex() {
                             title={collection.name}
                             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
+                          <div className="absolute top-2 right-2 z-20">
+                            <FavoriteButton
+                              itemType="collection"
+                              itemId={collection.id}
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md border-white/10"
+                            />
+                          </div>
                           <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex flex-col justify-end p-3">
                             <div className="flex items-center justify-center gap-1.5 translate-y-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                               <Button

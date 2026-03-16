@@ -22,22 +22,17 @@ export function HymnSearch() {
   }, [query]);
 
   const { data: searchResults, isLoading: isSearchLoading } = useHymns(debouncedQuery);
-  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns();
+  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(debouncedQuery);
 
   const isLoading = showFavoritesOnly ? isFavoritesLoading : isSearchLoading;
 
   // Filter or select source based on toggle
   const hymns = showFavoritesOnly
-    ? (favoriteHymns || []).filter(h =>
-        !debouncedQuery ||
-        h.title.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-        h.number?.toString().includes(debouncedQuery) ||
-        h.lyrics?.toLowerCase().includes(debouncedQuery.toLowerCase())
-      )
+    ? favoriteHymns
     : searchResults;
 
   // Responsive columns for grid view
-...
+  const isXl = useMedia("(min-width: 1280px)", false);
   const isLg = useMedia("(min-width: 1024px)", false);
   const isMd = useMedia("(min-width: 768px)", false);
   const isSm = useMedia("(min-width: 640px)", false);
@@ -83,18 +78,24 @@ export function HymnSearch() {
           </Button>
           <div className="w-px h-4 bg-border mx-1" />
           <Button
-            variant={view === "list" ? "outline" : "ghost"}
+            variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className={cn(
+              "h-8 w-8 transition-all",
+              view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
             onClick={() => setView("list")}
             title="List view"
           >
             <ListIcon className="h-4 w-4" />
           </Button>
           <Button
-            variant={view === "grid" ? "outline" : "ghost"}
+            variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className={cn(
+              "h-8 w-8 transition-all",
+              view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
             onClick={() => setView("grid")}
             title="Grid view"
           >

@@ -7,6 +7,7 @@
 
 ## Rust Backend
 - **Error Handling:** Every function must return `Result<T, AppError>`. Never use `todo!()` or `unwrap()`; use `Err(AppError::Internal(...))` for stubs.
+- **Manual Error Destructuring:** Use the `catcher` utilities (`src-tauri/src/utils/catcher.rs`) when manually destructuring a `Result` into `(data, error)` or handling errors in threads/closures where `?` cannot be used.
 - **Windows IPC Safety:** **CRITICAL:** `#[tauri::command]` handlers must **never block**. Long-running operations (sleep, window creation) **must** be spawned via `std::thread::spawn`.
 - **Serde:** Use `#[serde(rename_all = "camelCase")]` on all structs sent to the frontend.
 - **Audio Init:** Initialize audio in a background thread with a timeout to prevent Tauri's `setup()` from hanging.

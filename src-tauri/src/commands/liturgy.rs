@@ -1,14 +1,16 @@
 use crate::db::models::{Service, ServiceItem, ServiceWithItems};
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 
 #[tauri::command]
 #[specta::specta]
 pub fn get_services(state: tauri::State<'_, AppState>) -> Result<Vec<Service>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::liturgy::get_services(&conn)
 }
 
@@ -18,10 +20,11 @@ pub fn get_service(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<ServiceWithItems, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let service = crate::db::queries::liturgy::get_service_by_id(&conn, id)?;
     let items = crate::db::queries::liturgy::get_service_items(&conn, id)?;
     Ok(ServiceWithItems { service, items })
@@ -35,10 +38,11 @@ pub fn create_service(
     notes: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Service, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let id = crate::db::queries::liturgy::insert_service(
         &conn,
         &title,
@@ -57,10 +61,11 @@ pub fn update_service(
     notes: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::liturgy::update_service(
         &conn,
         id,
@@ -73,10 +78,11 @@ pub fn update_service(
 #[tauri::command]
 #[specta::specta]
 pub fn delete_service(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::liturgy::delete_service(&conn, id)
 }
 
@@ -90,10 +96,11 @@ pub fn add_service_item(
     notes: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<ServiceItem, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let id = crate::db::queries::liturgy::insert_service_item(
         &conn,
         service_id,
@@ -108,10 +115,11 @@ pub fn add_service_item(
 #[tauri::command]
 #[specta::specta]
 pub fn remove_service_item(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::liturgy::delete_service_item(&conn, id)
 }
 
@@ -122,20 +130,22 @@ pub fn reorder_service_items(
     item_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::liturgy::reorder_items(&conn, service_id, &item_ids)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn duplicate_service(id: i64, state: tauri::State<'_, AppState>) -> Result<Service, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let new_id = crate::db::queries::liturgy::duplicate_service_with_items(&conn, id)?;
     crate::db::queries::liturgy::get_service_by_id(&conn, new_id)
 }
@@ -148,9 +158,10 @@ pub fn update_service_item(
     notes: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::liturgy::update_service_item(&conn, id, &title, notes.as_deref())
 }

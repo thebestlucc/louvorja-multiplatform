@@ -21,6 +21,7 @@
 - **Community-Driven Translation:** The platform must provide necessary tooling for the community to submit and manage their own translations.
 
 ## Architectural Guidelines
+- **Standardized Error Handling:** **ALWAYS use `catcher`** utilities (TS/Rust) instead of manual `try-catch` or `match` destructuring. This ensures consistent error reporting, auto-notifications, and aligns with the project's pastoral error messaging philosophy.
 - **Realtime Sync Rule:** Use pub/sub events (Tauri emitters) for live projection state. Never rely on periodic polling as the primary synchronization path.
 - **Managed Media Paths:** Persist only relative paths (`media/videos/...`) in slide content; resolve to absolute paths/asset URLs only at runtime.
 - **Service-Aware Updates:** Suppress update banners during live projection (`isProjectorOpen || isPlayingService`).

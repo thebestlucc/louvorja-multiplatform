@@ -1,0 +1,10 @@
+{
+  "id": "rust_error_refactor_20260315",
+  "title": "Refactor Rust Error Handling to use Catcher Utilities",
+  "description": "Standardize error handling in the Rust backend by replacing manual match/if-let blocks with the catcher utility, mirroring the frontend pattern.",
+  "status": "completed",
+  "priority": "medium",
+  "owner": "gemini-cli",
+  "created_at": "2026-03-15T00:00:00.000Z",
+  "updated_at": "2026-03-16T00:00:00.000Z"
+}

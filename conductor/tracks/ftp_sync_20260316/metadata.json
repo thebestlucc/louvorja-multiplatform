@@ -1,0 +1,9 @@
+{
+  "id": "ftp_sync_20260316",
+  "title": "FTP Synchronization",
+  "description": "Implementation of legacy FTP asset synchronization for audio and covers.",
+  "status": "pending",
+  "created_at": "2026-03-16T00:00:00Z",
+  "updated_at": "2026-03-16T00:00:00Z",
+  "tags": ["backend", "rust", "ftp", "sync"]
+}

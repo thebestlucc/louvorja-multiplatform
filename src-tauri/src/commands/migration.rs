@@ -10,6 +10,7 @@ use crate::migration::{
     MigrationRunState, CANCELLATION_MESSAGE,
 };
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -56,10 +57,12 @@ pub fn start_migration(
     }
 
     {
-        let migration = state
-            .migration
-            .lock()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (migration, err) = catcher(state.migration.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let migration = migration.unwrap();
+
         if let Some(active_run_id) = migration.active_run_id.as_deref() {
             if let Some(active_run) = migration.runs.get(active_run_id) {
                 if active_run.progress.status == "running" {
@@ -93,10 +96,12 @@ pub fn start_migration(
     let cancel_flag = Arc::new(AtomicBool::new(false));
 
     {
-        let mut migration = state
-            .migration
-            .lock()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (migration, err) = catcher(state.migration.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut migration = migration.unwrap();
+
         migration.active_run_id = Some(run_id.clone());
         migration.runs.insert(
             run_id.clone(),
@@ -133,10 +138,12 @@ pub fn get_migration_progress(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<MigrationProgress, AppError> {
-    let migration = state
-        .migration
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (migration, err) = catcher(state.migration.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let migration = migration.unwrap();
+
     let run = migration
         .runs
         .get(&run_id)
@@ -148,10 +155,12 @@ pub fn get_migration_progress(
 #[tauri::command]
 #[specta::specta]
 pub fn cancel_migration(run_id: String, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let mut migration = state
-        .migration
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (migration, err) = catcher(state.migration.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut migration = migration.unwrap();
+
     let run = migration
         .runs
         .get_mut(&run_id)
@@ -173,10 +182,12 @@ pub fn get_migration_report(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<MigrationReport, AppError> {
-    let migration = state
-        .migration
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (migration, err) = catcher(state.migration.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let migration = migration.unwrap();
+
     let run = migration
         .runs
         .get(&run_id)
@@ -348,10 +359,11 @@ fn execute_domain_import(
 ) -> Result<crate::migration::MigrationDomainReport, AppError> {
     let cancel_flag = get_cancel_flag(app, run_id)?;
     let app_state = app.state::<AppState>();
-    let mut target_conn = app_state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (target_conn, err) = catcher(app_state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut target_conn = target_conn.unwrap();
 
     match domain {
         MigrationDomain::Hymns => import_hymns_domain(
@@ -421,10 +433,12 @@ fn update_progress(app: &AppHandle, update: ProgressUpdate<'_>) -> Result<(), Ap
 
     {
         let app_state = app.state::<AppState>();
-        let mut migration = app_state
-            .migration
-            .lock()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (migration, err) = catcher(app_state.migration.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut migration = migration.unwrap();
+
         let run = migration.runs.get_mut(update.run_id).ok_or_else(|| {
             AppError::NotFound(format!("Migration run '{}' was not found.", update.run_id))
         })?;
@@ -486,8 +500,8 @@ fn finalize_with_errors(app: &AppHandle, summary: FinalizeWithErrors<'_>) {
 
     {
         let app_state = app.state::<AppState>();
-        let maybe_guard = app_state.migration.lock();
-        if let Ok(mut migration) = maybe_guard {
+        let (migration, _err) = catcher(app_state.migration.lock());
+        if let Some(mut migration) = migration {
             if let Some(run) = migration.runs.get_mut(summary.run_id) {
                 run.report = Some(report.clone());
                 run.progress.status = status.to_string();
@@ -541,8 +555,8 @@ fn persist_migration_metadata(
     let finished_at = report.finished_at.clone().unwrap_or_else(now_iso);
 
     let app_state = app.state::<AppState>();
-    let maybe_conn = app_state.db.get();
-    if let Ok(conn) = maybe_conn {
+    let (conn, _err) = catcher(app_state.db.get());
+    if let Some(conn) = conn {
         let _ = set_setting(&conn, "migration.lastSourcePath", source_path);
         let _ = set_setting(&conn, "migration.lastRunStatus", status);
         let _ = set_setting(&conn, "migration.lastRunAt", &finished_at);
@@ -552,10 +566,12 @@ fn persist_migration_metadata(
 
 fn get_cancel_flag(app: &AppHandle, run_id: &str) -> Result<Arc<AtomicBool>, AppError> {
     let app_state = app.state::<AppState>();
-    let migration = app_state
-        .migration
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (migration, err) = catcher(app_state.migration.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let migration = migration.unwrap();
+
     let run = migration
         .runs
         .get(run_id)

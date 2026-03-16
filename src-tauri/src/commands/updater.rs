@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::utils::catcher::catcher;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
@@ -15,15 +16,17 @@ pub struct UpdateInfo {
 #[tauri::command]
 #[specta::specta]
 pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, AppError> {
-    let updater = match app.updater() {
-        Ok(instance) => instance,
-        Err(_) => return Ok(None),
-    };
+    let (updater, err) = catcher(app.updater());
+    if err.is_some() {
+        return Ok(None);
+    }
+    let updater = updater.unwrap();
 
-    let update = match updater.check().await {
-        Ok(value) => value,
-        Err(_) => return Ok(None),
-    };
+    let (update, err) = catcher(updater.check().await);
+    if err.is_some() {
+        return Ok(None);
+    }
+    let update = update.unwrap();
 
     Ok(update.map(|item| UpdateInfo {
         version: item.version.clone(),
@@ -35,23 +38,26 @@ pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, App
 #[tauri::command]
 #[specta::specta]
 pub async fn install_update(app: AppHandle) -> Result<(), AppError> {
-    let updater = app
-        .updater()
-        .map_err(|e| AppError::Internal(format!("Updater init failed: {}", e)))?;
+    let (updater, err) = catcher(app.updater());
+    if let Some(e) = err {
+        return Err(AppError::Internal(format!("Updater init failed: {}", e)));
+    }
+    let updater = updater.unwrap();
 
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| AppError::Internal(format!("Update check failed: {}", e)))?;
+    let (update, err) = catcher(updater.check().await);
+    if let Some(e) = err {
+        return Err(AppError::Internal(format!("Update check failed: {}", e)));
+    }
+    let update = update.unwrap();
 
     let Some(update) = update else {
         return Ok(());
     };
 
-    update
-        .download_and_install(|_chunk_length, _content_length| {}, || {})
-        .await
-        .map_err(|e| AppError::Internal(format!("Install update failed: {}", e)))?;
+    let (_, err) = catcher(update.download_and_install(|_chunk_length, _content_length| {}, || {}).await);
+    if let Some(e) = err {
+        return Err(AppError::Internal(format!("Install update failed: {}", e)));
+    }
 
     Ok(())
 }

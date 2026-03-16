@@ -1,6 +1,7 @@
 use crate::db::models::{MediaIntegrityReport, MissingFile, VideoMetadata};
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use crate::utils::paths::SafePath;
 use crate::video;
 use rand::rngs::OsRng;
@@ -19,15 +20,17 @@ pub async fn scan_media_integrity(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<MediaIntegrityReport, AppError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     let mut referenced_paths = HashSet::new();
     let mut missing_files = Vec::new();
@@ -136,10 +139,11 @@ pub async fn delete_excess_media(
     paths: Vec<String>,
     app: AppHandle,
 ) -> Result<(), AppError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
 
     for path in paths {
         let full_path = app_data_dir.join(&path);
@@ -208,10 +212,11 @@ pub fn copy_video_to_media(
 ) -> Result<(), AppError> {
     // Fast synchronous checks — validate before spawning the thread
     {
-        let conn = state
-            .db
-            .get()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (conn, err) = catcher(state.db.get());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let conn = conn.unwrap();
         let exists: i64 = conn.query_row(
             "SELECT COUNT(*) FROM presentations WHERE id = ?1",
             rusqlite::params![presentation_id],
@@ -233,12 +238,12 @@ pub fn copy_video_to_media(
     }
 
     let app_clone = app.clone();
-    std::thread::spawn(move || match do_copy_video_work(&video_path, &app_clone) {
-        Ok(rel_path) => {
-            let _ = app_clone.emit("video-copy-complete", (presentation_id, rel_path));
-        }
-        Err(e) => {
+    std::thread::spawn(move || {
+        let (rel_path, err) = catcher(do_copy_video_work(&video_path, &app_clone));
+        if let Some(e) = err {
             let _ = app_clone.emit("video-copy-error", (presentation_id, e.to_string()));
+        } else {
+            let _ = app_clone.emit("video-copy-complete", (presentation_id, rel_path.unwrap()));
         }
     });
 
@@ -249,9 +254,11 @@ pub fn copy_video_to_media(
 /// Called from a background thread; must not hold AppState references.
 fn do_copy_video_work(video_path: &str, app: &AppHandle) -> Result<String, AppError> {
     let source = PathBuf::from(video_path);
-    let canonical_source = source
-        .canonicalize()
-        .map_err(|e| AppError::Internal(format!("Failed to resolve source video path: {}", e)))?;
+    let (canonical_source, err) = catcher(source.canonicalize());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let canonical_source = canonical_source.unwrap();
     let format = video::ensure_supported_video(&canonical_source)?;
 
     let mut hasher = blake3::Hasher::new();
@@ -268,10 +275,11 @@ fn do_copy_video_work(video_path: &str, app: &AppHandle) -> Result<String, AppEr
     let digest = hasher.finalize().to_hex().to_string();
     let filename = format!("{}.{}", &digest[..24], format);
 
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
     let media_dir = app_data_dir.join("media").join("videos");
     std::fs::create_dir_all(&media_dir)?;
 
@@ -298,21 +306,28 @@ pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<S
             source.display()
         )));
     }
-    let canonical_source = source
-        .canonicalize()
-        .map_err(|e| AppError::Internal(format!("Failed to resolve source image path: {}", e)))?;
+    let (canonical_source, err) = catcher(source.canonicalize());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let canonical_source = canonical_source.unwrap();
     let extension = ensure_supported_cover_image(&canonical_source)?;
-    let file_size = std::fs::metadata(&canonical_source)?.len();
+    let (metadata, err) = catcher(std::fs::metadata(&canonical_source));
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let file_size = metadata.unwrap().len();
     if file_size > MAX_COVER_SIZE_BYTES {
         return Err(AppError::Internal(format!(
             "Cover image is too large ({} bytes). Maximum size is {} bytes.",
             file_size, MAX_COVER_SIZE_BYTES
         )));
     }
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
 
     // Offload hash + copy to a blocking thread — image files can be up to 8 MB
     // and blocking the IPC thread hangs all invoke() calls on Windows.
@@ -352,10 +367,11 @@ pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<S
 #[tauri::command]
 #[specta::specta]
 pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
 
     let safe_path = SafePath::new(&app_data_dir);
     let resolved = safe_path.resolve(&path)?;
@@ -378,10 +394,11 @@ pub async fn get_video_metadata(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<VideoMetadata, AppError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get app data directory: {}", e)))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
 
     let safe_path = SafePath::new(&app_data_dir);
     let resolved_path = safe_path.resolve(&path)?;
@@ -394,7 +411,11 @@ pub async fn get_video_metadata(
     }
 
     let format = video::ensure_supported_video(&resolved_path)?;
-    let file_size = std::fs::metadata(&resolved_path)?.len() as i64;
+    let (metadata, err) = catcher(std::fs::metadata(&resolved_path));
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let file_size = metadata.unwrap().len() as i64;
 
     // Load ffprobe settings before entering spawn_blocking — tauri::State
     // is not Send and cannot cross the async boundary.
@@ -493,10 +514,11 @@ fn to_sentence_case(text: &str) -> String {
 fn load_ffprobe_settings(
     state: &tauri::State<'_, AppState>,
 ) -> Result<(bool, Option<String>), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     let enabled = crate::db::queries::settings::get_setting(&conn, "video.ffprobeEnabled")
         .ok()

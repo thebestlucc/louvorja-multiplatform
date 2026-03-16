@@ -1,33 +1,126 @@
-use crate::db::models::{Favorite, Hymn};
+use crate::db::models::{Collection, Favorite, Hymn};
 use crate::error::AppError;
 use rusqlite::{params, Connection};
 
-pub fn get_favorite_hymns(conn: &Connection) -> Result<Vec<Hymn>, AppError> {
+pub fn get_favorite_collections(conn: &Connection, query: Option<&str>) -> Result<Vec<Collection>, AppError> {
+    if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+        if !crate::db::queries::collections::collections_fts_exists_pub(conn)? {
+            return Ok(vec![]);
+        }
+
+        let Some(fts_query) = build_fts_prefix_query(q) else {
+            return Ok(vec![]);
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT c.*,
+                    (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
+                    + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
+                    AS song_count
+             FROM collections c
+             JOIN favorites f ON c.id = f.item_id
+             JOIN collections_fts fts ON fts.collection_id = c.id
+             WHERE f.item_type = 'collection'
+             AND fts.collections_fts MATCH ?1
+             ORDER BY c.name ASC, f.id DESC",
+        )?;
+        let rows = stmt.query_map(params![fts_query], |row| {
+            crate::db::queries::collections::map_collection_row_pub(row)
+        })?.collect::<Result<Vec<_>, _>>()?;
+        return Ok(rows);
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT 
+            c.id, c.name, c.description, c.year, c.cover_path, c.auto_cover_path,
+            (
+                (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
+                + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
+            ) as song_count,
+            c.source_type, c.api_album_id, c.created_at, c.updated_at
+         FROM collections c
+         JOIN favorites f ON c.id = f.item_id
+         WHERE f.item_type = 'collection'
+         ORDER BY c.name ASC, f.id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        crate::db::queries::collections::map_collection_row_pub(row)
+    })?;
+
+    let mut collections = Vec::new();
+    for row in rows {
+        collections.push(row?);
+    }
+    Ok(collections)
+}
+
+fn sanitize_fts_query(query: &str) -> Vec<String> {
+    query
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .map(|term| term.trim().to_lowercase())
+        .filter(|term| !term.is_empty())
+        .collect()
+}
+
+fn build_fts_prefix_query(query: &str) -> Option<String> {
+    let terms = sanitize_fts_query(query);
+    if terms.is_empty() {
+        return None;
+    }
+    Some(
+        terms
+            .into_iter()
+            .map(|term| format!("{term}*"))
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
+pub fn get_favorite_hymns(conn: &Connection, query: Option<&str>) -> Result<Vec<Hymn>, AppError> {
+    if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+        // If numeric, search by number within favorites
+        if let Ok(num) = q.parse::<i64>() {
+            let mut stmt = conn.prepare(
+                "SELECT h.* FROM hymns h
+                 JOIN favorites f ON h.id = f.item_id
+                 WHERE f.item_type = 'hymn' AND h.number = ?1
+                 ORDER BY h.number ASC",
+            )?;
+            let hymns = stmt.query_map(params![num], |row| {
+                crate::db::queries::music::map_hymn_row_pub(row)
+            })?.collect::<Result<Vec<_>, _>>()?;
+            return Ok(hymns);
+        }
+
+        // Text search via FTS5 within favorites
+        let Some(fts_query) = build_fts_prefix_query(q) else {
+            return Ok(vec![]);
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT h.* FROM hymns h
+             JOIN favorites f ON h.id = f.item_id
+             JOIN hymns_fts fts ON fts.rowid = h.id
+             WHERE f.item_type = 'hymn' AND fts.hymns_fts MATCH ?1
+             ORDER BY h.number ASC, f.id DESC",
+        )?;
+        let hymns = stmt.query_map(params![fts_query], |row| {
+            crate::db::queries::music::map_hymn_row_pub(row)
+        })?.collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
     let mut stmt = conn.prepare(
         "SELECT h.* FROM hymns h
          JOIN favorites f ON h.id = f.item_id
          WHERE f.item_type = 'hymn'
-         ORDER BY f.id DESC",
+         ORDER BY h.number ASC, f.id DESC",
     )?;
     let rows = stmt.query_map([], |row| {
-        Ok(Hymn {
-            id: row.get(0)?,
-            number: row.get(1)?,
-            title: row.get(2)?,
-            author: row.get(3)?,
-            album: row.get(4)?,
-            lyrics: row.get(5)?,
-            chords: row.get(6)?,
-            audio_path: row.get(7)?,
-            playback_path: row.get(8)?,
-            category: row.get(9)?,
-            notes: row.get(10)?,
-            cover_path: row.get(11)?,
-            lyrics_sync: row.get(12)?,
-            api_music_id: row.get(13)?,
-            created_at: row.get(14)?,
-            updated_at: row.get(15)?,
-        })
+        crate::db::queries::music::map_hymn_row_pub(row)
     })?;
 
     let mut hymns = Vec::new();

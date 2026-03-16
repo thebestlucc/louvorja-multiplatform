@@ -3,10 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import type {
   Hymn,
   Album,
-  AlertState,
   HymnWriteInput,
   MediaIntegrityReport,
-  MissingFile,
   MonitorInfo,
   Presentation,
   Slide,
@@ -99,8 +97,8 @@ export async function getHymnAudioPath(hymnId: number): Promise<string | null> {
 }
 
 // Collections
-export async function getCollections(): Promise<Collection[]> {
-  return tauriInvoke<Collection[]>("get_collections");
+export async function getCollections(query?: string | null): Promise<Collection[]> {
+  return tauriInvoke<Collection[]>("get_collections", { query: query ?? null });
 }
 
 export async function getCollection(id: number): Promise<CollectionWithSongs> {
@@ -434,8 +432,12 @@ export async function getFavorites(itemType: string): Promise<Favorite[]> {
   return tauriInvoke<Favorite[]>("get_favorites", { itemType });
 }
 
-export async function getFavoriteHymns(): Promise<Hymn[]> {
-  return tauriInvoke<Hymn[]>("get_favorite_hymns");
+export async function getFavoriteHymns(query?: string | null): Promise<Hymn[]> {
+  return tauriInvoke<Hymn[]>("get_favorite_hymns", { query: query ?? null });
+}
+
+export async function getFavoriteCollections(query?: string | null): Promise<Collection[]> {
+  return tauriInvoke<Collection[]>("get_favorite_collections", { query: query ?? null });
 }
 
 export async function isFavorite(itemType: string, itemId: number): Promise<boolean> {

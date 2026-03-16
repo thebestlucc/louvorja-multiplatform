@@ -38,7 +38,13 @@ All tasks follow a strict lifecycle:
    ```
    Target: >80% coverage for new code. The specific tools and commands will vary by language and framework.
 
-7. **Document Deviations:** If implementation differs from tech stack:
+7. **Verification and Regression Check (CRITICAL):**
+   - **Build Verification:** Run the project's build command (e.g., `pnpm vite build`, `cargo check`) to ensure no syntax or type errors were introduced.
+   - **Runtime Verification:** If possible, run the application and manually verify the new functionality.
+   - **Regression Check:** Briefly verify that core existing features related to the change still function as expected.
+   - **Binding Verification:** If backend commands were added/modified, ensure TypeScript bindings and permissions (e.g., `capabilities/`, `permissions/`) are updated and valid.
+
+8. **Document Deviations:** If implementation differs from tech stack:
    - **STOP** implementation
    - Update `tech-stack.md` with new design
    - Add dated note explaining the change
@@ -144,6 +150,7 @@ Before marking any task complete, verify:
 - [ ] All public functions/methods are documented (e.g., docstrings, JSDoc, GoDoc)
 - [ ] Type safety is enforced (e.g., type hints, TypeScript types, Go types)
 - [ ] No linting or static analysis errors (using the project's configured tools)
+- [ ] **i18n Enforcement:** All user-facing text must be rendered through `i18next` (`t('key')`) and exist in all locale files (PT, EN, ES). Hardcoded strings are not allowed.
 - [ ] Works correctly on mobile (if applicable)
 - [ ] Documentation updated if needed
 - [ ] No security vulnerabilities introduced

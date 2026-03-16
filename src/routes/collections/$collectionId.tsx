@@ -38,6 +38,7 @@ import { Badge } from "../../components/ui/badge";
 import { CoverPicker } from "../../components/media/cover-picker";
 import { CoverImage } from "../../components/media/cover-image";
 import type { CollectionSong, CollectionSongSyncStatus, AudioStatusPayload } from "../../lib/bindings";
+import { FavoriteButton } from "../../components/music/favorite-button";
 import { getSlides } from "../../lib/tauri";
 import { parseSlideRow, type SlideRow } from "../../types/presentation";
 import { useSlides as useSlidesControl } from "../../hooks/use-slides";
@@ -338,7 +339,10 @@ function CollectionDetail() {
               className="h-10 w-10 rounded-md"
             />
             <div className="min-w-0 space-y-1">
-              <p className="truncate text-sm font-semibold">{name || data.collection.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold">{name || data.collection.name}</p>
+                <FavoriteButton itemType="collection" itemId={id} size="sm" variant="ghost" className="h-6 w-6" />
+              </div>
               <p className="text-xs text-muted-foreground">
                 {data.collection.year ?? t("collections.yearUnknown")}
               </p>

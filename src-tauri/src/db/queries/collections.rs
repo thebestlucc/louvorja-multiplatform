@@ -22,6 +22,10 @@ fn map_collection_row(row: &Row) -> Result<Collection, rusqlite::Error> {
     })
 }
 
+pub fn map_collection_row_pub(row: &Row) -> Result<Collection, rusqlite::Error> {
+    map_collection_row(row)
+}
+
 fn map_collection_song_row(row: &Row) -> Result<CollectionSong, rusqlite::Error> {
     let sync_status: String = row.get("sync_status")?;
     Ok(CollectionSong {
@@ -107,6 +111,10 @@ fn collections_fts_exists(conn: &Connection) -> Result<bool, AppError> {
         |row| row.get(0),
     )?;
     Ok(exists > 0)
+}
+
+pub fn collections_fts_exists_pub(conn: &Connection) -> Result<bool, AppError> {
+    collections_fts_exists(conn)
 }
 
 fn sqlite_table_exists(conn: &Connection, table: &str) -> Result<bool, AppError> {
@@ -453,7 +461,42 @@ pub fn search_collections(
     Ok(rows)
 }
 
-pub fn get_collections(conn: &Connection) -> Result<Vec<Collection>, AppError> {
+pub fn get_collections(conn: &Connection, query: Option<&str>) -> Result<Vec<Collection>, AppError> {
+    if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+        if !collections_fts_exists(conn)? {
+            return Ok(vec![]);
+        }
+
+        let Some(fts_query) = build_fts_prefix_query(q) else {
+            return Ok(vec![]);
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT c.id,
+                    c.name,
+                    c.description,
+                    c.year,
+                    c.cover_path,
+                    c.auto_cover_path,
+                    c.source_type,
+                    c.api_album_id,
+                    c.created_at,
+                    c.updated_at,
+                    (
+                        (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
+                        + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
+                    ) AS song_count
+             FROM collections c
+             JOIN collections_fts fts ON fts.collection_id = c.id
+             WHERE fts.collections_fts MATCH ?1
+             ORDER BY c.updated_at DESC, c.name ASC",
+        )?;
+        let rows = stmt
+            .query_map(params![fts_query], map_collection_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(rows);
+    }
+
     let mut stmt = conn.prepare(
         "SELECT c.id,
                 c.name,

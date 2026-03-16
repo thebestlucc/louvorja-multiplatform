@@ -15,6 +15,7 @@ use crate::legacy_fetch::{
     LegacyFetchReport, LegacyFetchRunState, LegacyFetchStatus, LegacyFetchSubTask,
 };
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -63,10 +64,12 @@ pub fn start_legacy_fetch(
 ) -> Result<String, AppError> {
     // Check if another fetch is already running
     {
-        let fetch_state = state
-            .legacy_fetch
-            .lock()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let fetch_state = fetch_state.unwrap();
+
         if let Some(active_run_id) = fetch_state.active_run_id.as_deref() {
             if let Some(active_run) = fetch_state.runs.get(active_run_id) {
                 if matches!(
@@ -99,10 +102,11 @@ pub fn start_legacy_fetch(
     };
 
     {
-        let mut fetch_state = state
-            .legacy_fetch
-            .lock()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut fetch_state = fetch_state.unwrap();
 
         // Prune completed/cancelled/failed runs
         fetch_state.runs.retain(|_, run| {
@@ -157,10 +161,12 @@ pub fn get_legacy_fetch_progress(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<LegacyFetchProgress, AppError> {
-    let fetch_state = state
-        .legacy_fetch
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let fetch_state = fetch_state.unwrap();
+
     let run = fetch_state.runs.get(&run_id).ok_or_else(|| {
         AppError::NotFound(format!("Legacy fetch run '{}' was not found.", run_id))
     })?;
@@ -178,10 +184,11 @@ pub fn cancel_legacy_fetch(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let fetch_state = state
-        .legacy_fetch
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let fetch_state = fetch_state.unwrap();
 
     let run = fetch_state.runs.get(&run_id).ok_or_else(|| {
         AppError::NotFound(format!("Legacy fetch run '{}' was not found.", run_id))
@@ -201,10 +208,11 @@ pub fn get_legacy_fetch_report(
     run_id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<LegacyFetchReport>, AppError> {
-    let fetch_state = state
-        .legacy_fetch
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let fetch_state = fetch_state.unwrap();
 
     let run = fetch_state.runs.get(&run_id).ok_or_else(|| {
         AppError::NotFound(format!("Legacy fetch run '{}' was not found.", run_id))
@@ -246,10 +254,12 @@ pub async fn check_db_version(
     };
 
     let stored_version: Option<i64> = {
-        let conn = state
-            .db
-            .get()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (conn, err) = catcher(state.db.get());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let conn = conn.unwrap();
+
         crate::db::queries::settings::get_setting(&conn, "api.dbVersion")
             .ok()
             .and_then(|s| s.value.parse::<i64>().ok())
@@ -277,34 +287,38 @@ fn update_sub_task(
     total_items: u64,
 ) {
     if let Some(state) = app.try_state::<AppState>() {
-        if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
-            if let Some(run) = fetch_state.runs.get_mut(run_id) {
-                if let Some(st) = run.progress.sub_tasks.iter_mut().find(|s| s.id == id) {
-                    st.title = title.to_string();
-                    st.percent = percent;
-                    st.status = status.to_string();
-                } else {
-                    run.progress.sub_tasks.push(LegacyFetchSubTask {
-                        id: id.to_string(),
-                        title: title.to_string(),
-                        percent,
-                        status: status.to_string(),
-                    });
-                }
+        let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+        if err.is_some() {
+            return;
+        }
+        let mut fetch_state = fetch_state.unwrap();
 
-                run.progress.items_total = total_items;
-                run.progress.items_processed = processed_count;
-
-                if total_items > 0 {
-                    let ratio = processed_count as f64 / total_items as f64;
-                    run.progress.percent = 10.0 + (90.0 * ratio.min(1.0));
-                }
-
-                let _ = app.emit(
-                    "legacy-fetch-progress",
-                    LegacyFetchProgressEvent::from(&run.progress),
-                );
+        if let Some(run) = fetch_state.runs.get_mut(run_id) {
+            if let Some(st) = run.progress.sub_tasks.iter_mut().find(|s| s.id == id) {
+                st.title = title.to_string();
+                st.percent = percent;
+                st.status = status.to_string();
+            } else {
+                run.progress.sub_tasks.push(LegacyFetchSubTask {
+                    id: id.to_string(),
+                    title: title.to_string(),
+                    percent,
+                    status: status.to_string(),
+                });
             }
+
+            run.progress.items_total = total_items;
+            run.progress.items_processed = processed_count;
+
+            if total_items > 0 {
+                let ratio = processed_count as f64 / total_items as f64;
+                run.progress.percent = 10.0 + (90.0 * ratio.min(1.0));
+            }
+
+            let _ = app.emit(
+                "legacy-fetch-progress",
+                LegacyFetchProgressEvent::from(&run.progress),
+            );
         }
     }
 }
@@ -320,20 +334,24 @@ fn update_global_progress(
     items_processed: u64,
 ) {
     if let Some(state) = app.try_state::<AppState>() {
-        if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
-            if let Some(run) = fetch_state.runs.get_mut(run_id) {
-                run.progress.step = step.to_string();
-                run.progress.status = status;
-                run.progress.percent = percent;
-                run.progress.message = Some(message.to_string());
-                run.progress.items_total = items_total;
-                run.progress.items_processed = items_processed;
+        let (fetch_state, err) = catcher(state.legacy_fetch.lock());
+        if err.is_some() {
+            return;
+        }
+        let mut fetch_state = fetch_state.unwrap();
 
-                let _ = app.emit(
-                    "legacy-fetch-progress",
-                    LegacyFetchProgressEvent::from(&run.progress),
-                );
-            }
+        if let Some(run) = fetch_state.runs.get_mut(run_id) {
+            run.progress.step = step.to_string();
+            run.progress.status = status;
+            run.progress.percent = percent;
+            run.progress.message = Some(message.to_string());
+            run.progress.items_total = items_total;
+            run.progress.items_processed = items_processed;
+
+            let _ = app.emit(
+                "legacy-fetch-progress",
+                LegacyFetchProgressEvent::from(&run.progress),
+            );
         }
     }
 }
@@ -415,7 +433,8 @@ async fn run_legacy_fetch_background(
         let db_state = app_h.state::<AppState>();
         let mut last_hymn_number: i64 = 0;
         if !options_h.replace_existing {
-            if let Ok(db) = db_state.db.get() {
+            let (db, _err) = catcher(db_state.db.get());
+            if let Some(db) = db {
                 last_hymn_number = db
                     .query_row(
                         "SELECT MAX(number) FROM hymns WHERE category = 'hymnal'",
@@ -462,12 +481,14 @@ async fn run_legacy_fetch_background(
                 }
             }
             Err(e) => {
-                let mut errs = errors_h.lock().unwrap();
-                errs.push(LegacyFetchError {
-                    item_type: "fetch_hymns".to_string(),
-                    item_id: None,
-                    message: e.to_string(),
-                });
+                let (errs, _) = catcher(errors_h.lock());
+                if let Some(mut errs) = errs {
+                    errs.push(LegacyFetchError {
+                        item_type: "fetch_hymns".to_string(),
+                        item_id: None,
+                        message: e.to_string(),
+                    });
+                }
                 return;
             }
         }
@@ -565,7 +586,8 @@ async fn run_legacy_fetch_background(
             if db_batch.len() >= batch_size || is_last_item {
                 let state = app_h.state::<AppState>();
                 let _d_permit = dsem_h.acquire().await.ok();
-                if let Ok(mut db) = state.db.get() {
+                let (db, _) = catcher(state.db.get());
+                if let Some(mut db) = db {
                     if let Ok(tx) = db.transaction() {
                         let mut db_changed = false;
                         for (item, media) in db_batch.drain(..) {
@@ -591,12 +613,14 @@ async fn run_legacy_fetch_background(
                                 }
                                 Err(e) => {
                                     log::error!("Failed to import hymn {}: {}", item.id_music, e);
-                                    let mut errs = errors_h.lock().unwrap();
-                                    errs.push(LegacyFetchError {
-                                        item_type: "hymn".to_string(),
-                                        item_id: Some(item.id_music.to_string()),
-                                        message: e.to_string(),
-                                    });
+                                    let (errs, _) = catcher(errors_h.lock());
+                                    if let Some(mut errs) = errs {
+                                        errs.push(LegacyFetchError {
+                                            item_type: "hymn".to_string(),
+                                            item_id: Some(item.id_music.to_string()),
+                                            message: e.to_string(),
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -665,12 +689,14 @@ async fn run_legacy_fetch_background(
                 );
             }
             Err(e) => {
-                let mut errs = errors_a.lock().unwrap();
-                errs.push(LegacyFetchError {
-                    item_type: "fetch_albums".to_string(),
-                    item_id: None,
-                    message: e.to_string(),
-                });
+                let (errs, _) = catcher(errors_a.lock());
+                if let Some(mut errs) = errs {
+                    errs.push(LegacyFetchError {
+                        item_type: "fetch_albums".to_string(),
+                        item_id: None,
+                        message: e.to_string(),
+                    });
+                }
                 return;
             }
         }
@@ -718,7 +744,8 @@ async fn run_legacy_fetch_background(
             let state = app_a.state::<AppState>();
             let mut collection_id_opt = None;
 
-            if let Ok(g) = state.db.get() {
+            let (g, _) = catcher(state.db.get());
+            if let Some(g) = g {
                 let cover = {
                     let _permit = sem_a.acquire().await.ok();
                     importer::download_album_cover(&album, &media_dir_a, options_a.download_images)
@@ -870,7 +897,8 @@ async fn run_legacy_fetch_background(
 
                 let db_state = app_a.state::<AppState>();
                 let _d_permit = dsem_a.acquire().await.ok();
-                if let Ok(mut g) = db_state.db.get() {
+                let (g, _) = catcher(db_state.db.get());
+                if let Some(mut g) = g {
                     if let Ok(tx) = g.transaction() {
                         let mut db_changed = false;
                         for (detailed_item, media, mi) in song_results {
@@ -900,12 +928,14 @@ async fn run_legacy_fetch_background(
                                         detailed_item.id_music,
                                         e
                                     );
-                                    let mut errs = errors_a.lock().unwrap();
-                                    errs.push(LegacyFetchError {
-                                        item_type: "album_song".to_string(),
-                                        item_id: Some(detailed_item.id_music.to_string()),
-                                        message: e.to_string(),
-                                    });
+                                    let (errs, _) = catcher(errors_a.lock());
+                                    if let Some(mut errs) = errs {
+                                        errs.push(LegacyFetchError {
+                                            item_type: "album_song".to_string(),
+                                            item_id: Some(detailed_item.id_music.to_string()),
+                                            message: e.to_string(),
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -949,7 +979,8 @@ async fn run_legacy_fetch_background(
     if final_status == LegacyFetchStatus::Completed {
         if let Some(ver) = api_db_version {
             if let Some(state) = app.try_state::<AppState>() {
-                if let Ok(conn) = state.db.get() {
+                let (conn, _) = catcher(state.db.get());
+                if let Some(conn) = conn {
                     let _ = crate::db::queries::settings::set_setting(
                         &conn,
                         "api.dbVersion",
@@ -962,11 +993,13 @@ async fn run_legacy_fetch_background(
     let total_items = total_hymns.load(Ordering::Relaxed)
         + total_albums.load(Ordering::Relaxed)
         + total_album_songs.load(Ordering::Relaxed);
+    let (errs, _) = catcher(errors.lock());
+    let errs_vec = errs.map(|e| e.clone()).unwrap_or_default();
     finalize_fetch_sync(
         &app,
         &run_id,
         final_status,
-        errors.lock().unwrap().clone(),
+        errs_vec,
         total_hymns.load(Ordering::Relaxed),
         hymns_imported.load(Ordering::Relaxed),
         hymns_skipped.load(Ordering::Relaxed),
@@ -1020,7 +1053,8 @@ fn finalize_fetch_sync(
     };
 
     if let Some(state) = app.try_state::<AppState>() {
-        if let Ok(mut fetch_state) = state.legacy_fetch.lock() {
+        let (fetch_state, _) = catcher(state.legacy_fetch.lock());
+        if let Some(mut fetch_state) = fetch_state {
             if let Some(run) = fetch_state.runs.get_mut(run_id) {
                 run.progress.status = status.clone();
                 run.progress.percent = 100.0;
@@ -1071,10 +1105,12 @@ pub async fn restore_hymn_from_api(
     use crate::legacy_fetch::fetcher::fetch_music_detail;
 
     let (api_music_id, album_name): (i64, Option<String>) = {
-        let conn = state
-            .db
-            .get()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (conn, err) = catcher(state.db.get());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let conn = conn.unwrap();
+
         let row = conn
             .query_row(
                 "SELECT api_music_id, album FROM hymns WHERE id = ?1",
@@ -1097,18 +1133,20 @@ pub async fn restore_hymn_from_api(
         .await
         .map_err(|e| AppError::Internal(format!("API fetch failed: {}", e)))?;
 
-    let data_dir: PathBuf = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .join("media");
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let data_dir = app_data_dir.unwrap().join("media");
 
     let media = importer::download_music_media(&detail, &data_dir, true, true).await;
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+
     importer::import_music_to_db(
         &conn,
         &detail,
@@ -1142,10 +1180,12 @@ pub async fn restore_album_from_api(
     use crate::legacy_fetch::fetcher::{fetch_album_musics_page, fetch_music_detail};
 
     let (api_album_id, album_name): (i64, String) = {
-        let conn = state
-            .db
-            .get()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (conn, err) = catcher(state.db.get());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let conn = conn.unwrap();
+
         let row = conn
             .query_row(
                 "SELECT api_album_id, name FROM collections WHERE id = ?1",
@@ -1182,15 +1222,17 @@ pub async fn restore_album_from_api(
         current_index += 1;
     }
 
-    let data_dir: PathBuf = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .join("media");
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let data_dir = app_data_dir.unwrap().join("media");
+
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     for (mi, music) in m_queue.into_iter().enumerate() {
         let mut detailed_item = fetch_music_detail(language, music.id_music)

@@ -2,6 +2,7 @@ use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::streaming::StreamingInfo;
+use crate::utils::catcher::catcher;
 use tauri::{AppHandle, Manager};
 
 pub(crate) fn streaming_slide_title(slide: &SlideContent) -> String {
@@ -257,25 +258,30 @@ pub fn start_streaming_server(
         }
     }
 
-    let current_slide = app_state
-        .current_slide
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .clone();
-    let slide_context = app_state
-        .slide_context
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .clone();
+    let (current_slide, err) = catcher(app_state.current_slide.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let current_slide = current_slide.unwrap().clone();
 
-    let mut server = state
-        .server
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to resolve app data directory: {}", e)))?;
+    let (slide_context, err) = catcher(app_state.slide_context.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let slide_context = slide_context.unwrap().clone();
+
+    let (server, err) = catcher(state.server.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut server = server.unwrap();
+
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
+
     server.set_media_root(app_data_dir.join("media"));
     let info = server.start(port).map_err(AppError::Internal)?;
 
@@ -286,10 +292,11 @@ pub fn start_streaming_server(
 #[tauri::command]
 #[specta::specta]
 pub fn stop_streaming_server(state: tauri::State<'_, StreamingState>) -> Result<(), AppError> {
-    let mut server = state
-        .server
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (server, err) = catcher(state.server.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut server = server.unwrap();
     server.stop();
     Ok(())
 }
@@ -299,10 +306,11 @@ pub fn stop_streaming_server(state: tauri::State<'_, StreamingState>) -> Result<
 pub fn get_streaming_status(
     state: tauri::State<'_, StreamingState>,
 ) -> Result<StreamingInfo, AppError> {
-    let server = state
-        .server
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (server, err) = catcher(state.server.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let server = server.unwrap();
     server.get_status().map_err(AppError::Internal)
 }
 
@@ -313,21 +321,24 @@ pub fn set_streaming_broadcast(
     state: tauri::State<'_, StreamingState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let current_slide = app_state
-        .current_slide
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .clone();
-    let slide_context = app_state
-        .slide_context
-        .read()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .clone();
+    let (current_slide, err) = catcher(app_state.current_slide.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let current_slide = current_slide.unwrap().clone();
 
-    let server = state
-        .server
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (slide_context, err) = catcher(app_state.slide_context.read());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let slide_context = slide_context.unwrap().clone();
+
+    let (server, err) = catcher(state.server.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let server = server.unwrap();
+
     server.set_broadcast_enabled(enabled);
     if enabled {
         sync_streaming_projection_state(&server, current_slide, slide_context);

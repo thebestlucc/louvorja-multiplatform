@@ -78,9 +78,9 @@ async getHymnAudioPath(hymnId: number) : Promise<Result<string | null, AppErrorR
     else return { status: "error", error: e  as any };
 }
 },
-async getCollections() : Promise<Result<Collection[], AppErrorResponse>> {
+async getCollections(query: string | null) : Promise<Result<Collection[], AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_collections") };
+    return { status: "ok", data: await TAURI_INVOKE("get_collections", { query }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -324,9 +324,17 @@ async getFavorites(itemType: string) : Promise<Result<Favorite[], AppErrorRespon
     else return { status: "error", error: e  as any };
 }
 },
-async getFavoriteHymns() : Promise<Result<Hymn[], AppErrorResponse>> {
+async getFavoriteHymns(query: string | null) : Promise<Result<Hymn[], AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_favorite_hymns") };
+    return { status: "ok", data: await TAURI_INVOKE("get_favorite_hymns", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getFavoriteCollections(query: string | null) : Promise<Result<Collection[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_favorite_collections", { query }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1314,6 +1322,7 @@ async spotlightHide() : Promise<Result<null, AppErrorResponse>> {
 /** user-defined types **/
 
 export type Album = { name: string; hymnCount: number }
+export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
 /**
  * Supported languages for the API
  */
@@ -1349,7 +1358,6 @@ export type ContentSyncSummaryMode = "smart" | "degraded"
  * Returns `{ has_new_version: bool, new_version: Option<i64> }`.
  */
 export type DbVersionCheckResult = { hasNewVersion: boolean; newVersion: number | null }
-export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
@@ -1389,11 +1397,11 @@ export type LegacyFetchReport = { runId: string; hymnsFetched: number; hymnsImpo
  * Status of a legacy fetch operation
  */
 export type LegacyFetchStatus = "pending" | "fetching" | "importing" | "downloading" | "completed" | "failed" | "cancelled"
-export type MediaIntegrityReport = { missingFiles: MissingFile[]; excessFiles: string[] }
 /**
  * Sub-task progress information
  */
 export type LegacyFetchSubTask = { id: string; title: string; percent: number; status: string }
+export type MediaIntegrityReport = { missingFiles: MissingFile[]; excessFiles: string[] }
 export type MigrationDomainReport = { domain: string; imported: number; skipped: number }
 export type MigrationErrorItem = { domain: string; code: string; message: string; context?: string | null }
 export type MigrationOptions = { includeHymns?: boolean; includeBible?: boolean; includeFavorites?: boolean; includeServices?: boolean; includeSettings?: boolean; replaceExisting?: boolean }

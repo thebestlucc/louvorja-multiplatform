@@ -1,6 +1,7 @@
 use crate::db::models::{Presentation, Slide};
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use tauri::{AppHandle, Manager};
@@ -8,10 +9,11 @@ use tauri::{AppHandle, Manager};
 #[tauri::command]
 #[specta::specta]
 pub fn get_presentations(state: tauri::State<'_, AppState>) -> Result<Vec<Presentation>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::slides::get_presentations(&conn)
 }
 
@@ -21,10 +23,11 @@ pub fn get_presentation(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Presentation, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::slides::get_presentation_by_id(&conn, id)
 }
 
@@ -35,10 +38,11 @@ pub fn create_presentation(
     aspect_ratio: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Presentation, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let id = crate::db::queries::slides::insert_presentation(&conn, &title, &aspect_ratio)?;
     crate::db::queries::slides::get_presentation_by_id(&conn, id)
 }
@@ -51,20 +55,22 @@ pub fn update_presentation(
     aspect_ratio: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::slides::update_presentation(&conn, id, &title, &aspect_ratio)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn delete_presentation(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::slides::delete_presentation(&conn, id)
 }
 
@@ -74,10 +80,11 @@ pub fn get_slides(
     presentation_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Slide>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::slides::get_slides(&conn, presentation_id)
 }
 
@@ -89,10 +96,11 @@ pub fn create_slide(
     sort_order: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<Slide, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let id = crate::db::queries::slides::insert_slide(
         &conn,
         presentation_id,
@@ -114,20 +122,22 @@ pub fn update_slide(
     content_json: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::slides::update_slide(&conn, id, &content_json)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn delete_slide(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut conn = conn.unwrap();
     crate::db::queries::slides::delete_slide(&mut conn, id)
 }
 
@@ -138,10 +148,11 @@ pub fn reorder_slides(
     slide_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let mut conn = conn.unwrap();
     crate::db::queries::slides::update_slide_orders(&mut conn, presentation_id, &slide_ids)
 }
 
@@ -175,10 +186,11 @@ pub fn import_slja(
         }
     }
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let pres_id = crate::db::queries::slides::insert_presentation(
         &conn,
         &archive.manifest.title,
@@ -208,10 +220,11 @@ pub fn export_slja(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     let presentation = crate::db::queries::slides::get_presentation_by_id(&conn, presentation_id)?;
     let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;
     let app_data_dir = app
@@ -282,7 +295,11 @@ fn collect_video_media_files(
 }
 
 fn extract_video_path_from_content(content_json: &str) -> Option<String> {
-    let value = serde_json::from_str::<serde_json::Value>(content_json).ok()?;
+    let (value, err) = catcher(serde_json::from_str::<serde_json::Value>(content_json));
+    if err.is_some() {
+        return None;
+    }
+    let value = value.unwrap();
     let slide_type = value.get("type")?.as_str()?;
     if slide_type != "video" {
         return None;
@@ -304,10 +321,11 @@ fn remap_video_paths_in_content(
     content_json: &str,
     media_map: &HashMap<String, String>,
 ) -> Result<String, AppError> {
-    let mut value: serde_json::Value = match serde_json::from_str(content_json) {
-        Ok(value) => value,
-        Err(_) => return Ok(content_json.to_string()),
-    };
+    let (value, err) = catcher(serde_json::from_str::<serde_json::Value>(content_json));
+    if err.is_some() {
+        return Ok(content_json.to_string());
+    }
+    let mut value = value.unwrap();
 
     let slide_type = value
         .get("type")

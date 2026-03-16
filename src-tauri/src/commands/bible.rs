@@ -1,6 +1,7 @@
 use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, SlideContext, Verse};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
+use crate::utils::catcher::catcher;
 use tauri::{AppHandle, Emitter, Manager};
 
 fn broadcast_bible_stream_payloads(
@@ -42,10 +43,11 @@ fn broadcast_bible_stream_payloads(
 pub fn get_bible_versions(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<BibleVersion>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::bible::get_versions(&conn)
 }
 
@@ -55,10 +57,11 @@ pub fn get_books(
     version_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Book>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::bible::get_books(&conn, version_id)
 }
 
@@ -70,10 +73,11 @@ pub fn get_verses(
     chapter: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Verse>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::bible::get_verses(&conn, version_id, &book, chapter)
 }
 
@@ -87,10 +91,11 @@ pub fn get_verse_range(
     end: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Verse>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::bible::get_verse_range(&conn, version_id, &book, chapter, start, end)
 }
 
@@ -101,10 +106,11 @@ pub fn search_bible(
     version_id: Option<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<BibleSearchResult>, AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::bible::search_bible_text(&conn, &query, version_id)
 }
 
@@ -119,10 +125,11 @@ pub fn project_bible_verse(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     let verses =
         crate::db::queries::bible::get_verse_range(&conn, version_id, &book, chapter, start, end)?;
@@ -161,10 +168,11 @@ pub fn project_bible_verse(
 
     // Update current slide state
     {
-        let mut current = state
-            .current_slide
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (current, err) = catcher(state.current_slide.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut current = current.unwrap();
         *current = Some(slide_data.clone());
     }
 
@@ -178,10 +186,11 @@ pub fn project_bible_verse(
         audio_duration_ms: None,
     };
     {
-        let mut context = state
-            .slide_context
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (context, err) = catcher(state.slide_context.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut context = context.unwrap();
         *context = Some(slide_context.clone());
     }
 
@@ -213,11 +222,11 @@ pub fn navigate_bible_verse(
 ) -> Result<(), AppError> {
     // Read current slide
     let current_slide = {
-        let current = state
-            .current_slide
-            .read()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        current.clone()
+        let (current, err) = catcher(state.current_slide.read());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        current.unwrap().clone()
     };
 
     let slide = current_slide.ok_or_else(|| AppError::Internal("No slide projected".into()))?;
@@ -229,10 +238,11 @@ pub fn navigate_bible_verse(
     let reference = slide.title.as_deref().unwrap_or("");
     let (book, chapter, verse_start) = parse_bible_reference(reference)?;
 
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
 
     // We need to figure out the version_id from the current verse
     let version_id: i64 = conn
@@ -352,10 +362,11 @@ pub fn navigate_bible_verse(
 
     // Update current slide state
     {
-        let mut current = state
-            .current_slide
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (current, err) = catcher(state.current_slide.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut current = current.unwrap();
         *current = Some(slide_data.clone());
     }
 
@@ -369,10 +380,11 @@ pub fn navigate_bible_verse(
         audio_duration_ms: None,
     };
     {
-        let mut context = state
-            .slide_context
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (context, err) = catcher(state.slide_context.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut context = context.unwrap();
         *context = Some(slide_context.clone());
     }
 
@@ -434,9 +446,10 @@ pub fn import_bible_version(
     state: tauri::State<'_, AppState>,
 ) -> Result<i64, AppError> {
     let verses: Vec<(String, i64, i64, String)> = serde_json::from_str(&verses_json)?;
-    let conn = state
-        .db
-        .get()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
     crate::db::queries::bible::import_bible_version(&conn, &name, &abbreviation, &language, &verses)
 }
