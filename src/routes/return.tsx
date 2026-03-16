@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import type { SlideContent, SlideContext, OverlayState } from "../lib/bindings";
+import type { SlideContent, SlideContext, OverlayState, AlertState } from "../lib/bindings";
 import { getCurrentSlide, getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
 import { SlideRenderer } from "../components/slides/slide-renderer";
 import { useAllSettings, useTimerState } from "../lib/queries";
+import { AlertOverlay } from "../components/display/alert-overlay";
 import {
   buildProjectorDefaultSlide,
   getProjectorDefaultContentLabel,
@@ -38,6 +39,7 @@ function ReturnPage() {
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
+  const [alert, setAlert] = useState<AlertState | null>(null);
   const { data: allSettings } = useAllSettings();
   const screenDefaults = useMemo(() => parseProjectorScreenDefaults(allSettings), [allSettings]);
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
@@ -119,12 +121,14 @@ function ReturnPage() {
     const unlisten = listen<OverlayState>("overlay-changed", (event) => {
       setBlackScreen(event.payload.blackScreen);
       setLogoScreen(event.payload.logoScreen);
+      setAlert(event.payload.alert ?? null);
     });
 
     void getOverlayState()
       .then((state) => {
         setBlackScreen(state.blackScreen);
         setLogoScreen(state.logoScreen);
+        setAlert(state.alert ?? null);
       })
       .catch(() => {});
 
@@ -291,6 +295,8 @@ function ReturnPage() {
           </div>
         )}
       </div>
+
+      <AlertOverlay alert={alert} fontSize="1.8vw" />
     </div>
   );
 }

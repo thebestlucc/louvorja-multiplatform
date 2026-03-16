@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { getCurrentSlide, getOverlayState } from "../../lib/tauri";
-import type { OverlayState, SlideContent } from "../../lib/bindings";
+import type { AlertState, OverlayState, SlideContent } from "../../lib/bindings";
 import { SlideRenderer } from "./slide-renderer";
 import { useAllSettings, useTimerState } from "../../lib/queries";
 import {
@@ -17,6 +17,7 @@ import {
 import { cn } from "../../lib/utils";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { useMediaSource } from "../../hooks/use-media-source";
+import { AlertOverlay } from "../display/alert-overlay";
 
 function getSlideBackgroundImage(slide: SlideContent): string {
   if (slide.slideType === "lyrics" || slide.slideType === "cover" || slide.slideType === "text") {
@@ -31,6 +32,7 @@ export function ProjectorView() {
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
+  const [alert, setAlert] = useState<AlertState | null>(null);
   const [now, setNow] = useState(() => new Date());
   // slideKey only changes when the slide's visual identity (type + background) changes.
   // This prevents remounting the background image on every stanza change (which causes blinking).
@@ -74,12 +76,14 @@ export function ProjectorView() {
     const unlisten = listen<OverlayState>("overlay-changed", (event) => {
       setBlackScreen(event.payload.blackScreen);
       setLogoScreen(event.payload.logoScreen);
+      setAlert(event.payload.alert ?? null);
     });
 
     void getOverlayState()
       .then((state) => {
         setBlackScreen(state.blackScreen);
         setLogoScreen(state.logoScreen);
+        setAlert(state.alert ?? null);
       })
       .catch(() => {});
 
@@ -219,6 +223,8 @@ export function ProjectorView() {
           <span className="text-4xl font-bold text-white/80">LouvorJA</span>
         )}
       </div>
+
+      <AlertOverlay alert={alert} />
     </div>
   );
 }
