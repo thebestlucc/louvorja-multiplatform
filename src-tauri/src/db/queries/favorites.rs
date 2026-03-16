@@ -1,6 +1,41 @@
-use crate::db::models::Favorite;
+use crate::db::models::{Favorite, Hymn};
 use crate::error::AppError;
 use rusqlite::{params, Connection};
+
+pub fn get_favorite_hymns(conn: &Connection) -> Result<Vec<Hymn>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT h.* FROM hymns h
+         JOIN favorites f ON h.id = f.item_id
+         WHERE f.item_type = 'hymn'
+         ORDER BY f.id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Hymn {
+            id: row.get(0)?,
+            number: row.get(1)?,
+            title: row.get(2)?,
+            author: row.get(3)?,
+            album: row.get(4)?,
+            lyrics: row.get(5)?,
+            chords: row.get(6)?,
+            audio_path: row.get(7)?,
+            playback_path: row.get(8)?,
+            category: row.get(9)?,
+            notes: row.get(10)?,
+            cover_path: row.get(11)?,
+            lyrics_sync: row.get(12)?,
+            api_music_id: row.get(13)?,
+            created_at: row.get(14)?,
+            updated_at: row.get(15)?,
+        })
+    })?;
+
+    let mut hymns = Vec::new();
+    for row in rows {
+        hymns.push(row?);
+    }
+    Ok(hymns)
+}
 
 pub fn toggle_favorite(
     conn: &Connection,

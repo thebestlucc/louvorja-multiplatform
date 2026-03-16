@@ -1,6 +1,18 @@
-use crate::db::models::Favorite;
+use crate::db::models::{Favorite, Hymn};
 use crate::error::AppError;
 use crate::state::AppState;
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_favorite_hymns(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Hymn>, AppError> {
+    let conn = state
+        .db
+        .get()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::favorites::get_favorite_hymns(&conn)
+}
 
 #[tauri::command]
 #[specta::specta]

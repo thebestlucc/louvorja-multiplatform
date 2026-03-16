@@ -324,6 +324,14 @@ async getFavorites(itemType: string) : Promise<Result<Favorite[], AppErrorRespon
     else return { status: "error", error: e  as any };
 }
 },
+async getFavoriteHymns() : Promise<Result<Hymn[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_favorite_hymns") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async isFavorite(itemType: string, itemId: number) : Promise<Result<boolean, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("is_favorite", { itemType, itemId }) };
