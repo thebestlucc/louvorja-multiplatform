@@ -497,6 +497,7 @@
       "completedVersion": "Completed version",
       "currentVersion": "Current version",
       "description": "Review remote content changes, run the smart sync runtime, and inspect the latest sync report.",
+      "downloading": "Downloading",
       "downloadingAsset": "Downloading asset: {{path}}",
       "failed": "Failed",
       "fallback": "Fallback",

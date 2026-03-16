@@ -17,6 +17,18 @@ export function ContentSyncReportCard({
   }
 
   const status = report?.status ?? progress?.status ?? "pending";
+  const step = progress?.step ?? "idle";
+
+  const stepLabelMap: Record<string, string> = {
+    starting: t("settings.contentSync.starting"),
+    executing: t("settings.contentSync.runningMessage"),
+    downloading: t("settings.contentSync.downloading"), // We should add this key
+    fallback: t("settings.contentSync.fallback"),
+    cancelled: t("settings.contentSync.cancel"),
+    done: t("settings.legacyFetch.stepDone"),
+  };
+
+  const translatedStep = stepLabelMap[step] ?? step;
 
   return (
     <section className="rounded-lg border border-border bg-card p-4">
@@ -27,18 +39,37 @@ export function ContentSyncReportCard({
             {t("settings.contentSync.reportDescription")}
           </p>
         </div>
-        <Badge variant={status === "completed" ? "default" : "secondary"}>{status}</Badge>
+        <Badge
+          variant={
+            status === "completed"
+              ? "default"
+              : status === "failed"
+              ? "destructive"
+              : status === "cancelled"
+              ? "secondary"
+              : "outline"
+          }
+        >
+          {status}
+        </Badge>
       </div>
 
       {progress ? (
         <div className="mb-4 space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span>{progress.message ?? t("settings.contentSync.runningMessage")}</span>
-            <span>{Math.round(progress.percent)}%</span>
+            <div className="flex flex-col">
+              <span className="font-medium text-primary uppercase text-[10px] tracking-wider">
+                {translatedStep}
+              </span>
+              <span className="text-muted-foreground truncate max-w-[300px]">
+                {progress.message ?? t("settings.contentSync.runningMessage")}
+              </span>
+            </div>
+            <span className="font-mono">{Math.round(progress.percent)}%</span>
           </div>
           <div className="h-2 rounded-full bg-muted">
             <div
-              className="h-2 rounded-full bg-primary transition-all"
+              className="h-2 rounded-full bg-primary transition-all duration-500"
               style={{ width: `${Math.max(0, Math.min(100, progress.percent))}%` }}
             />
           </div>
