@@ -94,6 +94,7 @@ pub fn run() {
             // Favorites
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
+            commands::favorites::get_favorite_hymns,
             commands::favorites::is_favorite,
             // Slides
             commands::slides::get_presentations,

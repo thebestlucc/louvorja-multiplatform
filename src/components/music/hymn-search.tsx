@@ -1,28 +1,43 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Search, LayoutGrid, List as ListIcon, Star } from "lucide-react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { useHymns } from "../../lib/queries";
+import { useHymns, useFavoriteHymns } from "../../lib/queries";
 import { HymnCard } from "./hymn-card";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMedia } from "react-use";
+import { cn } from "../../lib/utils";
 
 export function HymnSearch() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [view, setView] = useState<"list" | "grid">("list");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300);
     return () => clearTimeout(timer);
   }, [query]);
 
-  const { data: hymns, isLoading } = useHymns(debouncedQuery);
+  const { data: searchResults, isLoading: isSearchLoading } = useHymns(debouncedQuery);
+  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns();
+
+  const isLoading = showFavoritesOnly ? isFavoritesLoading : isSearchLoading;
+
+  // Filter or select source based on toggle
+  const hymns = showFavoritesOnly
+    ? (favoriteHymns || []).filter(h =>
+        !debouncedQuery ||
+        h.title.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+        h.number?.toString().includes(debouncedQuery) ||
+        h.lyrics?.toLowerCase().includes(debouncedQuery.toLowerCase())
+      )
+    : searchResults;
 
   // Responsive columns for grid view
-  const isXl = useMedia("(min-width: 1280px)", false);
+...
   const isLg = useMedia("(min-width: 1024px)", false);
   const isMd = useMedia("(min-width: 768px)", false);
   const isSm = useMedia("(min-width: 640px)", false);
@@ -53,7 +68,20 @@ export function HymnSearch() {
             className="pl-9"
           />
         </div>
-        <div className="flex items-center rounded-md border p-1 bg-muted/20">
+        <div className="flex items-center rounded-md border p-1 bg-muted/20 gap-1">
+          <Button
+            variant={showFavoritesOnly ? "outline" : "ghost"}
+            size="icon"
+            className={cn(
+              "h-8 w-8",
+              showFavoritesOnly ? "text-yellow-500 hover:text-yellow-600 border-yellow-500/20 bg-yellow-500/5" : "text-muted-foreground"
+            )}
+            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            title={t("favorites.title")}
+          >
+            <Star className={cn("h-4 w-4", showFavoritesOnly && "fill-current")} />
+          </Button>
+          <div className="w-px h-4 bg-border mx-1" />
           <Button
             variant={view === "list" ? "outline" : "ghost"}
             size="icon"
@@ -81,6 +109,10 @@ export function HymnSearch() {
 
       {hymns && hymns.length === 0 && debouncedQuery && (
         <p className="text-sm text-muted-foreground">{t("hymnal.noResults")}</p>
+      )}
+
+      {hymns && hymns.length === 0 && !debouncedQuery && showFavoritesOnly && (
+        <p className="text-sm text-muted-foreground">{t("favorites.empty")}</p>
       )}
 
       {hymns && hymns.length > 0 && (

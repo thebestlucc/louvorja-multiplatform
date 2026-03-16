@@ -419,6 +419,10 @@ export async function getFavorites(itemType: string): Promise<Favorite[]> {
   return tauriInvoke<Favorite[]>("get_favorites", { itemType });
 }
 
+export async function getFavoriteHymns(): Promise<Hymn[]> {
+  return tauriInvoke<Hymn[]>("get_favorite_hymns");
+}
+
 export async function isFavorite(itemType: string, itemId: number): Promise<boolean> {
   return tauriInvoke<boolean>("is_favorite", { itemType, itemId });
 }

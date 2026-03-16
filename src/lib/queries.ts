@@ -15,7 +15,7 @@ import {
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
   getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
-  toggleFavorite, getFavorites, isFavorite,
+  toggleFavorite, getFavorites, isFavorite, getFavoriteHymns,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
@@ -593,6 +593,13 @@ export function useFavorites(itemType: string) {
   return useQuery({
     queryKey: queryKeys.favorites.all(itemType),
     queryFn: () => getFavorites(itemType),
+  });
+}
+
+export function useFavoriteHymns() {
+  return useQuery({
+    queryKey: queryKeys.favorites.all("hymn"),
+    queryFn: () => getFavoriteHymns(),
   });
 }
 
