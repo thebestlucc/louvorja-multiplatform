@@ -249,6 +249,16 @@
     "stopProjection": "Parar",
     "title": "Título"
   },
+  "interactiveText": {
+    "clear": "Limpar Alerta",
+    "displayMode": "Modo de Exibição",
+    "placeholder": "Digite a mensagem para projetar...",
+    "project": "Projetar Alerta",
+    "static": "Estático",
+    "status": "Estado Atual",
+    "ticker": "Letreiro (Ticker)",
+    "title": "Texto Interativo"
+  },
   "hymnal": {
     "album": "Álbum",
     "albumPlaceholder": "Álbum",
@@ -788,6 +798,10 @@
       "hour24": "24 horas",
       "showDate": "Mostrar data",
       "title": "Relógio"
+    },
+    "interactiveText": {
+      "description": "Projete avisos e letreiros (tickers) temporários sobre qualquer tela.",
+      "title": "Texto Interativo"
     },
     "lottery": {
       "allPicked": "Todos os itens disponíveis já foram sorteados.",
