@@ -182,6 +182,12 @@
     "toggleBlack": "Toggle Black Screen (B)",
     "toggleLogo": "Toggle Logo Screen (L)"
   },
+  "favorites": {
+    "add": "Add to favorites",
+    "empty": "No favorite items yet.",
+    "remove": "Remove from favorites",
+    "title": "Favorites"
+  },
   "help": {
     "description": "Quick help for keyboard usage, projection flow, and streaming.",
     "documentationTitle": "Documentation files",

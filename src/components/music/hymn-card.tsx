@@ -11,6 +11,7 @@ import { LyricsModal } from "./lyrics-modal";
 import { useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
+import { FavoriteButton } from "./favorite-button";
 
 interface HymnCardProps {
   hymn: Hymn;
@@ -123,6 +124,7 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
                   <Plus className="h-4 w-4" />
                 </Button>
               )}
+              <FavoriteButton itemType="hymn" itemId={hymn.id} size="icon" className="h-8 w-8" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
@@ -220,6 +222,13 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
+            <FavoriteButton
+              itemType="hymn"
+              itemId={hymn.id}
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
+            />
           </div>
         </div>
         {hymn.number != null && (

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoverPicker } from "../../components/media/cover-picker";
 import { buildVisibleHymnLyricItems } from "../../lib/hymn-slides";
 import { ConfirmationDialog } from "../../components/schedules/confirmation-dialog";
+import { FavoriteButton } from "../../components/music/favorite-button";
 
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
@@ -240,6 +241,7 @@ function HymnDetail() {
               </Badge>
             )}
             <h1 className="text-xl font-semibold">{hymn.title}</h1>
+            <FavoriteButton itemType="hymn" itemId={id} size="sm" variant="outline" className="ml-2" />
           </div>
         </div>
 
