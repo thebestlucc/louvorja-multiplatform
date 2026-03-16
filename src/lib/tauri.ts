@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import type {
   Hymn,
   Album,
+  AlertState,
   HymnWriteInput,
   MonitorInfo,
   Presentation,
@@ -243,6 +244,14 @@ export async function toggleLogoScreen(): Promise<OverlayState> {
 
 export async function getOverlayState(): Promise<OverlayState> {
   return tauriInvoke<OverlayState>("get_overlay_state");
+}
+
+export async function setAlert(text: string, isTicker: boolean): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("set_alert", { text, isTicker });
+}
+
+export async function clearAlert(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("clear_alert");
 }
 
 export async function setSlideContext(contextData: SlideContext): Promise<void> {

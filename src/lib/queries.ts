@@ -23,6 +23,7 @@ import {
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
   updateScheduleDayDepartmentPeoplePerDay, resetScheduleDayDepartmentManualOverride,
   getMonitorConfigs, setMonitorConfig,
+  setAlert, clearAlert, toggleBlackScreen, toggleLogoScreen, getOverlayState,
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings, clearDatabase,
@@ -96,6 +97,7 @@ export const queryKeys = {
     all: ["settings"] as const,
     detail: (key: string) => ["settings", key] as const,
   },
+  overlay: ["overlay"] as const,
   legacyFetch: {
     progress: (runId: string) => ["legacyFetch", "progress", runId] as const,
     report: (runId: string) => ["legacyFetch", "report", runId] as const,
@@ -1251,6 +1253,55 @@ export function useSetShortcut() {
       queryClient.invalidateQueries({
         queryKey: ["setting", `shortcut.${vars.id}.${vars.layer}`],
       });
+    },
+  });
+}
+
+// Overlay / Display
+export function useOverlayState() {
+  return useQuery({
+    queryKey: queryKeys.overlay,
+    queryFn: () => getOverlayState(),
+  });
+}
+
+export function useToggleBlackScreen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => toggleBlackScreen(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.overlay, data);
+    },
+  });
+}
+
+export function useToggleLogoScreen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => toggleLogoScreen(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.overlay, data);
+    },
+  });
+}
+
+export function useSetAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ text, isTicker }: { text: string; isTicker: boolean }) =>
+      setAlert(text, isTicker),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.overlay, data);
+    },
+  });
+}
+
+export function useClearAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => clearAlert(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.overlay, data);
     },
   });
 }
