@@ -771,6 +771,22 @@ pub struct Favorite {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MissingFile {
+    pub path: String,
+    pub source_type: String, // "hymn" or "slide"
+    pub source_id: i64,
+    pub source_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaIntegrityReport {
+    pub missing_files: Vec<MissingFile>,
+    pub excess_files: Vec<String>,
+}
+
 impl ContentSyncReport {
     pub fn from_run(run: ContentSyncRun) -> Self {
         #[derive(Deserialize, Default)]

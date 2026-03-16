@@ -5,6 +5,8 @@ import type {
   Album,
   AlertState,
   HymnWriteInput,
+  MediaIntegrityReport,
+  MissingFile,
   MonitorInfo,
   Presentation,
   Slide,
@@ -716,6 +718,14 @@ export async function runLottery(names: string[]): Promise<string> {
 
 export async function formatText(text: string, format: TextFormat): Promise<string> {
   return tauriInvoke<string>("format_text", { text, format });
+}
+
+export async function scanMediaIntegrity(): Promise<MediaIntegrityReport> {
+  return tauriInvoke<MediaIntegrityReport>("scan_media_integrity");
+}
+
+export async function deleteExcessMedia(paths: string[]): Promise<void> {
+  return tauriInvoke<void>("delete_excess_media", { paths });
 }
 
 // Streaming

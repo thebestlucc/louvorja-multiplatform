@@ -1201,6 +1201,22 @@ async formatText(text: string, format: string) : Promise<Result<string, AppError
     else return { status: "error", error: e  as any };
 }
 },
+async scanMediaIntegrity() : Promise<Result<MediaIntegrityReport, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("scan_media_integrity") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteExcessMedia(paths: string[]) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_excess_media", { paths }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * Copy a video file to the managed media directory.
  * 
@@ -1373,6 +1389,7 @@ export type LegacyFetchReport = { runId: string; hymnsFetched: number; hymnsImpo
  * Status of a legacy fetch operation
  */
 export type LegacyFetchStatus = "pending" | "fetching" | "importing" | "downloading" | "completed" | "failed" | "cancelled"
+export type MediaIntegrityReport = { missingFiles: MissingFile[]; excessFiles: string[] }
 /**
  * Sub-task progress information
  */
@@ -1383,6 +1400,7 @@ export type MigrationOptions = { includeHymns?: boolean; includeBible?: boolean;
 export type MigrationProgress = { runId: string; step: string; completed: number; total: number; percent: number; etaSeconds: number; message: string; status: string; updatedAt: string }
 export type MigrationReport = { runId: string; status: string; startedAt: string; finishedAt: string | null; sourcePath: string; domains: MigrationDomainReport[]; errors: MigrationErrorItem[] }
 export type MigrationRunInfo = { runId: string; startedAt: string; sourcePath: string }
+export type MissingFile = { path: string; sourceType: string; sourceId: number; sourceName: string }
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
