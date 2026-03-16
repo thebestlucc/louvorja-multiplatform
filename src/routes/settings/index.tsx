@@ -19,6 +19,7 @@ import {
   useLegacyFetchReport,
   useMonitorConfigs,
   useMonitors,
+  useIdentifyMonitors,
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
@@ -645,6 +646,7 @@ function MonitorSection() {
   const { data: monitors = [] } = useMonitors();
   const { data: monitorConfigs = [] } = useMonitorConfigs();
   const saveMonitorConfigMutation = useSaveMonitorConfig();
+  const identifyMonitorsMutation = useIdentifyMonitors();
 
   const [projectorMonitorId, setProjectorMonitorId] = useState("");
   const [returnMonitorId, setReturnMonitorId] = useState("");
@@ -783,6 +785,10 @@ function MonitorSection() {
     }
   };
 
+  const handleIdentifyMonitors = async () => {
+    await catcher(identifyMonitorsMutation.mutateAsync(), { notify: true });
+  };
+
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <div className="mb-4 flex items-center gap-2">
@@ -879,6 +885,15 @@ function MonitorSection() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleIdentifyMonitors()}
+                    disabled={identifyMonitorsMutation.isPending}
+                  >
+                    <Monitor className="mr-2 h-4 w-4" />
+                    {t("display.identifyMonitors")}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
