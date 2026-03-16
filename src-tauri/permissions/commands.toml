@@ -13,7 +13,11 @@ allow = [
     "create_hymn",
     "update_hymn",
     "delete_hymn",
-    "get_hymn_audio_path"
+    "get_hymn_audio_path",
+    "toggle_favorite",
+    "get_favorites",
+    "get_favorite_hymns",
+    "is_favorite"
 ]
 
 [[permission]]
@@ -110,6 +114,9 @@ allow = [
     "toggle_black_screen",
     "toggle_logo_screen",
     "get_overlay_state",
+    "set_alert",
+    "clear_alert",
+    "identify_monitors",
     "set_monitor_config",
     "get_monitor_configs"
 ]
@@ -121,6 +128,8 @@ description = "Allows miscellaneous utility commands"
 allow = [
     "run_lottery",
     "format_text",
+    "scan_media_integrity",
+    "delete_excess_media",
     "copy_video_to_media",
     "copy_image_to_media",
     "get_video_metadata",
