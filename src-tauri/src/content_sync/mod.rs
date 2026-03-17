@@ -175,16 +175,104 @@ fn hydrated_sync_state(conn: &Connection) -> Result<Option<ContentSyncState>, Ap
     Ok(sync_state)
 }
 
-pub fn load_summary(conn: &Connection) -> Result<ContentSyncSummary, AppError> {
+pub fn load_summary<F>(conn: &Connection, file_exists: F) -> Result<ContentSyncSummary, AppError>
+where
+    F: Fn(&str) -> bool,
+{
     let sync_state = hydrated_sync_state(conn)?;
-    Ok(baseline_degraded_summary(None, sync_state))
+    let mut summary = baseline_degraded_summary(None, sync_state);
+
+    // Count missing assets
+    let hymns = conn
+        .prepare("SELECT id, audio_path, playback_path, cover_path, album FROM hymns")?
+        .query_map([], |row| {
+            Ok(ContentSyncLocalMediaPaths {
+                entity_type: "hymn".to_string(),
+                local_id: row.get(0)?,
+                audio_path: row.get(1)?,
+                playback_path: row.get(2)?,
+                cover_path: row.get(3)?,
+                album: row.get(4)?,
+                language: None,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let albums = conn
+        .prepare("SELECT id, cover_path, name FROM collections")?
+        .query_map([], |row| {
+            Ok(ContentSyncLocalMediaPaths {
+                entity_type: "album".to_string(),
+                local_id: row.get(0)?,
+                audio_path: None,
+                playback_path: None,
+                cover_path: row.get(1)?,
+                album: row.get(2)?,
+                language: None,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut missing_count = 0;
+    for media in hymns {
+        if media_paths_missing(&media, &file_exists) {
+            missing_count += 1;
+        }
+    }
+    for media in albums {
+        if media_paths_missing(&media, &file_exists) {
+            missing_count += 1;
+        }
+    }
+
+    summary.missing_asset_count = missing_count;
+    if missing_count > 0 {
+        summary.has_updates = true;
+    }
+
+    Ok(summary)
 }
 
-pub fn build_degraded_plan(summary: ContentSyncSummary) -> ContentSyncPlan {
-    ContentSyncPlan {
-        mode: ContentSyncRunMode::Full,
-        summary,
-        items: vec![ContentSyncPlanItem {
+pub fn resolve_remote_path_from_url(url: &str) -> String {
+    if url.contains("/file/musics/") {
+        let parts: Vec<&str> = url.split("/file/musics/").collect();
+        if parts.len() == 2 {
+            let sub = parts[1];
+            let sub_parts: Vec<&str> = sub.splitn(2, '/').collect();
+            if sub_parts.len() == 2 {
+                let lang = sub_parts[0];
+                let rest = sub_parts[1];
+                if lang == "pt" {
+                    return format!("config/musicas/{}", rest);
+                } else {
+                    return format!("{}/config/musicas/{}", lang.to_uppercase(), rest);
+                }
+            }
+        }
+    } else if url.contains("/file/images/") {
+        let parts: Vec<&str> = url.split("/file/images/").collect();
+        if parts.len() == 2 {
+            return format!("config/imagens/{}", parts[1]);
+        }
+    }
+    url.to_string()
+}
+
+pub fn build_degraded_plan<F>(
+    conn: &Connection,
+    summary: ContentSyncSummary,
+    file_exists: F,
+) -> Result<ContentSyncPlan, AppError>
+where
+    F: Fn(&str) -> bool,
+{
+    let mut items = Vec::new();
+
+    // When the remote version is newer, include a FullSyncFallback marker to signal
+    // that a full API sync is also needed (new hymns may have been added remotely).
+    // This is a MARKER ONLY — the executor processes it as a single skip and continues.
+    if summary.has_updates && summary.remote_version > summary.current_version {
+        items.push(ContentSyncPlanItem {
             id: "fallback-full-sync".to_string(),
             entity_type: "system".to_string(),
             remote_id: None,
@@ -192,11 +280,101 @@ pub fn build_degraded_plan(summary: ContentSyncSummary) -> ContentSyncPlan {
             action: ContentSyncPlanItemAction::FullSyncFallback,
             status: ContentSyncPlanItemStatus::Pending,
             reason: Some(
-                "Remote manifest metadata is unavailable. Use the legacy full sync flow."
-                    .to_string(),
+                "Remote version is newer — a full API sync is also needed to get new content.".to_string(),
             ),
-        }],
+            remote_path: None,
+            label: Some("Full Database Sync Required".to_string()),
+        });
     }
+
+    // Always scan for and repair missing local media files — regardless of version.
+    // This ensures FTP downloads run even when there is a version mismatch.
+    let hymns = conn
+        .prepare("SELECT id, api_music_id, audio_path, playback_path, cover_path, album, title FROM hymns")?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                ContentSyncLocalMediaPaths {
+                    entity_type: "hymn".to_string(),
+                    local_id: row.get(0)?,
+                    audio_path: row.get(2)?,
+                    playback_path: row.get(3)?,
+                    cover_path: row.get(4)?,
+                    album: row.get(5)?,
+                    language: None,
+                },
+                row.get::<_, String>(6)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for (local_id, remote_id, media, name) in hymns {
+        if media_paths_missing(&media, &file_exists) {
+            let mut missing_parts = Vec::new();
+            if let Some(ref p) = media.audio_path { if !file_exists(p) { missing_parts.push("audio"); } }
+            if let Some(ref p) = media.playback_path { if !file_exists(p) { missing_parts.push("playback"); } }
+            if let Some(ref p) = media.cover_path { if !file_exists(p) { missing_parts.push("cover"); } }
+
+            items.push(ContentSyncPlanItem {
+                id: format!("repair-hymn-{}", local_id),
+                entity_type: "hymn".to_string(),
+                remote_id,
+                local_id: Some(local_id),
+                action: ContentSyncPlanItemAction::RepairMedia,
+                status: ContentSyncPlanItemStatus::Pending,
+                reason: Some(format!("Missing: {}", missing_parts.join(", "))),
+                remote_path: None,
+                label: Some(name),
+            });
+        }
+    }
+
+    let albums = conn
+        .prepare("SELECT id, api_album_id, cover_path, name FROM collections")?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                ContentSyncLocalMediaPaths {
+                    entity_type: "album".to_string(),
+                    local_id: row.get(0)?,
+                    audio_path: None,
+                    playback_path: None,
+                    cover_path: row.get(2)?,
+                    album: row.get(3)?,
+                    language: None,
+                },
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for (local_id, remote_id, media, name) in albums {
+        if media_paths_missing(&media, &file_exists) {
+            items.push(ContentSyncPlanItem {
+                id: format!("repair-album-{}", local_id),
+                entity_type: "album".to_string(),
+                remote_id,
+                local_id: Some(local_id),
+                action: ContentSyncPlanItemAction::RepairMedia,
+                status: ContentSyncPlanItemStatus::Pending,
+                reason: Some("Missing: cover image".to_string()),
+                remote_path: None,
+                label: Some(name),
+            });
+        }
+    }
+
+    Ok(ContentSyncPlan {
+        mode: if summary.has_updates {
+            ContentSyncRunMode::Full
+        } else {
+            ContentSyncRunMode::Selective
+        },
+        summary,
+        items,
+    })
 }
 
 pub fn plan_requires_full_sync_fallback(plan: &ContentSyncPlan) -> bool {
@@ -473,6 +651,8 @@ fn plan_item(
         action,
         status: ContentSyncPlanItemStatus::Pending,
         reason: Some(reason.to_string()),
+        remote_path: None,
+        label: None,
     }
 }
 
@@ -592,13 +772,18 @@ mod tests {
             );
             CREATE TABLE hymns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                api_music_id INTEGER,
                 audio_path TEXT,
                 playback_path TEXT,
-                cover_path TEXT
+                cover_path TEXT,
+                album TEXT,
+                title TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE collections (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cover_path TEXT
+                api_album_id INTEGER,
+                cover_path TEXT,
+                name TEXT NOT NULL DEFAULT ''
             );
             "#,
         )
@@ -755,17 +940,23 @@ mod tests {
 
     #[test]
     fn planner_returns_degraded_full_sync_fallback_when_manifest_is_unavailable() {
-        let plan = build_degraded_plan(baseline_degraded_summary(
-            Some(11),
-            Some(crate::db::models::ContentSyncState {
-                id: 1,
-                content_version: Some(10),
-                last_checked_at: None,
-                last_synced_at: None,
-                last_sync_status: None,
-                last_error: None,
-            }),
-        ));
+        let conn = setup_planner_db();
+        let plan = build_degraded_plan(
+            &conn,
+            baseline_degraded_summary(
+                Some(11),
+                Some(crate::db::models::ContentSyncState {
+                    id: 1,
+                    content_version: Some(10),
+                    last_checked_at: None,
+                    last_synced_at: None,
+                    last_sync_status: None,
+                    last_error: None,
+                }),
+            ),
+            |_| true,
+        )
+        .unwrap();
 
         assert_eq!(plan.summary.mode, ContentSyncSummaryMode::Degraded);
         assert_eq!(plan.items.len(), 1);
@@ -776,10 +967,46 @@ mod tests {
     }
 
     #[test]
+    fn degraded_plan_with_version_mismatch_still_repairs_missing_local_files() {
+        let conn = setup_planner_db();
+
+        // Seed a hymn with missing audio
+        conn.execute(
+            "INSERT INTO hymns (id, audio_path, playback_path, cover_path) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![1_i64, "media/audio/1/song.mp3", "media/playback/1/pb.mp3", "media/images/1/cover.jpg"],
+        )
+        .expect("seed hymn");
+
+        // Version mismatch: remote=11, local=10
+        let summary = baseline_degraded_summary(
+            Some(11),
+            Some(crate::db::models::ContentSyncState {
+                id: 1,
+                content_version: Some(10),
+                last_checked_at: None,
+                last_synced_at: None,
+                last_sync_status: None,
+                last_error: None,
+            }),
+        );
+
+        // file_exists returns false for everything (missing files)
+        let plan = build_degraded_plan(&conn, summary, |_| false).unwrap();
+
+        // Must have FullSyncFallback marker AND RepairMedia items
+        let has_fallback = plan.items.iter().any(|i| matches!(i.action, ContentSyncPlanItemAction::FullSyncFallback));
+        let has_repair = plan.items.iter().any(|i| matches!(i.action, ContentSyncPlanItemAction::RepairMedia));
+
+        assert!(has_fallback, "FullSyncFallback marker must still be present on version mismatch");
+        assert!(has_repair, "RepairMedia items must be emitted even on version mismatch — this was the bug");
+        assert!(plan.items.len() >= 2, "Plan must contain at least the fallback marker + one repair item");
+    }
+
+    #[test]
     fn runtime_creates_sync_run_record() {
         let conn = setup_planner_db();
         let run_id = new_run_id();
-        let plan = build_degraded_plan(baseline_degraded_summary(Some(11), None));
+        let plan = build_degraded_plan(&conn, baseline_degraded_summary(Some(11), None), |_| true).unwrap();
 
         let run = begin_runtime_run(&conn, &run_id, &plan).expect("create run");
 
@@ -792,8 +1019,9 @@ mod tests {
 
     #[test]
     fn runtime_updates_progress_state() {
+        let conn = setup_planner_db();
         let run_id = new_run_id();
-        let plan = build_degraded_plan(baseline_degraded_summary(Some(11), None));
+        let plan = build_degraded_plan(&conn, baseline_degraded_summary(Some(11), None), |_| true).unwrap();
         let progress = initial_progress(&run_id, &plan);
         let cancel_flag = Arc::new(AtomicBool::new(false));
         let mut runtime_state = ContentSyncRuntimeState::default();
@@ -827,7 +1055,7 @@ mod tests {
     fn runtime_persists_completed_report() {
         let conn = setup_planner_db();
         let run_id = new_run_id();
-        let plan = build_degraded_plan(baseline_degraded_summary(Some(11), None));
+        let plan = build_degraded_plan(&conn, baseline_degraded_summary(Some(11), None), |_| true).unwrap();
         begin_runtime_run(&conn, &run_id, &plan).expect("create run");
 
         let report = finalize_runtime_run(
@@ -852,7 +1080,7 @@ mod tests {
     fn runtime_cancellation_moves_run_to_cancelled_terminal_state() {
         let conn = setup_planner_db();
         let run_id = new_run_id();
-        let plan = build_degraded_plan(baseline_degraded_summary(Some(11), None));
+        let plan = build_degraded_plan(&conn, baseline_degraded_summary(Some(11), None), |_| true).unwrap();
         begin_runtime_run(&conn, &run_id, &plan).expect("create run");
 
         let cancel_flag = Arc::new(AtomicBool::new(false));
