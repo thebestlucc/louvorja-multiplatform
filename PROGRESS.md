@@ -11,12 +11,12 @@ This is the single status tracker for implementation progress.
 3. Every status update requires repository evidence (code + verification command output).
 4. Historical numbered phases remain tracked here, but newer post-phase delivery streams and active worktree efforts must also be recorded here.
 
-## Verification Snapshot (2026-03-08)
+## Verification Snapshot (2026-03-16)
 
 - `pnpm exec tsc --noEmit` -> pass
 - `pnpm lint:i18n` -> pass
 - `cargo check --manifest-path src-tauri/Cargo.toml` -> pass
-- `pnpm exec vite build` -> pass (bundle warning: `dist/assets/index-VAIlap3v.js` at 518.41 kB after minification)
+- `pnpm exec vite build` -> pass
 
 ## Phase Status Overview
 
@@ -49,6 +49,7 @@ The repository has continued to move after the last numbered phase. These stream
 | Monthly Department Schedules with print workflow | COMPLETE | Commits `af7cfcf`, `a931981`, `5904bd6`, `e7c4c0c`, `2fdd1cf`, and `d0d6e88`; `src/routes/utilities/schedules.tsx`; `src-tauri/src/commands/schedules.rs`; `src-tauri/src/db/queries/schedules.rs`; `tests/schedules/calendar-helpers.test.ts`; `tests/schedules/department-labels.test.ts`; `tests/schedules/print-layout.test.ts` |
 | Spotlight and shortcut UX refinement | COMPLETE | Commits `be7ca00`, `f2c057e`, and `88c3b73`; `src/routes/spotlight.tsx`; `src-tauri/src/commands/spotlight.rs`; `src/hooks/use-keyboard.ts`; `src/lib/shortcut-definitions.ts`; `tests/spotlight-shortcuts.test.ts` |
 | Lyrics sync playback stabilization | IN PROGRESS | Current working tree and plans: `docs/plans/2026-03-07-lyrics-sync-playback-fix.md`; `docs/plans/2026-03-07-lyrics-sync-playback-fix-tasks.md`; `src-tauri/src/audio/player.rs`; `src-tauri/src/commands/audio.rs`; `src/components/music/audio-sync-editor.tsx`; `src/components/music/lyrics-display.tsx`; `src/hooks/use-hymn-playback.ts`; `src/stores/audio-store.ts`; `tests/stores/audio-store.test.ts`; `tests/lib/audio-sync.test.ts` |
+| FTP Synchronization | COMPLETE | `src-tauri/src/ftp_sync/`; `src-tauri/src/commands/content_sync.rs` (RepairMedia task); `src-tauri/src/db/queries/content_sync.rs`; verified connectivity and path resolution; fixed UI "Verify Now" button to trigger real server check and deep file existence verification |
 
 ## Current Evidence (Audited in This Update)
 

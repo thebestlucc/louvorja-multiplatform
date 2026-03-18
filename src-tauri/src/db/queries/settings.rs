@@ -89,7 +89,12 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
     // Delete from tables that reference other tables first (foreign keys), then parent tables
     // Order matters due to foreign key constraints
     // NOTE: Bible data (bible_verses, bible_versions, bible_fts) is preserved
-    conn.execute_batch(
+    //
+    // FTS5 virtual tables must be cleared via the 'delete-all' special command
+    // rather than direct DELETE statements, which can corrupt the FTS shadow tables.
+    let tx = conn.unchecked_transaction().map_err(AppError::Database)?;
+
+    tx.execute_batch(
         "
         -- Clear child tables first
         DELETE FROM audio_sync_points;
@@ -105,15 +110,22 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
         DELETE FROM services;
         DELETE FROM collections;
 
-        -- Clear FTS tables (but NOT bible_fts)
-        DELETE FROM hymns_fts;
-        DELETE FROM collections_fts;
-
         -- Reset monitor configs but keep settings
         DELETE FROM monitor_configs;
         ",
     )
     .map_err(AppError::Database)?;
+
+    // FTS5 'delete-all' command clears the index cleanly without corrupting shadow tables
+    tx.execute_batch(
+        "
+        INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');
+        INSERT INTO collections_fts(collections_fts) VALUES('delete-all');
+        ",
+    )
+    .map_err(AppError::Database)?;
+
+    tx.commit().map_err(AppError::Database)?;
 
     Ok(())
 }

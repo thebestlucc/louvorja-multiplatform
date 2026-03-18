@@ -581,7 +581,6 @@ pub async fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
 
             let logical_x = position.x as f64 / scale;
             let logical_y = position.y as f64 / scale;
-            let logical_w = size.width as f64 / scale;
             let logical_h = size.height as f64 / scale;
 
             // Position the window at the bottom-left with a margin

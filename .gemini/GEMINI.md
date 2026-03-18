@@ -25,6 +25,7 @@ This file provides comprehensive repository-level guidance for Gemini Code Assis
 
 ### Rust Backend
 - **Error Handling:** Every function must return `Result<T, AppError>`. `AppError` returns structured JSON.
+- **Manual Error Destructuring:** Use the `catcher` utilities (`src-tauri/src/utils/catcher.rs`) when manually destructuring a `Result` into `(data, error)` or handling errors in threads/closures where `?` cannot be used.
 - **Database:** Use the `r2d2` connection pool from `AppState`. Never open manual connections.
 - **No Panics:** Never use `todo!()` or `unwrap()` in production code. Use `Err(AppError::Internal("...".into()))` for stubs.
 - **Windows IPC Safety:** **CRITICAL:** `#[tauri::command]` handlers must **never block**. Any operation involving `sleep`, long loops, or window creation (which requires retries) **must** be spawned on a separate thread via `std::thread::spawn`. Blocking the IPC thread hangs the entire application on Windows.

@@ -37,6 +37,8 @@ export interface ContentSyncPlanItem {
   action: ContentSyncPlanItemAction;
   status: ContentSyncPlanItemStatus;
   reason: string | null;
+  label: string | null;
+  remotePath: string | null;
 }
 
 export interface ContentSyncPlan {

@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
-import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database } from "lucide-react";
+import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
 import {
   useCancelContentSync,
   useCancelLegacyFetch,
@@ -27,9 +28,12 @@ import {
   useStartLegacyFetch,
 } from "../../lib/queries";
 import { ContentSyncReportCard } from "../../components/content-sync/content-sync-report";
+import { FtpFileBrowser } from "../../components/content-sync/ftp-file-browser";
 import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
 import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
+import { planContentSync } from "../../lib/tauri";
+import type { ContentSyncPlan } from "../../types/content-sync";
 import type {
   LegacyFetchOptions,
   MonitorConfig,
@@ -64,7 +68,7 @@ import { closeProjectorWindow, closeReturnWindow, openProjectorWindow, openRetur
 import { resolveProjectionMonitorIndexes } from "../../lib/monitor-resolution";
 import { getPreferredMonitorName } from "../../lib/monitor-display-name";
 
-type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "migration" | "data";
+type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "sync" | "migration" | "data";
 
 interface SettingsSearch {
   tab?: SettingsTab;
@@ -85,6 +89,7 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentT
   { id: "shortcuts", labelKey: "settings.tabs.shortcuts", icon: Keyboard },
   { id: "monitor", labelKey: "settings.tabs.monitor", icon: Monitor },
   { id: "streaming", labelKey: "settings.tabs.streaming", icon: Wifi },
+  { id: "sync", labelKey: "settings.tabs.sync", icon: RefreshCw },
   { id: "migration", labelKey: "settings.tabs.migration", icon: Upload },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
 ];
@@ -133,6 +138,7 @@ function SettingsIndex() {
         {activeTab === "shortcuts" && <ShortcutsTab />}
         {activeTab === "monitor" && <MonitorSection />}
         {activeTab === "streaming" && <StreamingSection />}
+        {activeTab === "sync" && <SyncSection />}
         {activeTab === "migration" && <MigrationSection />}
         {activeTab === "data" && <DataSection />}
       </main>
@@ -1033,28 +1039,36 @@ function StreamingSection() {
 /*  MigrationSection                                                   */
 /* ------------------------------------------------------------------ */
 
-function MigrationSection() {
+/* ------------------------------------------------------------------ */
+/*  SyncSection                                                        */
+/* ------------------------------------------------------------------ */
+
+function SyncSection() {
   const { t } = useTranslation();
 
-  const contentSyncRunId = useContentSyncStore((s) => s.runId);
-  const setContentSyncRunId = useContentSyncStore((s) => s.setRunId);
-  const contentSyncStoreProgress = useContentSyncStore((s) => s.progress);
-  const contentSyncStoreReport = useContentSyncStore((s) => s.report);
-  const resetContentSync = useContentSyncStore((s) => s.resetRun);
-  const contentSyncSummaryQuery = useContentSyncSummary();
-  const startContentSyncMutation = useStartContentSync();
-  const cancelContentSyncMutation = useCancelContentSync();
-  const contentSyncProgressQuery = useContentSyncProgress(contentSyncRunId, { enabled: Boolean(contentSyncRunId) });
-  const contentSyncShouldLoadReport = Boolean(
-    contentSyncRunId
-      && contentSyncProgressQuery.data
-      && !["pending", "running"].includes(contentSyncProgressQuery.data.status),
+  return (
+    <div className="space-y-6">
+      {/* FTP File Browser */}
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Cloud className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.ftpBrowser.title")}</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {t("settings.ftpBrowser.description")}
+        </p>
+        <FtpFileBrowser />
+      </section>
+    </div>
   );
-  const contentSyncReportQuery = useContentSyncReport(contentSyncRunId, { enabled: contentSyncShouldLoadReport });
-  const contentSyncProgress = contentSyncStoreProgress ?? contentSyncProgressQuery.data;
-  const contentSyncReport = contentSyncStoreReport ?? contentSyncReportQuery.data;
-  const contentSyncIsRunning = contentSyncProgress
-    && ["pending", "running"].includes(contentSyncProgress.status);
+}
+
+/* ------------------------------------------------------------------ */
+/*  MigrationSection                                                   */
+/* ------------------------------------------------------------------ */
+
+function MigrationSection() {
+  const { t } = useTranslation();
 
   const legacyFetchRunId = useLegacyFetchStore((s) => s.runId);
   const setLegacyFetchRunId = useLegacyFetchStore((s) => s.setRunId);
@@ -1093,26 +1107,6 @@ function MigrationSection() {
     }
   };
 
-  const handleStartContentSync = async () => {
-    const [runId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
-    if (error) {
-      notify.error(error.message);
-      return;
-    }
-    if (runId) {
-      setContentSyncRunId(runId);
-    }
-  };
-
-  const handleCancelContentSync = () => {
-    if (!contentSyncRunId) return;
-    cancelContentSyncMutation.mutate(contentSyncRunId);
-  };
-
-  const handleContentSyncDone = () => {
-    resetContentSync();
-  };
-
   const handleStartLegacyFetch = async (options: LegacyFetchOptions) => {
     setConnectionError(null);
     const [runId, error] = await catcher(startLegacyFetchMutation.mutateAsync(options), { notify: false });
@@ -1142,61 +1136,6 @@ function MigrationSection() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-border bg-card p-4">
-        <div className="mb-4 flex items-center gap-2">
-          <Cloud className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-medium">{t("settings.contentSync.title")}</h2>
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {t("settings.contentSync.description")}
-        </p>
-
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <Badge variant="secondary">
-            {t("settings.contentSync.mode")}: {contentSyncSummaryQuery.data?.mode ?? t("settings.contentSync.unknown")}
-          </Badge>
-          <Badge variant="secondary">
-            {t("settings.contentSync.currentVersion")}: {contentSyncSummaryQuery.data?.currentVersion ?? t("settings.contentSync.unknown")}
-          </Badge>
-          <Badge variant="secondary">
-            {t("settings.contentSync.remoteVersion")}: {contentSyncSummaryQuery.data?.remoteVersion ?? t("settings.contentSync.unknown")}
-          </Badge>
-        </div>
-
-        <div className="mb-4 flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => void contentSyncSummaryQuery.refetch()}
-            disabled={contentSyncSummaryQuery.isFetching}
-          >
-            {t("settings.contentSync.checkNow")}
-          </Button>
-          <Button
-            onClick={() => void handleStartContentSync()}
-            disabled={startContentSyncMutation.isPending || Boolean(contentSyncIsRunning)}
-          >
-            {startContentSyncMutation.isPending
-              ? t("settings.contentSync.starting")
-              : t("settings.contentSync.startSync")}
-          </Button>
-          {contentSyncIsRunning ? (
-            <Button variant="outline" onClick={handleCancelContentSync}>
-              {t("settings.contentSync.cancel")}
-            </Button>
-          ) : null}
-          {(contentSyncProgress || contentSyncReport) ? (
-            <Button variant="ghost" onClick={handleContentSyncDone}>
-              {t("settings.contentSync.clearRun")}
-            </Button>
-          ) : null}
-        </div>
-
-        <ContentSyncReportCard
-          progress={contentSyncProgress ?? null}
-          report={contentSyncReport ?? null}
-        />
-      </section>
-
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="mb-4 flex items-center gap-2">
           <Cloud className="h-5 w-5 text-primary" />

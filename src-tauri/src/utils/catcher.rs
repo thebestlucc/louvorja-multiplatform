@@ -23,6 +23,7 @@ where
 }
 
 /// Standardizes error handling for async operations.
+#[allow(dead_code)]
 pub async fn catcher_async<F, T, E>(future: F) -> (Option<T>, Option<AppError>)
 where
     F: Future<Output = Result<T, E>>,
@@ -32,6 +33,7 @@ where
 }
 
 /// Standardizes error handling for closures.
+#[allow(dead_code)]
 pub fn catcher_sync<F, T, E>(f: F) -> (Option<T>, Option<AppError>)
 where
     F: FnOnce() -> Result<T, E>,

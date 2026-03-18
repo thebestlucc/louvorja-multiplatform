@@ -83,6 +83,8 @@ pub fn run() {
             commands::content_sync::get_content_sync_progress,
             commands::content_sync::cancel_content_sync,
             commands::content_sync::get_content_sync_report,
+            commands::content_sync::list_ftp_files,
+            commands::content_sync::download_ftp_files,
             // Bible
             commands::bible::get_bible_versions,
             commands::bible::get_books,

@@ -665,6 +665,8 @@ pub struct ContentSyncLocalMediaPaths {
     pub audio_path: Option<String>,
     pub playback_path: Option<String>,
     pub cover_path: Option<String>,
+    pub album: Option<String>,
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -691,13 +693,15 @@ pub struct ContentSyncSummary {
 pub struct ContentSyncPlanItem {
     pub id: String,
     pub entity_type: String,
-    #[specta(type = Option<i32>)]
+    #[specta(type = i32)]
     pub remote_id: Option<i64>,
-    #[specta(type = Option<i32>)]
+    #[specta(type = i32)]
     pub local_id: Option<i64>,
     pub action: ContentSyncPlanItemAction,
     pub status: ContentSyncPlanItemStatus,
     pub reason: Option<String>,
+    pub remote_path: Option<String>,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -758,6 +762,31 @@ pub struct ContentSyncReport {
     pub created_at: String,
     pub finished_at: Option<String>,
     pub message: Option<String>,
+}
+
+/// A single file entry returned by `list_ftp_files`.
+/// Not persisted — used only as a Tauri command return type.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FtpFileEntry {
+    /// Path on the FTP server (relative to FTP root), e.g. "config/musicas/pt/album/song.mp3"
+    pub remote_path: String,
+    /// Relative path under app_data_dir where the file would be stored locally, if derivable.
+    pub local_path: Option<String>,
+    /// Whether the local file currently exists on disk.
+    pub exists_locally: bool,
+    /// Remote file size in bytes (from FTP SIZE command), if available.
+    pub file_size: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FtpDownloadProgress {
+    pub remote_path: String,
+    pub done: usize,
+    pub total: usize,
+    pub success: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

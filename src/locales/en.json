@@ -505,6 +505,9 @@
       "ftpError": "FTP connection error",
       "lastStatus": "Last sync status",
       "later": "Later",
+      "itemLabel": "Name",
+      "itemReason": "Missing files",
+      "itemType": "Type",
       "missingAssets": "Missing assets",
       "modalDegradedDescription": "Selective manifest details are unavailable. A full sync fallback may be required.",
       "modalSmartDescription": "New remote content was detected for this device.",
@@ -526,6 +529,26 @@
       "title": "Content Sync",
       "unknown": "Unknown",
       "yes": "Yes"
+    },
+    "ftpBrowser": {
+      "columnActions": "Actions",
+      "columnPath": "Remote Path",
+      "columnSize": "Size",
+      "columnStatus": "Status",
+      "description": "Browse files stored on the FTP server, check if they are present locally, and download missing ones.",
+      "download": "Download",
+      "downloadSelected": "Download selected ({{count}})",
+      "downloading": "Downloading...",
+      "empty": "Click \"Load files\" to browse the FTP server.",
+      "error": "Error",
+      "fileCount": "{{count}} files",
+      "found": "Found",
+      "loadFiles": "Load files",
+      "loading": "Loading...",
+      "missing": "Missing",
+      "openInFinder": "Open in Finder",
+      "selectFile": "Select file",
+      "title": "FTP File Browser"
     },
     "dangerZone": {
       "clearDatabase": "Reset App Data",
@@ -688,7 +711,8 @@
       "migration": "Migration",
       "monitor": "Monitor",
       "shortcuts": "Shortcuts",
-      "streaming": "Streaming"
+      "streaming": "Streaming",
+      "sync": "Content Sync"
     },
     "theme": "Theme",
     "themeDesc": "Choose the visual style of the app.",

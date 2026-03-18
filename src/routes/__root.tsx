@@ -175,6 +175,12 @@ function RootLayout() {
       const store = useContentSyncStore.getState();
       if (!store.runId || event.payload.runId === store.runId) {
         setContentSyncReport(event.payload);
+        // Re-fetch summary and plan so the missing asset count reflects the
+        // files that were just downloaded by the background sync thread.
+        if (["completed", "cancelled", "failed"].includes(event.payload.status)) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.summary });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.plan });
+        }
       }
     }).catch(() => () => {});
 
@@ -182,7 +188,7 @@ function RootLayout() {
       unlistenProgress.then((unlisten) => unlisten());
       unlistenReport.then((unlisten) => unlisten());
     };
-  }, [setContentSyncProgress, setContentSyncReport]);
+  }, [queryClient, setContentSyncProgress, setContentSyncReport]);
 
   useEffect(() => {
     if (isBareRoute) {
@@ -303,7 +309,7 @@ function RootLayout() {
   const handleStartContentSync = async () => {
     const [runId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
     if (error) {
-      toast.error(error.message);
+      toast.error(error.details ?? error.message);
       return;
     }
     if (runId) {
@@ -334,7 +340,7 @@ function RootLayout() {
         onStartSync={() => void handleStartContentSync()}
         onOpenSettings={() => {
           closeContentSyncPrompt();
-          void router.navigate({ to: "/settings", search: { tab: "migration" } });
+          void router.navigate({ to: "/settings", search: { tab: "sync" } });
         }}
         isStarting={startContentSyncMutation.isPending}
       />

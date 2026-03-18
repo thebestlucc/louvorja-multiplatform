@@ -627,6 +627,30 @@ export async function getContentSyncReport(runId: string): Promise<ContentSyncRe
   return tauriInvoke<ContentSyncReport | null>("get_content_sync_report", { runId });
 }
 
+// FTP File Browser
+export interface FtpFileEntry {
+  remotePath: string;
+  localPath: string | null;
+  existsLocally: boolean;
+  fileSize: number | null;
+}
+
+export interface FtpDownloadProgress {
+  remotePath: string;
+  done: number;
+  total: number;
+  success: boolean;
+  error: string | null;
+}
+
+export async function listFtpFiles(): Promise<void> {
+  return tauriInvoke<void>("list_ftp_files");
+}
+
+export async function downloadFtpFiles(remotePaths: string[]): Promise<void> {
+  return tauriInvoke<void>("download_ftp_files", { remotePaths });
+}
+
 export async function restoreHymnFromApi(hymnId: number, language: string): Promise<void> {
   return tauriInvoke<void>("restore_hymn_from_api", { hymnId, language });
 }
