@@ -626,7 +626,214 @@ fn run_content_sync_background(
             }
 
             ContentSyncPlanItemAction::CreateAlbum | ContentSyncPlanItemAction::UpdateAlbum => {
-                // Implemented in next task
+                let is_update =
+                    matches!(item.action, ContentSyncPlanItemAction::UpdateAlbum);
+                let Some(api_id) = item.remote_id else {
+                    eprintln!("[sync] {:?}: skipping — no remote_id", item.action);
+                    skipped_count += 1;
+                    continue;
+                };
+
+                emit_progress(
+                    &app,
+                    &run_id,
+                    "executing",
+                    ContentSyncRunStatus::Running,
+                    percent,
+                    Some(format!(
+                        "{} album (api_id={})…",
+                        if is_update { "Updating" } else { "Creating" },
+                        api_id
+                    )),
+                    processed,
+                );
+
+                // Ensure FTP is ready
+                if !ensure_ftp_ready(&app, &mut ftp_settings, &mut ftp_stream) {
+                    eprintln!("[sync] {:?}: FTP unavailable — skipping api_id={}", item.action, api_id);
+                    skipped_count += 1;
+                    continue;
+                }
+
+                let lang = get_app_lang(&app);
+                let api_lang = lang_to_api_language(&lang);
+
+                // Fetch all song pages for this album
+                let mut all_musics: Vec<crate::legacy_fetch::ApiMusic> = Vec::new();
+                let mut page = 1i64;
+                let mut fetch_failed = false;
+                loop {
+                    let page_res = tauri::async_runtime::block_on(
+                        crate::legacy_fetch::fetcher::fetch_album_musics_page(api_lang, api_id, page),
+                    );
+                    match page_res {
+                        Ok(resp) => {
+                            let is_last = resp.data.is_empty()
+                                || resp.last_page.map_or(true, |lp| page >= lp);
+                            all_musics.extend(resp.data);
+                            if is_last {
+                                break;
+                            }
+                            page += 1;
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "[sync] {:?}: fetch_album_musics_page failed for api_id={} page={}: {}",
+                                item.action, api_id, page, e
+                            );
+                            fetch_failed = true;
+                            break;
+                        }
+                    }
+                }
+                if fetch_failed {
+                    failed_count += 1;
+                    continue;
+                }
+
+                // Try to obtain album cover URL from albums page 1
+                let album_cover_url: Option<String> = {
+                    let albums_res = tauri::async_runtime::block_on(
+                        crate::legacy_fetch::fetcher::fetch_albums_page(api_lang, 1),
+                    );
+                    albums_res.ok().and_then(|resp| {
+                        resp.data
+                            .into_iter()
+                            .find(|a| a.id_album == api_id)
+                            .and_then(|a| a.url_image)
+                    })
+                };
+
+                let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+
+                // Download album cover via FTP
+                let cover_path = download_asset_via_ftp(
+                    &mut ftp_stream,
+                    &album_cover_url,
+                    "album_covers",
+                    api_id,
+                    &app_data_dir,
+                );
+
+                // Build ApiAlbum for upsert_api_album_collection
+                let album_name = item
+                    .label
+                    .clone()
+                    .unwrap_or_else(|| format!("Album {}", api_id));
+                let api_album = crate::legacy_fetch::ApiAlbum {
+                    id_album: api_id,
+                    name: album_name.clone(),
+                    url_image: album_cover_url.clone(),
+                    subtitle: None,
+                    color: None,
+                    id_file_image: None,
+                    order: None,
+                    image_version: None,
+                    musics: Vec::new(), // songs imported separately below
+                };
+
+                let release_year = album_cover_url
+                    .as_deref()
+                    .and_then(crate::content_sync::importer::extract_year_from_url);
+
+                let conn_res = app
+                    .try_state::<AppState>()
+                    .ok_or(())
+                    .and_then(|s| s.db.get().map_err(|_| ()));
+                let Ok(conn) = conn_res else {
+                    eprintln!("[sync] {:?}: DB connection unavailable", item.action);
+                    failed_count += 1;
+                    continue;
+                };
+
+                let collection_id = match crate::content_sync::importer::upsert_api_album_collection(
+                    &conn,
+                    &api_album,
+                    cover_path.as_deref(),
+                    release_year,
+                ) {
+                    Ok((id, _)) => id,
+                    Err(e) => {
+                        eprintln!(
+                            "[sync] {:?}: upsert_api_album_collection failed for api_id={}: {}",
+                            item.action, api_id, e
+                        );
+                        failed_count += 1;
+                        continue;
+                    }
+                };
+
+                // Persist local_id in content_sync_entities
+                let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
+                    &conn,
+                    "album",
+                    api_id,
+                    collection_id,
+                );
+
+                // Import each song and link it to the collection
+                let music_count = all_musics.len();
+                for (i, music_stub) in all_musics.iter().enumerate() {
+                    // Fetch full music detail for lyrics
+                    let full_music_res = tauri::async_runtime::block_on(
+                        crate::legacy_fetch::fetcher::fetch_music_detail(api_lang, music_stub.id_music),
+                    );
+                    let music = full_music_res.unwrap_or_else(|e| {
+                        eprintln!(
+                            "[sync] Album {}: fetch_music_detail failed for song id={}: {} — using stub",
+                            api_id, music_stub.id_music, e
+                        );
+                        music_stub.clone()
+                    });
+
+                    let audio = download_asset_via_ftp(
+                        &mut ftp_stream,
+                        &music.url_music,
+                        "audio",
+                        music.id_music,
+                        &app_data_dir,
+                    );
+                    let playback = download_asset_via_ftp(
+                        &mut ftp_stream,
+                        &music.url_instrumental_music,
+                        "playback",
+                        music.id_music,
+                        &app_data_dir,
+                    );
+                    let song_cover = download_asset_via_ftp(
+                        &mut ftp_stream,
+                        &music.url_image,
+                        "images",
+                        music.id_music,
+                        &app_data_dir,
+                    );
+                    let media = crate::content_sync::importer::DownloadedMusicMedia {
+                        audio_path: audio,
+                        playback_path: playback,
+                        cover_path: song_cover,
+                    };
+
+                    if let Err(e) = crate::content_sync::importer::import_music_and_link_to_collection(
+                        &conn,
+                        collection_id,
+                        &music,
+                        &media,
+                        is_update,
+                        Some(&album_name),
+                        Some("album"),
+                        (i as i64) + 1,
+                    ) {
+                        eprintln!(
+                            "[sync] Album {}: import_music_and_link failed for song id={}: {}",
+                            api_id, music.id_music, e
+                        );
+                    }
+                }
+
+                eprintln!(
+                    "[sync] {:?}: album api_id={} done — {} songs processed",
+                    item.action, api_id, music_count
+                );
                 applied_count += 1;
             }
 
