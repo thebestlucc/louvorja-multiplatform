@@ -1,7 +1,8 @@
 use crate::content_sync::{self, ContentSyncRunState};
 use crate::db::models::{
-    ContentSyncPlan, ContentSyncProgress, ContentSyncReport, ContentSyncRunStatus,
-    ContentSyncSummary, ContentSyncPlanItemAction, FtpFileEntry, FtpDownloadProgress,
+    ContentSyncPlan, ContentSyncProgress, ContentSyncRemoteEntityInput, ContentSyncReport,
+    ContentSyncRunStatus, ContentSyncSummary, ContentSyncPlanItemAction, FtpFileEntry,
+    FtpDownloadProgress,
 };
 use crate::error::AppError;
 use crate::state::AppState;
@@ -41,9 +42,9 @@ pub async fn plan_content_sync(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<ContentSyncPlan, AppError> {
-    // Fetch remote version first
+    // Fetch remote params to get db_version
     let params_res = legacy_fetch::fetcher::fetch_params().await;
-    let remote_version = match params_res {
+    let remote_version = match &params_res {
         Ok(p) => p.db_version,
         Err(_) => None,
     };
@@ -54,7 +55,7 @@ pub async fn plan_content_sync(
     }
     let conn = conn.unwrap();
 
-    // Mark as checked in the database
+    // Record the check timestamp + remote version
     let _ = crate::db::queries::content_sync::mark_content_sync_checked(&conn, remote_version, None);
 
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
@@ -63,8 +64,39 @@ pub async fn plan_content_sync(
         std::fs::metadata(full_path).is_ok()
     };
 
-    let summary = content_sync::load_summary(&conn, &file_exists)?;
-    content_sync::build_degraded_plan(&conn, summary, &file_exists)
+    // Attempt smart manifest plan if API is reachable
+    let lang = get_app_lang(&app);
+    let api_lang = lang_to_api_language(&lang);
+
+    let hymns_res = fetch_all_hymnal_pages(api_lang).await;
+    let albums_res = fetch_all_album_pages(api_lang).await;
+
+    match (hymns_res, albums_res) {
+        (Ok(hymns), Ok(albums)) => {
+            let hymn_inputs: Vec<ContentSyncRemoteEntityInput> =
+                hymns.iter().map(api_music_to_entity_input).collect();
+            let album_inputs: Vec<ContentSyncRemoteEntityInput> =
+                albums.iter().map(api_album_to_entity_input).collect();
+
+            content_sync::build_manifest_plan(
+                &conn,
+                remote_version,
+                &hymn_inputs,
+                &album_inputs,
+                &file_exists,
+            )
+        }
+        (hymns_res, albums_res) => {
+            if let Err(e) = hymns_res {
+                eprintln!("[plan] fetch_all_hymnal_pages failed: {}", e);
+            }
+            if let Err(e) = albums_res {
+                eprintln!("[plan] fetch_all_album_pages failed: {}", e);
+            }
+            let summary = content_sync::load_summary(&conn, &file_exists)?;
+            content_sync::build_degraded_plan(&conn, summary, &file_exists)
+        }
+    }
 }
 
 #[tauri::command]
@@ -111,8 +143,32 @@ pub fn start_content_sync(
         std::fs::metadata(full_path).is_ok()
     };
 
-    let summary = content_sync::load_summary(&conn, &file_exists)?;
-    let plan = content_sync::build_degraded_plan(&conn, summary, &file_exists)?;
+    // Attempt smart manifest plan; fall back to degraded if API unreachable
+    let lang = get_app_lang(&app);
+    let api_lang = lang_to_api_language(&lang);
+
+    let hymns_res = tauri::async_runtime::block_on(fetch_all_hymnal_pages(api_lang));
+    let albums_res = tauri::async_runtime::block_on(fetch_all_album_pages(api_lang));
+
+    let plan = match (hymns_res, albums_res) {
+        (Ok(hymns), Ok(albums)) => {
+            let hymn_inputs: Vec<ContentSyncRemoteEntityInput> =
+                hymns.iter().map(api_music_to_entity_input).collect();
+            let album_inputs: Vec<ContentSyncRemoteEntityInput> =
+                albums.iter().map(api_album_to_entity_input).collect();
+            content_sync::build_manifest_plan(
+                &conn,
+                remote_version,
+                &hymn_inputs,
+                &album_inputs,
+                &file_exists,
+            )?
+        }
+        _ => {
+            let summary = content_sync::load_summary(&conn, &file_exists)?;
+            content_sync::build_degraded_plan(&conn, summary, &file_exists)?
+        }
+    };
     let run_id = content_sync::new_run_id();
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let initial_progress = content_sync::initial_progress(&run_id, &plan);
@@ -1491,6 +1547,78 @@ fn ensure_ftp_ready(
     }
 
     ftp_stream.is_some()
+}
+
+/// Fetch all pages of the hymnal list for a given language.
+async fn fetch_all_hymnal_pages(
+    lang: crate::legacy_fetch::ApiLanguage,
+) -> Result<Vec<crate::legacy_fetch::ApiMusic>, AppError> {
+    let mut all = Vec::new();
+    let mut page = 1i64;
+    loop {
+        let resp = crate::legacy_fetch::fetcher::fetch_hymnal_page(lang, page).await?;
+        let is_last = resp.data.is_empty()
+            || resp.last_page.map_or(true, |lp| page >= lp);
+        all.extend(resp.data);
+        if is_last {
+            break;
+        }
+        page += 1;
+    }
+    Ok(all)
+}
+
+/// Fetch all pages of the album list for a given language.
+async fn fetch_all_album_pages(
+    lang: crate::legacy_fetch::ApiLanguage,
+) -> Result<Vec<crate::legacy_fetch::ApiAlbum>, AppError> {
+    let mut all = Vec::new();
+    let mut page = 1i64;
+    loop {
+        let resp = crate::legacy_fetch::fetcher::fetch_albums_page(lang, page).await?;
+        let is_last = resp.data.is_empty()
+            || resp.last_page.map_or(true, |lp| page >= lp);
+        all.extend(resp.data);
+        if is_last {
+            break;
+        }
+        page += 1;
+    }
+    Ok(all)
+}
+
+/// Convert an ApiMusic (from hymnal list) to ContentSyncRemoteEntityInput.
+fn api_music_to_entity_input(music: &crate::legacy_fetch::ApiMusic) -> ContentSyncRemoteEntityInput {
+    ContentSyncRemoteEntityInput {
+        entity_type: "hymn".to_string(),
+        remote_id: music.id_music,
+        local_id: None,
+        remote_version: music.track,
+        content_hash: None,
+        lyrics_hash: None,
+        image_version: music.url_image.clone(),
+        audio_version: music.url_music.clone(),
+        playback_version: music.url_instrumental_music.clone(),
+        updated_at: None,
+        deleted: false,
+    }
+}
+
+/// Convert an ApiAlbum to ContentSyncRemoteEntityInput.
+fn api_album_to_entity_input(album: &crate::legacy_fetch::ApiAlbum) -> ContentSyncRemoteEntityInput {
+    ContentSyncRemoteEntityInput {
+        entity_type: "album".to_string(),
+        remote_id: album.id_album,
+        local_id: None,
+        remote_version: album.order,
+        content_hash: None,
+        lyrics_hash: None,
+        image_version: album.url_image.clone(),
+        audio_version: None,
+        playback_version: None,
+        updated_at: None,
+        deleted: false,
+    }
 }
 
 #[cfg(test)]
