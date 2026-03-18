@@ -773,6 +773,7 @@ fn run_content_sync_background(
 
                 // Import each song and link it to the collection
                 let music_count = all_musics.len();
+                let mut success_count = 0usize;
                 for (i, music_stub) in all_musics.iter().enumerate() {
                     // Fetch full music detail for lyrics
                     let full_music_res = tauri::async_runtime::block_on(
@@ -827,14 +828,24 @@ fn run_content_sync_background(
                             "[sync] Album {}: import_music_and_link failed for song id={}: {}",
                             api_id, music.id_music, e
                         );
+                    } else {
+                        success_count += 1;
                     }
                 }
 
-                eprintln!(
-                    "[sync] {:?}: album api_id={} done — {} songs processed",
-                    item.action, api_id, music_count
-                );
-                applied_count += 1;
+                if success_count > 0 || music_count == 0 {
+                    eprintln!(
+                        "[sync] {:?}: album api_id={} done — {}/{} songs imported",
+                        item.action, api_id, success_count, music_count
+                    );
+                    applied_count += 1;
+                } else {
+                    eprintln!(
+                        "[sync] {:?}: album api_id={} failed — no songs imported",
+                        item.action, api_id
+                    );
+                    failed_count += 1;
+                }
             }
 
             ContentSyncPlanItemAction::DeleteRemoteManagedHymn
