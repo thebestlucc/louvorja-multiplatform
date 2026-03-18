@@ -233,6 +233,32 @@ where
     Ok(summary)
 }
 
+/// Derive a local media file path in the same format as the HTTP importer:
+/// `media/{subfolder}/{api_id}/{filename}`
+///
+/// This ensures FTP-downloaded files land in the same directory structure
+/// as HTTP-imported files, making them interchangeable.
+/// `subfolder` is "audio", "playback", or "images".
+pub fn derive_local_media_path(url: &str, subfolder: &str, api_id: i64) -> String {
+    let filename = url.rsplit('/').next().unwrap_or("file");
+    let sanitized: String = filename
+        .chars()
+        .map(|ch| {
+            if ch.is_alphanumeric() || ch == '.' || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let filename = if sanitized.is_empty() || sanitized == "." {
+        format!("file.{}", if subfolder == "images" { "jpg" } else { "mp3" })
+    } else {
+        sanitized
+    };
+    format!("media/{}/{}/{}", subfolder, api_id, filename)
+}
+
 pub fn resolve_remote_path_from_url(url: &str) -> String {
     if url.contains("/file/musics/") {
         let parts: Vec<&str> = url.split("/file/musics/").collect();
@@ -310,11 +336,18 @@ where
         .collect::<Result<Vec<_>, _>>()?;
 
     for (local_id, remote_id, media, name) in hymns {
-        if media_paths_missing(&media, &file_exists) {
+        // Also flag managed hymns (api_music_id IS NOT NULL) whose paths are NULL —
+        // they've never been downloaded. media_paths_missing returns false for all-null paths.
+        let has_null_managed_paths = remote_id.is_some()
+            && (media.audio_path.is_none() || media.playback_path.is_none() || media.cover_path.is_none());
+        if media_paths_missing(&media, &file_exists) || has_null_managed_paths {
             let mut missing_parts = Vec::new();
-            if let Some(ref p) = media.audio_path { if !file_exists(p) { missing_parts.push("audio"); } }
-            if let Some(ref p) = media.playback_path { if !file_exists(p) { missing_parts.push("playback"); } }
-            if let Some(ref p) = media.cover_path { if !file_exists(p) { missing_parts.push("cover"); } }
+            if let Some(ref p) = media.audio_path { if p != "_na_" && !file_exists(p) { missing_parts.push(format!("audio ({})", p)); } }
+            else if remote_id.is_some() { missing_parts.push("audio (not downloaded)".to_string()); }
+            if let Some(ref p) = media.playback_path { if p != "_na_" && !file_exists(p) { missing_parts.push(format!("playback ({})", p)); } }
+            else if remote_id.is_some() { missing_parts.push("playback (not downloaded)".to_string()); }
+            if let Some(ref p) = media.cover_path { if p != "_na_" && !file_exists(p) { missing_parts.push(format!("cover ({})", p)); } }
+            else if remote_id.is_some() { missing_parts.push("cover (not downloaded)".to_string()); }
 
             items.push(ContentSyncPlanItem {
                 id: format!("repair-hymn-{}", local_id),
@@ -708,7 +741,8 @@ where
     ]
     .into_iter()
     .flatten()
-    .any(|path| !file_exists(path))
+    // "_na_" is a sentinel written when the asset has no remote URL — treat as not missing
+    .any(|path| path != "_na_" && !file_exists(path))
 }
 
 #[cfg(test)]

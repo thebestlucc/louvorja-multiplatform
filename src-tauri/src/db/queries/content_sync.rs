@@ -322,7 +322,7 @@ pub fn get_hymn_media_paths(
     hymn_id: i64,
 ) -> Result<Option<ContentSyncLocalMediaPaths>, AppError> {
     conn.query_row(
-        "SELECT id, audio_path, playback_path, cover_path
+        "SELECT id, audio_path, playback_path, cover_path, album
          FROM hymns
          WHERE id = ?1",
         [hymn_id],
@@ -333,6 +333,8 @@ pub fn get_hymn_media_paths(
                 audio_path: row.get(1)?,
                 playback_path: row.get(2)?,
                 cover_path: row.get(3)?,
+                album: row.get(4)?,
+                language: None, // Will be resolved by the sync runner if needed
             })
         },
     )
@@ -345,7 +347,7 @@ pub fn get_album_media_paths(
     collection_id: i64,
 ) -> Result<Option<ContentSyncLocalMediaPaths>, AppError> {
     conn.query_row(
-        "SELECT id, cover_path
+        "SELECT id, cover_path, name
          FROM collections
          WHERE id = ?1",
         [collection_id],
@@ -356,11 +358,31 @@ pub fn get_album_media_paths(
                 audio_path: None,
                 playback_path: None,
                 cover_path: row.get(1)?,
+                album: row.get(2)?,
+                language: None,
             })
         },
     )
     .optional()
     .map_err(AppError::Database)
+}
+
+pub fn set_hymn_audio_path(conn: &Connection, hymn_id: i64, path: &str) -> Result<(), AppError> {
+    conn.execute("UPDATE hymns SET audio_path = ?2 WHERE id = ?1", params![hymn_id, path])
+        .map_err(AppError::Database)?;
+    Ok(())
+}
+
+pub fn set_hymn_playback_path(conn: &Connection, hymn_id: i64, path: &str) -> Result<(), AppError> {
+    conn.execute("UPDATE hymns SET playback_path = ?2 WHERE id = ?1", params![hymn_id, path])
+        .map_err(AppError::Database)?;
+    Ok(())
+}
+
+pub fn set_hymn_cover_path(conn: &Connection, hymn_id: i64, path: &str) -> Result<(), AppError> {
+    conn.execute("UPDATE hymns SET cover_path = ?2 WHERE id = ?1", params![hymn_id, path])
+        .map_err(AppError::Database)?;
+    Ok(())
 }
 
 pub fn create_content_sync_run(conn: &Connection, run: &ContentSyncRun) -> Result<(), AppError> {

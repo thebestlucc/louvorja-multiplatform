@@ -505,6 +505,9 @@
       "ftpError": "Error de conexión FTP",
       "lastStatus": "Último estado",
       "later": "Después",
+      "itemLabel": "Nombre",
+      "itemReason": "Archivos faltantes",
+      "itemType": "Tipo",
       "missingAssets": "Archivos faltantes",
       "modalDegradedDescription": "Los detalles selectivos del manifiesto no están disponibles. Puede ser necesario usar el fallback de sincronización completa.",
       "modalSmartDescription": "Se detectó nuevo contenido remoto para este dispositivo.",
@@ -526,6 +529,26 @@
       "title": "Sincronización de contenido",
       "unknown": "Desconocida",
       "yes": "Sí"
+    },
+    "ftpBrowser": {
+      "columnActions": "Acciones",
+      "columnPath": "Ruta Remota",
+      "columnSize": "Tamaño",
+      "columnStatus": "Estado",
+      "description": "Explore los archivos en el servidor FTP, verifique cuáles están presentes localmente y descargue los que faltan.",
+      "download": "Descargar",
+      "downloadSelected": "Descargar seleccionados ({{count}})",
+      "downloading": "Descargando...",
+      "empty": "Haz clic en \"Cargar archivos\" para explorar el servidor FTP.",
+      "error": "Error",
+      "fileCount": "{{count}} archivos",
+      "found": "Encontrado",
+      "loadFiles": "Cargar archivos",
+      "loading": "Cargando...",
+      "missing": "Faltante",
+      "openInFinder": "Abrir en Finder",
+      "selectFile": "Seleccionar archivo",
+      "title": "Navegador FTP"
     },
     "dangerZone": {
       "clearDatabase": "Restablecer Datos de la App",
@@ -688,7 +711,8 @@
       "migration": "Migración",
       "monitor": "Monitor",
       "shortcuts": "Atajos",
-      "streaming": "Streaming"
+      "streaming": "Streaming",
+      "sync": "Sincronización"
     },
     "theme": "Tema",
     "themeDesc": "Elija el estilo visual de la aplicación.",

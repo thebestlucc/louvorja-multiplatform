@@ -30,6 +30,7 @@ import {
   getSetting, setSetting, getAllSettings, clearDatabase,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
   getContentSyncSummary, planContentSync, startContentSync, getContentSyncProgress, cancelContentSync, getContentSyncReport,
+  listFtpFiles, downloadFtpFiles,
   restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
@@ -997,6 +998,19 @@ export function useCancelContentSync() {
       queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.progress(runId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.report(runId) });
     },
+  });
+}
+
+// FTP File Browser
+export function useListFtpFiles() {
+  return useMutation({
+    mutationFn: () => listFtpFiles(),
+  });
+}
+
+export function useDownloadFtpFiles() {
+  return useMutation({
+    mutationFn: (remotePaths: string[]) => downloadFtpFiles(remotePaths),
   });
 }
 

@@ -191,7 +191,9 @@ allow = [
     "fetch_legacy_params",
     "check_db_version",
     "restore_hymn_from_api",
-    "restore_album_from_api"
+    "restore_album_from_api",
+    "list_ftp_files",
+    "download_ftp_files"
 ]
 
 [[permission]]

@@ -1,28 +1,33 @@
 import { Badge } from "../ui/badge";
 import { useTranslation } from "react-i18next";
-import type { ContentSyncProgress, ContentSyncReport } from "../../types/content-sync";
+import type { ContentSyncProgress, ContentSyncReport, ContentSyncPlan } from "../../types/content-sync";
+import { ScrollArea } from "../ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 interface ContentSyncReportProps {
   progress?: ContentSyncProgress | null;
   report?: ContentSyncReport | null;
+  plan?: ContentSyncPlan | null;
 }
 
 export function ContentSyncReportCard({
   progress = null,
   report = null,
+  plan = null,
 }: ContentSyncReportProps) {
   const { t } = useTranslation();
-  if (!progress && !report) {
+  if (!progress && !report && (!plan || plan.items.length === 0)) {
     return null;
   }
 
-  const status = report?.status ?? progress?.status ?? "pending";
+  const status = report?.status ?? progress?.status ?? "idle";
   const step = progress?.step ?? "idle";
 
   const stepLabelMap: Record<string, string> = {
     starting: t("settings.contentSync.starting"),
     executing: t("settings.contentSync.runningMessage"),
     downloading: t("settings.contentSync.downloading"), // We should add this key
+    "fallback-noted": t("settings.contentSync.fallback"),
     fallback: t("settings.contentSync.fallback"),
     cancelled: t("settings.contentSync.cancel"),
     done: t("settings.legacyFetch.stepDone"),
@@ -95,6 +100,37 @@ export function ContentSyncReportCard({
               {report.message}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {plan && plan.items.length > 0 && !(progress && ["pending", "running"].includes(progress.status)) ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium">{t("settings.contentSync.plannedChanges")}</h4>
+            <span className="text-xs text-muted-foreground">
+              {plan.items.filter(i => i.action === "repair_media").length} {t("settings.contentSync.missingAssets").toLowerCase()}
+            </span>
+          </div>
+          <ScrollArea className="h-[240px] rounded-md border border-border">
+            <Table>
+              <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                <TableRow>
+                  <TableHead className="w-[160px] h-9 text-xs">{t("settings.contentSync.itemLabel")}</TableHead>
+                  <TableHead className="w-[80px] h-9 text-xs">{t("settings.contentSync.itemType")}</TableHead>
+                  <TableHead className="h-9 text-xs">{t("settings.contentSync.itemReason")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {plan.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="py-2 text-xs font-medium">{item.label ?? item.id}</TableCell>
+                    <TableCell className="py-2 text-xs text-muted-foreground capitalize">{item.entityType}</TableCell>
+                    <TableCell className="py-2 text-xs text-muted-foreground font-mono break-all">{item.reason}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </div>
       ) : null}
     </section>

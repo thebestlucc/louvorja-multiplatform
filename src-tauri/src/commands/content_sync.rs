@@ -1,16 +1,17 @@
 use crate::content_sync::{self, ContentSyncRunState};
 use crate::db::models::{
     ContentSyncPlan, ContentSyncProgress, ContentSyncReport, ContentSyncRunStatus,
-    ContentSyncSummary, ContentSyncPlanItemAction,
+    ContentSyncSummary, ContentSyncPlanItemAction, FtpFileEntry, FtpDownloadProgress,
 };
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::catcher::catcher;
 use crate::ftp_sync;
 use crate::legacy_fetch;
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use suppaftp::FtpStream;
+use suppaftp::{list::File as FtpListFile, FtpStream};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[tauri::command]
@@ -355,6 +356,8 @@ fn run_content_sync_background(
                     continue;
                 };
 
+                let local_id = item.local_id.unwrap_or(0);
+
                 // Load media paths for this item from the DB
                 let media = {
                     let Ok(conn) = app.try_state::<AppState>()
@@ -365,7 +368,6 @@ fn run_content_sync_background(
                         continue;
                     };
 
-                    let local_id = item.local_id.unwrap_or(0);
                     match item.entity_type.as_str() {
                         "hymn" => crate::db::queries::content_sync::get_hymn_media_paths(&conn, local_id),
                         "album" => crate::db::queries::content_sync::get_album_media_paths(&conn, local_id),
@@ -397,24 +399,62 @@ fn run_content_sync_background(
 
                 let mut item_success = true;
 
-                // Download each missing asset — skipping those without a resolvable remote URL
-                let assets: &[(Option<String>, Option<String>)] = &[
-                    (media.audio_path.clone(), music_detail.as_ref().and_then(|d| d.url_music.clone())),
-                    (media.playback_path.clone(), music_detail.as_ref().and_then(|d| d.url_instrumental_music.clone())),
-                    (media.cover_path.clone(), music_detail.as_ref().and_then(|d| d.url_image.clone())),
+                // Download each missing asset — (column, local_rel_path, remote_url).
+                // local_rel_path may be None for managed hymns never downloaded before;
+                // in that case, derive the local path from the remote URL and update the DB after download.
+                let assets: Vec<(&str, Option<String>, Option<String>)> = vec![
+                    ("audio", media.audio_path.clone(), music_detail.as_ref().and_then(|d| d.url_music.clone())),
+                    ("playback", media.playback_path.clone(), music_detail.as_ref().and_then(|d| d.url_instrumental_music.clone())),
+                    ("cover", media.cover_path.clone(), music_detail.as_ref().and_then(|d| d.url_image.clone())),
                 ];
 
-                for (local_rel_path, remote_url) in assets {
-                    let Some(ref path) = local_rel_path else { continue; };
+                let api_id = item.remote_id.unwrap_or(local_id);
 
-                    let full_path = app_data_dir.join(path);
-                    if full_path.exists() { continue; } // already present
+                for (col, local_rel_path, remote_url) in &assets {
+                    // Determine effective local path:
+                    // - If already in DB, use existing path (preserves HTTP-importer layout).
+                    // - If null (never downloaded), derive using HTTP-importer path format
+                    //   (media/{subfolder}/{api_id}/{filename}) so FTP and HTTP files are co-located.
+                    let effective_path = match (local_rel_path, remote_url) {
+                        (Some(p), _) => p.clone(),
+                        (None, Some(url)) => {
+                            let subfolder = match *col {
+                                "audio" => "audio",
+                                "playback" => "playback",
+                                "cover" => "images",
+                                _ => "misc",
+                            };
+                            content_sync::derive_local_media_path(url, subfolder, api_id)
+                        }
+                        (None, None) => {
+                            // No local path and no remote URL — asset is unavailable on the server.
+                            // Write a sentinel so future load_summary counts stop flagging this hymn.
+                            // The sentinel is non-NULL so the managed_null_count query ignores it,
+                            // and media_paths_missing() skips "_na_" paths explicitly.
+                            if item.entity_type == "hymn" {
+                                if let Ok(conn) = app.try_state::<AppState>().ok_or(()).and_then(|s| s.db.get().map_err(|_| ())) {
+                                    save_hymn_path(&conn, local_id, col, "_na_");
+                                }
+                            }
+                            continue;
+                        }
+                    };
 
-                    // Resolve FTP remote path from the remote URL.
-                    // If URL is unavailable, we cannot safely determine the FTP path — skip.
+                    let full_path = app_data_dir.join(&effective_path);
+                    if full_path.exists() {
+                        // File already present; if path was never saved to DB, record it now
+                        if local_rel_path.is_none() && item.entity_type == "hymn" {
+                            if let Ok(conn) = app.try_state::<AppState>().ok_or(()).and_then(|s| s.db.get().map_err(|_| ())) {
+                                save_hymn_path(&conn, local_id, col, &effective_path);
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Resolve FTP remote path — requires a remote URL
                     let Some(ref url) = remote_url else {
-                        eprintln!("[sync] Skipping asset '{}': no remote URL available to resolve FTP path", path);
-                        continue; // Skip this asset — don't fail the whole item
+                        eprintln!("[sync] Skipping asset '{}': no remote URL to resolve FTP path", effective_path);
+                        continue;
                     };
 
                     let remote_path = content_sync::resolve_remote_path_from_url(url);
@@ -429,9 +469,29 @@ fn run_content_sync_background(
                         processed,
                     );
 
-                    if let Err(e) = ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path) {
-                        eprintln!("[sync] FTP error for '{}': {}", remote_path, e);
-                        item_success = false;
+                    match ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path) {
+                        Ok(()) => {
+                            // If this was a never-before-downloaded path, persist it in the DB
+                            if local_rel_path.is_none() && item.entity_type == "hymn" {
+                                if let Ok(conn) = app.try_state::<AppState>().ok_or(()).and_then(|s| s.db.get().map_err(|_| ())) {
+                                    save_hymn_path(&conn, local_id, col, &effective_path);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let err_msg = format!("FTP error for '{}': {}", remote_path, e);
+                            eprintln!("[sync] {}", err_msg);
+                            emit_progress(
+                                &app,
+                                &run_id,
+                                "downloading",
+                                ContentSyncRunStatus::Running,
+                                percent,
+                                Some(err_msg),
+                                processed,
+                            );
+                            item_success = false;
+                        }
                     }
                 }
 
@@ -520,6 +580,400 @@ fn finish_run(
     }
 }
 
+/// Persist a downloaded media path into the hymn row for future file-existence checks.
+/// Called only when the DB path was previously NULL (managed hymn, never downloaded before).
+fn save_hymn_path(conn: &rusqlite::Connection, hymn_id: i64, col: &str, path: &str) {
+    let result = match col {
+        "audio" => crate::db::queries::content_sync::set_hymn_audio_path(conn, hymn_id, path),
+        "playback" => crate::db::queries::content_sync::set_hymn_playback_path(conn, hymn_id, path),
+        "cover" => crate::db::queries::content_sync::set_hymn_cover_path(conn, hymn_id, path),
+        _ => return,
+    };
+    if let Err(e) = result {
+        eprintln!("[sync] Failed to persist hymn path '{}' for col '{}': {}", path, col, e);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FTP File Browser commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Data needed to map an FTP remote path back to a structured local path
+/// (media/{subfolder}/{api_id}/{filename})
+struct FtpPathMapEntry {
+    api_id: i64,
+    subfolder: String,
+}
+
+/// Load a mapping of known FTP remote paths to their respective API IDs and subfolders.
+/// This allows the FTP browser to co-locate files in the same folders as the HTTP fetcher.
+fn get_ftp_path_mapping(conn: &rusqlite::Connection) -> HashMap<String, FtpPathMapEntry> {
+    let mut map = HashMap::new();
+
+    // Mapping for hymns
+    let stmt = conn.prepare(
+        "SELECT api_music_id, url_music, url_instrumental_music, url_image FROM hymns WHERE api_music_id IS NOT NULL"
+    ).ok();
+
+    if let Some(mut stmt) = stmt {
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+            ))
+        }).ok();
+
+        if let Some(rows) = rows {
+            for row in rows.flatten() {
+                let api_id = row.0;
+                if let Some(url) = row.1 {
+                    map.insert(content_sync::resolve_remote_path_from_url(&url), FtpPathMapEntry { api_id, subfolder: "audio".to_string() });
+                }
+                if let Some(url) = row.2 {
+                    map.insert(content_sync::resolve_remote_path_from_url(&url), FtpPathMapEntry { api_id, subfolder: "playback".to_string() });
+                }
+                if let Some(url) = row.3 {
+                    map.insert(content_sync::resolve_remote_path_from_url(&url), FtpPathMapEntry { api_id, subfolder: "images".to_string() });
+                }
+            }
+        }
+    }
+
+    // Mapping for albums (collections)
+    let stmt = conn.prepare(
+        "SELECT api_album_id, url_image FROM collections WHERE api_album_id IS NOT NULL"
+    ).ok();
+
+    if let Some(mut stmt) = stmt {
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+            ))
+        }).ok();
+
+        if let Some(rows) = rows {
+            for row in rows.flatten() {
+                let api_id = row.0;
+                if let Some(url) = row.1 {
+                    map.insert(content_sync::resolve_remote_path_from_url(&url), FtpPathMapEntry { api_id, subfolder: "album_covers".to_string() });
+                }
+            }
+        }
+    }
+
+    map
+}
+
+/// List all files on the FTP server (walking known content directories) and
+/// compare each against local disk.  Returns `Vec<FtpFileEntry>`.
+///
+/// Known directories walked:
+///   config/musicas  — audio / playback files
+///   config/imagens  — cover images
+///
+/// For each remote file we derive the expected local path via
+/// `resolve_local_path_for_remote` and check whether it exists under
+/// `app_data_dir`.
+
+/// Recursively walk `dir` on the FTP server, collecting file entries.
+/// Directories are descended into (up to `MAX_DEPTH` levels to avoid
+/// infinite loops on symlink cycles or malformed server responses).
+fn collect_ftp_files_recursive(
+    stream: &mut FtpStream,
+    dir: &str,
+    app_data_dir: &std::path::Path,
+    path_map: &HashMap<String, FtpPathMapEntry>,
+    out: &mut Vec<FtpFileEntry>,
+) -> Result<(), AppError> {
+    const MAX_DEPTH: usize = 8;
+
+    fn walk(
+        stream: &mut FtpStream,
+        dir: &str,
+        app_data_dir: &std::path::Path,
+        path_map: &HashMap<String, FtpPathMapEntry>,
+        out: &mut Vec<FtpFileEntry>,
+        depth: usize,
+    ) -> Result<(), AppError> {
+        if depth > MAX_DEPTH {
+            return Ok(());
+        }
+
+        let lines = match stream.list(Some(dir)) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("[ftp-browser] list failed for '{}': {}", dir, e);
+                return Ok(()); // skip unreadable dirs, don't abort the whole walk
+            }
+        };
+
+        for line in lines {
+            let parsed = match FtpListFile::try_from(line.as_str()) {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+
+            let name = parsed.name();
+            // Ignore UNIX navigation entries
+            if name == "." || name == ".." {
+                continue;
+            }
+
+            let remote_path = format!("{}/{}", dir, name);
+
+            if parsed.is_directory() {
+                walk(stream, &remote_path, app_data_dir, path_map, out, depth + 1)?;
+            } else {
+                let file_size = Some(parsed.size() as u64);
+                let local_path = resolve_local_path_for_remote(&remote_path, path_map);
+                let exists_locally = local_path
+                    .as_ref()
+                    .is_some_and(|rel| app_data_dir.join(rel).exists());
+
+                out.push(FtpFileEntry {
+                    remote_path,
+                    local_path,
+                    exists_locally,
+                    file_size,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    walk(stream, dir, app_data_dir, path_map, out, 0)
+}
+#[tauri::command]
+#[specta::specta]
+pub fn list_ftp_files(app: AppHandle, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
+    let lang = get_app_lang(&app);
+    let app_clone = app.clone();
+    
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err { return Err(e); }
+    let conn = conn.unwrap();
+    let path_map = get_ftp_path_mapping(&conn);
+    drop(conn);
+
+    std::thread::spawn(move || {
+        match list_ftp_files_background(&app_clone, &lang, path_map) {
+            Ok(entries) => { let _ = app_clone.emit("ftp-files-loaded", entries); }
+            Err(e) => { let _ = app_clone.emit("ftp-files-error", e.to_string()); }
+        }
+    });
+    Ok(())
+}
+
+fn list_ftp_files_background(
+    app: &AppHandle, 
+    lang: &str,
+    path_map: HashMap<String, FtpPathMapEntry>,
+) -> Result<Vec<FtpFileEntry>, AppError> {
+    // Fetch FTP credentials
+    let params = tauri::async_runtime::block_on(crate::legacy_fetch::fetcher::fetch_params())
+        .map_err(|e| AppError::Internal(format!("Failed to fetch API params: {}", e)))?;
+
+    let conn_ftp_url = params.conn_ftp.ok_or_else(|| {
+        AppError::Internal("FTP URL not available from API params".to_string())
+    })?;
+
+    let settings = tauri::async_runtime::block_on(
+        ftp_sync::credentials::fetch_ftp_credentials(&conn_ftp_url, lang),
+    )?;
+
+    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+
+    // Connect once and reuse
+    let mut stream = ftp_sync::client::get_ftp_client(&settings)?;
+
+    // Directories to walk on the FTP server
+    let dirs = [
+        "config/musicas",
+        "config/imagens",
+    ];
+
+    let mut entries: Vec<FtpFileEntry> = Vec::new();
+
+    for dir in &dirs {
+        collect_ftp_files_recursive(&mut stream, dir, &app_data_dir, &path_map, &mut entries)?;
+    }
+
+    let _ = stream.quit();
+    Ok(entries)
+}
+
+/// Download a list of remote FTP paths to their corresponding local locations.
+///
+/// Runs in a background thread and returns immediately.
+/// Progress is emitted as `"ftp-file-download-progress"` events with
+/// `FtpDownloadProgress` payload.
+#[tauri::command]
+#[specta::specta]
+pub fn download_ftp_files(
+    remote_paths: Vec<String>, 
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let lang = get_app_lang(&app);
+    let app_clone = app.clone();
+
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err { return Err(e); }
+    let conn = conn.unwrap();
+    let path_map = get_ftp_path_mapping(&conn);
+    drop(conn);
+
+    std::thread::spawn(move || {
+        let result = download_ftp_files_background(app_clone, remote_paths, &lang, path_map);
+        if let Err(e) = result {
+            eprintln!("[ftp-browser] Background download failed: {}", e);
+        }
+    });
+
+    Ok(())
+}
+
+fn download_ftp_files_background(
+    app: AppHandle,
+    remote_paths: Vec<String>,
+    lang: &str,
+    path_map: HashMap<String, FtpPathMapEntry>,
+) -> Result<(), AppError> {
+    let params = tauri::async_runtime::block_on(crate::legacy_fetch::fetcher::fetch_params())
+        .map_err(|e| AppError::Internal(format!("Failed to fetch API params: {}", e)))?;
+
+    let conn_ftp_url = params.conn_ftp.ok_or_else(|| {
+        AppError::Internal("FTP URL not available from API params".to_string())
+    })?;
+
+    let settings = tauri::async_runtime::block_on(
+        ftp_sync::credentials::fetch_ftp_credentials(&conn_ftp_url, lang),
+    )?;
+
+    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+    let total = remote_paths.len();
+
+    let mut stream = ftp_sync::client::get_ftp_client(&settings)?;
+
+    for (index, remote_path) in remote_paths.iter().enumerate() {
+        let local_path = resolve_local_path_for_remote(remote_path, &path_map);
+
+        let Some(local_rel) = local_path else {
+            let _ = app.emit(
+                "ftp-file-download-progress",
+                &FtpDownloadProgress {
+                    remote_path: remote_path.clone(),
+                    done: index + 1,
+                    total,
+                    success: false,
+                    error: Some("Cannot derive local path for this remote path".to_string()),
+                },
+            );
+            continue;
+        };
+
+        let full_local = app_data_dir.join(&local_rel);
+
+        match ftp_sync::client::sync_file_on_stream(&mut stream, remote_path, &full_local) {
+            Ok(()) => {
+                let _ = app.emit(
+                    "ftp-file-download-progress",
+                    &FtpDownloadProgress {
+                        remote_path: remote_path.clone(),
+                        done: index + 1,
+                        total,
+                        success: true,
+                        error: None,
+                    },
+                );
+            }
+            Err(e) => {
+                let _ = app.emit(
+                    "ftp-file-download-progress",
+                    &FtpDownloadProgress {
+                        remote_path: remote_path.clone(),
+                        done: index + 1,
+                        total,
+                        success: false,
+                        error: Some(e.to_string()),
+                    },
+                );
+            }
+        }
+    }
+
+    let _ = stream.quit();
+    Ok(())
+}
+
+/// Derive a local relative path from an FTP remote path.
+///
+/// Mapping rules (mirrors what the sync executor does):
+///   config/musicas/...   → media/audio/{api_id}/{filename} (if known)
+///   config/imagens/...   → media/images/{api_id}/{filename} (if known)
+///
+/// Returns `None` if the remote path doesn't match any known pattern.
+fn resolve_local_path_for_remote(
+    remote_path: &str,
+    path_map: &HashMap<String, FtpPathMapEntry>,
+) -> Option<String> {
+    let filename = remote_path.rsplit('/').next()?;
+    if filename.is_empty() || !filename.contains('.') {
+        return None; // Looks like a directory entry — skip
+    }
+
+    // Try to find a mapping to a structured path used by the HTTP fetcher
+    if let Some(entry) = path_map.get(remote_path) {
+        return Some(format!("media/{}/{}/{}", entry.subfolder, entry.api_id, filename));
+    }
+
+    // Fallback: use the "browser" subfolder if mapping is unknown, 
+    // but still group by remote category.
+    if remote_path.starts_with("config/musicas/") {
+        let subpath = remote_path.trim_start_matches("config/musicas/");
+        let sanitized_subpath: String = subpath
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '/' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        Some(format!("media/audio/browser/{}", sanitized_subpath))
+    } else if remote_path.starts_with("config/imagens/") {
+        let subpath = remote_path.trim_start_matches("config/imagens/");
+        let sanitized_subpath: String = subpath
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '/' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        Some(format!("media/images/browser/{}", sanitized_subpath))
+    } else {
+        // Generic fallback: store under media/ftp-browser/ mirroring the remote path
+        let sanitized_full: String = remote_path
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '/' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        Some(format!("media/ftp-browser/{}", sanitized_full))
+    }
+}
+
 /// Read the active language from app settings, defaulting to "pt".
 fn get_app_lang(app: &AppHandle) -> String {
     app.try_state::<AppState>()
@@ -530,6 +984,106 @@ fn get_app_lang(app: &AppHandle) -> String {
                 .map(|s| s.value)
         })
         .unwrap_or_else(|| "pt".to_string())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sync execution helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Convert a language string (from app settings) to the API language enum.
+fn lang_to_api_language(lang: &str) -> crate::legacy_fetch::ApiLanguage {
+    match lang {
+        "en" => crate::legacy_fetch::ApiLanguage::En,
+        "es" => crate::legacy_fetch::ApiLanguage::Es,
+        _ => crate::legacy_fetch::ApiLanguage::Pt,
+    }
+}
+
+/// Download a single asset file via the already-open FTP stream.
+/// Derives the local relative path from the HTTP URL (same layout as the HTTP importer:
+/// `media/{subfolder}/{api_id}/{filename}`), skips if the file already exists locally,
+/// and returns the relative path on success.
+///
+/// Returns `None` if the URL is absent, the FTP stream is not available,
+/// or the download fails (errors are logged, not propagated).
+fn download_asset_via_ftp(
+    ftp_stream: &mut Option<FtpStream>,
+    url: &Option<String>,
+    subfolder: &str,
+    api_id: i64,
+    app_data_dir: &std::path::Path,
+) -> Option<String> {
+    let url = url.as_ref()?;
+    if url.is_empty() {
+        return None;
+    }
+    let rel_path = content_sync::derive_local_media_path(url, subfolder, api_id);
+    let full_path = app_data_dir.join(&rel_path);
+    if full_path.exists() {
+        return Some(rel_path);
+    }
+    let remote_path = content_sync::resolve_remote_path_from_url(url);
+    if let Some(stream) = ftp_stream {
+        match ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path) {
+            Ok(()) => return Some(rel_path),
+            Err(e) => {
+                eprintln!(
+                    "[sync] FTP download failed for '{}' -> '{}': {}",
+                    remote_path,
+                    full_path.display(),
+                    e
+                );
+            }
+        }
+    }
+    None
+}
+
+/// Ensure FTP credentials and stream are initialized.
+/// Both `ftp_settings` and `ftp_stream` are lazily populated once per run and reused.
+/// Returns `true` if the stream is ready after this call, `false` if unavailable.
+fn ensure_ftp_ready(
+    app: &AppHandle,
+    ftp_settings: &mut Option<ftp_sync::credentials::FtpSettings>,
+    ftp_stream: &mut Option<FtpStream>,
+) -> bool {
+    // Lazy-fetch credentials
+    if ftp_settings.is_none() {
+        let lang = get_app_lang(app);
+        let params_res =
+            tauri::async_runtime::block_on(legacy_fetch::fetcher::fetch_params());
+        if let Ok(params) = params_res {
+            if let Some(conn_ftp_url) = params.conn_ftp {
+                let creds_res = tauri::async_runtime::block_on(
+                    ftp_sync::credentials::fetch_ftp_credentials(&conn_ftp_url, &lang),
+                );
+                match creds_res {
+                    Ok(settings) => *ftp_settings = Some(settings),
+                    Err(e) => {
+                        eprintln!("[sync] Failed to fetch FTP credentials: {}", e);
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    let Some(ref settings) = ftp_settings else {
+        return false;
+    };
+
+    // Lazy-connect stream
+    if ftp_stream.is_none() {
+        match ftp_sync::client::get_ftp_client(settings) {
+            Ok(stream) => *ftp_stream = Some(stream),
+            Err(e) => {
+                eprintln!("[sync] FTP connect failed: {}", e);
+                return false;
+            }
+        }
+    }
+
+    ftp_stream.is_some()
 }
 
 #[cfg(test)]

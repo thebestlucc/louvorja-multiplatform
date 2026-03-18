@@ -238,6 +238,29 @@ async getContentSyncReport(runId: string) : Promise<Result<ContentSyncReport | n
     else return { status: "error", error: e  as any };
 }
 },
+async listFtpFiles() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_ftp_files") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Download a list of remote FTP paths to their corresponding local locations.
+ * 
+ * Runs in a background thread and returns immediately.
+ * Progress is emitted as `"ftp-file-download-progress"` events with
+ * `FtpDownloadProgress` payload.
+ */
+async downloadFtpFiles(remotePaths: string[]) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_ftp_files", { remotePaths }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getBibleVersions() : Promise<Result<BibleVersion[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_bible_versions") };
@@ -1344,7 +1367,7 @@ export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "e
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
 export type ContentSyncFallbackAction = "start_full_sync"
 export type ContentSyncPlan = { mode: ContentSyncRunMode; summary: ContentSyncSummary; items: ContentSyncPlanItem[] }
-export type ContentSyncPlanItem = { id: string; entityType: string; remoteId: number | null; localId: number | null; action: ContentSyncPlanItemAction; status: ContentSyncPlanItemStatus; reason: string | null }
+export type ContentSyncPlanItem = { id: string; entityType: string; remoteId: number; localId: number; action: ContentSyncPlanItemAction; status: ContentSyncPlanItemStatus; reason: string | null; remotePath: string | null; label: string | null }
 export type ContentSyncPlanItemAction = "create_hymn" | "update_hymn" | "create_album" | "update_album" | "relink_collection_hymn" | "repair_media" | "delete_remote_managed_hymn" | "delete_remote_managed_album" | "full_sync_fallback"
 export type ContentSyncPlanItemStatus = "pending" | "running" | "completed" | "skipped" | "failed"
 export type ContentSyncProgress = { runId: string; step: string; status: ContentSyncRunStatus; percent: number; message: string | null; itemsTotal: number; itemsProcessed: number }

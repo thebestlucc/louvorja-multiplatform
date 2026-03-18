@@ -47,11 +47,11 @@ describe("audio sync helper", () => {
   });
 
   test("resolves a slide timing window using the next exact sync point", () => {
-    assert.deepEqual(resolveSlideTimingWindow(syncPoints, 1, "karaoke", 15_000), {
+    assert.deepEqual(resolveSlideTimingWindow(syncPoints, 1, "karaoke"), {
       startMs: 5_000,
       endMs: 9_000,
     });
-    assert.deepEqual(resolveSlideTimingWindow(syncPoints, 2, "karaoke", 15_000), {
+    assert.deepEqual(resolveSlideTimingWindow(syncPoints, 2, "karaoke"), {
       startMs: 9_000,
       endMs: null,
     });
@@ -63,7 +63,7 @@ describe("audio sync helper", () => {
       { slideIndex: 1, timestampMs: 1_000, instrumentalTimestampMs: 5_000 },
     ];
 
-    const timingWindow = resolveSlideTimingWindow(finalGapSyncPoints, 2, "karaoke", 15_000);
+    const timingWindow = resolveSlideTimingWindow(finalGapSyncPoints, 2, "karaoke");
 
     assert.deepEqual(timingWindow, {
       startMs: 5_000,
