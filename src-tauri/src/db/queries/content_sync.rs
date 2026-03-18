@@ -367,6 +367,22 @@ pub fn get_album_media_paths(
     .map_err(AppError::Database)
 }
 
+/// Update the local_id of an existing content_sync_entities row.
+/// Called after CreateHymn/CreateAlbum so the next plan run resolves the entity.
+pub fn set_content_sync_entity_local_id(
+    conn: &Connection,
+    entity_type: &str,
+    remote_id: i64,
+    local_id: i64,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE content_sync_entities SET local_id = ?1, updated_local_at = datetime('now')
+         WHERE entity_type = ?2 AND remote_id = ?3",
+        rusqlite::params![local_id, entity_type, remote_id],
+    )?;
+    Ok(())
+}
+
 pub fn set_hymn_audio_path(conn: &Connection, hymn_id: i64, path: &str) -> Result<(), AppError> {
     conn.execute("UPDATE hymns SET audio_path = ?2 WHERE id = ?1", params![hymn_id, path])
         .map_err(AppError::Database)?;

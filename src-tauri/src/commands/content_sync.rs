@@ -502,8 +502,142 @@ fn run_content_sync_background(
                 }
             }
 
+            ContentSyncPlanItemAction::CreateHymn | ContentSyncPlanItemAction::UpdateHymn => {
+                let is_update =
+                    matches!(item.action, ContentSyncPlanItemAction::UpdateHymn);
+                let Some(api_id) = item.remote_id else {
+                    eprintln!("[sync] {:?}: skipping — no remote_id", item.action);
+                    skipped_count += 1;
+                    continue;
+                };
+
+                emit_progress(
+                    &app,
+                    &run_id,
+                    "executing",
+                    ContentSyncRunStatus::Running,
+                    percent,
+                    Some(format!(
+                        "{} hymn (api_id={})…",
+                        if is_update { "Updating" } else { "Creating" },
+                        api_id
+                    )),
+                    processed,
+                );
+
+                // Ensure FTP is ready (credentials + connection)
+                if !ensure_ftp_ready(&app, &mut ftp_settings, &mut ftp_stream) {
+                    eprintln!("[sync] {:?}: FTP unavailable — skipping api_id={}", item.action, api_id);
+                    skipped_count += 1;
+                    continue;
+                }
+
+                // Fetch full hymn detail (includes lyrics)
+                let lang = get_app_lang(&app);
+                let api_lang = lang_to_api_language(&lang);
+                let detail_res = tauri::async_runtime::block_on(
+                    crate::legacy_fetch::fetcher::fetch_music_detail(api_lang, api_id),
+                );
+                let music = match detail_res {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!(
+                            "[sync] {:?}: fetch_music_detail failed for api_id={}: {}",
+                            item.action, api_id, e
+                        );
+                        failed_count += 1;
+                        continue;
+                    }
+                };
+
+                let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+
+                // Download assets via FTP
+                let audio_path = download_asset_via_ftp(
+                    &mut ftp_stream,
+                    &music.url_music,
+                    "audio",
+                    api_id,
+                    &app_data_dir,
+                );
+                let playback_path = download_asset_via_ftp(
+                    &mut ftp_stream,
+                    &music.url_instrumental_music,
+                    "playback",
+                    api_id,
+                    &app_data_dir,
+                );
+                let cover_path = download_asset_via_ftp(
+                    &mut ftp_stream,
+                    &music.url_image,
+                    "images",
+                    api_id,
+                    &app_data_dir,
+                );
+
+                // Import (upsert) into DB
+                let conn_res = app
+                    .try_state::<AppState>()
+                    .ok_or(())
+                    .and_then(|s| s.db.get().map_err(|_| ()));
+                let Ok(conn) = conn_res else {
+                    eprintln!("[sync] {:?}: DB connection unavailable", item.action);
+                    failed_count += 1;
+                    continue;
+                };
+
+                match crate::content_sync::importer::import_music_to_db(
+                    &conn,
+                    &music,
+                    audio_path.as_deref(),
+                    playback_path.as_deref(),
+                    cover_path.as_deref(),
+                    is_update, // replace_existing = true for UpdateHymn
+                    None,       // album_name — not known at hymn level
+                    Some(api_id),
+                    Some("hymnal"),
+                ) {
+                    Ok((_, Some(local_id))) => {
+                        // Persist the local_id into content_sync_entities so future plan
+                        // runs can resolve this entity without re-creating it.
+                        let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
+                            &conn,
+                            "hymn",
+                            api_id,
+                            local_id,
+                        );
+                        applied_count += 1;
+                    }
+                    Ok((_, None)) => {
+                        eprintln!(
+                            "[sync] {:?}: import returned no local id for api_id={}",
+                            item.action, api_id
+                        );
+                        failed_count += 1;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[sync] {:?}: import_music_to_db failed for api_id={}: {}",
+                            item.action, api_id, e
+                        );
+                        failed_count += 1;
+                    }
+                }
+            }
+
+            ContentSyncPlanItemAction::CreateAlbum | ContentSyncPlanItemAction::UpdateAlbum => {
+                // Implemented in next task
+                applied_count += 1;
+            }
+
+            ContentSyncPlanItemAction::DeleteRemoteManagedHymn
+            | ContentSyncPlanItemAction::DeleteRemoteManagedAlbum => {
+                // Implemented in next task
+                skipped_count += 1;
+            }
+
             _ => {
-                // Placeholder for other actions (CreateHymn, UpdateHymn, etc.)
+                // Remaining unhandled variants
                 applied_count += 1;
             }
         }
