@@ -848,9 +848,64 @@ fn run_content_sync_background(
                 }
             }
 
-            ContentSyncPlanItemAction::DeleteRemoteManagedHymn
-            | ContentSyncPlanItemAction::DeleteRemoteManagedAlbum => {
-                // Implemented in next task
+            ContentSyncPlanItemAction::DeleteRemoteManagedHymn => {
+                let Some(api_id) = item.remote_id else {
+                    eprintln!("[sync] DeleteRemoteManagedHymn: skipping — no remote_id");
+                    skipped_count += 1;
+                    continue;
+                };
+
+                // Do not hard-delete locally — the user may have service items or annotations.
+                // Just mark the content_sync_entities row as deleted so future plan runs
+                // don't keep emitting this action.
+                let conn_res = app
+                    .try_state::<AppState>()
+                    .ok_or(())
+                    .and_then(|s| s.db.get().map_err(|_| ()));
+                let Ok(conn) = conn_res else {
+                    eprintln!("[sync] DeleteRemoteManagedHymn: DB connection unavailable");
+                    failed_count += 1;
+                    continue;
+                };
+
+                let _ = conn.execute(
+                    "UPDATE content_sync_entities SET deleted = 1, updated_local_at = datetime('now')
+                     WHERE entity_type = 'hymn' AND remote_id = ?1",
+                    rusqlite::params![api_id],
+                );
+                eprintln!(
+                    "[sync] DeleteRemoteManagedHymn: marked api_id={} as deleted in content_sync_entities (not hard-deleted)",
+                    api_id
+                );
+                skipped_count += 1;
+            }
+
+            ContentSyncPlanItemAction::DeleteRemoteManagedAlbum => {
+                let Some(api_id) = item.remote_id else {
+                    eprintln!("[sync] DeleteRemoteManagedAlbum: skipping — no remote_id");
+                    skipped_count += 1;
+                    continue;
+                };
+
+                let conn_res = app
+                    .try_state::<AppState>()
+                    .ok_or(())
+                    .and_then(|s| s.db.get().map_err(|_| ()));
+                let Ok(conn) = conn_res else {
+                    eprintln!("[sync] DeleteRemoteManagedAlbum: DB connection unavailable");
+                    failed_count += 1;
+                    continue;
+                };
+
+                let _ = conn.execute(
+                    "UPDATE content_sync_entities SET deleted = 1, updated_local_at = datetime('now')
+                     WHERE entity_type = 'album' AND remote_id = ?1",
+                    rusqlite::params![api_id],
+                );
+                eprintln!(
+                    "[sync] DeleteRemoteManagedAlbum: marked api_id={} as deleted in content_sync_entities (not hard-deleted)",
+                    api_id
+                );
                 skipped_count += 1;
             }
 
