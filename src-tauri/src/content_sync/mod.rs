@@ -1,12 +1,15 @@
 #![allow(dead_code)]
 
 pub mod importer;
+pub mod manifest;
+pub mod snapshot;
 
 use crate::db::models::{
-    ContentSyncFallbackAction, ContentSyncLocalMediaPaths, ContentSyncPlan, ContentSyncPlanItem,
-    ContentSyncPlanItemAction, ContentSyncPlanItemStatus, ContentSyncRemoteEntityInput,
-    ContentSyncProgress, ContentSyncReport, ContentSyncRun, ContentSyncRunMode,
-    ContentSyncRunStatus, ContentSyncState, ContentSyncSummary, ContentSyncSummaryMode,
+    ContentSyncFallbackAction, ContentSyncLocalMediaPaths, ContentSyncMetadataSource,
+    ContentSyncPlan, ContentSyncPlanItem, ContentSyncPlanItemAction, ContentSyncPlanItemStatus,
+    ContentSyncProgress, ContentSyncRemoteEntityInput, ContentSyncReport, ContentSyncRun,
+    ContentSyncRunMode, ContentSyncRunStatus, ContentSyncState, ContentSyncSummary,
+    ContentSyncSummaryMode,
 };
 use crate::db::queries::{content_sync, settings};
 use crate::error::AppError;
@@ -34,6 +37,18 @@ pub fn new_run_id() -> String {
     Uuid::new_v4().to_string()
 }
 
+pub fn pending_progress(run_id: &str) -> ContentSyncProgress {
+    ContentSyncProgress {
+        run_id: run_id.to_string(),
+        step: "planning".to_string(),
+        status: ContentSyncRunStatus::Pending,
+        percent: 0.0,
+        message: Some("Preparing content sync run.".to_string()),
+        items_total: 0,
+        items_processed: 0,
+    }
+}
+
 pub fn initial_progress(run_id: &str, plan: &ContentSyncPlan) -> ContentSyncProgress {
     let requires_fallback = plan_requires_full_sync_fallback(plan);
     ContentSyncProgress {
@@ -53,6 +68,26 @@ pub fn initial_progress(run_id: &str, plan: &ContentSyncPlan) -> ContentSyncProg
         items_total: plan.items.len() as u64,
         items_processed: 0,
     }
+}
+
+pub fn begin_pending_runtime_run(
+    conn: &Connection,
+    run_id: &str,
+) -> Result<ContentSyncRun, AppError> {
+    let run = ContentSyncRun {
+        id: run_id.to_string(),
+        mode: ContentSyncRunMode::Selective,
+        status: ContentSyncRunStatus::Pending,
+        requested_version: None,
+        completed_version: None,
+        planned_changes_json: None,
+        result_json: None,
+        error_json: None,
+        created_at: chrono_like_now(),
+        finished_at: None,
+    };
+    content_sync::create_content_sync_run(conn, &run)?;
+    Ok(run)
 }
 
 pub fn begin_runtime_run(
@@ -80,6 +115,26 @@ pub fn begin_runtime_run(
     Ok(run)
 }
 
+pub fn prepare_runtime_run(
+    conn: &Connection,
+    run_id: &str,
+    plan: &ContentSyncPlan,
+) -> Result<(), AppError> {
+    let mode = if plan_requires_full_sync_fallback(plan) {
+        ContentSyncRunMode::Full
+    } else {
+        plan.mode.clone()
+    };
+    let planned_changes_json = serde_json::to_string(&plan.items)?;
+    content_sync::prepare_content_sync_run(
+        conn,
+        run_id,
+        mode,
+        plan.summary.remote_version,
+        Some(&planned_changes_json),
+    )
+}
+
 pub fn update_runtime_progress(
     runtime_state: &mut ContentSyncRuntimeState,
     run_id: &str,
@@ -98,6 +153,15 @@ pub fn update_runtime_progress(
     Some(run.progress.clone())
 }
 
+pub fn replace_runtime_progress(
+    runtime_state: &mut ContentSyncRuntimeState,
+    progress: ContentSyncProgress,
+) -> Option<ContentSyncProgress> {
+    let run = runtime_state.runs.get_mut(&progress.run_id)?;
+    run.progress = progress.clone();
+    Some(progress)
+}
+
 pub fn finalize_runtime_run(
     conn: &Connection,
     run_id: &str,
@@ -114,6 +178,7 @@ pub fn finalize_runtime_run(
         "skippedCount": skipped_count,
         "failedCount": failed_count,
         "fallbackUsed": fallback_used,
+        "metadataSource": plan.summary.metadata_source,
         "message": message,
     })
     .to_string();
@@ -123,6 +188,37 @@ pub fn finalize_runtime_run(
         run_id,
         status,
         plan.summary.remote_version,
+        Some(&result_json),
+        None,
+        Some(&chrono_like_now()),
+    )?;
+
+    load_report(conn, run_id)?.ok_or_else(|| {
+        AppError::Internal(format!("Content sync report '{}' was not persisted.", run_id))
+    })
+}
+
+pub fn finalize_runtime_run_without_plan(
+    conn: &Connection,
+    run_id: &str,
+    status: ContentSyncRunStatus,
+    message: Option<String>,
+) -> Result<ContentSyncReport, AppError> {
+    let result_json = serde_json::json!({
+        "appliedCount": 0,
+        "skippedCount": 0,
+        "failedCount": if matches!(status, ContentSyncRunStatus::Failed) { 1 } else { 0 },
+        "fallbackUsed": false,
+        "metadataSource": serde_json::Value::Null,
+        "message": message,
+    })
+    .to_string();
+
+    content_sync::complete_content_sync_run(
+        conn,
+        run_id,
+        status,
+        None,
         Some(&result_json),
         None,
         Some(&chrono_like_now()),
@@ -240,22 +336,14 @@ where
 /// as HTTP-imported files, making them interchangeable.
 /// `subfolder` is "audio", "playback", or "images".
 pub fn derive_local_media_path(url: &str, subfolder: &str, api_id: i64) -> String {
-    let filename = url.rsplit('/').next().unwrap_or("file");
-    let sanitized: String = filename
-        .chars()
-        .map(|ch| {
-            if ch.is_alphanumeric() || ch == '.' || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    let filename = if sanitized.is_empty() || sanitized == "." {
-        format!("file.{}", if subfolder == "images" { "jpg" } else { "mp3" })
-    } else {
-        sanitized
-    };
+    let filename = importer::filename_from_pathish(
+        url,
+        if subfolder == "images" {
+            "jpg"
+        } else {
+            "mp3"
+        },
+    );
     format!("media/{}/{}/{}", subfolder, api_id, filename)
 }
 
@@ -267,7 +355,9 @@ pub fn resolve_remote_path_from_url(url: &str) -> String {
             let sub_parts: Vec<&str> = sub.splitn(2, '/').collect();
             if sub_parts.len() == 2 {
                 let lang = sub_parts[0];
-                let rest = sub_parts[1];
+                let rest = urlencoding::decode(sub_parts[1])
+                    .map(|value| value.into_owned())
+                    .unwrap_or_else(|_| sub_parts[1].to_string());
                 if lang == "pt" {
                     return format!("config/musicas/{}", rest);
                 } else {
@@ -278,7 +368,10 @@ pub fn resolve_remote_path_from_url(url: &str) -> String {
     } else if url.contains("/file/images/") {
         let parts: Vec<&str> = url.split("/file/images/").collect();
         if parts.len() == 2 {
-            return format!("config/imagens/{}", parts[1]);
+            let decoded = urlencoding::decode(parts[1])
+                .map(|value| value.into_owned())
+                .unwrap_or_else(|_| parts[1].to_string());
+            return format!("config/imagens/{}", decoded);
         }
     }
     url.to_string()
@@ -437,6 +530,20 @@ pub fn build_manifest_plan<F>(
 where
     F: Fn(&str) -> bool,
 {
+    build_manifest_plan_with_source(conn, remote_version, hymns, albums, file_exists, None)
+}
+
+pub fn build_manifest_plan_with_source<F>(
+    conn: &Connection,
+    remote_version: Option<i64>,
+    hymns: &[ContentSyncRemoteEntityInput],
+    albums: &[ContentSyncRemoteEntityInput],
+    file_exists: F,
+    metadata_source: Option<ContentSyncMetadataSource>,
+) -> Result<ContentSyncPlan, AppError>
+where
+    F: Fn(&str) -> bool,
+{
     let sync_state = hydrated_sync_state(conn)?;
     let local_entities = content_sync::list_content_sync_entities(conn, None)?;
     let local_by_key = local_entities
@@ -487,6 +594,7 @@ where
             changed_album_count,
             missing_asset_count,
             fallback_action: None,
+            metadata_source,
             last_checked_at: sync_state.as_ref().and_then(|state| state.last_checked_at.clone()),
             last_synced_at: sync_state.as_ref().and_then(|state| state.last_synced_at.clone()),
             last_sync_status: sync_state
@@ -522,6 +630,7 @@ pub fn baseline_degraded_summary(
         changed_album_count: 0,
         missing_asset_count: 0,
         fallback_action: Some(ContentSyncFallbackAction::StartFullSync),
+        metadata_source: None,
         last_checked_at: state.as_ref().and_then(|value| value.last_checked_at.clone()),
         last_synced_at: state.as_ref().and_then(|value| value.last_synced_at.clone()),
         last_sync_status: state
@@ -685,7 +794,7 @@ fn plan_item(
         status: ContentSyncPlanItemStatus::Pending,
         reason: Some(reason.to_string()),
         remote_path: None,
-        label: None,
+        label: remote.label.clone(),
     }
 }
 
@@ -719,9 +828,46 @@ where
         return Ok(false);
     };
 
+    if entity_type == "album" {
+        let album_missing = content_sync::get_album_media_paths(conn, local_id)?
+            .as_ref()
+            .is_some_and(|media| media_paths_missing(media, file_exists));
+        if album_missing {
+            return Ok(true);
+        }
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT h.id, h.audio_path, h.playback_path, h.cover_path, c.name
+            FROM collection_hymns ch
+            INNER JOIN hymns h ON h.id = ch.hymn_id
+            INNER JOIN collections c ON c.id = ch.collection_id
+            WHERE ch.collection_id = ?1
+            ORDER BY ch.item_order ASC, h.id ASC
+            "#,
+        )?;
+        let rows = stmt.query_map([local_id], |row| {
+            Ok(ContentSyncLocalMediaPaths {
+                entity_type: "hymn".to_string(),
+                local_id: row.get(0)?,
+                audio_path: row.get(1)?,
+                playback_path: row.get(2)?,
+                cover_path: row.get(3)?,
+                album: row.get(4)?,
+                language: None,
+            })
+        })?;
+
+        for row in rows {
+            if media_paths_missing(&row?, file_exists) {
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
+
     let media = match entity_type {
         "hymn" => content_sync::get_hymn_media_paths(conn, local_id)?,
-        "album" => content_sync::get_album_media_paths(conn, local_id)?,
         _ => None,
     };
 
@@ -748,13 +894,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        baseline_degraded_summary, begin_runtime_run, build_degraded_plan, build_manifest_plan,
-        finalize_runtime_run, initial_progress, mark_run_cancelled, new_run_id,
-        update_runtime_progress, ContentSyncRunState, ContentSyncRuntimeState,
+        baseline_degraded_summary, begin_pending_runtime_run, begin_runtime_run,
+        build_degraded_plan, build_manifest_plan, build_manifest_plan_with_source,
+        derive_local_media_path, finalize_runtime_run, finalize_runtime_run_without_plan,
+        initial_progress, mark_run_cancelled, new_run_id, pending_progress,
+        prepare_runtime_run, replace_runtime_progress, update_runtime_progress,
+        ContentSyncRunState, ContentSyncRuntimeState,
     };
     use crate::db::models::{
-        ContentSyncEntity, ContentSyncPlanItemAction, ContentSyncRemoteEntityInput,
-        ContentSyncRunStatus, ContentSyncSummaryMode,
+        ContentSyncEntity, ContentSyncMetadataSource, ContentSyncPlanItemAction,
+        ContentSyncRemoteEntityInput, ContentSyncRunStatus, ContentSyncSummaryMode,
     };
     use crate::db::queries::content_sync;
     use rusqlite::Connection;
@@ -819,6 +968,11 @@ mod tests {
                 cover_path TEXT,
                 name TEXT NOT NULL DEFAULT ''
             );
+            CREATE TABLE collection_hymns (
+                collection_id INTEGER NOT NULL,
+                hymn_id INTEGER NOT NULL,
+                item_order INTEGER NOT NULL DEFAULT 0
+            );
             "#,
         )
         .expect("planner schema");
@@ -843,6 +997,7 @@ mod tests {
             playback_version: Some("1".to_string()),
             updated_at: Some("2026-03-08T12:00:00Z".to_string()),
             deleted: false,
+            label: Some(format!("{entity_type}-{remote_id}")),
         }
     }
 
@@ -881,6 +1036,16 @@ mod tests {
     }
 
     #[test]
+    fn derive_local_media_path_decodes_encoded_filenames() {
+        let url =
+            "https://api.louvorja.com.br/file/images/covers/Hino%2067%20%C3%81rvore.jpg";
+
+        let path = derive_local_media_path(url, "images", 67);
+
+        assert_eq!(path, "media/images/67/Hino_67_Árvore.jpg");
+    }
+
+    #[test]
     fn planner_classifies_new_remote_hymn() {
         let conn = setup_planner_db();
         let hymn = remote_entity("hymn", 101);
@@ -889,9 +1054,11 @@ mod tests {
             .expect("manifest plan");
 
         assert_eq!(plan.summary.mode, ContentSyncSummaryMode::Smart);
+        assert_eq!(plan.summary.metadata_source, None);
         assert_eq!(plan.summary.changed_hymn_count, 1);
         assert_eq!(plan.items.len(), 1);
         assert_eq!(plan.items[0].action, ContentSyncPlanItemAction::CreateHymn);
+        assert_eq!(plan.items[0].label.as_deref(), Some("hymn-101"));
     }
 
     #[test]
@@ -969,6 +1136,41 @@ mod tests {
 
         assert_eq!(plan.items.len(), 1);
         assert_eq!(plan.summary.missing_asset_count, 1);
+        assert_eq!(plan.items[0].action, ContentSyncPlanItemAction::RepairMedia);
+    }
+
+    #[test]
+    fn planner_marks_album_for_repair_when_collection_song_media_is_missing() {
+        let conn = setup_planner_db();
+        conn.execute(
+            "INSERT INTO collections (id, cover_path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params![2_i64, "album-cover.jpg", "Collection A"],
+        )
+        .expect("seed collection");
+        conn.execute(
+            "INSERT INTO hymns (id, audio_path, playback_path, cover_path, title) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![9_i64, "missing-song.mp3", "playback.mp3", "cover.jpg", "Song A"],
+        )
+        .expect("seed hymn");
+        conn.execute(
+            "INSERT INTO collection_hymns (collection_id, hymn_id, item_order) VALUES (?1, ?2, 1)",
+            rusqlite::params![2_i64, 9_i64],
+        )
+        .expect("link collection song");
+        content_sync::upsert_content_sync_entity(
+            &conn,
+            &local_entity("album", 55, 2, "1"),
+        )
+        .expect("seed album sync entity");
+
+        let mut album = remote_entity("album", 55);
+        album.local_id = Some(2);
+
+        let plan =
+            build_manifest_plan(&conn, Some(11), &[], &[album], |path| path != "missing-song.mp3")
+                .expect("manifest plan");
+
+        assert_eq!(plan.items.len(), 1);
         assert_eq!(plan.items[0].action, ContentSyncPlanItemAction::RepairMedia);
     }
 
@@ -1052,6 +1254,19 @@ mod tests {
     }
 
     #[test]
+    fn runtime_creates_pending_run_record_before_plan_exists() {
+        let conn = setup_planner_db();
+        let run_id = new_run_id();
+
+        let run = begin_pending_runtime_run(&conn, &run_id).expect("create pending run");
+
+        assert_eq!(run.id, run_id);
+        assert_eq!(run.status, ContentSyncRunStatus::Pending);
+        assert_eq!(run.requested_version, None);
+        assert!(run.planned_changes_json.is_none());
+    }
+
+    #[test]
     fn runtime_updates_progress_state() {
         let conn = setup_planner_db();
         let run_id = new_run_id();
@@ -1086,6 +1301,35 @@ mod tests {
     }
 
     #[test]
+    fn runtime_can_replace_pending_progress_after_plan_is_ready() {
+        let run_id = new_run_id();
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        let mut runtime_state = ContentSyncRuntimeState::default();
+        runtime_state.runs.insert(
+            run_id.clone(),
+            ContentSyncRunState {
+                progress: pending_progress(&run_id),
+                report: None,
+                cancel_flag,
+            },
+        );
+
+        let plan_progress = initial_progress(
+            &run_id,
+            &build_degraded_plan(
+                &setup_planner_db(),
+                baseline_degraded_summary(Some(11), None),
+                |_| true,
+            )
+            .expect("plan"),
+        );
+
+        let updated = replace_runtime_progress(&mut runtime_state, plan_progress).expect("replace progress");
+        assert_eq!(updated.items_total, 1);
+        assert_eq!(updated.status, ContentSyncRunStatus::Pending);
+    }
+
+    #[test]
     fn runtime_persists_completed_report() {
         let conn = setup_planner_db();
         let run_id = new_run_id();
@@ -1107,7 +1351,67 @@ mod tests {
         assert_eq!(report.run_id, run_id);
         assert_eq!(report.status, ContentSyncRunStatus::Completed);
         assert!(report.fallback_used);
+        assert_eq!(report.metadata_source, None);
         assert_eq!(report.skipped_count, 1);
+    }
+
+    #[test]
+    fn runtime_prepares_pending_run_with_plan_before_execution() {
+        let conn = setup_planner_db();
+        let hymn = remote_entity("hymn", 101);
+        let plan = build_manifest_plan_with_source(
+            &conn,
+            Some(11),
+            &[hymn],
+            &[],
+            |_| true,
+            Some(ContentSyncMetadataSource::DbSnapshot),
+        )
+        .expect("manifest plan");
+        let run_id = new_run_id();
+
+        begin_pending_runtime_run(&conn, &run_id).expect("create pending run");
+        prepare_runtime_run(&conn, &run_id, &plan).expect("prepare pending run");
+
+        let stored = content_sync::get_content_sync_run(&conn, &run_id)
+            .expect("load run")
+            .expect("stored run");
+        assert_eq!(stored.requested_version, Some(11));
+        assert!(stored.planned_changes_json.is_some());
+    }
+
+    #[test]
+    fn runtime_report_persists_metadata_source_from_plan() {
+        let conn = setup_planner_db();
+        let hymn = remote_entity("hymn", 101);
+        let plan = build_manifest_plan_with_source(
+            &conn,
+            Some(11),
+            &[hymn],
+            &[],
+            |_| true,
+            Some(ContentSyncMetadataSource::DbSnapshot),
+        )
+        .expect("manifest plan");
+        let run_id = new_run_id();
+        begin_runtime_run(&conn, &run_id, &plan).expect("create run");
+
+        let report = finalize_runtime_run(
+            &conn,
+            &run_id,
+            &plan,
+            ContentSyncRunStatus::Completed,
+            1,
+            0,
+            0,
+            Some("done".to_string()),
+        )
+        .expect("persist report");
+
+        assert_eq!(
+            report.metadata_source,
+            Some(ContentSyncMetadataSource::DbSnapshot)
+        );
     }
 
     #[test]
@@ -1134,5 +1438,24 @@ mod tests {
         .expect("persist cancelled report");
 
         assert_eq!(report.status, ContentSyncRunStatus::Cancelled);
+    }
+
+    #[test]
+    fn runtime_can_fail_pending_run_without_plan() {
+        let conn = setup_planner_db();
+        let run_id = new_run_id();
+        begin_pending_runtime_run(&conn, &run_id).expect("create pending run");
+
+        let report = finalize_runtime_run_without_plan(
+            &conn,
+            &run_id,
+            ContentSyncRunStatus::Failed,
+            Some("Preparation failed.".to_string()),
+        )
+        .expect("persist failed report");
+
+        assert_eq!(report.status, ContentSyncRunStatus::Failed);
+        assert_eq!(report.failed_count, 1);
+        assert_eq!(report.message.as_deref(), Some("Preparation failed."));
     }
 }
