@@ -1,6 +1,6 @@
 import { Link, Outlet, createFileRoute, useMatchRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, CaseSensitive, Clock3, LayoutGrid, Shuffle, Timer } from "lucide-react";
+import { CalendarDays, CaseSensitive, Clock3, LayoutGrid, Library, Shuffle, Timer } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export const Route = createFileRoute("/utilities")({
@@ -12,6 +12,7 @@ const utilityNav = [
   { to: "/utilities/timer", icon: Timer, key: "utilities.nav.timer" },
   { to: "/utilities/clock", icon: Clock3, key: "utilities.nav.clock" },
   { to: "/utilities/schedules", icon: CalendarDays, key: "utilities.nav.schedules" },
+  { to: "/utilities/media-library", icon: Library, key: "utilities.nav.mediaLibrary" },
   { to: "/utilities/lottery", icon: Shuffle, key: "utilities.nav.lottery" },
   { to: "/utilities/text", icon: CaseSensitive, key: "utilities.nav.text" },
 ] as const;

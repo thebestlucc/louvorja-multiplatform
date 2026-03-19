@@ -36,6 +36,7 @@ import { Route as BibleIndexRouteImport } from './routes/bible/index'
 import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
 import { Route as UtilitiesTextRouteImport } from './routes/utilities/text'
 import { Route as UtilitiesSchedulesRouteImport } from './routes/utilities/schedules'
+import { Route as UtilitiesMediaLibraryRouteImport } from './routes/utilities/media-library'
 import { Route as UtilitiesLotteryRouteImport } from './routes/utilities/lottery'
 import { Route as UtilitiesInteractiveTextRouteImport } from './routes/utilities/interactive-text'
 import { Route as UtilitiesIntegrityRouteImport } from './routes/utilities/integrity'
@@ -183,6 +184,11 @@ const UtilitiesSchedulesRoute = UtilitiesSchedulesRouteImport.update({
   path: '/schedules',
   getParentRoute: () => UtilitiesRouteRoute,
 } as any)
+const UtilitiesMediaLibraryRoute = UtilitiesMediaLibraryRouteImport.update({
+  id: '/media-library',
+  path: '/media-library',
+  getParentRoute: () => UtilitiesRouteRoute,
+} as any)
 const UtilitiesLotteryRoute = UtilitiesLotteryRouteImport.update({
   id: '/lottery',
   path: '/lottery',
@@ -268,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/utilities/integrity': typeof UtilitiesIntegrityRoute
   '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/media-library': typeof UtilitiesMediaLibraryRoute
   '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
@@ -299,6 +306,7 @@ export interface FileRoutesByTo {
   '/utilities/integrity': typeof UtilitiesIntegrityRoute
   '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/media-library': typeof UtilitiesMediaLibraryRoute
   '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
@@ -340,6 +348,7 @@ export interface FileRoutesById {
   '/utilities/integrity': typeof UtilitiesIntegrityRoute
   '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
+  '/utilities/media-library': typeof UtilitiesMediaLibraryRoute
   '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
@@ -382,6 +391,7 @@ export interface FileRouteTypes {
     | '/utilities/integrity'
     | '/utilities/interactive-text'
     | '/utilities/lottery'
+    | '/utilities/media-library'
     | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
@@ -413,6 +423,7 @@ export interface FileRouteTypes {
     | '/utilities/integrity'
     | '/utilities/interactive-text'
     | '/utilities/lottery'
+    | '/utilities/media-library'
     | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
@@ -453,6 +464,7 @@ export interface FileRouteTypes {
     | '/utilities/integrity'
     | '/utilities/interactive-text'
     | '/utilities/lottery'
+    | '/utilities/media-library'
     | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
@@ -676,6 +688,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UtilitiesSchedulesRouteImport
       parentRoute: typeof UtilitiesRouteRoute
     }
+    '/utilities/media-library': {
+      id: '/utilities/media-library'
+      path: '/media-library'
+      fullPath: '/utilities/media-library'
+      preLoaderRoute: typeof UtilitiesMediaLibraryRouteImport
+      parentRoute: typeof UtilitiesRouteRoute
+    }
     '/utilities/lottery': {
       id: '/utilities/lottery'
       path: '/lottery'
@@ -869,6 +888,7 @@ interface UtilitiesRouteRouteChildren {
   UtilitiesIntegrityRoute: typeof UtilitiesIntegrityRoute
   UtilitiesInteractiveTextRoute: typeof UtilitiesInteractiveTextRoute
   UtilitiesLotteryRoute: typeof UtilitiesLotteryRoute
+  UtilitiesMediaLibraryRoute: typeof UtilitiesMediaLibraryRoute
   UtilitiesSchedulesRoute: typeof UtilitiesSchedulesRoute
   UtilitiesTextRoute: typeof UtilitiesTextRoute
   UtilitiesTimerRoute: typeof UtilitiesTimerRoute
@@ -880,6 +900,7 @@ const UtilitiesRouteRouteChildren: UtilitiesRouteRouteChildren = {
   UtilitiesIntegrityRoute: UtilitiesIntegrityRoute,
   UtilitiesInteractiveTextRoute: UtilitiesInteractiveTextRoute,
   UtilitiesLotteryRoute: UtilitiesLotteryRoute,
+  UtilitiesMediaLibraryRoute: UtilitiesMediaLibraryRoute,
   UtilitiesSchedulesRoute: UtilitiesSchedulesRoute,
   UtilitiesTextRoute: UtilitiesTextRoute,
   UtilitiesTimerRoute: UtilitiesTimerRoute,
