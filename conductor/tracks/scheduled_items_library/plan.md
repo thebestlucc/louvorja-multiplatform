@@ -90,8 +90,8 @@ Ensure the backend compiles.
 **Files:**
 - Modify: `src-tauri/src/commands/spotlight.rs`
 
-- [ ] **Step 1: Update spotlight search query to include library items**
-- [ ] **Step 2: Commit**
+- [x] **Step 1: Update spotlight search query to include library items**
+- [x] **Step 2: Commit** (e030d4c)
 `git add . && git commit -m "feat(tauri): Add media library items to spotlight search"`
 
 ### Task 8: i18n and Polish
