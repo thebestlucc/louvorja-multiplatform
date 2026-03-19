@@ -354,7 +354,7 @@ function BibleIndex() {
       {bible.currentVersionId > 0 && (
         <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
           {/* Left panel: Verse display */}
-          <div className="order-2 min-h-0 flex-1 overflow-y-auto rounded-lg border bg-surface p-4 lg:order-1 lg:w-[38%] lg:flex-none">
+          <div className="order-2 min-h-0 flex-1 overflow-y-auto rounded-lg border bg-surface p-4 lg:order-1 lg:w-[15%] lg:flex-none">
             {bible.currentBook && bible.currentChapter > 0 ? (
               <div className="space-y-4">
                 <VerseDisplay
@@ -389,6 +389,7 @@ function BibleIndex() {
               query={searchQuery}
               onQueryChange={setSearchQuery}
               versionId={bible.currentVersionId}
+              versionAbbr={currentVersion?.abbreviation}
               onNavigate={handleSearchNavigate}
               availableBooks={availableBooks}
             />
