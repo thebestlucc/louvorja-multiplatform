@@ -183,6 +183,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (32)", [])?;
     }
 
+    if current_version < 33 {
+        migrate_v33(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (33)", [])?;
+    }
+
     Ok(())
 }
 
@@ -1277,6 +1282,17 @@ fn migrate_v28(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v33(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS content_sync_packs (
+            pack_id     TEXT PRIMARY KEY,
+            local_version INTEGER NOT NULL DEFAULT 0,
+            extracted_at  TEXT
+        );"
+    ).map_err(AppError::Database)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1309,7 +1325,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 32);
+        assert_eq!(schema_version, 33);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1371,6 +1387,11 @@ mod tests {
             .expect("schedule fts count");
         assert_eq!(schedule_fts_count, 0);
 
+        assert!(
+            table_exists(&conn, "content_sync_packs").expect("content_sync_packs table exists"),
+            "missing table content_sync_packs"
+        );
+
         let mut stmt = conn
             .prepare("SELECT code FROM schedule_departments ORDER BY sort_order ASC")
             .expect("prepare seeded department query");
@@ -1392,6 +1413,18 @@ mod tests {
                 "cleaning".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn content_sync_packs_table_created_on_v33() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='content_sync_packs'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(count, 1);
     }
 
     #[test]
@@ -1431,6 +1464,7 @@ mod tests {
             (30, migrate_v30),
             (31, migrate_v31),
             (32, migrate_v32),
+            (33, migrate_v33),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
