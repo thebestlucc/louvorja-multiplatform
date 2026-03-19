@@ -19,7 +19,7 @@ import {
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   getMediaLibraryCategories, upsertMediaLibraryCategory, deleteMediaLibraryCategory,
-  getMediaLibraryItems, upsertMediaLibraryItem, deleteMediaLibraryItem, searchMediaLibraryItems,
+  getMediaLibraryItems, getMediaLibraryItemsByDate, getMediaLibraryItemDates, upsertMediaLibraryItem, deleteMediaLibraryItem, searchMediaLibraryItems,
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
   replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
@@ -98,6 +98,8 @@ export const queryKeys = {
   mediaLibrary: {
     categories: (language: string) => ["mediaLibrary", "categories", language] as const,
     items: (categoryId: number) => ["mediaLibrary", "items", categoryId] as const,
+    itemsByDate: (categoryId: number, date: string | null) => ["mediaLibrary", "items", categoryId, date] as const,
+    itemDates: (categoryId: number) => ["mediaLibrary", "itemDates", categoryId] as const,
     search: (query: string) => ["mediaLibrary", "search", query] as const,
   },
   schedule: {
@@ -791,12 +793,29 @@ export function useMediaLibraryItems(categoryId: number) {
   });
 }
 
+export function useMediaLibraryItemsByDate(categoryId: number, date: string | null) {
+  return useQuery({
+    queryKey: queryKeys.mediaLibrary.itemsByDate(categoryId, date),
+    queryFn: () => getMediaLibraryItemsByDate(categoryId, date),
+    enabled: categoryId > 0,
+  });
+}
+
+export function useMediaLibraryItemDates(categoryId: number) {
+  return useQuery({
+    queryKey: queryKeys.mediaLibrary.itemDates(categoryId),
+    queryFn: () => getMediaLibraryItemDates(categoryId),
+    enabled: categoryId > 0,
+  });
+}
+
 export function useUpsertMediaLibraryItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: MediaLibraryItemInput) => upsertMediaLibraryItem(input),
     onSuccess: (_, input) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mediaLibrary.items(input.categoryId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mediaLibrary.itemDates(input.categoryId) });
     },
   });
 }
@@ -807,6 +826,7 @@ export function useDeleteMediaLibraryItem(categoryId: number) {
     mutationFn: (id: number) => deleteMediaLibraryItem(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mediaLibrary.items(categoryId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mediaLibrary.itemDates(categoryId) });
     },
   });
 }

@@ -90,19 +90,35 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
     // Order matters due to foreign key constraints
     // NOTE: Bible data (bible_verses, bible_versions, bible_fts) is preserved
     //
-    // FTS5 virtual tables must be cleared via the 'delete-all' special command
-    // rather than direct DELETE statements, which can corrupt the FTS shadow tables.
+    // CRITICAL: We drop FTS triggers before mass deletion to avoid "database disk image is malformed"
+    // errors caused by triggers trying to update a corrupted or already-cleared index.
     let tx = conn.unchecked_transaction().map_err(AppError::Database)?;
 
     tx.execute_batch(
         "
-        -- Clear child tables first
+        -- Temporarily drop triggers to allow safe cleanup of potentially corrupted FTS indexes
+        DROP TRIGGER IF EXISTS hymns_ai;
+        DROP TRIGGER IF EXISTS hymns_ad;
+        DROP TRIGGER IF EXISTS hymns_au;
+
+        -- Clear child tables
         DELETE FROM audio_sync_points;
         DELETE FROM slides;
         DELETE FROM service_items;
         DELETE FROM favorites;
         DELETE FROM collection_songs;
         DELETE FROM collection_hymns;
+        DELETE FROM content_sync_runs;
+        DELETE FROM content_sync_entities;
+        DELETE FROM content_sync_state;
+
+        -- Clear schedule tables (child to parent)
+        DELETE FROM schedule_assignments;
+        DELETE FROM schedule_day_departments;
+        DELETE FROM schedule_days;
+        DELETE FROM schedule_department_members;
+        DELETE FROM schedule_months;
+        DELETE FROM schedule_departments WHERE is_system = 0;
 
         -- Clear parent tables (but NOT bible tables)
         DELETE FROM hymns;
@@ -112,15 +128,45 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
 
         -- Reset monitor configs but keep settings
         DELETE FROM monitor_configs;
-        ",
-    )
-    .map_err(AppError::Database)?;
 
-    // FTS5 'delete-all' command clears the index cleanly without corrupting shadow tables
-    tx.execute_batch(
-        "
+        -- Clear and fix FTS indexes
+        -- hymns_fts is an external content table, so we use 'delete-all'.
         INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');
-        INSERT INTO collections_fts(collections_fts) VALUES('delete-all');
+        -- collections_fts is a standard FTS5 table, so we use DELETE.
+        DELETE FROM collections_fts;
+
+        -- REPAIR: Rebuild bible_fts to ensure preserved Bible data is healthy.
+        -- Bible FTS corruption is a common source of 'malformed' errors even when not deleting it.
+        INSERT INTO bible_fts(bible_fts) VALUES('rebuild');
+
+        -- Re-create triggers (optimized with v29 logic)
+        CREATE TRIGGER hymns_ai
+        AFTER INSERT ON hymns
+        WHEN NEW.category = 'hymnal'
+        BEGIN
+            INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+            VALUES (NEW.id, NEW.title, COALESCE(NEW.lyrics,''), COALESCE(NEW.author,''), COALESCE(NEW.album,''));
+        END;
+
+        CREATE TRIGGER hymns_ad
+        AFTER DELETE ON hymns
+        WHEN OLD.category = 'hymnal'
+        BEGIN
+            INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+            VALUES ('delete', OLD.id, OLD.title, COALESCE(OLD.lyrics,''), COALESCE(OLD.author,''), COALESCE(OLD.album,''));
+        END;
+
+        CREATE TRIGGER hymns_au
+        AFTER UPDATE ON hymns
+        BEGIN
+            INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+            SELECT 'delete', OLD.id, OLD.title, COALESCE(OLD.lyrics,''), COALESCE(OLD.author,''), COALESCE(OLD.album,'')
+            WHERE OLD.category = 'hymnal';
+
+            INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+            SELECT NEW.id, NEW.title, COALESCE(NEW.lyrics,''), COALESCE(NEW.author,''), COALESCE(NEW.album,'')
+            WHERE NEW.category = 'hymnal';
+        END;
         ",
     )
     .map_err(AppError::Database)?;

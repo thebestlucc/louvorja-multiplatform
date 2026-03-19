@@ -61,6 +61,21 @@ pub fn get_media_library_items(
 
 #[tauri::command]
 #[specta::specta]
+pub fn get_media_library_items_by_date(
+    category_id: i64,
+    date: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<MediaLibraryItem>, AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::media_library::get_items_by_category_and_date(&conn, category_id, date)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn upsert_media_library_item(
     input: MediaLibraryItemInput,
     state: tauri::State<'_, AppState>,
@@ -85,6 +100,20 @@ pub fn delete_media_library_item(
     }
     let conn = conn.unwrap();
     crate::db::queries::media_library::delete_item(&conn, id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_media_library_item_dates(
+    category_id: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<String>, AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::media_library::get_item_dates_by_category(&conn, category_id)
 }
 
 #[tauri::command]

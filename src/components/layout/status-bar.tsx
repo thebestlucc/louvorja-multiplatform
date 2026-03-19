@@ -64,7 +64,7 @@ export function StatusBar() {
       <div className="flex items-center gap-3">
         {showContentSyncIndicator && (
           <button
-            onClick={() => navigate({ to: "/settings", search: { tab: "migration" } })}
+            onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
             className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-emerald-400 hover:bg-white/10"
             title={t("settings.contentSync.title")}
           >

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { FileIcon, MoreVertical, Trash2, Edit2, Play, Plus } from "lucide-react";
 import { Button } from "../ui/button";
-import { useMediaLibraryItems, useUpsertMediaLibraryItem, useDeleteMediaLibraryItem } from "../../lib/queries";
+import { useMediaLibraryItemsByDate, useUpsertMediaLibraryItem, useDeleteMediaLibraryItem } from "../../lib/queries";
 import { MediaLibraryItem } from "../../lib/bindings";
 import { Card, CardContent, CardFooter } from "../ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
@@ -13,11 +13,12 @@ import { catcher } from "../../lib/catcher";
 
 interface ItemGridProps {
   categoryId: number | null;
+  selectedDate: string | null;
 }
 
-export function ItemGrid({ categoryId }: ItemGridProps) {
+export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
   const { t } = useTranslation();
-  const { data: items = [], isLoading } = useMediaLibraryItems(categoryId ?? 0);
+  const { data: items = [], isLoading } = useMediaLibraryItemsByDate(categoryId ?? 0, selectedDate);
   const upsertMutation = useUpsertMediaLibraryItem();
   const deleteMutation = useDeleteMediaLibraryItem(categoryId ?? 0);
 
@@ -74,6 +75,7 @@ export function ItemGrid({ categoryId }: ItemGridProps) {
         filePath,
         fileType: filePath.split(".").pop()?.toLowerCase() ?? "unknown",
         thumbnailPath: null,
+        scheduledDate: selectedDate,
         sortOrder: editingItem?.sortOrder ?? 0,
       }),
       { notify: true }
@@ -110,7 +112,7 @@ export function ItemGrid({ categoryId }: ItemGridProps) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {items.map((item) => (
+          {items.map((item: MediaLibraryItem) => (
             <Card key={item.id} className="group relative overflow-hidden border-border bg-surface shadow-none transition-colors hover:border-primary/50">
               <CardContent className="flex aspect-video items-center justify-center bg-accent/5 p-0">
                 {item.thumbnailPath ? (

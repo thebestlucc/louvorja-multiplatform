@@ -178,6 +178,33 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (31)", [])?;
     }
 
+    if current_version < 32 {
+        migrate_v32(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (32)", [])?;
+    }
+
+    Ok(())
+}
+
+fn migrate_v31(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "media_library_items",
+        "scheduled_date",
+        "TEXT",
+    )?;
+    Ok(())
+}
+
+fn migrate_v32(conn: &Connection) -> Result<(), AppError> {
+    // Bible data has moved to a dedicated bible.db (separate connection pool).
+    // Remove the now-redundant bible tables from the main DB.
+    // bible_fts must be dropped before bible_verses (content table dependency).
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS bible_fts;
+         DROP TABLE IF EXISTS bible_verses;
+         DROP TABLE IF EXISTS bible_versions;",
+    )?;
     Ok(())
 }
 
@@ -209,8 +236,9 @@ fn migrate_v30(conn: &Connection) -> Result<(), AppError> {
 }
 
 fn migrate_v29(conn: &Connection) -> Result<(), AppError> {
+
     // Recreate hymns_fts triggers with proper category filtering.
-    // This fixes "database disk image is malformed" errors caused by undefined behavior
+    // This fixes "database disk image is malformed" errors caused by undefined behavior 
     // when deleting/updating hymns that were not indexed (category != 'hymnal').
     conn.execute_batch(
         "
@@ -1249,18 +1277,6 @@ fn migrate_v28(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
-fn migrate_v31(conn: &Connection) -> Result<(), AppError> {
-    // Bible data has moved to a dedicated bible.db (separate connection pool).
-    // Remove the now-redundant bible tables from the main DB.
-    // bible_fts must be dropped before bible_verses (content table dependency).
-    conn.execute_batch(
-        "DROP TABLE IF EXISTS bible_fts;
-         DROP TABLE IF EXISTS bible_verses;
-         DROP TABLE IF EXISTS bible_versions;",
-    )?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1293,7 +1309,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 31);
+        assert_eq!(schema_version, 32);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1379,7 +1395,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v31() {
+    fn fresh_migration_chain_stepwise_reaches_v32() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1414,6 +1430,7 @@ mod tests {
             (29, migrate_v29),
             (30, migrate_v30),
             (31, migrate_v31),
+            (32, migrate_v32),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));

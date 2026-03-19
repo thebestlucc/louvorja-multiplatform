@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_parse_ftp_credentials() {
-        let decoded_str = "host=louvorja.ligaosom.com.br\nport=21\nroot=/\npassword=OP3v$UjoC(SI\nusername=louvorja@louvorja.ligaosom.com.br\nlang=pt\n";
+        let decoded_str = "host=https://louvorja.ligaosom.com.br\nport=21\nroot=/\npassword=OP3v$UjoC(SI\nusername=louvorja@louvorja.ligaosom.com.br\nlang=pt\n";
 
         let mut settings = FtpSettings::default();
         for line in decoded_str.lines() {

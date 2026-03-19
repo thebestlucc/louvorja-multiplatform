@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { appDataDir } from "@tauri-apps/api/path";
-import { FolderOpen, Download, RefreshCw, AlertCircle } from "lucide-react";
+import { FolderOpen, Download, RefreshCw, AlertCircle, CheckSquare } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -17,15 +17,8 @@ import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { catcher } from "../../lib/catcher";
 import { useListFtpFiles, useDownloadFtpFiles } from "../../lib/queries";
-import type { FtpDownloadProgress } from "../../lib/tauri";
-import { useFtpBrowserStore } from "../../stores/ftp-browser-store";
-
-// Row-level state tracked while downloading
-interface RowDownloadState {
-  inProgress: boolean;
-  done: boolean;
-  error: string | null;
-}
+import type { FtpDownloadProgress, FtpFileEntry } from "../../lib/tauri";
+import { useFtpBrowserStore, type RowDownloadState } from "../../stores/ftp-browser-store";
 
 export function FtpFileBrowser() {
   const { t } = useTranslation();
@@ -36,12 +29,15 @@ export function FtpFileBrowser() {
   const entries = useFtpBrowserStore((s) => s.entries);
   const isLoading = useFtpBrowserStore((s) => s.isLoading);
   const loadError = useFtpBrowserStore((s) => s.loadError);
+  const checked = useFtpBrowserStore((s) => s.checked);
+  const rowStates = useFtpBrowserStore((s) => s.rowStates);
+  
   const setEntries = useFtpBrowserStore((s) => s.setEntries);
   const setIsLoading = useFtpBrowserStore((s) => s.setIsLoading);
   const setLoadError = useFtpBrowserStore((s) => s.setLoadError);
+  const setChecked = useFtpBrowserStore((s) => s.setChecked);
+  const setRowStates = useFtpBrowserStore((s) => s.setRowStates);
 
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [rowStates, setRowStates] = useState<Record<string, RowDownloadState>>({});
   const [appData, setAppData] = useState<string>("");
 
   // Resolve app data dir once for "Open in Finder"
@@ -54,6 +50,7 @@ export function FtpFileBrowser() {
     const unlistenLoaded = listen<FtpFileEntry[]>("ftp-files-loaded", (event) => {
       const result = event.payload;
       setEntries(result);
+      // Auto-check missing files on first load
       setChecked(new Set(result.filter((e) => !e.existsLocally).map((e) => e.remotePath)));
       setIsLoading(false);
     });
@@ -67,7 +64,7 @@ export function FtpFileBrowser() {
       void unlistenLoaded.then((fn) => fn());
       void unlistenError.then((fn) => fn());
     };
-  }, []);
+  }, [setEntries, setIsLoading, setLoadError, setChecked]);
 
   // Listen to per-file progress events emitted by the background thread
   useEffect(() => {
@@ -84,8 +81,8 @@ export function FtpFileBrowser() {
 
       // If download succeeded, mark the entry as existing locally
       if (p.success) {
-        setEntries((prev) =>
-          prev.map((e) =>
+        setEntries(
+          entries.map((e) =>
             e.remotePath === p.remotePath ? { ...e, existsLocally: true } : e,
           ),
         );
@@ -101,7 +98,7 @@ export function FtpFileBrowser() {
     return () => {
       void unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [entries, setEntries, setRowStates, setChecked]);
 
   const handleLoad = useCallback(async () => {
     setLoadError(null);
@@ -113,7 +110,7 @@ export function FtpFileBrowser() {
       setLoadError(err.message);
       setIsLoading(false);
     }
-  }, [listMutation]);
+  }, [listMutation, setIsLoading, setLoadError, setRowStates]);
 
   const handleToggleCheck = (remotePath: string) => {
     setChecked((prev) => {
@@ -167,6 +164,10 @@ export function FtpFileBrowser() {
     }
   };
 
+  const handleSelectAllMissing = () => {
+    setChecked(new Set(missingEntries.map((e) => e.remotePath)));
+  };
+
   // Only missing files can be checked
   const missingCheckedCount = Array.from(checked).filter((p) => {
     const entry = entries.find((e) => e.remotePath === p);
@@ -191,6 +192,18 @@ export function FtpFileBrowser() {
             ? t("settings.ftpBrowser.loading")
             : t("settings.ftpBrowser.loadFiles")}
         </Button>
+
+        {missingEntries.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSelectAllMissing}
+            disabled={isLoading || isDownloading}
+          >
+            <CheckSquare className="mr-2 h-4 w-4" />
+            {t("settings.ftpBrowser.selectAllMissing", { count: missingEntries.length })}
+          </Button>
+        )}
 
         {missingCheckedCount > 0 && (
           <Button
@@ -227,9 +240,9 @@ export function FtpFileBrowser() {
 
       {/* File table */}
       {entries.length > 0 && (
-        <div className="rounded-md border border-border max-h-[520px] overflow-y-auto">
+        <div className="rounded-md border border-border max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead className="w-8">
                   <input
