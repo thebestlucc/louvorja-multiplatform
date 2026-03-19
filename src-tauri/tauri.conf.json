@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeDevCommand": "cargo run --manifest-path src-tauri/Cargo.toml --bin build_bible && pnpm dev",
+    "beforeBuildCommand": "cargo run --manifest-path src-tauri/Cargo.toml --bin build_bible && pnpm build"
   },
   "app": {
     "macOSPrivateApi": true,
