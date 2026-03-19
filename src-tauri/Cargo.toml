@@ -52,7 +52,7 @@ wait-timeout = "0.2"
 which = "7"
 rand = "0.8"
 display-info = "0.5.7"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "gzip"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 urlencoding = "2"
 tauri-plugin-store = "2"
@@ -76,3 +76,6 @@ tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
+
+[dev-dependencies]
+wiremock = "0.6"
