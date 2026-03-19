@@ -473,8 +473,10 @@
       "file": "File",
       "hymn": "Hymn",
       "presentation": "Presentation",
+      "scheduled_category": "Scheduled Item (Dynamic)",
       "url": "URL"
     },
+
     "items": "Items",
     "new": "New Service",
     "noItems": "No items. Click \"Add Item\" to get started.",
@@ -880,6 +882,7 @@
       "nameLabel": "Name",
       "namePlaceholder": "Item name",
       "noItems": "No items in this category",
+      "noItemOnDate": "No item for this date",
       "selectCategoryHint": "Select a category to view items",
       "title": "Scheduled Items"
     },

@@ -627,6 +627,14 @@ async searchMediaLibraryItems(query: string) : Promise<Result<MediaLibraryItem[]
     else return { status: "error", error: e  as any };
 }
 },
+async getScheduledMediaItem(categoryId: number, date: string) : Promise<Result<MediaLibraryItem | null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_scheduled_media_item", { categoryId, date }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async listScheduleDepartments() : Promise<Result<ScheduleDepartment[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("list_schedule_departments") };

@@ -129,3 +129,18 @@ pub fn search_media_library_items(
     let conn = conn.unwrap();
     crate::db::queries::media_library::search_library_items(&conn, &query)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_scheduled_media_item(
+    category_id: i64,
+    date: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<MediaLibraryItem>, AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::media_library::get_scheduled_media_item(&conn, category_id, &date)
+}

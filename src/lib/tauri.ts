@@ -535,6 +535,10 @@ export async function searchMediaLibraryItems(query: string): Promise<MediaLibra
   return tauriInvoke<MediaLibraryItem[]>("search_media_library_items", { query });
 }
 
+export async function getScheduledMediaItem(categoryId: number, date: string): Promise<MediaLibraryItem | null> {
+  return tauriInvoke<MediaLibraryItem | null>("get_scheduled_media_item", { categoryId, date });
+}
+
 // Schedules
 export async function listScheduleDepartments(): Promise<ScheduleDepartment[]> {
   return tauriInvoke<ScheduleDepartment[]>("list_schedule_departments");
