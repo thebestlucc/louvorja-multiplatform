@@ -874,7 +874,7 @@
     },
     "mediaLibrary": {
       "addItem": "Adicionar Item",
-      "allDates": "Mostrar Todos",
+      "showAllCategoryItems": "Ver todos os itens desta categoria",
       "description": "Gerencie uma biblioteca de vídeos, imagens e PDFs para uso rápido no culto.",
       "editItem": "Editar Item",
       "filePathLabel": "Caminho do Arquivo",
@@ -884,6 +884,7 @@
       "namePlaceholder": "Nome do item",
       "noItems": "Nenhum item nesta categoria",
       "noItemOnDate": "Sem item para esta data",
+      "notScheduled": "Não agendado",
       "selectCategoryHint": "Selecione uma categoria para ver os itens",
       "title": "Itens Agendados"
     },

@@ -67,13 +67,14 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
       
       <div className="flex justify-end">
         <button 
+          type="button"
           onClick={() => onSelectDate(null)}
           className={cn(
             "text-[10px] hover:underline",
             selectedDate === null ? "font-bold text-primary" : "text-muted-foreground"
           )}
         >
-          {t("utilities.mediaLibrary.allDates")}
+          {t("utilities.mediaLibrary.showAllCategoryItems")}
         </button>
       </div>
 
@@ -101,6 +102,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
                   return (
                     <button
                       key={cell.isoDate}
+                      type="button"
                       disabled={disabled}
                       onClick={() => onSelectDate(cell.isoDate)}
                       className={cn(

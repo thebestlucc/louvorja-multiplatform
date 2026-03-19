@@ -874,7 +874,7 @@
     },
     "mediaLibrary": {
       "addItem": "Add Item",
-      "allDates": "Show All",
+      "showAllCategoryItems": "Show all items in this category",
       "description": "Manage a library of videos, images, and PDFs for quick use during worship.",
       "editItem": "Edit Item",
       "filePathLabel": "File Path",
@@ -884,6 +884,7 @@
       "namePlaceholder": "Item name",
       "noItems": "No items in this category",
       "noItemOnDate": "No item for this date",
+      "notScheduled": "Not scheduled",
       "selectCategoryHint": "Select a category to view items",
       "title": "Scheduled Items"
     },
