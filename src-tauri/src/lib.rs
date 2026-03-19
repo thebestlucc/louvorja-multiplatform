@@ -6,6 +6,7 @@ mod db;
 mod display;
 mod error;
 mod ftp_sync;
+mod http_sync;
 mod legacy_fetch;
 mod migration;
 mod projection;
