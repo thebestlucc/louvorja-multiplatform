@@ -547,6 +547,78 @@ async updateServiceItem(id: number, title: string, notes: string | null) : Promi
     else return { status: "error", error: e  as any };
 }
 },
+async getMediaLibraryCategories(language: string) : Promise<Result<MediaLibraryCategory[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_media_library_categories", { language }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async upsertMediaLibraryCategory(input: MediaLibraryCategoryInput) : Promise<Result<number, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("upsert_media_library_category", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteMediaLibraryCategory(id: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_media_library_category", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getMediaLibraryItems(categoryId: number) : Promise<Result<MediaLibraryItem[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_media_library_items", { categoryId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getMediaLibraryItemsByDate(categoryId: number, date: string | null) : Promise<Result<MediaLibraryItem[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_media_library_items_by_date", { categoryId, date }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getMediaLibraryItemDates(categoryId: number) : Promise<Result<string[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_media_library_item_dates", { categoryId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async upsertMediaLibraryItem(input: MediaLibraryItemInput) : Promise<Result<number, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("upsert_media_library_item", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteMediaLibraryItem(id: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_media_library_item", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async searchMediaLibraryItems(query: string) : Promise<Result<MediaLibraryItem[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_media_library_items", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async listScheduleDepartments() : Promise<Result<ScheduleDepartment[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("list_schedule_departments") };
@@ -1425,6 +1497,10 @@ export type LegacyFetchStatus = "pending" | "fetching" | "importing" | "download
  */
 export type LegacyFetchSubTask = { id: string; title: string; percent: number; status: string }
 export type MediaIntegrityReport = { missingFiles: MissingFile[]; excessFiles: string[] }
+export type MediaLibraryCategory = { id: number; name: string; sortOrder: number; idLanguage: string }
+export type MediaLibraryCategoryInput = { id: number | null; name: string; sortOrder: number; idLanguage: string }
+export type MediaLibraryItem = { id: number; categoryId: number; name: string; filePath: string; fileType: string; thumbnailPath: string | null; scheduledDate: string | null; sortOrder: number; createdAt: string }
+export type MediaLibraryItemInput = { id: number | null; categoryId: number; name: string; filePath: string; fileType: string; thumbnailPath: string | null; scheduledDate: string | null; sortOrder: number }
 export type MigrationDomainReport = { domain: string; imported: number; skipped: number }
 export type MigrationErrorItem = { domain: string; code: string; message: string; context?: string | null }
 export type MigrationOptions = { includeHymns?: boolean; includeBible?: boolean; includeFavorites?: boolean; includeServices?: boolean; includeSettings?: boolean; replaceExisting?: boolean }

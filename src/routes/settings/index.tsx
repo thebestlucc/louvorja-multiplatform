@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
@@ -8,12 +7,8 @@ import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
 import {
-  useCancelContentSync,
   useCancelLegacyFetch,
   useClearDatabase,
-  useContentSyncProgress,
-  useContentSyncReport,
-  useContentSyncSummary,
   useCopyImageToMedia,
   useFetchLegacyParams,
   useLegacyFetchProgress,
@@ -24,23 +19,17 @@ import {
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
-  useStartContentSync,
   useStartLegacyFetch,
 } from "../../lib/queries";
-import { ContentSyncReportCard } from "../../components/content-sync/content-sync-report";
 import { FtpFileBrowser } from "../../components/content-sync/ftp-file-browser";
 import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
-import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
-import { planContentSync } from "../../lib/tauri";
-import type { ContentSyncPlan } from "../../types/content-sync";
 import type {
   LegacyFetchOptions,
   MonitorConfig,
 } from "../../lib/bindings";
 import { StreamingControls } from "../../components/streaming/streaming-controls";
 import { ShortcutsTab } from "../../components/settings/shortcuts-tab";
-import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";

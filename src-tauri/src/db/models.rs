@@ -85,7 +85,7 @@ pub struct BibleSearchResult {
     pub verse: Verse,
     pub book_name: String,
     pub snippet: String,
-    pub version_abbreviation: String,  // empty string for per-version search, populated for global search
+    pub version_abbreviation: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -847,6 +847,7 @@ pub struct MediaLibraryItem {
     pub file_path: String,
     pub file_type: String,
     pub thumbnail_path: Option<String>,
+    pub scheduled_date: Option<String>,
     pub sort_order: i32,
     pub created_at: String,
 }
@@ -861,6 +862,7 @@ pub struct MediaLibraryItemInput {
     pub file_path: String,
     pub file_type: String,
     pub thumbnail_path: Option<String>,
+    pub scheduled_date: Option<String>,
     pub sort_order: i32,
 }
 

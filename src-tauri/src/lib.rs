@@ -91,7 +91,6 @@ pub fn run() {
             commands::bible::get_verses,
             commands::bible::get_verse_range,
             commands::bible::search_bible,
-            commands::bible::search_bible_global,
             commands::bible::project_bible_verse,
             commands::bible::import_bible_version,
             commands::bible::navigate_bible_verse,
@@ -130,6 +129,8 @@ pub fn run() {
             commands::media_library::upsert_media_library_category,
             commands::media_library::delete_media_library_category,
             commands::media_library::get_media_library_items,
+            commands::media_library::get_media_library_items_by_date,
+            commands::media_library::get_media_library_item_dates,
             commands::media_library::upsert_media_library_item,
             commands::media_library::delete_media_library_item,
             commands::media_library::search_media_library_items,
@@ -281,32 +282,18 @@ pub fn run() {
             let pool = db::init_db(&app_data_dir)
                 .map_err(|e| format!("Failed to initialize database: {e}"))?;
 
-            // Initialize bible.db — copy from resources on first launch
+            // Initialize dedicated bible.db — copy from bundled resource on first launch
             let bible_db_path = app_data_dir.join("bible.db");
             if !bible_db_path.exists() {
-                let resource_path = app
-                    .path()
-                    .resource_dir()
-                    .map_err(|e| format!("Failed to get resource dir: {e}"))?
-                    .join("bible.db");
-
-                // Copy to a temp path first, then rename atomically to avoid
-                // partial-copy corruption if the process is killed mid-copy.
+                let resource_path = app.path().resource_dir()?.join("bible.db");
                 let tmp_path = bible_db_path.with_extension("db.tmp");
                 std::fs::copy(&resource_path, &tmp_path)
                     .map_err(|e| format!("Failed to copy bible.db from {}: {e}", resource_path.display()))?;
                 std::fs::rename(&tmp_path, &bible_db_path)
                     .map_err(|e| format!("Failed to install bible.db: {e}"))?;
             }
-            let bible_manager = r2d2_sqlite::SqliteConnectionManager::file(&bible_db_path)
-                .with_init(|conn| {
-                    conn.execute_batch(
-                        "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;"
-                    )?;
-                    Ok(())
-                });
-            let bible_pool = r2d2::Pool::new(bible_manager)
-                .map_err(|e| format!("Failed to create bible db pool: {e}"))?;
+            let bible_pool = db::init_bible_db(&bible_db_path)
+                .map_err(|e| format!("Failed to initialize bible database: {e}"))?;
 
             app.manage(AppState {
                 db: pool.clone(),

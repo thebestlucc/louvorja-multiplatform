@@ -224,6 +224,8 @@ allow = [
     "upsert_media_library_category",
     "delete_media_library_category",
     "get_media_library_items",
+    "get_media_library_items_by_date",
+    "get_media_library_item_dates",
     "upsert_media_library_item",
     "delete_media_library_item",
     "search_media_library_items"
