@@ -8,7 +8,7 @@ LouvorJA Multiplatform is a modern, cross-platform church worship management des
 
 ## Core Value Proposition
 - **Cross-Platform Stability:** A robust and modern alternative to legacy systems on any operating system.
-- **All-in-One Workflow:** Consolidates music, Bibles, and presentations into a single, cohesive, easy-to-use interface.
+- **All-in-One Workflow:** Consolidates music, Bibles, presentations, and a centralized media library into a single, cohesive interface.
 - **Live Media Sync:** Provides seamless, low-latency audio/visual synchronization across multiple screens (Projector, Return, Playing Now).
 - **Interactive Alerts:** Project scrolling tickers or static notices over any active screen without interrupting the flow.
 - **Operator Productivity Tools:** Integrated utilities for monitor identification, library integrity scanning, and rapid favorites management.
