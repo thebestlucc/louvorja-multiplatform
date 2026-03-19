@@ -33,9 +33,9 @@ Ensure the backend compiles.
 - Create: `src-tauri/src/db/queries/media_library.rs`
 - Modify: `src-tauri/src/db/models.rs` (Assuming it exists, need to verify)
 
-- [ ] **Step 1: Define Structs in models.rs**
-- [ ] **Step 2: Implement CRUD queries in media_library.rs**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Define Structs in models.rs**
+- [x] **Step 2: Implement CRUD queries in media_library.rs**
+- [x] **Step 3: Commit** (fae091a)
 `git add src-tauri/src/db/queries/media_library.rs src-tauri/src/db/models.rs && git commit -m "feat(db): Implement media library queries"`
 
 ### Task 3: Tauri Commands
