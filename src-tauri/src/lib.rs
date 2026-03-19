@@ -91,6 +91,7 @@ pub fn run() {
             commands::bible::get_verses,
             commands::bible::get_verse_range,
             commands::bible::search_bible,
+            commands::bible::search_bible_global,
             commands::bible::project_bible_verse,
             commands::bible::import_bible_version,
             commands::bible::navigate_bible_verse,
