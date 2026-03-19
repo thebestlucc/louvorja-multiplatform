@@ -80,9 +80,9 @@ Ensure the backend compiles.
 - Modify: `src/components/services/add-item-modal.tsx`
 - Create: `src/components/media/library-browser.tsx`
 
-- [ ] **Step 1: Implement LibraryBrowser (shared browser)**
-- [ ] **Step 2: Update AddItemModal to use LibraryBrowser in 'File' tab**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Implement LibraryBrowser (shared browser)**
+- [x] **Step 2: Update AddItemModal to use LibraryBrowser in 'File' tab**
+- [x] **Step 3: Commit** (b50fa46)
 `git add . && git commit -m "feat(ui): Integrate media library into service add-item flow"`
 
 ### Task 7: Spotlight Integration
