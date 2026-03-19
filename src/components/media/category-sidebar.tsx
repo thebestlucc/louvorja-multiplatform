@@ -82,6 +82,7 @@ export function CategorySidebar({ selectedCategoryId, onSelectCategory }: Catego
             )}
           >
             <button
+              type="button"
               className="flex-1 text-left"
               onClick={() => onSelectCategory(category.id)}
             >

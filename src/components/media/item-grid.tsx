@@ -1,15 +1,15 @@
 import { useTranslation } from "react-i18next";
-import { FileIcon, MoreVertical, Trash2, Edit2, Play, Plus } from "lucide-react";
+import { FileIcon, MoreVertical, Trash2, Edit2, Play, Plus, Calendar } from "lucide-react";
 import { Button } from "../ui/button";
 import { useMediaLibraryItemsByDate, useUpsertMediaLibraryItem, useDeleteMediaLibraryItem } from "../../lib/queries";
 import { MediaLibraryItem } from "../../lib/bindings";
-import { Card, CardContent, CardFooter } from "../ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { open } from "@tauri-apps/plugin-dialog";
 import { catcher } from "../../lib/catcher";
+import { ScrollArea } from "../ui/scroll-area";
 
 interface ItemGridProps {
   categoryId: number | null;
@@ -17,7 +17,7 @@ interface ItemGridProps {
 }
 
 export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data: items = [], isLoading } = useMediaLibraryItemsByDate(categoryId ?? 0, selectedDate);
   const upsertMutation = useUpsertMediaLibraryItem();
   const deleteMutation = useDeleteMediaLibraryItem(categoryId ?? 0);
@@ -27,10 +27,12 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
   const [name, setName] = useState("");
   const [filePath, setFilePath] = useState("");
 
+  const dateFormater = new Intl.DateTimeFormat(i18n.language, { day: "2-digit", month: "2-digit", year: "numeric" });
+
   if (!categoryId) {
     return (
       <div className="flex h-full items-center justify-center rounded-md border border-dashed p-12">
-        <p className="text-muted-foreground">{t("mediaLibrary.selectCategoryHint", "Select a category to view items")}</p>
+        <p className="text-muted-foreground">{t("utilities.mediaLibrary.selectCategoryHint")}</p>
       </div>
     );
   }
@@ -93,106 +95,135 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4 overflow-hidden">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">{t("mediaLibrary.items", "Items")}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium">{t("utilities.mediaLibrary.items")}</h3>
+          {selectedDate && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground bg-accent/50 px-2 py-0.5 rounded-full border border-accent">
+              <Calendar className="h-3 w-3" />
+              {dateFormater.format(new Date(selectedDate + "T12:00:00Z"))}
+            </div>
+          )}
+        </div>
         <Button size="sm" onClick={handleOpenAdd}>
           <Plus className="mr-2 h-4 w-4" />
           {t("actions.add")}
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="flex h-32 items-center justify-center">
-          <p className="text-sm text-muted-foreground">{t("bible.loading")}</p>
+      <div className="rounded-md border border-border bg-surface">
+        <div className="grid grid-cols-[auto_1fr_150px_auto] gap-4 border-b bg-accent/5 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="w-6"></div>
+          <div>{t("utilities.mediaLibrary.nameLabel")}</div>
+          <div>{t("utilities.mediaLibrary.schedule")}</div>
+          <div className="w-8"></div>
         </div>
-      ) : items.length === 0 ? (
-        <div className="flex h-32 items-center justify-center rounded-md border border-dashed">
-          <p className="text-sm text-muted-foreground">{t("mediaLibrary.noItems", "No items in this category")}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {items.map((item: MediaLibraryItem) => (
-            <Card key={item.id} className="group relative overflow-hidden border-border bg-surface shadow-none transition-colors hover:border-primary/50">
-              <CardContent className="flex aspect-video items-center justify-center bg-accent/5 p-0">
-                {item.thumbnailPath ? (
-                  <img src={item.thumbnailPath} alt={item.name} className="h-full w-full object-cover" />
-                ) : (
-                  <FileIcon className="h-10 w-10 text-muted-foreground/30" />
-                )}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Button size="icon" variant="outline" className="rounded-full bg-surface/20 border-white/20 text-white hover:bg-surface/40 hover:text-white">
-                    <Play className="h-5 w-5" />
-                  </Button>
+
+        <ScrollArea className="h-[calc(100vh-22rem)]">
+          {isLoading ? (
+            <div className="flex h-32 items-center justify-center">
+              <p className="text-sm text-muted-foreground">{t("bible.loading")}</p>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="flex h-32 items-center justify-center p-8 text-center">
+              <p className="text-sm text-muted-foreground">{t("utilities.mediaLibrary.noItems")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {items.map((item: MediaLibraryItem) => (
+                <div key={item.id} className="group grid grid-cols-[auto_1fr_150px_auto] items-center gap-4 px-4 py-2 text-sm transition-colors hover:bg-surface-hover border-b last:border-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded bg-accent/5 text-muted-foreground">
+                    <FileIcon className="h-4 w-4" />
+                  </div>
+                  
+                  <div className="min-w-0 flex flex-col">
+                    <span className="truncate font-medium text-foreground" title={item.name}>
+                      {item.name}
+                    </span>
+                    <span className="truncate text-[10px] text-muted-foreground opacity-70" title={item.filePath}>
+                      {item.filePath}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    {item.scheduledDate ? (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {dateFormater.format(new Date(item.scheduledDate + "T12:00:00Z"))}
+                      </div>
+                    ) : (
+                      <span className="italic opacity-50">{t("utilities.mediaLibrary.notScheduled")}</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
+                          <Edit2 className="mr-2 h-3.5 w-3.5" />
+                          {t("actions.edit")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <Trash2 className="mr-2 h-3.5 w-3.5" />
+                          {t("actions.delete")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-              </CardContent>
-              <CardFooter className="p-2">
-                <div className="flex w-full items-center justify-between gap-1 overflow-hidden">
-                  <span className="truncate text-xs font-medium text-foreground" title={item.name}>
-                    {item.name}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100">
-                        <MoreVertical className="h-3 w-3" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
-                        <Edit2 className="mr-2 h-3 w-3" />
-                        {t("actions.edit")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => handleDelete(item.id)}
-                      >
-                        <Trash2 className="mr-2 h-3 w-3" />
-                        {t("actions.delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingItem ? t("mediaLibrary.editItem", "Edit Item") : t("mediaLibrary.addItem", "Add Item")}
+              {editingItem ? t("utilities.mediaLibrary.editItem") : t("utilities.mediaLibrary.addItem")}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <label className="text-sm font-medium">{t("mediaLibrary.nameLabel", "Name")}</label>
+              <label className="text-sm font-medium">{t("utilities.mediaLibrary.nameLabel")}</label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={t("mediaLibrary.namePlaceholder", "Item name")}
+                placeholder={t("utilities.mediaLibrary.namePlaceholder")}
               />
             </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium">{t("mediaLibrary.filePathLabel", "File Path")}</label>
+              <label className="text-sm font-medium">{t("utilities.mediaLibrary.filePathLabel")}</label>
               <div className="flex gap-2">
                 <Input
                   value={filePath}
                   readOnly
-                  placeholder={t("mediaLibrary.filePathPlaceholder", "Select a file...")}
+                  placeholder={t("utilities.mediaLibrary.filePathPlaceholder")}
                 />
-                <Button variant="outline" onClick={handlePickFile}>
+                <Button variant="outline" onClick={handlePickFile} type="button">
                   {t("actions.open")}
                 </Button>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} type="button">
               {t("actions.cancel")}
             </Button>
-            <Button onClick={handleSave} disabled={!name.trim() || !filePath}>
+            <Button onClick={handleSave} disabled={!name.trim() || !filePath} type="button">
               {t("actions.save")}
             </Button>
           </DialogFooter>
