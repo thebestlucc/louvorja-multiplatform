@@ -159,9 +159,18 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (29)", [])?;
     }
 
-    if current_version < 30 {
+    // Force v30 check: tables might be missing if a placeholder was run previously
+    let v30_missing = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='media_library_categories'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0) == 0;
+
+    if current_version < 30 || v30_missing {
         migrate_v30(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (30)", [])?;
+        conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (30)", [])?;
     }
 
     Ok(())
