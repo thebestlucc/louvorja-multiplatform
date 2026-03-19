@@ -41,16 +41,14 @@ fn validate_https_url(url: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Download a single file via HTTP to `local_path`.
-/// Uses temp file + atomic rename for safety. Skips if already up to date.
-pub async fn download_file_http(
+/// Internal download function — assumes URL has already been validated.
+/// Public callers must use `download_file_http` which enforces HTTPS.
+async fn download_bytes_to_path(
     client: &reqwest::Client,
     url: &str,
     local_path: &Path,
     expected_size: Option<u64>,
 ) -> Result<DownloadResult, AppError> {
-    validate_https_url(url)?;
-
     if should_skip_download(local_path, expected_size) {
         return Ok(DownloadResult::Skipped);
     }
@@ -59,10 +57,10 @@ pub async fn download_file_http(
         std::fs::create_dir_all(parent).map_err(AppError::Io)?;
     }
 
-    let nonce = uuid::Uuid::new_v4().simple().to_string();
     let file_name = local_path
         .file_name()
         .ok_or_else(|| AppError::Internal("local_path has no file name component".into()))?;
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
     let temp_path = local_path.with_file_name(
         format!("{}.~{}.tmp", file_name.to_string_lossy(), nonce)
     );
@@ -73,7 +71,7 @@ pub async fn download_file_http(
             .timeout(std::time::Duration::from_secs(120))
             .send()
             .await
-            .map_err(|e| AppError::Internal(format!("HTTP GET failed for '{}': {}", url, e)))?;
+            .map_err(|e| AppError::Internal(format!("HTTP GET failed: {}", e)))?;
 
         if !response.status().is_success() {
             return Err(AppError::Internal(format!(
@@ -127,6 +125,18 @@ pub async fn download_file_http(
     }
 }
 
+/// Download a single file via HTTPS to `local_path`.
+/// Uses temp file + atomic rename for safety. Skips if already up to date.
+pub async fn download_file_http(
+    client: &reqwest::Client,
+    url: &str,
+    local_path: &Path,
+    expected_size: Option<u64>,
+) -> Result<DownloadResult, AppError> {
+    validate_https_url(url)?;
+    download_bytes_to_path(client, url, local_path, expected_size).await
+}
+
 /// Download a ZIP pack from CDN and extract into `app_data_dir`.
 /// Skips download+extraction when `local_version >= expected_version`.
 /// ZIP entries are extracted preserving their internal paths relative to `app_data_dir`.
@@ -149,7 +159,7 @@ pub async fn download_and_extract_pack(
     let nonce = uuid::Uuid::new_v4().simple().to_string();
     let temp_zip = app_data_dir.join(format!("pack_download_{}_{}.zip.tmp", expected_version, nonce));
 
-    let download = download_file_http(client, pack_url, &temp_zip, None).await;
+    let download = download_bytes_to_path(client, pack_url, &temp_zip, None).await;
     if let Err(e) = download {
         let _ = std::fs::remove_file(&temp_zip);
         return Err(e);
@@ -214,7 +224,7 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<PackResult, AppError>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
+    use std::io::Write as _;
     use tempfile::tempdir;
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
@@ -299,8 +309,12 @@ mod tests {
         assert!(!dir.path().join("evil.txt").exists());
     }
 
+    // ── download_bytes_to_path tests ────────────────────────────────────────
+    // These call the inner function directly so wiremock's HTTP URLs are accepted.
+    // The HTTPS enforcement on the public API is tested separately below.
+
     #[tokio::test]
-    async fn download_file_http_success_writes_file() {
+    async fn download_bytes_to_path_success_writes_file() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/audio.mp3"))
@@ -311,34 +325,15 @@ mod tests {
         let dir = tempdir().unwrap();
         let dest = dir.path().join("audio.mp3");
         let client = reqwest::Client::new();
-        // wiremock serves HTTP (not HTTPS), so bypass validate_https_url by using the raw URL
-        // In tests we use HTTP since wiremock doesn't support TLS; the SSRF guard is tested separately
         let url = format!("{}/audio.mp3", server.uri());
 
-        // Directly test download_file_http internals by temporarily wrapping (HTTP allowed via wiremock)
-        // We test the function via its internal path, noting the HTTPS guard will reject this URL.
-        // Instead we test the underlying logic skipping the HTTPS check by calling the inner logic.
-        // For this integration test, we accept that the HTTPS guard fires and test it separately below.
-        let result = download_file_http(&client, &url, &dest, None).await;
-        // wiremock uses http://, so HTTPS guard rejects it
-        assert!(result.is_err());
-        let err_msg = format!("{:?}", result.unwrap_err());
-        assert!(err_msg.contains("HTTPS"), "Should reject non-HTTPS URL");
+        let result = download_bytes_to_path(&client, &url, &dest, None).await.unwrap();
+        assert!(matches!(result, DownloadResult::Downloaded));
+        assert_eq!(std::fs::read(&dest).unwrap(), b"fake audio data");
     }
 
     #[tokio::test]
-    async fn download_file_http_rejects_non_https_url() {
-        let client = reqwest::Client::new();
-        let dir = tempdir().unwrap();
-        let dest = dir.path().join("file.mp3");
-        let result = download_file_http(&client, "http://example.com/file.mp3", &dest, None).await;
-        assert!(result.is_err());
-        let err_msg = format!("{:?}", result.unwrap_err());
-        assert!(err_msg.contains("HTTPS"));
-    }
-
-    #[tokio::test]
-    async fn download_file_http_returns_error_on_404() {
+    async fn download_bytes_to_path_returns_error_on_404() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/missing.mp3"))
@@ -351,31 +346,27 @@ mod tests {
         let client = reqwest::Client::new();
         let url = format!("{}/missing.mp3", server.uri());
 
-        // This will fail with HTTPS guard (HTTP URL from wiremock), which is fine —
-        // any error path should also clean up temp files
-        let result = download_file_http(&client, &url, &dest, None).await;
+        let result = download_bytes_to_path(&client, &url, &dest, None).await;
         assert!(result.is_err());
-        // Temp file should be cleaned up
-        assert!(!dest.exists());
-
-        // Verify no leftover .tmp files
-        let leftover_tmps: Vec<_> = std::fs::read_dir(dir.path())
-            .unwrap()
+        // Temp files should be cleaned up
+        let leftover = std::fs::read_dir(dir.path()).unwrap()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
-            .collect();
-        assert!(leftover_tmps.is_empty(), "Temp files were not cleaned up: {:?}", leftover_tmps);
+            .count();
+        assert_eq!(leftover, 0, "Temp files were not cleaned up after error");
     }
 
     #[tokio::test]
-    async fn download_file_http_rejects_oversized_response() {
+    async fn download_bytes_to_path_rejects_when_content_length_exceeds_limit() {
         let server = MockServer::start().await;
+        // Send a small body but lie about content-length being 512 MB (> 500 MB limit).
+        // reqwest reads the Content-Length header before streaming and rejects early.
         Mock::given(method("GET"))
             .and(path("/huge.zip"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .append_header("content-length", "536870912") // 512MB > 500MB limit
-                    .set_body_bytes(vec![0u8; 1024])
+                    .append_header("content-length", "536870912") // 512 MB > 500 MB limit
+                    .set_body_bytes(b"small")
             )
             .mount(&server)
             .await;
@@ -385,11 +376,42 @@ mod tests {
         let client = reqwest::Client::new();
         let url = format!("{}/huge.zip", server.uri());
 
-        // Note: HTTPS guard fires first for http:// URLs from wiremock.
-        // The oversized content-length check is covered by this test verifying an error is returned.
-        let result = download_file_http(&client, &url, &dest, None).await;
-        assert!(result.is_err(), "Should reject download with content-length > limit or non-HTTPS URL");
+        let result = download_bytes_to_path(&client, &url, &dest, None).await;
+        // Either our size-limit guard fires (err contains "limit") or hyper/reqwest rejects
+        // the mismatched Content-Length header before streaming begins — both are correct
+        // behaviour: a claimed 512 MB download must never succeed.
+        assert!(result.is_err(), "Expected error for oversized Content-Length, got Ok");
     }
+
+    #[tokio::test]
+    async fn download_bytes_to_path_skips_when_expected_size_matches() {
+        let dir = tempdir().unwrap();
+        let dest = dir.path().join("already.mp3");
+        // Create a file with known size
+        let mut f = std::fs::File::create(&dest).unwrap();
+        f.write_all(&[0u8; 1024]).unwrap();
+        drop(f);
+
+        let client = reqwest::Client::new();
+        // URL is never contacted because should_skip_download fires first
+        let result = download_bytes_to_path(&client, "http://unused.invalid/audio.mp3", &dest, Some(1024)).await.unwrap();
+        assert!(matches!(result, DownloadResult::Skipped));
+    }
+
+    // ── Public API: HTTPS guard ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn download_file_http_rejects_non_https_url() {
+        let client = reqwest::Client::new();
+        let dir = tempdir().unwrap();
+        let dest = dir.path().join("file.mp3");
+        let result = download_file_http(&client, "http://example.com/file.mp3", &dest, None).await;
+        assert!(result.is_err());
+        let err_msg = format!("{:?}", result.unwrap_err());
+        assert!(err_msg.contains("HTTPS"));
+    }
+
+    // ── download_and_extract_pack skip-logic tests ──────────────────────────
 
     #[tokio::test]
     async fn download_and_extract_pack_skips_when_up_to_date() {
@@ -440,8 +462,6 @@ mod tests {
 
     #[tokio::test]
     async fn download_and_extract_pack_extracts_when_local_version_less_than_expected() {
-        use std::io::Write as _;
-
         // Create an in-memory ZIP with one file
         let mut zip_bytes = Vec::new();
         {
@@ -462,15 +482,15 @@ mod tests {
             .await;
 
         let dir = tempdir().unwrap();
-        // wiremock uses HTTP; call extract_zip directly to test extraction logic
-        // since HTTPS guard prevents using wiremock URLs in download_and_extract_pack
         let url = format!("{}/pack.zip", server.uri());
 
-        // Download the zip manually via reqwest (bypassing our HTTPS guard) and extract
-        let response = reqwest::get(&url).await.unwrap();
-        let bytes = response.bytes().await.unwrap();
+        // download_bytes_to_path bypasses the HTTPS guard; call it directly to download
+        // and feed the zip into extract_zip — mirrors what download_and_extract_pack does
+        // internally once the HTTPS guard passes in production.
+        let client = reqwest::Client::new();
         let zip_path = dir.path().join("pack.zip");
-        std::fs::write(&zip_path, &bytes).unwrap();
+        let dl = download_bytes_to_path(&client, &url, &zip_path, None).await.unwrap();
+        assert!(matches!(dl, DownloadResult::Downloaded));
 
         let result = extract_zip(&zip_path, dir.path()).unwrap();
         assert!(matches!(result, PackResult::Extracted { files_count: 1 }));
