@@ -433,6 +433,31 @@ pub fn create_content_sync_run(conn: &Connection, run: &ContentSyncRun) -> Resul
     Ok(())
 }
 
+pub fn prepare_content_sync_run(
+    conn: &Connection,
+    run_id: &str,
+    mode: ContentSyncRunMode,
+    requested_version: Option<i64>,
+    planned_changes_json: Option<&str>,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE content_sync_runs
+         SET mode = ?2,
+             requested_version = ?3,
+             planned_changes_json = ?4
+         WHERE id = ?1",
+        params![
+            run_id,
+            mode.as_db_str(),
+            requested_version,
+            planned_changes_json,
+        ],
+    )
+    .map_err(AppError::Database)?;
+
+    Ok(())
+}
+
 pub fn complete_content_sync_run(
     conn: &Connection,
     run_id: &str,
@@ -489,6 +514,28 @@ pub fn get_content_sync_run(
     .map_err(AppError::Database)
 }
 
+/// Returns the locally cached version for a pack, or 0 if unknown.
+pub fn get_pack_local_version(conn: &Connection, pack_id: &str) -> Result<u32, AppError> {
+    conn.query_row(
+        "SELECT local_version FROM content_sync_packs WHERE pack_id = ?1",
+        rusqlite::params![pack_id],
+        |row| row.get::<_, u32>(0),
+    )
+    .or_else(|_| Ok(0))
+}
+
+/// Upsert the extracted version for a pack.
+pub fn set_pack_local_version(conn: &Connection, pack_id: &str, version: u32) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO content_sync_packs (pack_id, local_version, extracted_at)
+         VALUES (?1, ?2, datetime('now'))
+         ON CONFLICT(pack_id) DO UPDATE SET local_version = ?2, extracted_at = datetime('now')",
+        rusqlite::params![pack_id, version],
+    )
+    .map(|_| ())
+    .map_err(AppError::Database)
+}
+
 pub fn list_content_sync_runs(
     conn: &Connection,
     limit: usize,
@@ -522,4 +569,27 @@ pub fn list_content_sync_runs(
         .map_err(AppError::Database)?;
 
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrations::run_migrations;
+
+    #[test]
+    fn get_pack_version_returns_zero_for_unknown_pack() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        let v = get_pack_local_version(&conn, "nonexistent").unwrap();
+        assert_eq!(v, 0);
+    }
+
+    #[test]
+    fn set_and_get_pack_version_roundtrip() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_pack_local_version(&conn, "album-test", 3).unwrap();
+        let v = get_pack_local_version(&conn, "album-test").unwrap();
+        assert_eq!(v, 3);
+    }
 }
