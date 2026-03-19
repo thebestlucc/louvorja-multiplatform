@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useBible } from "../../hooks/use-bible";
-import { BookSelector } from "../../components/bible/book-selector";
+import { BookSelector, NAV_GRID_COLS, BOOK_COLS } from "../../components/bible/book-selector";
 import { VerseDisplay } from "../../components/bible/verse-display";
 import { BibleSearch } from "../../components/bible/bible-search";
 import { VersionComparison } from "../../components/bible/version-comparison";
 import { resolveBookIndex } from "../../components/bible/book-catalog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Monitor, Square } from "lucide-react";
 
-const VERSE_GRID_COLUMNS = 11;
 const PERIODIC_FALLBACK_ORDER_OFFSET = 1000;
 
 export const Route = createFileRoute("/bible/")({
@@ -34,15 +34,30 @@ function BibleIndex() {
   const bible = useBible();
   const { book, chapter, verse } = Route.useSearch();
   const [searchQuery, setSearchQuery] = useState("");
+  const [showComparison, setShowComparison] = useState(false);
   const deepLinkApplied = useRef(false);
   const pendingVerseNavigationRef = useRef<PendingVerseNavigation | null>(null);
+  const shiftAnchorRef = useRef<number | null>(null);
+  const initialBookFocusDone = useRef(false);
 
-  // Auto-select first version when loaded
+  // Auto-select default version when loaded (prefer NAA, fall back to first)
   useEffect(() => {
     if (bible.versions.length > 0 && !bible.currentVersionId) {
-      bible.setVersion(bible.versions[0].id);
+      const naa = bible.versions.find((v) => v.abbreviation === "NAA");
+      bible.setVersion((naa ?? bible.versions[0]).id);
     }
   }, [bible.versions, bible.currentVersionId, bible.setVersion]);
+
+  // Focus first available book on initial load so arrow nav works immediately
+  useEffect(() => {
+    if (bible.books.length > 0 && !initialBookFocusDone.current) {
+      initialBookFocusDone.current = true;
+      const btn =
+        document.querySelector<HTMLButtonElement>('button[data-bible-grid="book"][data-selected="true"]') ??
+        document.querySelector<HTMLButtonElement>('button[data-bible-grid="book"]:not([disabled])');
+      btn?.focus();
+    }
+  }, [bible.books]);
 
   // Deep-link from command palette search params
   useEffect(() => {
@@ -80,11 +95,24 @@ function BibleIndex() {
     bible.selectVerse(verse);
   };
 
+  const handleSelectVerse = useCallback(
+    (verse: number, shiftKey?: boolean) => {
+      if (shiftKey && bible.lastSelectedVerse !== null) {
+        bible.selectVerseRange(bible.lastSelectedVerse, verse);
+      } else {
+        bible.selectSingleVerse(verse);
+      }
+    },
+    [bible],
+  );
+
   const handleDoubleClickVerse = useCallback(
     (verseNum: number) => {
+      bible.selectSingleVerse(verseNum);
       if (bible.isProjecting) {
-        bible.selectSingleVerse(verseNum);
         void bible.updateBibleProjection();
+      } else {
+        void bible.startBibleProjection();
       }
     },
     [bible],
@@ -127,26 +155,48 @@ function BibleIndex() {
       };
       const focusedVerse = parseGridValue(focusedElement?.dataset.verse);
       const focusedChapter = parseGridValue(focusedElement?.dataset.chapter);
+      const focusedBookIndex = (() => {
+        const v = focusedElement?.dataset.bookIndex;
+        if (v === undefined) return null;
+        const parsed = Number(v);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+      })();
 
       const focusSelectedChapter = () => {
         const selected = document.querySelector<HTMLButtonElement>('button[data-bible-grid="chapter"][data-selected="true"]');
-        if (selected) {
-          selected.focus();
-          return;
-        }
+        if (selected) { selected.focus(); return; }
         const first = document.querySelector<HTMLButtonElement>('button[data-bible-grid="chapter"]');
         first?.focus();
       };
 
       const focusSelectedBook = () => {
         const selected = document.querySelector<HTMLButtonElement>('button[data-bible-grid="book"][data-selected="true"]');
-        if (selected) {
-          selected.focus();
-          return;
-        }
+        if (selected) { selected.focus(); return; }
         const firstAvailable = document.querySelector<HTMLButtonElement>('button[data-bible-grid="book"]:not([disabled])');
         firstAvailable?.focus();
       };
+
+      const focusSelectedVerse = () => {
+        const selected = document.querySelector<HTMLButtonElement>('button[data-bible-grid="verse"][data-selected="true"]');
+        if (selected) { selected.focus(); return; }
+        const first = document.querySelector<HTMLButtonElement>('button[data-bible-grid="verse"]');
+        first?.focus();
+      };
+
+      // ── Tab / Shift+Tab: cycle sections ────────────────────────────────────
+      if (e.key === "Tab" && focusedGrid) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (focusedGrid === "verse") focusSelectedChapter();
+          else if (focusedGrid === "chapter") focusSelectedBook();
+          else focusSelectedVerse();
+        } else {
+          if (focusedGrid === "book") focusSelectedChapter();
+          else if (focusedGrid === "chapter") focusSelectedVerse();
+          else focusSelectedBook();
+        }
+        return;
+      }
 
       const { currentBook, currentChapter, verses, lastSelectedVerse, selectedVerses, isProjecting } = bible;
       const currentBookIndex = orderedBooks.findIndex((bookEntry) => bookEntry.name === currentBook);
@@ -158,26 +208,70 @@ function BibleIndex() {
         targetChapter: number,
         verseMode: "first" | "last",
       ) => {
-        pendingVerseNavigationRef.current = {
-          book: targetBook,
-          chapter: targetChapter,
-          verseMode,
-        };
-        if (targetBook !== currentBook) {
-          bible.setBook(targetBook);
-        }
+        shiftAnchorRef.current = null;
+        pendingVerseNavigationRef.current = { book: targetBook, chapter: targetChapter, verseMode };
+        if (targetBook !== currentBook) bible.setBook(targetBook);
         bible.setChapter(targetChapter);
       };
 
-      if (focusedGrid === "book" && e.key.startsWith("Arrow")) {
-        if (e.key === "ArrowDown" && currentBook && chapterCount > 0) {
+      // ── Book grid ──────────────────────────────────────────────────────────
+      if (focusedGrid === "book") {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
           e.preventDefault();
+          if (focusedBookIndex !== null) {
+            const entry = orderedBooks.find((b) => resolveBookIndex(b.name) === focusedBookIndex);
+            if (entry) bible.setBook(entry.name);
+          }
           focusSelectedChapter();
+          return;
+        }
+
+        if (!e.key.startsWith("Arrow")) return;
+        e.preventDefault();
+
+        if (focusedBookIndex === null) {
+          if (e.key === "ArrowDown" && currentBook && chapterCount > 0) focusSelectedChapter();
+          return;
+        }
+
+        const navigateToBook = (index: number): boolean => {
+          const btn = document.querySelector<HTMLButtonElement>(
+            `button[data-bible-grid="book"][data-book-index="${index}"]`,
+          );
+          if (!btn) return false;
+          btn.focus();
+          const entry = orderedBooks.find((b) => resolveBookIndex(b.name) === index);
+          if (entry) bible.setBook(entry.name);
+          return true;
+        };
+
+        switch (e.key) {
+          case "ArrowRight":
+            navigateToBook(focusedBookIndex + 1);
+            break;
+          case "ArrowLeft":
+            if (focusedBookIndex > 0) navigateToBook(focusedBookIndex - 1);
+            break;
+          case "ArrowDown":
+            if (!navigateToBook(focusedBookIndex + BOOK_COLS)) focusSelectedChapter();
+            break;
+          case "ArrowUp":
+            if (focusedBookIndex >= BOOK_COLS) navigateToBook(focusedBookIndex - BOOK_COLS);
+            break;
         }
         return;
       }
 
-      if (focusedGrid === "chapter" && e.key.startsWith("Arrow")) {
+      // ── Chapter grid ────────────────────────────────────────────────────────
+      if (focusedGrid === "chapter") {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+          if (focusedChapter !== null) bible.setChapter(focusedChapter);
+          focusSelectedVerse();
+          return;
+        }
+
+        if (!e.key.startsWith("Arrow")) return;
         if (!currentBook || chapterCount <= 0) return;
         const activeChapter = focusedChapter ?? (currentChapter > 0 ? Math.min(currentChapter, chapterCount) : 1);
 
@@ -189,15 +283,29 @@ function BibleIndex() {
         switch (e.key) {
           case "ArrowUp":
             e.preventDefault();
-            if (activeChapter <= VERSE_GRID_COLUMNS) {
-              focusSelectedBook();
+            if (activeChapter <= NAV_GRID_COLS) {
+              if (currentBookIndex > 0) {
+                const prevBook = orderedBooks[currentBookIndex - 1];
+                bible.setBook(prevBook.name);
+                bible.setChapter(prevBook.chapterCount);
+              } else {
+                focusSelectedBook();
+              }
               return;
             }
-            moveToChapter(activeChapter - VERSE_GRID_COLUMNS);
+            moveToChapter(activeChapter - NAV_GRID_COLS);
             return;
           case "ArrowDown":
             e.preventDefault();
-            moveToChapter(activeChapter + VERSE_GRID_COLUMNS);
+            if (activeChapter + NAV_GRID_COLS > chapterCount) {
+              if (currentBookIndex >= 0 && currentBookIndex < orderedBooks.length - 1) {
+                const nextBook = orderedBooks[currentBookIndex + 1];
+                bible.setBook(nextBook.name);
+                bible.setChapter(1);
+              }
+              return;
+            }
+            moveToChapter(activeChapter + NAV_GRID_COLS);
             return;
           case "ArrowLeft":
             e.preventDefault();
@@ -210,6 +318,7 @@ function BibleIndex() {
         }
       }
 
+      // ── Verse grid ──────────────────────────────────────────────────────────
       if (!currentBook || currentChapter <= 0 || verses.length === 0) return;
 
       const verseCount = verses.length;
@@ -220,68 +329,86 @@ function BibleIndex() {
       const activeVerse = clampedLast ?? (selectedTail ? Math.min(selectedTail, verseCount) : 1);
 
       const moveToVerse = (verse: number) => {
+        shiftAnchorRef.current = null;
         const clamped = Math.max(1, Math.min(verse, verseCount));
         bible.selectSingleVerse(clamped);
-        if (isProjecting) {
-          void bible.updateBibleProjection();
-        }
+        if (isProjecting) void bible.updateBibleProjection();
+      };
+
+      const moveToVerseShift = (targetVerse: number) => {
+        const clamped = Math.max(1, Math.min(targetVerse, verseCount));
+        if (shiftAnchorRef.current === null) shiftAnchorRef.current = activeVerse;
+        bible.selectVerseRange(shiftAnchorRef.current, clamped);
+        if (isProjecting) void bible.updateBibleProjection();
       };
 
       switch (e.key) {
         case "ArrowRight":
           e.preventDefault();
-          if (activeVerse < verseCount) {
-            moveToVerse(activeVerse + 1);
-            break;
-          }
-
+          if (e.shiftKey) { moveToVerseShift(activeVerse + 1); break; }
+          if (activeVerse < verseCount) { moveToVerse(activeVerse + 1); break; }
           if (currentChapter < chapterCount) {
             navigateToBoundaryVerse(currentBook, currentChapter + 1, "first");
             break;
           }
-
           if (currentBookIndex >= 0 && currentBookIndex < orderedBooks.length - 1) {
-            const nextBook = orderedBooks[currentBookIndex + 1];
-            navigateToBoundaryVerse(nextBook.name, 1, "first");
+            navigateToBoundaryVerse(orderedBooks[currentBookIndex + 1].name, 1, "first");
           }
           break;
         case "ArrowLeft":
           e.preventDefault();
-          if (activeVerse > 1) {
-            moveToVerse(activeVerse - 1);
-            break;
-          }
-
+          if (e.shiftKey) { moveToVerseShift(activeVerse - 1); break; }
+          if (activeVerse > 1) { moveToVerse(activeVerse - 1); break; }
           if (currentChapter > 1) {
             navigateToBoundaryVerse(currentBook, currentChapter - 1, "last");
             break;
           }
-
           if (currentBookIndex > 0) {
-            const previousBook = orderedBooks[currentBookIndex - 1];
-            navigateToBoundaryVerse(previousBook.name, previousBook.chapterCount, "last");
+            const prev = orderedBooks[currentBookIndex - 1];
+            navigateToBoundaryVerse(prev.name, prev.chapterCount, "last");
           }
           break;
         case "ArrowDown":
           e.preventDefault();
-          moveToVerse(activeVerse + VERSE_GRID_COLUMNS);
+          if (e.shiftKey) { moveToVerseShift(activeVerse + NAV_GRID_COLS); break; }
+          if (activeVerse + NAV_GRID_COLS > verseCount) {
+            if (currentChapter < chapterCount) {
+              navigateToBoundaryVerse(currentBook, currentChapter + 1, "first");
+            } else if (currentBookIndex >= 0 && currentBookIndex < orderedBooks.length - 1) {
+              navigateToBoundaryVerse(orderedBooks[currentBookIndex + 1].name, 1, "first");
+            }
+            break;
+          }
+          moveToVerse(activeVerse + NAV_GRID_COLS);
           break;
         case "ArrowUp":
-          if (focusedGrid === "verse" && (focusedVerse ?? activeVerse) <= VERSE_GRID_COLUMNS) {
-            e.preventDefault();
-            focusSelectedChapter();
+          e.preventDefault();
+          if (e.shiftKey) { moveToVerseShift(activeVerse - NAV_GRID_COLS); break; }
+          if ((focusedVerse ?? activeVerse) <= NAV_GRID_COLS) {
+            if (currentChapter > 1) {
+              navigateToBoundaryVerse(currentBook, currentChapter - 1, "last");
+            } else if (currentBookIndex > 0) {
+              const prev = orderedBooks[currentBookIndex - 1];
+              navigateToBoundaryVerse(prev.name, prev.chapterCount, "last");
+            } else {
+              focusSelectedChapter();
+            }
             return;
           }
-          e.preventDefault();
-          moveToVerse(activeVerse - VERSE_GRID_COLUMNS);
+          moveToVerse(activeVerse - NAV_GRID_COLS);
           break;
         case "Enter":
         case " ":
         case "Spacebar":
           e.preventDefault();
           bible.selectSingleVerse(activeVerse);
+          if (isProjecting) void bible.updateBibleProjection();
+          else void bible.startBibleProjection();
+          break;
+        case "Escape":
           if (isProjecting) {
-            void bible.updateBibleProjection();
+            e.preventDefault();
+            void bible.stopBibleProjection();
           }
           break;
       }
@@ -356,26 +483,18 @@ function BibleIndex() {
           {/* Left panel: Verse display */}
           <div className="order-2 min-h-0 flex-1 overflow-y-auto rounded-lg border bg-surface p-4 lg:order-1 lg:w-[25%] lg:flex-none">
             {bible.currentBook && bible.currentChapter > 0 ? (
-              <div className="space-y-4">
-                <VerseDisplay
+              <VerseDisplay
                   verses={bible.verses}
                   selectedVerses={bible.selectedVerses}
                   scrollToVerse={bible.lastSelectedVerse}
                   book={bible.currentBook}
                   chapter={bible.currentChapter}
                   versionAbbr={currentVersion?.abbreviation}
-                  onSelectVerse={bible.selectVerse}
+                  onSelectVerse={handleSelectVerse}
                   onDoubleClickVerse={handleDoubleClickVerse}
                   isLoading={bible.isLoadingVerses}
+                  onOpenCompare={bible.versions.length > 1 ? () => setShowComparison(true) : undefined}
                 />
-
-                <VersionComparison
-                  currentVersionId={bible.currentVersionId}
-                  book={bible.currentBook}
-                  chapter={bible.currentChapter}
-                  selectedVerses={bible.selectedVerses}
-                />
-              </div>
             ) : (
               <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-muted-foreground">{t("bible.selectBook")}</p>
@@ -383,8 +502,8 @@ function BibleIndex() {
             )}
           </div>
 
-          {/* Right panel: Search + Periodic table + Chapters */}
-          <div className="order-1 space-y-3 lg:order-2 lg:flex-1">
+          {/* Right panel: Search + Book/Chapter/Verse selector */}
+          <div className="order-1 flex min-h-0 flex-col gap-3 lg:order-2 lg:flex-1">
             <BibleSearch
               query={searchQuery}
               onQueryChange={setSearchQuery}
@@ -397,21 +516,40 @@ function BibleIndex() {
             {bible.isLoadingBooks ? (
               <p className="text-sm text-muted-foreground">{t("bible.loading")}</p>
             ) : (
-              <BookSelector
-                books={bible.books}
-                currentBook={bible.currentBook}
-                currentChapter={bible.currentChapter}
-                verseCount={bible.verses.length}
-                selectedVerses={bible.selectedVerses}
-                onSelectBook={bible.setBook}
-                onSelectChapter={bible.setChapter}
-                onSelectVerse={bible.selectVerse}
-                onDoubleClickVerse={handleDoubleClickVerse}
-              />
+              <div className="min-h-0 flex-1">
+                <BookSelector
+                  books={bible.books}
+                  currentBook={bible.currentBook}
+                  currentChapter={bible.currentChapter}
+                  verseCount={bible.verses.length}
+                  selectedVerses={bible.selectedVerses}
+                  onSelectBook={bible.setBook}
+                  onSelectChapter={bible.setChapter}
+                  onSelectVerse={handleSelectVerse}
+                  onDoubleClickVerse={handleDoubleClickVerse}
+                />
+              </div>
             )}
           </div>
         </div>
       )}
+
+      {/* Version comparison dialog */}
+      <Dialog open={showComparison} onOpenChange={setShowComparison}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("bible.comparison")}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <VersionComparison
+              currentVersionId={bible.currentVersionId}
+              book={bible.currentBook}
+              chapter={bible.currentChapter}
+              selectedVerses={bible.selectedVerses}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

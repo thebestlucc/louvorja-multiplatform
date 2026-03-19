@@ -137,7 +137,7 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
                 <div 
                   key={item.id} 
                   className="group grid grid-cols-[1fr_120px_48px] items-center gap-4 px-4 py-2 text-sm transition-colors hover:bg-surface-hover border-b border-border last:border-0 cursor-pointer"
-                  onClick={() => console.log("Play item:", item.id)}
+                  onClick={() => {/* TODO: Implement direct projection from library */}}
                 >
                   <div className="min-w-0 flex items-center gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent/5 text-muted-foreground">

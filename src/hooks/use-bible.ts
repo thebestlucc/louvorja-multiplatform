@@ -55,10 +55,6 @@ export function useBible() {
 
   const setVersion = (id: number) => {
     setCurrentVersionId(id);
-    setCurrentBook("");
-    setCurrentChapter(0);
-    setSelectedVerses([]);
-    setLastSelectedVerse(null);
     void setPreference("bible.selectedVersionId", id);
   };
 
@@ -88,6 +84,15 @@ export function useBible() {
   const selectSingleVerse = (verse: number) => {
     setSelectedVerses([verse]);
     setLastSelectedVerse(verse);
+  };
+
+  const selectVerseRange = (anchor: number, end: number) => {
+    const min = Math.min(anchor, end);
+    const max = Math.max(anchor, end);
+    const range: number[] = [];
+    for (let i = min; i <= max; i++) range.push(i);
+    setSelectedVerses(range);
+    setLastSelectedVerse(end);
   };
 
   const projectSelectedVersesRange = useCallback(async () => {
@@ -131,8 +136,9 @@ export function useBible() {
   }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides]);
 
   const startBibleProjection = useCallback(async () => {
+    setCurrentProjectionType("bible");
     await projectSelectedVersesRange();
-  }, [projectSelectedVersesRange]);
+  }, [projectSelectedVersesRange, setCurrentProjectionType]);
 
   const updateBibleProjection = useCallback(async () => {
     if (isProjecting) {
@@ -163,6 +169,7 @@ export function useBible() {
     selectedVerses,
     selectVerse,
     selectSingleVerse,
+    selectVerseRange,
     lastSelectedVerse,
     isProjecting,
     startBibleProjection,

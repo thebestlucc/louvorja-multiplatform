@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import type { Verse } from "../../types/bible";
-import { Copy, Plus } from "lucide-react";
+import { Copy, Plus, Columns2 } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddServiceItem } from "../../lib/queries";
 import { copyToClipboard } from "../../lib/clipboard";
@@ -17,9 +17,10 @@ interface VerseDisplayProps {
   book: string;
   chapter: number;
   versionAbbr?: string;
-  onSelectVerse: (verse: number) => void;
+  onSelectVerse: (verse: number, shiftKey?: boolean) => void;
   onDoubleClickVerse: (verse: number) => void;
   isLoading: boolean;
+  onOpenCompare?: () => void;
 }
 
 export function VerseDisplay({
@@ -32,6 +33,7 @@ export function VerseDisplay({
   onSelectVerse,
   onDoubleClickVerse,
   isLoading,
+  onOpenCompare,
 }: VerseDisplayProps) {
   const { t, i18n } = useTranslation();
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
@@ -109,19 +111,26 @@ export function VerseDisplay({
             </span>
           )}
         </div>
-        {selectedVerses.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="ghost" onClick={() => void handleCopyVerses()} title={t("bible.copyVerse")}>
-              <Copy className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1">
+          {onOpenCompare && (
+            <Button size="sm" variant="ghost" onClick={onOpenCompare} title={t("bible.comparison")}>
+              <Columns2 className="h-3.5 w-3.5" />
             </Button>
-            {activeServiceId && (
-              <Button size="sm" variant="outline" onClick={handleAddToService}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                {t("services.addToService")}
+          )}
+          {selectedVerses.length > 0 && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => void handleCopyVerses()} title={t("bible.copyVerse")}>
+                <Copy className="h-3.5 w-3.5" />
               </Button>
-            )}
-          </div>
-        )}
+              {activeServiceId && (
+                <Button size="sm" variant="outline" onClick={handleAddToService}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  {t("services.addToService")}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
       <div className="space-y-0.5">
         {verses.map((v) => (
@@ -134,7 +143,7 @@ export function VerseDisplay({
                 ? "bg-primary/15 text-primary"
                 : "hover:bg-muted",
             )}
-            onClick={() => onSelectVerse(v.verse)}
+            onClick={(ev) => onSelectVerse(v.verse, ev.shiftKey)}
             onDoubleClick={() => onDoubleClickVerse(v.verse)}
           >
             <strong className="mr-1.5 inline-block min-w-[1.25rem] text-xs text-muted-foreground">
