@@ -41,6 +41,7 @@
     "allow-display-commands",
     "allow-utility-commands",
     "allow-system-commands",
-    "allow-schedule-commands"
+    "allow-schedule-commands",
+    "allow-media-library-commands"
   ]
 }

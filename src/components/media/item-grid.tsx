@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { open } from "@tauri-apps/plugin-dialog";
+import { catcher } from "../../lib/catcher";
 
 interface ItemGridProps {
   categoryId: number | null;
@@ -64,25 +65,28 @@ export function ItemGrid({ categoryId }: ItemGridProps) {
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
-    upsertMutation.mutate({
-      id: editingItem?.id ?? null,
-      categoryId: categoryId,
-      name,
-      filePath,
-      fileType: filePath.split(".").pop()?.toLowerCase() ?? "unknown",
-      thumbnailPath: null,
-      sortOrder: editingItem?.sortOrder ?? 0,
-    }, {
-      onSuccess: () => {
-        setIsDialogOpen(false);
-      }
-    });
+  const handleSave = async () => {
+    const [_, error] = await catcher(
+      upsertMutation.mutateAsync({
+        id: editingItem?.id ?? null,
+        categoryId: categoryId,
+        name,
+        filePath,
+        fileType: filePath.split(".").pop()?.toLowerCase() ?? "unknown",
+        thumbnailPath: null,
+        sortOrder: editingItem?.sortOrder ?? 0,
+      }),
+      { notify: true }
+    );
+
+    if (!error) {
+      setIsDialogOpen(false);
+    }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm(t("hymn.deleteConfirm"))) {
-      deleteMutation.mutate(id);
+      await catcher(deleteMutation.mutateAsync(id), { notify: true });
     }
   };
 
