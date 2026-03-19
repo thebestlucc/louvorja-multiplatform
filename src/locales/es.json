@@ -14,6 +14,12 @@
   "app": {
     "name": "LouvorJA"
   },
+  "categories": {
+    "add": "Agregar Categoría",
+    "edit": "Editar Categoría",
+    "namePlaceholder": "Nombre de la categoría",
+    "title": "Categorías"
+  },
   "audio": {
     "clearAll": "Borrar Todo",
     "discard": "Descartar",
@@ -149,6 +155,7 @@
     "collections": "Colecciones",
     "globalActions": "Acciones globales",
     "hymns": "Himnos",
+    "mediaLibrary": "Ítems Agendados",
     "navigation": "Navegación",
     "noResults": "No se encontraron resultados",
     "placeholder": "Escriba un comando...",
@@ -455,6 +462,10 @@
     "editNotes": "Editar Notas",
     "empty": "Sin cultos aún",
     "filePlaceholder": "Seleccione un archivo...",
+    "fileTabs": {
+      "library": "Ítems Agendados",
+      "upload": "Archivo Local"
+    },
     "invalidUrl": "Por favor, ingrese una URL válida",
     "itemTypes": {
       "annotation": "Anotación",
@@ -860,7 +871,16 @@
       "winner": "Ganador"
     },
     "mediaLibrary": {
+      "addItem": "Agregar Elemento",
       "description": "Gestione una biblioteca de videos, imágenes y PDF para uso rápido en el culto.",
+      "editItem": "Editar Elemento",
+      "filePathLabel": "Ruta del Archivo",
+      "filePathPlaceholder": "Seleccione un archivo...",
+      "items": "Elementos",
+      "nameLabel": "Nombre",
+      "namePlaceholder": "Nombre del elemento",
+      "noItems": "No hay elementos en esta categoría",
+      "selectCategoryHint": "Seleccione una categoría para ver los elementos",
       "title": "Ítems Agendados"
     },
     "mediaIntegrity": {
