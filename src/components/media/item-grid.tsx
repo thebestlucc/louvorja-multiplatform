@@ -116,12 +116,10 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
       </div>
 
       <div className={cn("rounded-md border border-border bg-surface overflow-hidden", !isCategorySelected && "opacity-50 pointer-events-none")}>
-        <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-border bg-accent/5 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="grid grid-cols-[1fr_120px_48px] gap-4 border-b border-border bg-accent/5 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           <div>{t("utilities.mediaLibrary.nameLabel")}</div>
-          <div className="flex items-center gap-10 pr-8">
-            <div className="w-[100px]">{t("utilities.mediaLibrary.schedule")}</div>
-            <div className="w-4"></div>
-          </div>
+          <div className="text-right">{t("utilities.mediaLibrary.schedule")}</div>
+          <div className="w-8"></div>
         </div>
 
         <ScrollArea className="h-[calc(100vh-22rem)]">
@@ -138,7 +136,7 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
               {items.map((item: MediaLibraryItem) => (
                 <div 
                   key={item.id} 
-                  className="group grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-2 text-sm transition-colors hover:bg-surface-hover border-b border-border last:border-0 cursor-pointer"
+                  className="group grid grid-cols-[1fr_120px_48px] items-center gap-4 px-4 py-2 text-sm transition-colors hover:bg-surface-hover border-b border-border last:border-0 cursor-pointer"
                   onClick={() => console.log("Play item:", item.id)}
                 >
                   <div className="min-w-0 flex items-center gap-3">
@@ -155,18 +153,18 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 pr-2" onClick={(e) => e.stopPropagation()}>
-                    <div className="w-[100px] text-xs text-muted-foreground shrink-0">
-                      {item.scheduledDate ? (
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {dateFormater.format(new Date(item.scheduledDate + "T12:00:00Z"))}
-                        </div>
-                      ) : (
-                        <span className="italic opacity-50">{t("utilities.mediaLibrary.notScheduled")}</span>
-                      )}
-                    </div>
+                  <div className="text-right text-xs text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+                    {item.scheduledDate ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {dateFormater.format(new Date(item.scheduledDate + "T12:00:00Z"))}
+                      </div>
+                    ) : (
+                      <span className="italic opacity-50">{t("utilities.mediaLibrary.notScheduled")}</span>
+                    )}
+                  </div>
 
+                  <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 cursor-pointer">
