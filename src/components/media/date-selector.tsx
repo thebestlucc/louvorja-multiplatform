@@ -70,7 +70,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
           type="button"
           onClick={() => onSelectDate(null)}
           className={cn(
-            "text-[10px] hover:underline",
+            "text-[10px] hover:underline cursor-pointer",
             selectedDate === null ? "font-bold text-primary" : "text-muted-foreground"
           )}
         >
@@ -106,7 +106,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
                       disabled={disabled}
                       onClick={() => onSelectDate(cell.isoDate)}
                       className={cn(
-                        "relative flex aspect-square items-center justify-center rounded-md text-[11px] transition-all",
+                        "relative flex aspect-square items-center justify-center rounded-md text-[11px] transition-all cursor-pointer",
                         !cell.inCurrentMonth && "opacity-0 pointer-events-none",
                         disabled && "opacity-30 cursor-not-allowed",
                         !disabled && !isSelected && "hover:bg-accent hover:text-accent-foreground",

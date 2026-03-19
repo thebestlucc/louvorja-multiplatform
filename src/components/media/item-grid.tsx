@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FileIcon, MoreVertical, Trash2, Edit2, Play, Plus, Calendar } from "lucide-react";
+import { FileIcon, MoreVertical, Trash2, Edit2, Plus, Calendar } from "lucide-react";
 import { Button } from "../ui/button";
 import { useMediaLibraryItemsByDate, useUpsertMediaLibraryItem, useDeleteMediaLibraryItem } from "../../lib/queries";
 import { MediaLibraryItem } from "../../lib/bindings";
@@ -112,12 +112,13 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
         </Button>
       </div>
 
-      <div className="rounded-md border border-border bg-surface">
-        <div className="grid grid-cols-[auto_1fr_150px_auto] gap-4 border-b bg-accent/5 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          <div className="w-6"></div>
+      <div className="rounded-md border border-border bg-surface overflow-hidden">
+        <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-border bg-accent/5 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           <div>{t("utilities.mediaLibrary.nameLabel")}</div>
-          <div>{t("utilities.mediaLibrary.schedule")}</div>
-          <div className="w-8"></div>
+          <div className="flex items-center gap-10 pr-8">
+            <div className="w-[100px]">{t("utilities.mediaLibrary.schedule")}</div>
+            <div className="w-4"></div>
+          </div>
         </div>
 
         <ScrollArea className="h-[calc(100vh-22rem)]">
@@ -132,48 +133,50 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
           ) : (
             <div className="flex flex-col">
               {items.map((item: MediaLibraryItem) => (
-                <div key={item.id} className="group grid grid-cols-[auto_1fr_150px_auto] items-center gap-4 px-4 py-2 text-sm transition-colors hover:bg-surface-hover border-b last:border-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded bg-accent/5 text-muted-foreground">
-                    <FileIcon className="h-4 w-4" />
-                  </div>
-                  
-                  <div className="min-w-0 flex flex-col">
-                    <span className="truncate font-medium text-foreground" title={item.name}>
-                      {item.name}
-                    </span>
-                    <span className="truncate text-[10px] text-muted-foreground opacity-70" title={item.filePath}>
-                      {item.filePath}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    {item.scheduledDate ? (
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {dateFormater.format(new Date(item.scheduledDate + "T12:00:00Z"))}
-                      </div>
-                    ) : (
-                      <span className="italic opacity-50">{t("utilities.mediaLibrary.notScheduled")}</span>
-                    )}
+                <div 
+                  key={item.id} 
+                  className="group grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-2 text-sm transition-colors hover:bg-surface-hover border-b border-border last:border-0 cursor-pointer"
+                  onClick={() => console.log("Play item:", item.id)}
+                >
+                  <div className="min-w-0 flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent/5 text-muted-foreground">
+                      <FileIcon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex flex-col">
+                      <span className="truncate font-medium text-foreground" title={item.name}>
+                        {item.name}
+                      </span>
+                      <span className="truncate text-[10px] text-muted-foreground opacity-70" title={item.filePath}>
+                        {item.filePath}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
-                      <Play className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center gap-4 pr-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-[100px] text-xs text-muted-foreground shrink-0">
+                      {item.scheduledDate ? (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {dateFormater.format(new Date(item.scheduledDate + "T12:00:00Z"))}
+                        </div>
+                      ) : (
+                        <span className="italic opacity-50">{t("utilities.mediaLibrary.notScheduled")}</span>
+                      )}
+                    </div>
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 cursor-pointer">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
+                        <DropdownMenuItem className="cursor-pointer" onClick={() => handleOpenEdit(item)}>
                           <Edit2 className="mr-2 h-3.5 w-3.5" />
                           {t("actions.edit")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="text-destructive"
+                          className="text-destructive cursor-pointer"
                           onClick={() => handleDelete(item.id)}
                         >
                           <Trash2 className="mr-2 h-3.5 w-3.5" />
