@@ -874,6 +874,7 @@
     },
     "mediaLibrary": {
       "addItem": "Adicionar Item",
+      "allDates": "Mostrar Todos",
       "description": "Gerencie uma biblioteca de vídeos, imagens e PDFs para uso rápido no culto.",
       "editItem": "Editar Item",
       "filePathLabel": "Caminho do Arquivo",

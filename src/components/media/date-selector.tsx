@@ -4,7 +4,7 @@ import { buildMonthGrid, toIsoDate } from "../../lib/schedules";
 import { useMediaLibraryItemDates } from "../../lib/queries";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface DateSelectorProps {
@@ -44,6 +44,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
 
   const handlePrev = () => setBaseMonthOffset(prev => prev - 3);
   const handleNext = () => setBaseMonthOffset(prev => prev + 3);
+  const handleToday = () => setBaseMonthOffset(0);
 
   return (
     <div className="flex w-72 flex-col gap-2 border-r pr-4">
@@ -52,6 +53,9 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
           {t("mediaLibrary.schedule", "Schedule")}
         </h3>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToday} title={t("actions.today", "Today")}>
+            <Calendar className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -69,7 +73,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
             selectedDate === null ? "font-bold text-primary" : "text-muted-foreground"
           )}
         >
-          {t("mediaLibrary.allDates", "Show All")}
+          {t("mediaLibrary.allDates")}
         </button>
       </div>
 
