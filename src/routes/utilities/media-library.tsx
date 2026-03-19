@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { MediaLibraryManager } from "../../components/media/media-library-manager";
 
 export const Route = createFileRoute("/utilities/media-library")({
   component: MediaLibraryPage,
@@ -10,7 +11,7 @@ function MediaLibraryPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b pb-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">
             {t("utilities.mediaLibrary.title")}
@@ -21,11 +22,7 @@ function MediaLibraryPage() {
         </div>
       </div>
 
-      <div className="rounded-md border border-dashed p-8 text-center">
-        <p className="text-muted-foreground">
-          Media Library Manager coming soon in Task 5...
-        </p>
-      </div>
+      <MediaLibraryManager />
     </div>
   );
 }
