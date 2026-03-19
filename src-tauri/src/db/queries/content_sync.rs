@@ -440,7 +440,7 @@ pub fn prepare_content_sync_run(
     requested_version: Option<i64>,
     planned_changes_json: Option<&str>,
 ) -> Result<(), AppError> {
-    conn.execute(
+    let updated = conn.execute(
         "UPDATE content_sync_runs
          SET mode = ?2,
              requested_version = ?3,
@@ -455,6 +455,9 @@ pub fn prepare_content_sync_run(
     )
     .map_err(AppError::Database)?;
 
+    if updated == 0 {
+        return Err(AppError::NotFound(format!("content_sync_run not found: {run_id}")));
+    }
     Ok(())
 }
 
@@ -514,16 +517,22 @@ pub fn get_content_sync_run(
     .map_err(AppError::Database)
 }
 
+// TODO(review): Add debug_assert!(!pack_id.is_empty()) to catch empty pack_id in dev - Business Logic Reviewer, 2026-03-19, Severity: Low
 /// Returns the locally cached version for a pack, or 0 if unknown.
 pub fn get_pack_local_version(conn: &Connection, pack_id: &str) -> Result<u32, AppError> {
+    // TODO(review): local_version stored as SQLite INTEGER (signed i64) but read as u32; add CHECK (local_version >= 0) to schema in a future migration to enforce at DB level - Nil-Safety Reviewer, 2026-03-19, Severity: Low
     conn.query_row(
         "SELECT local_version FROM content_sync_packs WHERE pack_id = ?1",
         rusqlite::params![pack_id],
         |row| row.get::<_, u32>(0),
     )
-    .or_else(|_| Ok(0))
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(0),
+        other => Err(AppError::Database(other)),
+    })
 }
 
+// TODO(review): Add debug_assert!(!pack_id.is_empty()) to catch empty pack_id in dev - Business Logic Reviewer, 2026-03-19, Severity: Low
 /// Upsert the extracted version for a pack.
 pub fn set_pack_local_version(conn: &Connection, pack_id: &str, version: u32) -> Result<(), AppError> {
     conn.execute(
@@ -591,5 +600,29 @@ mod tests {
         set_pack_local_version(&conn, "album-test", 3).unwrap();
         let v = get_pack_local_version(&conn, "album-test").unwrap();
         assert_eq!(v, 3);
+    }
+
+    #[test]
+    fn set_pack_version_overwrites_previous_value() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_pack_local_version(&conn, "pack-a", 1).unwrap();
+        set_pack_local_version(&conn, "pack-a", 7).unwrap();
+        let v = get_pack_local_version(&conn, "pack-a").unwrap();
+        assert_eq!(v, 7, "second set must overwrite first via upsert");
+    }
+
+    #[test]
+    fn set_pack_version_populates_extracted_at() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_pack_local_version(&conn, "pack-ts", 2).unwrap();
+        let extracted_at: Option<String> = conn.query_row(
+            "SELECT extracted_at FROM content_sync_packs WHERE pack_id = ?1",
+            rusqlite::params!["pack-ts"],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(extracted_at.is_some(), "extracted_at must be set after set_pack_local_version");
+        assert!(!extracted_at.unwrap().is_empty(), "extracted_at must not be empty");
     }
 }
