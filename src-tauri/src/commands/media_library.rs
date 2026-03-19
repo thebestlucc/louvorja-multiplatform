@@ -86,3 +86,17 @@ pub fn delete_media_library_item(
     let conn = conn.unwrap();
     crate::db::queries::media_library::delete_item(&conn, id)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn search_media_library_items(
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<MediaLibraryItem>, AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::media_library::search_library_items(&conn, &query)
+}
