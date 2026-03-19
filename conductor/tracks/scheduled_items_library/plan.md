@@ -69,9 +69,9 @@ Ensure the backend compiles.
 - Create: `src/components/media/category-sidebar.tsx`
 - Create: `src/components/media/item-grid.tsx`
 
-- [ ] **Step 1: Implement CategorySidebar**
-- [ ] **Step 2: Implement ItemGrid with drag-and-drop support**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Implement CategorySidebar**
+- [x] **Step 2: Implement ItemGrid with drag-and-drop support**
+- [x] **Step 3: Commit** (85290a4)
 `git add . && git commit -m "feat(ui): Implement media library management components"`
 
 ### Task 6: Service Integration
