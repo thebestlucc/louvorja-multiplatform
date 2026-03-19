@@ -62,10 +62,32 @@ function parseReference(query: string, language: string, availableBooksByIndex: 
   };
 }
 
+/** Renders an FTS snippet, turning <mark>…</mark> tags into highlighted spans. */
+function HighlightedSnippet({ html }: { html: string }) {
+  const parts = html.split(/(<mark>.*?<\/mark>)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("<mark>") && part.endsWith("</mark>") ? (
+          <mark
+            key={i}
+            className="rounded-sm bg-yellow-300/80 px-0.5 font-semibold text-yellow-900 dark:bg-yellow-600/60 dark:text-yellow-100"
+          >
+            {part.slice(6, -7)}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 interface BibleSearchProps {
   query: string;
   onQueryChange: (query: string) => void;
   versionId: number | null;
+  versionAbbr?: string;
   onNavigate: (book: string, chapter: number, verse: number) => void;
   availableBooks: Set<string>;
 }
@@ -74,6 +96,7 @@ export function BibleSearch({
   query,
   onQueryChange,
   versionId,
+  versionAbbr,
   onNavigate,
   availableBooks,
 }: BibleSearchProps) {
@@ -223,7 +246,7 @@ export function BibleSearch({
               {grouped.map((group) => (
                 <div key={group.key}>
                   <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {group.label}
+                    {group.label}{versionAbbr ? ` · ${versionAbbr}` : ""}
                   </p>
                   {group.items.map((result) => (
                     <button
@@ -234,10 +257,9 @@ export function BibleSearch({
                       }
                     >
                       <span className="font-medium">v.{result.verse.verse}</span>{" "}
-                      <span
-                        className="text-muted-foreground"
-                        dangerouslySetInnerHTML={{ __html: result.snippet }}
-                      />
+                      <span className="text-muted-foreground">
+                        <HighlightedSnippet html={result.snippet} />
+                      </span>
                     </button>
                   ))}
                 </div>
