@@ -228,7 +228,8 @@ allow = [
     "get_media_library_item_dates",
     "upsert_media_library_item",
     "delete_media_library_item",
-    "search_media_library_items"
+    "search_media_library_items",
+    "get_scheduled_media_item"
 ]
 
 [[permission]]

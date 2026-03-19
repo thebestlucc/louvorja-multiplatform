@@ -13,19 +13,19 @@
 ---
 
 ### Task 10: Date-Based Schema Update
-- [~] **Step 1: Write migration v31**
+- [x] **Step 1: Write migration v31** (b01ca8c)
 Add `scheduled_date` (TEXT) to `media_library_items`.
-- [ ] **Step 2: Update models and queries**
+- [x] **Step 2: Update models and queries** (6719ca8)
 Update `MediaLibraryItem` and `MediaLibraryItemInput` to include `scheduledDate`.
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ### Task 11: Management UI Refactor (Date Flow)
-- [ ] **Step 1: Implement DateSelector component (multiple calendars)**
-- [ ] **Step 2: Update MediaLibraryManager flow**
+- [x] **Step 1: Implement DateSelector component (multiple calendars)**
+- [x] **Step 2: Update MediaLibraryManager flow** (f87370c)
 Category Sidebar -> Date Sidebar (Calendar) -> Item Grid.
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ### Task 12: Smart Service Integration
-- [ ] **Step 1: Add 'Scheduled Item Category' item type to Liturgy**
-- [ ] **Step 2: Implement auto-resolution of items based on service date**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Add 'Scheduled Item Category' item type to Liturgy**
+- [x] **Step 2: Implement auto-resolution of items based on service date**
+- [x] **Step 3: Commit**

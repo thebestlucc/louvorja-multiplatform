@@ -139,7 +139,7 @@ pub fn get_item_dates_by_category(conn: &Connection, category_id: i64) -> Result
 
 pub fn search_library_items(conn: &Connection, query: &str) -> Result<Vec<MediaLibraryItem>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, category_id, name, file_path, file_type, thumbnail_path, sort_order, created_at 
+        "SELECT id, category_id, name, file_path, file_type, thumbnail_path, scheduled_date, sort_order, created_at 
          FROM media_library_items 
          WHERE name LIKE ?1 
          ORDER BY name 
@@ -149,3 +149,24 @@ pub fn search_library_items(conn: &Connection, query: &str) -> Result<Vec<MediaL
         .collect::<Result<Vec<_>, _>>()?;
     Ok(items)
 }
+
+pub fn get_scheduled_media_item(
+    conn: &Connection,
+    category_id: i64,
+    date: &str,
+) -> Result<Option<MediaLibraryItem>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, category_id, name, file_path, file_type, thumbnail_path, scheduled_date, sort_order, created_at 
+         FROM media_library_items 
+         WHERE category_id = ?1 AND scheduled_date = ?2
+         LIMIT 1"
+    )?;
+
+    let mut rows = stmt.query(params![category_id, date])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(map_item_row(row)?))
+    } else {
+        Ok(None)
+    }
+}
+

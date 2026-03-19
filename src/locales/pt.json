@@ -473,8 +473,10 @@
       "file": "Arquivo",
       "hymn": "Hino",
       "presentation": "Apresentação",
+      "scheduled_category": "Item Agendado (Dinâmico)",
       "url": "URL"
     },
+
     "items": "Itens",
     "new": "Novo Culto",
     "noItems": "Sem itens. Clique em \"Adicionar Item\" para começar.",
@@ -880,6 +882,7 @@
       "nameLabel": "Nome",
       "namePlaceholder": "Nome do item",
       "noItems": "Nenhum item nesta categoria",
+      "noItemOnDate": "Sem item para esta data",
       "selectCategoryHint": "Selecione uma categoria para ver os itens",
       "title": "Itens Agendados"
     },

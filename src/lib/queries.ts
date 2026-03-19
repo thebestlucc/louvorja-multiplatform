@@ -19,7 +19,7 @@ import {
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
   getMediaLibraryCategories, upsertMediaLibraryCategory, deleteMediaLibraryCategory,
-  getMediaLibraryItems, getMediaLibraryItemsByDate, getMediaLibraryItemDates, upsertMediaLibraryItem, deleteMediaLibraryItem, searchMediaLibraryItems,
+  getMediaLibraryItems, getMediaLibraryItemsByDate, getMediaLibraryItemDates, getScheduledMediaItem, upsertMediaLibraryItem, deleteMediaLibraryItem, searchMediaLibraryItems,
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
   replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
@@ -806,6 +806,14 @@ export function useMediaLibraryItemDates(categoryId: number) {
     queryKey: queryKeys.mediaLibrary.itemDates(categoryId),
     queryFn: () => getMediaLibraryItemDates(categoryId),
     enabled: categoryId > 0,
+  });
+}
+
+export function useScheduledMediaItem(categoryId: number, date: string | null) {
+  return useQuery({
+    queryKey: ["mediaLibrary", "scheduled", categoryId, date],
+    queryFn: () => getScheduledMediaItem(categoryId, date!),
+    enabled: categoryId > 0 && !!date,
   });
 }
 

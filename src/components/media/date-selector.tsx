@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildMonthGrid, toIsoDate } from "../../lib/schedules";
 import { useMediaLibraryItemDates } from "../../lib/queries";
 import { ScrollArea } from "../ui/scroll-area";
+import { Button } from "../ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface DateSelectorProps {
@@ -14,19 +16,19 @@ interface DateSelectorProps {
 export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSelectorProps) {
   const { i18n, t } = useTranslation();
   const { data: itemDates = [] } = useMediaLibraryItemDates(categoryId ?? 0);
+  const [baseMonthOffset, setBaseMonthOffset] = useState(0);
 
-  // Simple year logic for the 3 months
   const monthsData = useMemo(() => {
     const now = new Date();
     const items: { year: number; month: number }[] = [];
     
-    // Previous, Current, Next
-    for (let i = -1; i <= 1; i++) {
-      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1));
+    // Show 3 months starting from the current month + offset
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + baseMonthOffset + i, 1));
       items.push({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 });
     }
     return items;
-  }, []);
+  }, [baseMonthOffset]);
 
   const monthFormatter = new Intl.DateTimeFormat(i18n.language, { month: "long", year: "numeric" });
   const weekdayFormatter = new Intl.DateTimeFormat(i18n.language, { weekday: "narrow" });
@@ -40,12 +42,26 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
   const hasItems = (isoDate: string) => itemDates.includes(isoDate);
   const isPast = (isoDate: string) => isoDate < toIsoDate(new Date());
 
+  const handlePrev = () => setBaseMonthOffset(prev => prev - 3);
+  const handleNext = () => setBaseMonthOffset(prev => prev + 3);
+
   return (
     <div className="flex w-72 flex-col gap-2 border-r pr-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           {t("mediaLibrary.schedule", "Schedule")}
         </h3>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrev}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleNext}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      
+      <div className="flex justify-end">
         <button 
           onClick={() => onSelectDate(null)}
           className={cn(
