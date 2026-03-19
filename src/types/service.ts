@@ -8,4 +8,5 @@ export type ServiceItemType =
   | "presentation"
   | "annotation"
   | "url"
-  | "file";
+  | "file"
+  | "scheduled_category";
