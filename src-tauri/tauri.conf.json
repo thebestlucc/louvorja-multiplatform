@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "resources": ["resources/bible.db"],
     "createUpdaterArtifacts": false,
     "targets": "all",
     "icon": [
