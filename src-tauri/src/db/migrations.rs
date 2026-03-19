@@ -1415,6 +1415,7 @@ mod tests {
         );
     }
 
+    // FIXME(nitpick): content_sync_packs_table_created_on_v33 duplicates the smoke test's assertion — consider merging or expanding to verify column schema instead - Test Reviewer, 2026-03-19, Severity: Cosmetic
     #[test]
     fn content_sync_packs_table_created_on_v33() {
         let conn = Connection::open_in_memory().unwrap();
