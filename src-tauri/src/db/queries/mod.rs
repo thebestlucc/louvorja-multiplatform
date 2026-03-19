@@ -3,6 +3,7 @@ pub mod collections;
 pub mod content_sync;
 pub mod favorites;
 pub mod liturgy;
+pub mod media_library;
 pub mod music;
 pub mod schedules;
 pub mod settings;
