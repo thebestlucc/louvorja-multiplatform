@@ -50,7 +50,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
     <div className="flex w-72 flex-col gap-2 border-r pr-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          {t("mediaLibrary.schedule", "Schedule")}
+          {t("utilities.mediaLibrary.schedule")}
         </h3>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToday} title={t("actions.today", "Today")}>

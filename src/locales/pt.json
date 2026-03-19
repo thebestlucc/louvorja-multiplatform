@@ -885,6 +885,7 @@
       "noItems": "Nenhum item nesta categoria",
       "noItemOnDate": "Sem item para esta data",
       "notScheduled": "Não agendado",
+      "schedule": "Agenda",
       "selectCategoryHint": "Selecione uma categoria para ver os itens",
       "title": "Itens Agendados"
     },
