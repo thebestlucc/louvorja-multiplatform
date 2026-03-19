@@ -28,6 +28,8 @@ pub fn get_ftp_client(settings: &FtpSettings) -> Result<FtpStream, AppError> {
 }
 
 /// List files in a remote directory.
+/// Scaffolded for upcoming FTP sync commands (see docs/superpowers/plans/2026-03-18-ftp-sync-implement-create-update-actions.md).
+#[allow(dead_code)]
 pub fn list_files(settings: &FtpSettings, remote_dir: &str) -> Result<Vec<String>, AppError> {
     let mut client = get_ftp_client(settings)?;
     let files = client.nlst(Some(remote_dir))
@@ -88,6 +90,8 @@ pub fn sync_file_on_stream(
 
 /// Convenience wrapper: open a fresh connection, sync one file, close the connection.
 /// Use `sync_file_on_stream` directly when syncing multiple files to reuse the connection.
+/// Scaffolded for upcoming FTP sync commands (see docs/superpowers/plans/2026-03-18-ftp-sync-implement-create-update-actions.md).
+#[allow(dead_code)]
 pub fn sync_file(settings: &FtpSettings, remote_path: &str, local_path: &Path) -> Result<(), AppError> {
     let mut stream = get_ftp_client(settings)?;
     let result = sync_file_on_stream(&mut stream, remote_path, local_path);

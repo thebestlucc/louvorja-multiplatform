@@ -91,6 +91,7 @@ pub fn run() {
             commands::bible::get_verses,
             commands::bible::get_verse_range,
             commands::bible::search_bible,
+            commands::bible::search_bible_global,
             commands::bible::project_bible_verse,
             commands::bible::import_bible_version,
             commands::bible::navigate_bible_verse,
@@ -282,10 +283,16 @@ pub fn run() {
             let pool = db::init_db(&app_data_dir)
                 .map_err(|e| format!("Failed to initialize database: {e}"))?;
 
-            // Initialize dedicated bible.db — copy from bundled resource on first launch
+            // Initialize dedicated bible.db — copy from bundled resource on first launch.
+            // In dev mode resource_dir() points to target/debug/ (no bundled resources),
+            // so we fall back to the resources/ folder next to Cargo.toml.
             let bible_db_path = app_data_dir.join("bible.db");
             if !bible_db_path.exists() {
-                let resource_path = app.path().resource_dir()?.join("bible.db");
+                let resource_path = if cfg!(debug_assertions) {
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/bible.db")
+                } else {
+                    app.path().resource_dir()?.join("bible.db")
+                };
                 let tmp_path = bible_db_path.with_extension("db.tmp");
                 std::fs::copy(&resource_path, &tmp_path)
                     .map_err(|e| format!("Failed to copy bible.db from {}: {e}", resource_path.display()))?;
