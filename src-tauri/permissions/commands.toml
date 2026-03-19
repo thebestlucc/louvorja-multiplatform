@@ -216,6 +216,20 @@ allow = [
 ]
 
 [[permission]]
+identifier = "allow-media-library-commands"
+description = "Allows all media library management commands"
+[permission.commands]
+allow = [
+    "get_media_library_categories",
+    "upsert_media_library_category",
+    "delete_media_library_category",
+    "get_media_library_items",
+    "upsert_media_library_item",
+    "delete_media_library_item",
+    "search_media_library_items"
+]
+
+[[permission]]
 identifier = "allow-projection-view-only"
 description = "Minimal commands needed for projector/return windows"
 [permission.commands]
@@ -235,6 +249,7 @@ allow = [
     "search_all_hymns",
     "search_collections",
     "search_bible",
+    "search_media_library_items",
     "spotlight_select",
     "spotlight_hide",
     "get_available_monitors"

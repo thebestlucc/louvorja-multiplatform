@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { catcher } from "../../lib/catcher";
 
 interface CategorySidebarProps {
   selectedCategoryId: number | null;
@@ -36,22 +37,25 @@ export function CategorySidebar({ selectedCategoryId, onSelectCategory }: Catego
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
-    upsertMutation.mutate({
-      id: editingCategory?.id ?? null,
-      name,
-      sortOrder: editingCategory?.sortOrder ?? 0,
-      idLanguage: i18n.language,
-    }, {
-      onSuccess: () => {
-        setIsDialogOpen(false);
-      }
-    });
+  const handleSave = async () => {
+    const [_, error] = await catcher(
+      upsertMutation.mutateAsync({
+        id: editingCategory?.id ?? null,
+        name,
+        sortOrder: editingCategory?.sortOrder ?? 0,
+        idLanguage: i18n.language,
+      }),
+      { notify: true }
+    );
+
+    if (!error) {
+      setIsDialogOpen(false);
+    }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm(t("hymn.deleteConfirm"))) {
-      deleteMutation.mutate(id);
+      await catcher(deleteMutation.mutateAsync(id), { notify: true });
     }
   };
 
