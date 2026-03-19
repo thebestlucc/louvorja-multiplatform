@@ -747,13 +747,13 @@ fn run_content_sync_background(
                     continue;
                 }
 
-                // Try to obtain album cover URL from albums page 1
+                // Try to obtain album cover URL by fetching all album pages
                 let album_cover_url: Option<String> = {
                     let albums_res = tauri::async_runtime::block_on(
-                        crate::legacy_fetch::fetcher::fetch_albums_page(api_lang, 1),
+                        fetch_all_album_pages(api_lang),
                     );
-                    albums_res.ok().and_then(|resp| {
-                        resp.data
+                    albums_res.ok().and_then(|albums| {
+                        albums
                             .into_iter()
                             .find(|a| a.id_album == api_id)
                             .and_then(|a| a.url_image)
@@ -966,8 +966,8 @@ fn run_content_sync_background(
             }
 
             _ => {
-                // Remaining unhandled variants
-                applied_count += 1;
+                // RelinkCollectionHymn — not yet implemented, treated as skipped
+                skipped_count += 1;
             }
         }
     }
@@ -1486,18 +1486,21 @@ fn download_asset_via_ftp(
         return Some(rel_path);
     }
     let remote_path = content_sync::resolve_remote_path_from_url(url);
-    if let Some(stream) = ftp_stream {
-        match ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path) {
-            Ok(()) => return Some(rel_path),
-            Err(e) => {
-                eprintln!(
-                    "[sync] FTP download failed for '{}' -> '{}': {}",
-                    remote_path,
-                    full_path.display(),
-                    e
-                );
-            }
+    let stream_result = ftp_stream
+        .as_mut()
+        .map(|stream| ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path));
+    match stream_result {
+        Some(Ok(())) => return Some(rel_path),
+        Some(Err(e)) => {
+            eprintln!(
+                "[sync] FTP download failed for '{}' -> '{}': {}",
+                remote_path,
+                full_path.display(),
+                e
+            );
+            *ftp_stream = None;
         }
+        None => {}
     }
     None
 }
