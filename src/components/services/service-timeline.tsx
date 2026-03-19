@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Music, BookOpen, Presentation, StickyNote } from "lucide-react";
+import { Music, BookOpen, Presentation, StickyNote, CalendarClock } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { ServiceItem, ServiceItemType } from "../../types/service";
 import { ScrollArea } from "../ui/scroll-area";
@@ -11,6 +11,7 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   annotation: StickyNote,
   url: StickyNote,
   file: StickyNote,
+  scheduled_category: CalendarClock,
 };
 
 const itemTypeColors: Record<ServiceItemType, string> = {
@@ -20,6 +21,7 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   annotation: "bg-green-500",
   url: "bg-cyan-500",
   file: "bg-gray-500",
+  scheduled_category: "bg-rose-500",
 };
 
 const itemTypeRingColors: Record<ServiceItemType, string> = {
@@ -29,6 +31,7 @@ const itemTypeRingColors: Record<ServiceItemType, string> = {
   annotation: "ring-green-500/30",
   url: "ring-cyan-500/30",
   file: "ring-gray-500/30",
+  scheduled_category: "ring-rose-500/30",
 };
 
 interface ServiceTimelineProps {

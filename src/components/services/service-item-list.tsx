@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useRef, useEffect } from "react";
-import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X } from "lucide-react";
+import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import type { ServiceItem, ServiceItemType } from "../../types/service";
 
@@ -27,6 +27,7 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   annotation: StickyNote,
   url: Link2,
   file: FileIcon,
+  scheduled_category: CalendarClock,
 };
 
 const itemTypeColors: Record<ServiceItemType, string> = {
@@ -36,6 +37,7 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   annotation: "text-green-500",
   url: "text-cyan-500",
   file: "text-gray-500",
+  scheduled_category: "text-rose-500",
 };
 
 const itemTypeBorders: Record<ServiceItemType, string> = {
@@ -45,10 +47,12 @@ const itemTypeBorders: Record<ServiceItemType, string> = {
   annotation: "border-l-green-500",
   url: "border-l-cyan-500",
   file: "border-l-gray-500",
+  scheduled_category: "border-l-rose-500",
 };
 
 interface ServiceItemListProps {
   items: ServiceItem[];
+  serviceDate?: string | null;
   activeItemIndex?: number;
   onRemove: (id: number) => void;
   onReorder: (from: number, to: number) => void;
@@ -56,7 +60,7 @@ interface ServiceItemListProps {
   onEditItem?: (id: number, title: string, notes: string | null) => void;
 }
 
-export function ServiceItemList({ items, activeItemIndex = -1, onRemove, onReorder, onProject, onEditItem }: ServiceItemListProps) {
+export function ServiceItemList({ items, serviceDate, activeItemIndex = -1, onRemove, onReorder, onProject, onEditItem }: ServiceItemListProps) {
   const { t } = useTranslation();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -97,6 +101,7 @@ export function ServiceItemList({ items, activeItemIndex = -1, onRemove, onReord
               <SortableServiceItem
                 key={item.id}
                 item={item}
+                serviceDate={serviceDate}
                 index={index}
                 isActive={index === activeItemIndex}
                 onRemove={() => onRemove(item.id)}
@@ -113,6 +118,7 @@ export function ServiceItemList({ items, activeItemIndex = -1, onRemove, onReord
 
 function SortableServiceItem({
   item,
+  serviceDate,
   index,
   isActive,
   onRemove,
@@ -120,6 +126,7 @@ function SortableServiceItem({
   onEditItem,
 }: {
   item: ServiceItem;
+  serviceDate?: string | null;
   index: number;
   isActive: boolean;
   onRemove: () => void;
@@ -167,10 +174,11 @@ function SortableServiceItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const Icon = itemTypeIcons[item.itemType as ServiceItemType] ?? StickyNote;
-  const colorClass = itemTypeColors[item.itemType as ServiceItemType] ?? "text-gray-500";
-  const borderClass = itemTypeBorders[item.itemType as ServiceItemType] ?? "border-l-gray-500";
+  const Icon = (itemTypeIcons as Record<string, typeof Music>)[item.itemType] ?? CalendarClock;
+  const colorClass = (itemTypeColors as Record<string, string>)[item.itemType] ?? "text-gray-500";
+  const borderClass = (itemTypeBorders as Record<string, string>)[item.itemType] ?? "border-l-gray-500";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
+  const isScheduledCategory = item.itemType === "scheduled_category";
 
   return (
     <div
@@ -230,7 +238,11 @@ function SortableServiceItem({
       ) : (
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{item.title}</p>
-          <p className="text-xs text-muted-foreground">{typeLabel}</p>
+          {isScheduledCategory ? (
+            <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate} />
+          ) : (
+            <p className="text-xs text-muted-foreground">{typeLabel}</p>
+          )}
         </div>
       )}
 
@@ -264,4 +276,34 @@ function SortableServiceItem({
       )}
     </div>
   );
+}
+
+function ScheduledItemBadge({ categoryId, date }: { categoryId: number; date: string | null }) {
+  const { data: mediaItem, isLoading } = useScheduledMediaItem(categoryId, date);
+  const { t } = useTranslation();
+
+  if (isLoading) return <span className="text-[10px] text-muted-foreground animate-pulse mt-0.5">...</span>;
+
+  if (!mediaItem) {
+    return (
+      <Badge variant="outline" className="h-4 px-1 text-[10px] border-destructive text-destructive bg-destructive/5 mt-0.5">
+        {t("mediaLibrary.noItemOnDate", "No item for this date")}
+      </Badge>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <Badge variant="outline" className="h-4 px-1 text-[10px] border-primary/30 text-primary bg-primary/5">
+        {mediaItem.name}
+      </Badge>
+      <span className="text-[10px] text-muted-foreground uppercase">{mediaItem.fileType}</span>
+    </div>
+  );
+}
+
+/** Placeholder for the scheduled media item badge (feature in progress). */
+function ScheduledItemBadge({ categoryId: _categoryId, date: _date }: { categoryId: number; date?: string | null }) {
+  const { t } = useTranslation();
+  return <p className="text-xs text-muted-foreground">{t("services.itemTypes.scheduled_category", "Scheduled")}</p>;
 }

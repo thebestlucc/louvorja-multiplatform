@@ -9,7 +9,7 @@ import {
   FileIcon,
   ChevronLeft,
 } from "lucide-react";
-import { useHymns, usePresentations, useBibleVersions, useBooks, useVerses } from "../../lib/queries";
+import { useHymns, usePresentations, useBibleVersions, useBooks, useVerses, useMediaLibraryCategories } from "../../lib/queries";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -103,6 +103,7 @@ export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
               {selectedType === "annotation" && <AnnotationForm onAdd={handleAdd} />}
               {selectedType === "url" && <UrlForm onAdd={handleAdd} />}
               {selectedType === "file" && <FileForm onAdd={handleAdd} />}
+              {selectedType === "scheduled_category" && <ScheduledCategoryForm onAdd={handleAdd} />}
             </div>
           )}
         </div>
@@ -421,5 +422,45 @@ function FileForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
         <LibraryBrowser onSelect={(name, path) => onAdd("file", name, null, path)} />
       </TabsContent>
     </Tabs>
+  );
+}
+
+function ScheduledCategoryForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
+  const { t, i18n } = useTranslation();
+  const { data: categories = [] } = useMediaLibraryCategories(i18n.language);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const handleAdd = () => {
+    const category = categories.find((c) => c.id === selectedId);
+    if (category) {
+      onAdd("scheduled_category", category.name, category.id, null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ScrollArea className="h-64 rounded-md border p-2">
+        <div className="flex flex-col gap-1">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => setSelectedId(category.id)}
+              className={cn(
+                "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                selectedId === category.id
+                  ? "bg-accent text-accent-foreground"
+                  : "hover:bg-accent/50 text-muted-foreground",
+              )}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </ScrollArea>
+      <Button size="sm" disabled={!selectedId} onClick={handleAdd}>
+        {t("actions.add")}
+      </Button>
+    </div>
   );
 }
