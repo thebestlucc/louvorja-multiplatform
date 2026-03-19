@@ -225,9 +225,11 @@ pub fn import_bible_version(
         stmt.execute(params![version_id, book, chapter, verse, text])?;
     }
 
-    // Rebuild FTS index for the new verses
+    // Rebuild FTS index for the new verses.
+    // Use the delete-all command (not DELETE FROM) — bible_fts is a content-backed FTS5
+    // table and DELETE FROM would cascade-delete rows from bible_verses via the content trigger.
     conn.execute_batch(
-        "DELETE FROM bible_fts;
+        "INSERT INTO bible_fts(bible_fts) VALUES('delete-all');
          INSERT INTO bible_fts(rowid, text, book) SELECT id, text, book FROM bible_verses;",
     )?;
 
