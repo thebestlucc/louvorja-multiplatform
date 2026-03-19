@@ -53,13 +53,14 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
           {t("utilities.mediaLibrary.schedule")}
         </h3>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToday} title={t("actions.today", "Today")}>
-            <Calendar className="h-4 w-4" />
+          <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1 cursor-pointer" onClick={handleToday}>
+            <Calendar className="h-3 w-3" />
+            {t("actions.today")}
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrev}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 cursor-pointer" onClick={handlePrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleNext}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 cursor-pointer" onClick={handleNext}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
