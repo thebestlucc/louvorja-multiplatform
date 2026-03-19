@@ -5,7 +5,7 @@ use std::future::Future;
 /// Similar to the frontend's catcher utility.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// let (data, err) = catcher(some_fn());
 /// if let Some(e) = err {
 ///     return Err(e);

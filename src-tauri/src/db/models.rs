@@ -56,7 +56,7 @@ pub struct BibleVersion {
     pub name: String,
     pub abbreviation: String,
     pub language: String,
-    pub file_path: Option<String>,
+    pub is_builtin: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -85,6 +85,7 @@ pub struct BibleSearchResult {
     pub verse: Verse,
     pub book_name: String,
     pub snippet: String,
+    pub version_abbreviation: String,  // empty string for per-version search, populated for global search
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

@@ -186,6 +186,7 @@ pub struct OverlayRuntimeState {
 
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
+    pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
     pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,

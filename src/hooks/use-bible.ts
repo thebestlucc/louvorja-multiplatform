@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { catcher } from "../lib/catcher";
+import { getPreference, setPreference } from "../lib/store";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContent } from "../lib/bindings";
@@ -32,6 +33,13 @@ export function useBible() {
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const [lastSelectedVerse, setLastSelectedVerse] = useState<number | null>(null);
 
+  // Restore saved version on mount
+  useEffect(() => {
+    getPreference<number>("bible.selectedVersionId", 0).then((saved) => {
+      if (saved && saved > 0) setCurrentVersionId(saved);
+    });
+  }, []);
+
   const { data: versions = [], isLoading: isLoadingVersions } = useBibleVersions();
   const { data: books = [], isLoading: isLoadingBooks } = useBooks(currentVersionId);
   const { data: verses = [], isLoading: isLoadingVerses } = useVerses(currentVersionId, currentBook, currentChapter);
@@ -51,6 +59,7 @@ export function useBible() {
     setCurrentChapter(0);
     setSelectedVerses([]);
     setLastSelectedVerse(null);
+    void setPreference("bible.selectedVersionId", id);
   };
 
   const setBook = (name: string) => {

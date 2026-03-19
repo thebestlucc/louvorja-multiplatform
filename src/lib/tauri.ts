@@ -423,6 +423,9 @@ export async function getVerses(versionId: number, book: string, chapter: number
 export async function searchBible(query: string, versionId: number | null): Promise<BibleSearchResult[]> {
   return tauriInvoke<BibleSearchResult[]>("search_bible", { query, versionId });
 }
+export async function searchBibleGlobal(query: string): Promise<BibleSearchResult[]> {
+  return tauriInvoke<BibleSearchResult[]>("search_bible_global", { query });
+}
 export async function importBibleVersion(name: string, abbreviation: string, language: string, versesJson: string): Promise<number> {
   return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
 }

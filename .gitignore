@@ -23,6 +23,8 @@ src-tauri/binaries/
 *.db-shm
 # Exception: legacy Delphi database kept for importer feature (column name mapping)
 !src-tauri/src/db/database.db
+# Generated bible database (built by build_bible binary from resources/bible/*.sqlite)
+src-tauri/resources/bible.db
 
 # Editor directories and files
 .vscode/*

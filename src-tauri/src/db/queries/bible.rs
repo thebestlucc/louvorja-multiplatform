@@ -8,7 +8,7 @@ fn map_version_row(row: &Row) -> Result<BibleVersion, rusqlite::Error> {
         name: row.get("name")?,
         abbreviation: row.get("abbreviation")?,
         language: row.get("language")?,
-        file_path: row.get("file_path")?,
+        is_builtin: row.get::<_, i64>("is_builtin").map(|v| v != 0).unwrap_or(true),
     })
 }
 
@@ -35,7 +35,7 @@ fn sanitize_fts_query(query: &str) -> String {
 
 pub fn get_versions(conn: &Connection) -> Result<Vec<BibleVersion>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, abbreviation, language, file_path FROM bible_versions ORDER BY name",
+        "SELECT id, name, abbreviation, language, is_builtin FROM bible_versions ORDER BY name",
     )?;
     let versions = stmt
         .query_map([], map_version_row)?
@@ -123,6 +123,7 @@ pub fn search_bible_text(
             Ok(BibleSearchResult {
                 book_name: row.get::<_, String>("book")?,
                 snippet: row.get("snippet")?,
+                version_abbreviation: String::new(),
                 verse,
             })
         };
@@ -173,6 +174,7 @@ pub fn search_bible_text(
             verse,
             book_name,
             snippet,
+            version_abbreviation: String::new(),
         })
     };
 
@@ -211,7 +213,7 @@ pub fn import_bible_version(
     verses: &[(String, i64, i64, String)], // (book, chapter, verse, text)
 ) -> Result<i64, AppError> {
     conn.execute(
-        "INSERT INTO bible_versions (name, abbreviation, language) VALUES (?1, ?2, ?3)",
+        "INSERT INTO bible_versions (name, abbreviation, language, is_builtin) VALUES (?1, ?2, ?3, 0)",
         params![name, abbreviation, language],
     )?;
     let version_id = conn.last_insert_rowid();
@@ -223,11 +225,56 @@ pub fn import_bible_version(
         stmt.execute(params![version_id, book, chapter, verse, text])?;
     }
 
-    // Rebuild FTS index for the new verses
+    // Rebuild FTS index for the new verses.
+    // Use the delete-all command (not DELETE FROM) — bible_fts is a content-backed FTS5
+    // table and DELETE FROM would cascade-delete rows from bible_verses via the content trigger.
     conn.execute_batch(
-        "DELETE FROM bible_fts;
+        "INSERT INTO bible_fts(bible_fts) VALUES('delete-all');
          INSERT INTO bible_fts(rowid, text, book) SELECT id, text, book FROM bible_verses;",
     )?;
 
     Ok(version_id)
+}
+
+pub fn search_bible_global(
+    conn: &Connection,
+    query: &str,
+) -> Result<Vec<BibleSearchResult>, AppError> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let sanitized = sanitize_fts_query(trimmed);
+    if sanitized.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let fts_query = format!("{}*", sanitized);
+
+    let mut stmt = conn.prepare(
+        "SELECT v.id, v.version_id, v.book, v.chapter, v.verse, v.text,
+                bv.abbreviation as version_abbreviation,
+                snippet(bible_fts, 0, '<mark>', '</mark>', '...', 32) as snippet
+         FROM bible_verses v
+         JOIN bible_fts ON bible_fts.rowid = v.id
+         JOIN bible_versions bv ON bv.id = v.version_id
+         WHERE bible_fts MATCH ?1
+         ORDER BY rank
+         LIMIT 50",
+    )?;
+
+    let results = stmt
+        .query_map(params![fts_query], |row| {
+            let verse = map_verse_row(row)?;
+            Ok(BibleSearchResult {
+                book_name: row.get::<_, String>("book")?,
+                snippet: row.get("snippet")?,
+                version_abbreviation: row.get("version_abbreviation")?,
+                verse,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(results)
 }
