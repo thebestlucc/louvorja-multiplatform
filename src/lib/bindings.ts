@@ -301,6 +301,14 @@ async searchBible(query: string, versionId: number | null) : Promise<Result<Bibl
     else return { status: "error", error: e  as any };
 }
 },
+async searchBibleGlobal(query: string) : Promise<Result<BibleSearchResult[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_bible_global", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async projectBibleVerse(versionId: number, book: string, chapter: number, start: number, end: number) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("project_bible_verse", { versionId, book, chapter, start, end }) };
