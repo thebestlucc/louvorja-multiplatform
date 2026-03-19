@@ -11,8 +11,15 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 fn main() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output_path = std::path::PathBuf::from(manifest_dir)
+        .join("resources")
+        .join("bible.db");
+
     if let Err(e) = run() {
         eprintln!("[build_bible] ERROR: {}", e);
+        // Clean up partial output so next run rebuilds correctly
+        let _ = std::fs::remove_file(&output_path);
         std::process::exit(1);
     }
 }
@@ -39,7 +46,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(db_mtime) = mtime(&output_path) {
             let all_older = source_files
                 .iter()
-                .all(|f| mtime(f).map(|m| m <= db_mtime).unwrap_or(false));
+                .all(|f| mtime(f).map(|m| m < db_mtime).unwrap_or(false));
             if all_older {
                 println!("[build_bible] bible.db is up to date, skipping");
                 return Ok(());
@@ -188,11 +195,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         total_verses
     );
 
-    // Populate FTS table
+    // Populate FTS table inside a transaction so verses and FTS stay consistent
+    db.execute_batch("BEGIN IMMEDIATE")?;
     db.execute_batch(
         "INSERT INTO bible_fts(rowid, text, book)
          SELECT id, text, book FROM bible_verses;",
     )?;
+    db.execute_batch("COMMIT")?;
 
     println!("[build_bible] Running PRAGMA optimize and VACUUM...");
     db.execute_batch("PRAGMA optimize;")?;
