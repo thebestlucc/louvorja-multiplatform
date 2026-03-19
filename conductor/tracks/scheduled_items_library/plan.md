@@ -44,9 +44,9 @@ Ensure the backend compiles.
 - Create: `src-tauri/src/commands/media_library.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Implement commands in media_library.rs**
-- [ ] **Step 2: Register commands in lib.rs**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Implement commands in media_library.rs**
+- [x] **Step 2: Register commands in lib.rs**
+- [x] **Step 3: Commit** (880ba21)
 `git add src-tauri/src/commands/media_library.rs src-tauri/src/lib.rs && git commit -m "feat(tauri): Add media library commands"`
 
 ### Task 4: Frontend Bindings and Routes
