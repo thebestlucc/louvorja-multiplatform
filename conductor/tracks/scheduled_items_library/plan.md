@@ -99,7 +99,7 @@ Ensure the backend compiles.
 **Files:**
 - Modify: `src/locales/en.json`, `src/locales/pt.json`, `src/locales/es.json`
 
-- [ ] **Step 1: Add all necessary translation keys**
-- [ ] **Step 2: Final build check and verification**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Add all necessary translation keys**
+- [x] **Step 2: Final build check and verification**
+- [x] **Step 3: Commit** (1df43c9)
 `git add . && git commit -m "chore(i18n): Add media library translations"`
