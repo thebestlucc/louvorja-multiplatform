@@ -18,6 +18,8 @@ import {
   toggleFavorite, getFavorites, isFavorite, getFavoriteHymns, getFavoriteCollections,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
+  getMediaLibraryCategories, upsertMediaLibraryCategory, deleteMediaLibraryCategory,
+  getMediaLibraryItems, upsertMediaLibraryItem, deleteMediaLibraryItem, searchMediaLibraryItems,
   listScheduleDepartments, saveScheduleDepartment, deleteScheduleDepartment, reorderScheduleDepartments,
   replaceScheduleDepartmentMembers, getScheduleMonth, saveScheduleMonthDays,
   generateScheduleMonth, setScheduleDayResponsibleDepartment, saveScheduleDayAssignments,
@@ -47,6 +49,10 @@ import type {
   ScheduleDayInput,
   ScheduleDepartmentInput,
   ScheduleGenerationRequest,
+  MediaLibraryCategory,
+  MediaLibraryCategoryInput,
+  MediaLibraryItem,
+  MediaLibraryItemInput,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
 
@@ -89,6 +95,11 @@ export const queryKeys = {
     all: ["services"] as const,
     detail: (id: number) => ["services", id] as const,
     items: (serviceId: number) => ["services", serviceId, "items"] as const,
+  },
+  mediaLibrary: {
+    categories: (language: string) => ["mediaLibrary", "categories", language] as const,
+    items: (categoryId: number) => ["mediaLibrary", "items", categoryId] as const,
+    search: (query: string) => ["mediaLibrary", "search", query] as const,
   },
   schedule: {
     all: ["schedule"] as const,
@@ -734,6 +745,70 @@ export function useUpdateServiceItem() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
     },
+  });
+}
+
+// Media Library
+export function useMediaLibraryCategories(language: string) {
+  return useQuery({
+    queryKey: queryKeys.mediaLibrary.categories(language),
+    queryFn: () => getMediaLibraryCategories(language),
+  });
+}
+
+export function useUpsertMediaLibraryCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MediaLibraryCategoryInput) => upsertMediaLibraryCategory(input),
+    onSuccess: (_, input) => {
+      queryClient.invalidateQueries({ queryKey: ["mediaLibrary", "categories"] });
+    },
+  });
+}
+
+export function useDeleteMediaLibraryCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteMediaLibraryCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mediaLibrary", "categories"] });
+    },
+  });
+}
+
+export function useMediaLibraryItems(categoryId: number) {
+  return useQuery({
+    queryKey: queryKeys.mediaLibrary.items(categoryId),
+    queryFn: () => getMediaLibraryItems(categoryId),
+    enabled: categoryId > 0,
+  });
+}
+
+export function useUpsertMediaLibraryItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MediaLibraryItemInput) => upsertMediaLibraryItem(input),
+    onSuccess: (_, input) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mediaLibrary.items(input.categoryId) });
+    },
+  });
+}
+
+export function useDeleteMediaLibraryItem(categoryId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteMediaLibraryItem(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mediaLibrary.items(categoryId) });
+    },
+  });
+}
+
+export function useSearchMediaLibraryItems(query: string) {
+  return useQuery({
+    queryKey: queryKeys.mediaLibrary.search(query),
+    queryFn: () => searchMediaLibraryItems(query),
+    enabled: query.trim().length >= 2,
   });
 }
 

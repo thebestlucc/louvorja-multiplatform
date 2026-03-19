@@ -21,6 +21,7 @@ import {
   MonitorSmartphone,
   MonitorOff,
   Image,
+  Library,
   Eraser,
   Keyboard,
   Loader2,
@@ -37,10 +38,11 @@ import {
   searchAllHymns,
   searchBible,
   searchCollections,
+  searchMediaLibraryItems,
   getHymn,
   setCurrentSlide,
 } from "../lib/tauri";
-import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../lib/bindings";
+import type { Hymn, BibleSearchResult, CollectionSearchResult, MediaLibraryItem } from "../lib/bindings";
 import { CoverImage } from "../components/media/cover-image";
 import { useThemeStore } from "../stores/theme-store";
 
@@ -114,10 +116,10 @@ function SpotlightWindow() {
   const [query, setQuery] = useState("");
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [bibleResults, setBibleResults] = useState<BibleSearchResult[]>([]);
-  const [collectionResults, setCollectionResults] = useState<
-    CollectionSearchResult[]
-  >([]);
+  const [collectionResults, setCollectionResults] = useState<CollectionSearchResult[]>([]);
+  const [libraryResults, setLibraryResults] = useState<MediaLibraryItem[]>([]);
   const [searching, setSearching] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
   // Make the webview fully transparent so only the panel renders visually.
   // Without this, the html/body default background fills the entire window
@@ -165,6 +167,7 @@ function SpotlightWindow() {
       setHymns([]);
       setBibleResults([]);
       setCollectionResults([]);
+      setLibraryResults([]);
       requestAnimationFrame(() => inputRef.current?.focus());
     }).then((fn) => { unlisten = fn; });
     return () => unlisten?.();
@@ -194,15 +197,17 @@ function SpotlightWindow() {
       const long = query.trim().length >= 2;
       // Run searches independently so a broken FTS index for one domain
       // does not suppress results from the other two.
-      const [[h], [b], [c]] = await Promise.all([
+      const [[h], [b], [c], [l]] = await Promise.all([
         catcher(searchAllHymns(query), { notify: false }),
         long ? catcher(searchBible(query, null), { notify: false }) : Promise.resolve([[], null] as const),
         long ? catcher(searchCollections(query), { notify: false }) : Promise.resolve([[], null] as const),
+        long ? catcher(searchMediaLibraryItems(query), { notify: false }) : Promise.resolve([[], null] as const),
       ]);
 
       setHymns((h ?? []).slice(0, 5));
       setBibleResults((b ?? []).slice(0, 5));
       setCollectionResults((c ?? []).slice(0, 5));
+      setLibraryResults((l ?? []).slice(0, 5));
       setSearching(false);
     }, 300);
     return () => clearTimeout(timer);
@@ -267,7 +272,8 @@ function SpotlightWindow() {
     filteredActions.length > 0 ||
     hymns.length > 0 ||
     bibleResults.length > 0 ||
-    collectionResults.length > 0;
+    collectionResults.length > 0 ||
+    libraryResults.length > 0;
 
   const groupHeadingClass =
     "*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-muted-foreground *:[[cmdk-group-heading]]:select-none";
@@ -425,6 +431,46 @@ function SpotlightWindow() {
                       onClick={(e) => {
                         e.stopPropagation();
                         void projectBibleVerse(result);
+                      }}
+                      className={projectButtonClass}
+                    >
+                      <MonitorPlay className="h-3.5 w-3.5" />
+                    </button>
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
+
+            {/* ── Media Library ── */}
+            {libraryResults.length > 0 && (
+              <Command.Group
+                heading={t("commandPalette.mediaLibrary", "Media Library")}
+                className={groupHeadingClass}
+              >
+                {libraryResults.map((item) => (
+                  <Command.Item
+                    key={`library-item-${item.id}`}
+                    value={`library-item-${item.id}`}
+                    onSelect={() =>
+                      void spotlightSelect(
+                        "navigate",
+                        `/utilities/media-library?categoryId=${item.categoryId}&itemId=${item.id}`,
+                      )
+                    }
+                    className={itemClass}
+                  >
+                    <Library className={itemIconClass} />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    <button
+                      title={t("spotlight.projectToScreen")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void spotlightSelect(
+                          "navigate",
+                          `/utilities/media-library?categoryId=${item.categoryId}&itemId=${item.id}`,
+                        );
                       }}
                       className={projectButtonClass}
                     >

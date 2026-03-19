@@ -131,6 +131,7 @@ pub fn run() {
             commands::media_library::get_media_library_items,
             commands::media_library::upsert_media_library_item,
             commands::media_library::delete_media_library_item,
+            commands::media_library::search_media_library_items,
             // Schedules
             commands::schedules::list_schedule_departments,
             commands::schedules::save_schedule_department,

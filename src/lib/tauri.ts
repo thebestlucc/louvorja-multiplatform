@@ -43,6 +43,10 @@ import type {
   LegacyFetchProgress,
   LegacyFetchReport,
   ApiParams,
+  MediaLibraryCategory,
+  MediaLibraryCategoryInput,
+  MediaLibraryItem,
+  MediaLibraryItemInput,
 } from "./bindings";
 import type {
   ContentSyncPlan,
@@ -483,6 +487,35 @@ export async function duplicateService(id: number): Promise<Service> {
 
 export async function updateServiceItem(id: number, title: string, notes: string | null): Promise<void> {
   return tauriInvoke<void>("update_service_item", { id, title, notes });
+}
+
+// Media Library
+export async function getMediaLibraryCategories(language: string): Promise<MediaLibraryCategory[]> {
+  return tauriInvoke<MediaLibraryCategory[]>("get_media_library_categories", { language });
+}
+
+export async function upsertMediaLibraryCategory(input: MediaLibraryCategoryInput): Promise<number> {
+  return tauriInvoke<number>("upsert_media_library_category", { input });
+}
+
+export async function deleteMediaLibraryCategory(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_media_library_category", { id });
+}
+
+export async function getMediaLibraryItems(categoryId: number): Promise<MediaLibraryItem[]> {
+  return tauriInvoke<MediaLibraryItem[]>("get_media_library_items", { categoryId });
+}
+
+export async function upsertMediaLibraryItem(input: MediaLibraryItemInput): Promise<number> {
+  return tauriInvoke<number>("upsert_media_library_item", { input });
+}
+
+export async function deleteMediaLibraryItem(id: number): Promise<void> {
+  return tauriInvoke<void>("delete_media_library_item", { id });
+}
+
+export async function searchMediaLibraryItems(query: string): Promise<MediaLibraryItem[]> {
+  return tauriInvoke<MediaLibraryItem[]>("search_media_library_items", { query });
 }
 
 // Schedules
