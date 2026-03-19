@@ -18,8 +18,10 @@ import { cn } from "../../lib/utils";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { ServiceItemType } from "../../types/service";
 import { CoverImage } from "../media/cover-image";
+import { LibraryBrowser } from "../media/library-browser";
 import type { Hymn, Presentation as PresentationType, BibleVersion, Book, Verse } from "../../lib/bindings";
 import { catcherSync } from "../../lib/catcher";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
 interface AddItemModalProps {
   open: boolean;
@@ -397,16 +399,27 @@ function FileForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
   const fileName = filePath ? filePath.split(/[\\/]/).pop() ?? filePath : "";
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Input readOnly placeholder={t("services.filePlaceholder")} value={filePath} className="flex-1" />
-        <Button size="sm" variant="outline" onClick={handleBrowse}>
-          {t("services.browse")}
+    <Tabs defaultValue="upload" className="w-full">
+      <TabsList className="grid w-full grid-cols-2 mb-4">
+        <TabsTrigger value="upload">{t("services.fileTabs.upload", "Local File")}</TabsTrigger>
+        <TabsTrigger value="library">{t("services.fileTabs.library", "Library")}</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="upload" className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <Input readOnly placeholder={t("services.filePlaceholder")} value={filePath} className="flex-1" />
+          <Button size="sm" variant="outline" onClick={handleBrowse}>
+            {t("services.browse")}
+          </Button>
+        </div>
+        <Button size="sm" disabled={filePath.length === 0} onClick={() => onAdd("file", fileName, null, filePath)}>
+          {t("actions.add")}
         </Button>
-      </div>
-      <Button size="sm" disabled={filePath.length === 0} onClick={() => onAdd("file", fileName, null, filePath)}>
-        {t("actions.add")}
-      </Button>
-    </div>
+      </TabsContent>
+
+      <TabsContent value="library">
+        <LibraryBrowser onSelect={(name, path) => onAdd("file", name, null, path)} />
+      </TabsContent>
+    </Tabs>
   );
 }
