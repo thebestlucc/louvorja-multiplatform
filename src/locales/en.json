@@ -874,6 +874,7 @@
     },
     "mediaLibrary": {
       "addItem": "Add Item",
+      "allDates": "Show All",
       "description": "Manage a library of videos, images, and PDFs for quick use during worship.",
       "editItem": "Edit Item",
       "filePathLabel": "File Path",
