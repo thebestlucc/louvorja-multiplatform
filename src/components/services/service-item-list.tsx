@@ -18,6 +18,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, useRef, useEffect } from "react";
 import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
+import { Badge } from "../ui/badge";
+import { useScheduledMediaItem } from "../../lib/queries";
 import type { ServiceItem, ServiceItemType } from "../../types/service";
 
 const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
@@ -239,7 +241,7 @@ function SortableServiceItem({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{item.title}</p>
           {isScheduledCategory ? (
-            <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate} />
+            <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? null} />
           ) : (
             <p className="text-xs text-muted-foreground">{typeLabel}</p>
           )}
@@ -300,10 +302,4 @@ function ScheduledItemBadge({ categoryId, date }: { categoryId: number; date: st
       <span className="text-[10px] text-muted-foreground uppercase">{mediaItem.fileType}</span>
     </div>
   );
-}
-
-/** Placeholder for the scheduled media item badge (feature in progress). */
-function ScheduledItemBadge({ categoryId: _categoryId, date: _date }: { categoryId: number; date?: string | null }) {
-  const { t } = useTranslation();
-  return <p className="text-xs text-muted-foreground">{t("services.itemTypes.scheduled_category", "Scheduled")}</p>;
 }
