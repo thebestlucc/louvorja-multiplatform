@@ -14,7 +14,7 @@ import {
   getCollectionHymns, addHymnToCollection, removeHymnFromCollection,
   getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation,
   getSlides, createSlide, updateSlide, deleteSlide, reorderSlides, importSlja, exportSlja,
-  getBibleVersions, getBooks, getVerses, searchBible, importBibleVersion,
+  getBibleVersions, getBooks, getVerses, searchBible, searchBibleGlobal, importBibleVersion,
   toggleFavorite, getFavorites, isFavorite, getFavoriteHymns, getFavoriteCollections,
   getServices, getService, createService, updateService, deleteService,
   addServiceItem, removeServiceItem, reorderServiceItems, duplicateService, updateServiceItem,
@@ -74,6 +74,7 @@ export const queryKeys = {
     verses: (versionId: number, book: string, chapter: number) =>
       ["bible", "verses", versionId, book, chapter] as const,
     search: (query: string, versionId: number | null) => ["bible", "search", query, versionId] as const,
+    globalSearch: (query: string) => ["bible", "global-search", query] as const,
   },
   favorites: {
     all: (itemType: string, query?: string) => ["favorites", itemType, query || ""] as const,
@@ -590,6 +591,14 @@ export function useImportBible() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
     },
+  });
+}
+
+export function useSearchBibleGlobal(query: string) {
+  return useQuery({
+    queryKey: queryKeys.bible.globalSearch(query),
+    queryFn: () => searchBibleGlobal(query),
+    enabled: query.length >= 2,
   });
 }
 
