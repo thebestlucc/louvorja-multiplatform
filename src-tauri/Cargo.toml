@@ -15,6 +15,10 @@ default-run = "lja_multiplatform"
 name = "louvorja_multiplatform"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "build_bible"
+path = "src/bin/build_bible.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.5.3", features = [] }
 
