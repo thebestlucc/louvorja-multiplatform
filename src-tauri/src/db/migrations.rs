@@ -154,6 +154,81 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (28)", [])?;
     }
 
+    if current_version < 29 {
+        migrate_v29(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (29)", [])?;
+    }
+
+    if current_version < 30 {
+        migrate_v30(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (30)", [])?;
+    }
+
+    Ok(())
+    }
+
+    fn migrate_v30(conn: &Connection) -> Result<(), AppError> {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS media_library_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                id_language TEXT NOT NULL DEFAULT 'pt'
+            );
+
+            CREATE TABLE IF NOT EXISTS media_library_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id INTEGER NOT NULL REFERENCES media_library_categories(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_type TEXT NOT NULL,
+                thumbnail_path TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_media_library_items_category ON media_library_items(category_id);
+            ",
+        )?;
+        Ok(())
+    }
+
+    fn migrate_v29(conn: &Connection) -> Result<(), AppError> {
+
+    // Recreate hymns_fts triggers with proper category filtering.
+    // This fixes "database disk image is malformed" errors caused by undefined behavior 
+    // when deleting/updating hymns that were not indexed (category != 'hymnal').
+    conn.execute_batch(
+        "
+        DROP TRIGGER IF EXISTS hymns_ad;
+        DROP TRIGGER IF EXISTS hymns_au;
+
+        -- Fix hymns_ad: Only try to delete from FTS if it was indexed
+        CREATE TRIGGER hymns_ad
+        AFTER DELETE ON hymns
+        WHEN OLD.category = 'hymnal'
+        BEGIN
+            INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+            VALUES ('delete', OLD.id, OLD.title, COALESCE(OLD.lyrics,''), COALESCE(OLD.author,''), COALESCE(OLD.album,''));
+        END;
+
+        -- Fix hymns_au: Only try to delete from FTS if it was indexed
+        CREATE TRIGGER hymns_au
+        AFTER UPDATE ON hymns
+        BEGIN
+            -- Delete old version from FTS if it was indexed
+            INSERT INTO hymns_fts(hymns_fts, rowid, title, lyrics, author, album)
+            SELECT 'delete', OLD.id, OLD.title, COALESCE(OLD.lyrics,''), COALESCE(OLD.author,''), COALESCE(OLD.album,'')
+            WHERE OLD.category = 'hymnal';
+
+            -- Insert new version into FTS if it should be indexed
+            INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+            SELECT NEW.id, NEW.title, COALESCE(NEW.lyrics,''), COALESCE(NEW.author,''), COALESCE(NEW.album,'')
+            WHERE NEW.category = 'hymnal';
+        END;
+        ",
+    )?;
     Ok(())
 }
 
@@ -1193,7 +1268,14 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 28);
+        assert_eq!(schema_version, 30);
+
+        for table in ["media_library_categories", "media_library_items"] {
+            assert!(
+                table_exists(&conn, table).expect("table exists"),
+                "missing table {table}"
+            );
+        }
 
         for table in [
             "content_sync_state",
@@ -1272,7 +1354,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v28() {
+    fn fresh_migration_chain_stepwise_reaches_v30() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1304,6 +1386,8 @@ mod tests {
             (26, migrate_v26),
             (27, migrate_v27),
             (28, migrate_v28),
+            (29, migrate_v29),
+            (30, migrate_v30),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
