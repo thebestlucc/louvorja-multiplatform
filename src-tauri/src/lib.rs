@@ -272,8 +272,28 @@ pub fn run() {
             let pool = db::init_db(&app_data_dir)
                 .map_err(|e| format!("Failed to initialize database: {e}"))?;
 
+            // Initialize bible.db — copy from resources on first launch
+            let bible_db_path = app_data_dir.join("bible.db");
+            if !bible_db_path.exists() {
+                let resource_path = app
+                    .path()
+                    .resource_dir()
+                    .map_err(|e| format!("Failed to get resource dir: {e}"))?
+                    .join("bible.db");
+                std::fs::copy(&resource_path, &bible_db_path)
+                    .map_err(|e| format!("Failed to copy bible.db: {e}"))?;
+            }
+            let bible_manager = r2d2_sqlite::SqliteConnectionManager::file(&bible_db_path)
+                .with_init(|conn| {
+                    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+                    Ok(())
+                });
+            let bible_pool = r2d2::Pool::new(bible_manager)
+                .map_err(|e| format!("Failed to create bible db pool: {e}"))?;
+
             app.manage(AppState {
                 db: pool.clone(),
+                bible_db: bible_pool,
                 timer: RwLock::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),

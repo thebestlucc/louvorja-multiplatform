@@ -154,6 +154,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (28)", [])?;
     }
 
+    if current_version < 29 {
+        migrate_v29(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (29)", [])?;
+    }
+
     Ok(())
 }
 
@@ -1161,6 +1166,17 @@ fn migrate_v28(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v29(conn: &Connection) -> Result<(), AppError> {
+    // Bible data has moved to a dedicated bible.db (separate connection).
+    // Remove the now-redundant bible tables from the main DB.
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS bible_fts;
+         DROP TABLE IF EXISTS bible_verses;
+         DROP TABLE IF EXISTS bible_versions;",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1193,7 +1209,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 28);
+        assert_eq!(schema_version, 29);
 
         for table in [
             "content_sync_state",
@@ -1272,7 +1288,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v28() {
+    fn fresh_migration_chain_stepwise_reaches_v29() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1304,6 +1320,7 @@ mod tests {
             (26, migrate_v26),
             (27, migrate_v27),
             (28, migrate_v28),
+            (29, migrate_v29),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
