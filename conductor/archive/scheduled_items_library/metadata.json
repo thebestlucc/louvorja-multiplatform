@@ -1,0 +1,9 @@
+{
+  "id": "scheduled_items_library",
+  "name": "Scheduled Items Library",
+  "description": "Categorized media asset management with integration into services and spotlight search.",
+  "status": "planned",
+  "created_at": "2026-03-19T00:00:00Z",
+  "updated_at": "2026-03-19T00:00:00Z",
+  "tags": ["feature", "media", "library", "parity"]
+}
