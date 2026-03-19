@@ -7,6 +7,7 @@ pub mod display;
 pub mod favorites;
 pub mod legacy_fetch;
 pub mod liturgy;
+pub mod media_library;
 pub mod migration;
 pub mod music;
 pub mod schedules;

@@ -124,6 +124,13 @@ pub fn run() {
             commands::liturgy::reorder_service_items,
             commands::liturgy::duplicate_service,
             commands::liturgy::update_service_item,
+            // Media Library
+            commands::media_library::get_media_library_categories,
+            commands::media_library::upsert_media_library_category,
+            commands::media_library::delete_media_library_category,
+            commands::media_library::get_media_library_items,
+            commands::media_library::upsert_media_library_item,
+            commands::media_library::delete_media_library_item,
             // Schedules
             commands::schedules::list_schedule_departments,
             commands::schedules::save_schedule_department,
