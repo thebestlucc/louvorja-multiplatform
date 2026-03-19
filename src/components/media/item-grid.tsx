@@ -10,6 +10,7 @@ import { Input } from "../ui/input";
 import { open } from "@tauri-apps/plugin-dialog";
 import { catcher } from "../../lib/catcher";
 import { ScrollArea } from "../ui/scroll-area";
+import { cn } from "../../lib/utils";
 
 interface ItemGridProps {
   categoryId: number | null;
@@ -21,6 +22,8 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
   const { data: items = [], isLoading } = useMediaLibraryItemsByDate(categoryId ?? 0, selectedDate);
   const upsertMutation = useUpsertMediaLibraryItem();
   const deleteMutation = useDeleteMediaLibraryItem(categoryId ?? 0);
+
+  const isCategorySelected = categoryId !== null && categoryId > 0;
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaLibraryItem | null>(null);
@@ -106,13 +109,13 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
             </div>
           )}
         </div>
-        <Button size="sm" onClick={handleOpenAdd}>
+        <Button size="sm" onClick={handleOpenAdd} disabled={!isCategorySelected}>
           <Plus className="mr-2 h-4 w-4" />
           {t("actions.add")}
         </Button>
       </div>
 
-      <div className="rounded-md border border-border bg-surface overflow-hidden">
+      <div className={cn("rounded-md border border-border bg-surface overflow-hidden", !isCategorySelected && "opacity-50 pointer-events-none")}>
         <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-border bg-accent/5 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           <div>{t("utilities.mediaLibrary.nameLabel")}</div>
           <div className="flex items-center gap-10 pr-8">

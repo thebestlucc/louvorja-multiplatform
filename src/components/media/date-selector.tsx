@@ -18,6 +18,8 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
   const { data: itemDates = [] } = useMediaLibraryItemDates(categoryId ?? 0);
   const [baseMonthOffset, setBaseMonthOffset] = useState(0);
 
+  const isCategorySelected = categoryId !== null && categoryId > 0;
+
   const monthsData = useMemo(() => {
     const now = new Date();
     const items: { year: number; month: number }[] = [];
@@ -53,14 +55,32 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
           {t("utilities.mediaLibrary.schedule")}
         </h3>
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1 cursor-pointer" onClick={handleToday}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-7 px-2 text-[10px] gap-1 cursor-pointer" 
+            onClick={handleToday}
+            disabled={!isCategorySelected}
+          >
             <Calendar className="h-3 w-3" />
             {t("actions.today")}
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 cursor-pointer" onClick={handlePrev}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 cursor-pointer" 
+            onClick={handlePrev}
+            disabled={!isCategorySelected}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 cursor-pointer" onClick={handleNext}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 cursor-pointer" 
+            onClick={handleNext}
+            disabled={!isCategorySelected}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -69,17 +89,20 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
       <div className="flex justify-end">
         <button 
           type="button"
+          disabled={!isCategorySelected || selectedDate === null}
           onClick={() => onSelectDate(null)}
           className={cn(
-            "text-[10px] hover:underline cursor-pointer",
-            selectedDate === null ? "font-bold text-primary" : "text-muted-foreground"
+            "text-[10px] transition-all",
+            selectedDate !== null && isCategorySelected
+              ? "font-bold text-primary cursor-pointer hover:underline" 
+              : "text-muted-foreground opacity-50 cursor-not-allowed"
           )}
         >
           {t("utilities.mediaLibrary.showAllCategoryItems")}
         </button>
       </div>
 
-      <ScrollArea className="h-full pr-2">
+      <ScrollArea className={cn("h-full pr-2", !isCategorySelected && "opacity-50 pointer-events-none")}>
         <div className="flex flex-col gap-6 py-2">
           {monthsData.map(({ year, month }) => (
             <div key={`${year}-${month}`} className="space-y-2">
