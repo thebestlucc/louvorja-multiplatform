@@ -280,12 +280,20 @@ pub fn run() {
                     .resource_dir()
                     .map_err(|e| format!("Failed to get resource dir: {e}"))?
                     .join("bible.db");
-                std::fs::copy(&resource_path, &bible_db_path)
-                    .map_err(|e| format!("Failed to copy bible.db: {e}"))?;
+
+                // Copy to a temp path first, then rename atomically to avoid
+                // partial-copy corruption if the process is killed mid-copy.
+                let tmp_path = bible_db_path.with_extension("db.tmp");
+                std::fs::copy(&resource_path, &tmp_path)
+                    .map_err(|e| format!("Failed to copy bible.db from {}: {e}", resource_path.display()))?;
+                std::fs::rename(&tmp_path, &bible_db_path)
+                    .map_err(|e| format!("Failed to install bible.db: {e}"))?;
             }
             let bible_manager = r2d2_sqlite::SqliteConnectionManager::file(&bible_db_path)
                 .with_init(|conn| {
-                    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+                    conn.execute_batch(
+                        "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;"
+                    )?;
                     Ok(())
                 });
             let bible_pool = r2d2::Pool::new(bible_manager)
