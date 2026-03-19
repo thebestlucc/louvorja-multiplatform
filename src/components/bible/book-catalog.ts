@@ -272,8 +272,30 @@ export function getLocalizedBookAbbrByIndex(index: number): string {
   return PERIODIC_BOOKS[index]?.abbr ?? "";
 }
 
+// Extended aliases for books whose names vary across common PT bible translations.
+// Keys must already be in normalizeBookText() form (diacritics stripped, lowercase).
+const EXTENDED_PT_ALIASES: [string, number][] = [
+  // Song of Solomon (index 21) — "Cântico dos Cânticos" in ARC, ARA, NVI, etc.
+  ["cantico dos canticos", 21],
+  ["canticos", 21],
+  ["cantares de salomao", 21],
+  // Acts (index 43) — "Atos dos Apóstolos" in ARC, ARA; "Actos" in European PT
+  ["atos dos apostolos", 43],
+  ["actos dos apostolos", 43],
+  ["actos", 43],
+  // Lamentations (index 24) — some bibles use "Lamentações de Jeremias"
+  ["lamentacoes de jeremias", 24],
+];
+
 const BOOK_INDEX_BY_ALIAS = (() => {
   const map = new Map<string, number>();
+
+  // First-writer-wins: earlier books (lower index) keep their normalized key.
+  // This prevents collision between "Jó" (Job=17) and "Jo" (João=42) — both strip
+  // diacritics to "jo", so without first-writer-wins João would overwrite Job.
+  const trySet = (key: string, index: number) => {
+    if (key && !map.has(key)) map.set(key, index);
+  };
 
   PERIODIC_BOOKS.forEach((book, index) => {
     const aliases = [book.abbr, book.name, ENGLISH_BOOK_NAMES[index], SPANISH_BOOK_NAMES[index]];
@@ -282,10 +304,17 @@ const BOOK_INDEX_BY_ALIAS = (() => {
       if (!alias) continue;
       const normalized = normalizeBookText(alias);
       if (!normalized) continue;
-      map.set(normalized, index);
-      map.set(compactWhitespace(normalized), index);
+      trySet(normalized, index);
+      trySet(compactWhitespace(normalized), index);
     }
   });
+
+  // Extended aliases (force-set, these are unambiguous full-name variants)
+  for (const [alias, index] of EXTENDED_PT_ALIASES) {
+    const normalized = normalizeBookText(alias);
+    map.set(normalized, index);
+    map.set(compactWhitespace(normalized), index);
+  }
 
   return map;
 })();

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { Book } from "../../types/bible";
 import {
@@ -36,10 +36,15 @@ const CATEGORY_HOVER: Record<BookCategory, string> = {
   revelation: "hover:bg-fuchsia-700",
 };
 
-// Grid constants — 9 cols × 5 rows = 45 items per page for chapters/verses
-const NAV_COLS = 9;
-const NAV_ROWS = 5;
-const NAV_PAGE_SIZE = NAV_COLS * NAV_ROWS;
+// 6 cols × 5 rows = 30 total slots; slots 0 and 29 reserved for nav cells
+export const NAV_GRID_COLS = 6;
+const GRID_COLS = NAV_GRID_COLS;
+const GRID_ROWS = 5;
+const TOTAL_SLOTS = GRID_COLS * GRID_ROWS; // 30
+const ITEMS_PER_PAGE = TOTAL_SLOTS - 2; // 28
+
+export const BOOK_COLS = 11;
+const BOOK_ROWS = Math.ceil(PERIODIC_BOOKS.length / BOOK_COLS); // 6
 
 interface BookSelectorProps {
   books: Book[];
@@ -49,64 +54,95 @@ interface BookSelectorProps {
   selectedVerses: number[];
   onSelectBook: (book: string) => void;
   onSelectChapter: (chapter: number) => void;
-  onSelectVerse: (verse: number) => void;
+  onSelectVerse: (verse: number, shiftKey?: boolean) => void;
   onDoubleClickVerse: (verse: number) => void;
 }
 
-interface PaginatedGridProps {
+interface NavGridProps {
   total: number;
   page: number;
-  onPageChange: (page: number) => void;
-  /** Render a single cell by 1-based number */
+  onPageChange: (p: number) => void;
   renderCell: (num: number) => React.ReactNode;
-  label: string;
+  emptyLabel: string;
   "data-grid-type": string;
 }
 
-function PaginatedGrid({ total, page, onPageChange, renderCell, label, "data-grid-type": gridType }: PaginatedGridProps) {
-  const totalPages = Math.ceil(total / NAV_PAGE_SIZE);
-  const start = page * NAV_PAGE_SIZE + 1;
-  const end = Math.min(start + NAV_PAGE_SIZE - 1, total);
-  const items = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+function NavGrid({
+  total,
+  page,
+  onPageChange,
+  renderCell,
+  emptyLabel,
+  "data-grid-type": gridType,
+}: NavGridProps) {
+  if (total <= 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <span className="text-[10px] text-muted-foreground/50">{emptyLabel}</span>
+      </div>
+    );
+  }
+
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+  const hasPrev = page > 0;
+  const hasNext = page < totalPages - 1;
+
+  const start = page * ITEMS_PER_PAGE + 1; // 1-indexed
+  const end = Math.min(start + ITEMS_PER_PAGE - 1, total);
+
+  const slots: React.ReactNode[] = [];
+
+  // Slot 0: prev nav or spacer
+  slots.push(
+    hasPrev ? (
+      <button
+        key="prev-nav"
+        onClick={() => onPageChange(page - 1)}
+        className="flex cursor-pointer items-center justify-center rounded-sm bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <ChevronsLeft className="h-3 w-3" />
+      </button>
+    ) : (
+      <div key="prev-empty" />
+    ),
+  );
+
+  // Slots 1–28: items (28 items per page)
+  for (let num = start; num <= end; num++) {
+    slots.push(renderCell(num));
+  }
+
+  // Pad with empty divs when items < ITEMS_PER_PAGE
+  const itemsShown = end - start + 1;
+  for (let i = itemsShown; i < ITEMS_PER_PAGE; i++) {
+    slots.push(<div key={`pad-${i}`} />);
+  }
+
+  // Slot 29: next nav or spacer
+  slots.push(
+    hasNext ? (
+      <button
+        key="next-nav"
+        onClick={() => onPageChange(page + 1)}
+        className="flex cursor-pointer items-center justify-center rounded-sm bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <ChevronsRight className="h-3 w-3" />
+      </button>
+    ) : (
+      <div key="next-empty" />
+    ),
+  );
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* Section header + pagination controls */}
-      <div className="flex items-center justify-between px-0.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1">
-            <button
-              disabled={page === 0}
-              onClick={() => onPageChange(page - 1)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <span className="min-w-[3rem] text-center text-[10px] text-muted-foreground">
-              {page + 1} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages - 1}
-              onClick={() => onPageChange(page + 1)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Grid — fills full width, square cells, fixed columns */}
-      <div
-        data-grid-type={gridType}
-        className="grid gap-[3px]"
-        style={{ gridTemplateColumns: `repeat(${NAV_COLS}, minmax(0, 1fr))` }}
-      >
-        {items.map((num) => renderCell(num))}
-      </div>
+    <div
+      data-grid-type={gridType}
+      className="grid h-full gap-[3px]"
+      style={{
+        gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))`,
+      }}
+    >
+      {slots}
     </div>
   );
 }
@@ -142,16 +178,18 @@ export function BookSelector({
 
   const selectedBookIndex = resolveBookIndex(currentBook);
   const selectedEntry = selectedBookIndex !== null ? PERIODIC_BOOKS[selectedBookIndex] : null;
-  const chapterCount = selectedBookIndex !== null ? (availableBooks.get(selectedBookIndex)?.chapterCount ?? 0) : 0;
-  const localizedCurrentBook = selectedBookIndex !== null
-    ? getLocalizedBookNameByIndex(selectedBookIndex, language)
-    : currentBook;
+  const chapterCount =
+    selectedBookIndex !== null ? (availableBooks.get(selectedBookIndex)?.chapterCount ?? 0) : 0;
+  const localizedCurrentBook =
+    selectedBookIndex !== null
+      ? getLocalizedBookNameByIndex(selectedBookIndex, language)
+      : currentBook;
   const selectedVerseTail = selectedVerses[selectedVerses.length - 1] ?? null;
 
   // Auto-follow page when selection changes
   useEffect(() => {
     if (currentChapter > 0) {
-      setChapterPage(Math.floor((currentChapter - 1) / NAV_PAGE_SIZE));
+      setChapterPage(Math.floor((currentChapter - 1) / ITEMS_PER_PAGE));
     }
   }, [currentChapter]);
 
@@ -161,7 +199,7 @@ export function BookSelector({
 
   useEffect(() => {
     if (selectedVerseTail !== null) {
-      setVersePage(Math.floor((selectedVerseTail - 1) / NAV_PAGE_SIZE));
+      setVersePage(Math.floor((selectedVerseTail - 1) / ITEMS_PER_PAGE));
     }
   }, [selectedVerseTail]);
 
@@ -177,120 +215,155 @@ export function BookSelector({
 
   useEffect(() => {
     if (!currentBook || chapterCount <= 0) return;
-    const targetChapter = currentChapter > 0 ? Math.min(currentChapter, chapterCount) : 1;
-    chapterRefs.current.get(targetChapter)?.focus();
+    const active = document.activeElement;
+    const isChapterFocused = active instanceof HTMLElement && active.dataset.bibleGrid === "chapter";
+    if (!isChapterFocused) return;
+    const target = currentChapter > 0 ? Math.min(currentChapter, chapterCount) : 1;
+    chapterRefs.current.get(target)?.focus();
   }, [currentBook, currentChapter, chapterCount]);
 
   useEffect(() => {
     if (!currentBook || currentChapter <= 0 || verseCount <= 0) return;
-    const targetVerse = selectedVerseTail !== null ? Math.min(selectedVerseTail, verseCount) : 1;
-    verseRefs.current.get(targetVerse)?.focus();
+    const active = document.activeElement;
+    const isVerseFocused = active instanceof HTMLElement && active.dataset.bibleGrid === "verse";
+    if (!isVerseFocused) return;
+    const target = selectedVerseTail !== null ? Math.min(selectedVerseTail, verseCount) : 1;
+    verseRefs.current.get(target)?.focus();
   }, [currentBook, currentChapter, verseCount, selectedVerseTail]);
 
   const selectedVerseSet = new Set(selectedVerses);
 
-  return (
-    <div className="space-y-3">
-      {/* Periodic Table Grid — 11 columns, square cells */}
-      <div className="grid gap-[3px]" style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}>
-        {PERIODIC_BOOKS.map((book, index) => {
-          const availableEntry = availableBooks.get(index);
-          const available = Boolean(availableEntry);
-          const selected = index === selectedBookIndex;
-          const localizedName = getLocalizedBookNameByIndex(index, language);
+  const chapterLabel = selectedEntry
+    ? CATEGORY_COLORS[selectedEntry.cat]
+    : "bg-primary";
 
-          return (
-            <button
-              key={book.abbr}
-              data-bible-grid="book"
-              data-book-index={index}
-              data-selected={selected ? "true" : undefined}
-              disabled={!available}
-              onClick={() => {
-                if (availableEntry) onSelectBook(availableEntry.sourceName);
-              }}
-              title={localizedName}
-              className={cn(
-                "flex aspect-square flex-col items-center justify-center rounded-sm text-white transition-all",
-                CATEGORY_COLORS[book.cat],
-                available && CATEGORY_HOVER[book.cat],
-                !available && "cursor-not-allowed opacity-20",
-                selected && "z-10 ring-2 ring-white shadow-lg",
-              )}
-            >
-              <span className="text-xs font-bold leading-none sm:text-sm">{book.abbr}</span>
-              <span className="mt-0.5 w-full truncate px-0.5 text-center text-[6px] leading-none opacity-80 sm:text-[7px]">
-                {localizedName}
-              </span>
-            </button>
-          );
-        })}
+  return (
+    <div className="flex h-full flex-col gap-1">
+      {/* Books — top 50% */}
+      <div className="min-h-0 flex-1">
+        <div
+          className="grid h-full gap-[3px]"
+          style={{
+            gridTemplateColumns: `repeat(${BOOK_COLS}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${BOOK_ROWS}, minmax(0, 1fr))`,
+          }}
+        >
+          {PERIODIC_BOOKS.map((book, index) => {
+            const availableEntry = availableBooks.get(index);
+            const available = Boolean(availableEntry);
+            const selected = index === selectedBookIndex;
+            const hasSelection = selectedBookIndex !== null;
+            const localizedName = getLocalizedBookNameByIndex(index, language);
+
+            return (
+              <button
+                key={book.abbr}
+                data-bible-grid="book"
+                data-book-index={index}
+                data-selected={selected ? "true" : undefined}
+                disabled={!available}
+                onClick={() => {
+                  if (availableEntry) onSelectBook(availableEntry.sourceName);
+                }}
+                title={localizedName}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 overflow-hidden rounded-sm p-[3px] text-white transition-all",
+                  CATEGORY_COLORS[book.cat],
+                  available && [CATEGORY_HOVER[book.cat], "cursor-pointer"],
+                  !available && "cursor-not-allowed opacity-20",
+                  selected && "z-10 ring-2 ring-white shadow-lg",
+                  hasSelection && !selected && available && "opacity-50 saturate-50",
+                )}
+              >
+                <span className="text-[11px] font-extrabold leading-none">{book.abbr}</span>
+                <span className="w-full truncate text-center text-[7px] leading-none opacity-80">
+                  {localizedName}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Chapter Grid — paginated, square cells */}
-      {currentBook && chapterCount > 0 && (
-        <PaginatedGrid
-          total={chapterCount}
-          page={chapterPage}
-          onPageChange={setChapterPage}
-          label={t("bible.chapters")}
-          data-grid-type="chapter"
-          renderCell={(ch) => {
-            const isSelected = ch === currentChapter;
-            return (
-              <button
-                key={ch}
-                data-bible-grid="chapter"
-                data-chapter={ch}
-                data-selected={isSelected ? "true" : undefined}
-                ref={(el) => setChapterRef(ch, el)}
-                onClick={() => onSelectChapter(ch)}
-                className={cn(
-                  "flex aspect-square items-center justify-center rounded-sm text-sm font-semibold transition-colors",
-                  isSelected && selectedEntry
-                    ? `text-white ${CATEGORY_COLORS[selectedEntry.cat]}`
-                    : "border border-border bg-card hover:bg-accent hover:text-accent-foreground",
-                )}
-              >
-                {ch}
-              </button>
-            );
-          }}
-        />
-      )}
+      {/* Bottom row: Chapters (left) + Verses (right) — each 50% width, flex-1 height */}
+      <div className="flex min-h-0 flex-1 gap-1">
+        {/* Chapters */}
+        <div className="flex min-h-0 w-1/2 flex-col gap-0.5">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t("bible.chapters")}
+          </span>
+          <div className="min-h-0 flex-1">
+            <NavGrid
+              total={chapterCount}
+              page={chapterPage}
+              onPageChange={setChapterPage}
+              emptyLabel={t("bible.selectBook")}
+              data-grid-type="chapter"
+              renderCell={(ch) => {
+                const isSelected = ch === currentChapter;
+                return (
+                  <button
+                    key={ch}
+                    data-bible-grid="chapter"
+                    data-chapter={ch}
+                    data-selected={isSelected ? "true" : undefined}
+                    ref={(el) => setChapterRef(ch, el)}
+                    onClick={() => onSelectChapter(ch)}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-center rounded-sm text-xs font-semibold transition-colors",
+                      isSelected && selectedEntry
+                        ? `text-white ${chapterLabel}`
+                        : "border border-border bg-card hover:bg-accent hover:text-accent-foreground",
+                    )}
+                  >
+                    {ch}
+                  </button>
+                );
+              }}
+            />
+          </div>
+        </div>
 
-      {/* Verse Grid — paginated, square cells */}
-      {currentBook && currentChapter > 0 && verseCount > 0 && (
-        <PaginatedGrid
-          total={verseCount}
-          page={versePage}
-          onPageChange={setVersePage}
-          label={`${localizedCurrentBook} ${currentChapter} — ${t("bible.verses")}`}
-          data-grid-type="verse"
-          renderCell={(v) => {
-            const isSelected = selectedVerseSet.has(v);
-            return (
-              <button
-                key={v}
-                data-bible-grid="verse"
-                data-verse={v}
-                data-selected={isSelected ? "true" : undefined}
-                ref={(el) => setVerseRef(v, el)}
-                onClick={() => onSelectVerse(v)}
-                onDoubleClick={() => onDoubleClickVerse(v)}
-                className={cn(
-                  "flex aspect-square items-center justify-center rounded-sm text-sm font-medium transition-colors",
-                  isSelected && selectedEntry
-                    ? `text-white ${CATEGORY_COLORS[selectedEntry.cat]}`
-                    : "border border-border bg-card hover:bg-accent hover:text-accent-foreground",
-                )}
-              >
-                {v}
-              </button>
-            );
-          }}
-        />
-      )}
+        {/* Verses */}
+        <div className="flex min-h-0 w-1/2 flex-col gap-0.5">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {localizedCurrentBook && currentChapter > 0
+              ? `${localizedCurrentBook} ${currentChapter}`
+              : t("bible.verses")}
+          </span>
+          <div className="min-h-0 flex-1">
+            <NavGrid
+              total={verseCount}
+              page={versePage}
+              onPageChange={setVersePage}
+              emptyLabel={t("bible.selectChapter")}
+              data-grid-type="verse"
+              renderCell={(v) => {
+                const isSelected = selectedVerseSet.has(v);
+                return (
+                  <button
+                    key={v}
+                    data-bible-grid="verse"
+                    data-verse={v}
+                    data-selected={isSelected ? "true" : undefined}
+                    ref={(el) => setVerseRef(v, el)}
+                    onClick={(ev) => onSelectVerse(v, ev.shiftKey)}
+                    onDoubleClick={() => onDoubleClickVerse(v)}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-center rounded-sm text-xs font-medium transition-colors",
+                      isSelected && selectedEntry
+                        ? `text-white ${chapterLabel}`
+                        : "border border-border bg-card hover:bg-accent hover:text-accent-foreground",
+                    )}
+                  >
+                    {v}
+                  </button>
+                );
+              }}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

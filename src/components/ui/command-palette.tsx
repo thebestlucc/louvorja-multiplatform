@@ -32,7 +32,7 @@ import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-pane
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import {
   searchAllHymns,
-  searchBible,
+  searchBibleGlobal,
   searchCollections,
 } from "../../lib/tauri";
 import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../../lib/bindings";
@@ -98,7 +98,7 @@ export function CommandPalette() {
         Promise.all([
           searchAllHymns(query),
           query.trim().length >= 2
-            ? searchBible(query, null)
+            ? searchBibleGlobal(query)
             : Promise.resolve([]),
           query.trim().length >= 2
             ? searchCollections(query)
@@ -568,7 +568,17 @@ export function CommandPalette() {
                     {result.bookName} {result.verse.chapter}:{result.verse.verse}
                   </span>
                   {" - "}
-                  <span className="text-muted-foreground">{result.snippet}</span>
+                  <span className="text-muted-foreground">
+                    {result.snippet.split(/(<mark>.*?<\/mark>)/g).map((part, i) =>
+                      part.startsWith("<mark>") ? (
+                        <mark key={i} className="rounded-sm bg-yellow-300/80 px-0.5 font-semibold text-yellow-900 dark:bg-yellow-600/60 dark:text-yellow-100">
+                          {part.slice(6, -7)}
+                        </mark>
+                      ) : (
+                        <span key={i}>{part}</span>
+                      )
+                    )}
+                  </span>
                 </span>
               </Command.Item>
             ))}

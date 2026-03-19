@@ -303,8 +303,10 @@ function ServiceEditor() {
         <div className="overflow-auto rounded-lg border border-border">
           <ServiceItemList
             items={items}
+            serviceDate={service?.date ?? null}
             activeItemIndex={isPlayingService ? activeServiceItemIndex : -1}
             onRemove={removeItem}
+
             onReorder={reorderItems}
             onProject={projectItem}
             onEditItem={editItem}
