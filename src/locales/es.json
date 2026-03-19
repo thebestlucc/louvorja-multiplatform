@@ -9,7 +9,8 @@
     "open": "Abrir",
     "remove": "Quitar",
     "save": "Guardar",
-    "search": "Buscar"
+    "search": "Buscar",
+    "today": "Hoy"
   },
   "app": {
     "name": "LouvorJA"
