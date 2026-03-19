@@ -56,10 +56,10 @@ Ensure the backend compiles.
 - Create: `src/routes/utilities/media-library.tsx`
 - Modify: `src/routes/utilities/index.tsx`
 
-- [ ] **Step 1: Update bindings**
-- [ ] **Step 2: Add Media Library to Utilities index**
-- [ ] **Step 3: Scaffold management route**
-- [ ] **Step 4: Commit**
+- [x] **Step 1: Update bindings**
+- [x] **Step 2: Add Media Library to Utilities index**
+- [x] **Step 3: Scaffold management route**
+- [x] **Step 4: Commit** (ecfbfbd)
 `git add . && git commit -m "feat(ui): Add media library management route"`
 
 ### Task 5: Management UI Implementation
