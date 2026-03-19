@@ -90,11 +90,12 @@ pub fn get_items_by_category_and_date(
         return Ok(items);
     }
 
+    // "Show All" case: return all items for the category regardless of date
     let mut stmt = conn.prepare(
         "SELECT id, category_id, name, file_path, file_type, thumbnail_path, scheduled_date, sort_order, created_at 
          FROM media_library_items 
-         WHERE category_id = ?1 AND (scheduled_date IS NULL OR scheduled_date = '')
-         ORDER BY sort_order, name"
+         WHERE category_id = ?1
+         ORDER BY scheduled_date DESC, sort_order, name"
     )?;
     let items = stmt.query_map(params![category_id], map_item_row)?
         .collect::<Result<Vec<_>, _>>()?;

@@ -73,7 +73,7 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
             selectedDate === null ? "font-bold text-primary" : "text-muted-foreground"
           )}
         >
-          {t("mediaLibrary.allDates")}
+          {t("utilities.mediaLibrary.allDates")}
         </button>
       </div>
 
