@@ -14,6 +14,12 @@
   "app": {
     "name": "LouvorJA"
   },
+  "categories": {
+    "add": "Adicionar Categoria",
+    "edit": "Editar Categoria",
+    "namePlaceholder": "Nome da categoria",
+    "title": "Categorias"
+  },
   "audio": {
     "clearAll": "Limpar Tudo",
     "discard": "Descartar",
@@ -149,6 +155,7 @@
     "collections": "Coleções",
     "globalActions": "Ações globais",
     "hymns": "Hinos",
+    "mediaLibrary": "Itens Agendados",
     "navigation": "Navegação",
     "noResults": "Nenhum resultado encontrado",
     "placeholder": "Digite um comando...",
@@ -455,6 +462,10 @@
     "editNotes": "Editar Notas",
     "empty": "Nenhum culto ainda",
     "filePlaceholder": "Selecione um arquivo...",
+    "fileTabs": {
+      "library": "Itens Agendados",
+      "upload": "Arquivo Local"
+    },
     "invalidUrl": "Por favor, insira uma URL válida",
     "itemTypes": {
       "annotation": "Anotação",
@@ -860,7 +871,16 @@
       "winner": "Vencedor"
     },
     "mediaLibrary": {
+      "addItem": "Adicionar Item",
       "description": "Gerencie uma biblioteca de vídeos, imagens e PDFs para uso rápido no culto.",
+      "editItem": "Editar Item",
+      "filePathLabel": "Caminho do Arquivo",
+      "filePathPlaceholder": "Selecione um arquivo...",
+      "items": "Itens",
+      "nameLabel": "Nome",
+      "namePlaceholder": "Nome do item",
+      "noItems": "Nenhum item nesta categoria",
+      "selectCategoryHint": "Selecione uma categoria para ver os itens",
       "title": "Itens Agendados"
     },
     "mediaIntegrity": {

@@ -14,6 +14,12 @@
   "app": {
     "name": "LouvorJA"
   },
+  "categories": {
+    "add": "Add Category",
+    "edit": "Edit Category",
+    "namePlaceholder": "Category name",
+    "title": "Categories"
+  },
   "audio": {
     "clearAll": "Clear All",
     "discard": "Discard",
@@ -149,6 +155,7 @@
     "collections": "Collections",
     "globalActions": "Global Actions",
     "hymns": "Hymns",
+    "mediaLibrary": "Scheduled Items",
     "navigation": "Navigation",
     "noResults": "No results found",
     "placeholder": "Type a command...",
@@ -455,6 +462,10 @@
     "editNotes": "Edit Notes",
     "empty": "No services yet",
     "filePlaceholder": "Select a file...",
+    "fileTabs": {
+      "library": "Scheduled Items",
+      "upload": "Local File"
+    },
     "invalidUrl": "Please enter a valid URL",
     "itemTypes": {
       "annotation": "Annotation",
@@ -860,7 +871,16 @@
       "winner": "Winner"
     },
     "mediaLibrary": {
+      "addItem": "Add Item",
       "description": "Manage a library of videos, images, and PDFs for quick use during worship.",
+      "editItem": "Edit Item",
+      "filePathLabel": "File Path",
+      "filePathPlaceholder": "Select a file...",
+      "items": "Items",
+      "nameLabel": "Name",
+      "namePlaceholder": "Item name",
+      "noItems": "No items in this category",
+      "selectCategoryHint": "Select a category to view items",
       "title": "Scheduled Items"
     },
     "mediaIntegrity": {

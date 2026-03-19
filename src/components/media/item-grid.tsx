@@ -115,8 +115,8 @@ export function ItemGrid({ categoryId }: ItemGridProps) {
                   <FileIcon className="h-10 w-10 text-muted-foreground/30" />
                 )}
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Button size="icon" variant="secondary" className="rounded-full">
-                    <Play className="h-5 w-5 text-foreground" />
+                  <Button size="icon" variant="outline" className="rounded-full bg-surface/20 border-white/20 text-white hover:bg-surface/40 hover:text-white">
+                    <Play className="h-5 w-5" />
                   </Button>
                 </div>
               </CardContent>
@@ -176,7 +176,7 @@ export function ItemGrid({ categoryId }: ItemGridProps) {
                   readOnly
                   placeholder={t("mediaLibrary.filePathPlaceholder", "Select a file...")}
                 />
-                <Button variant="secondary" onClick={handlePickFile}>
+                <Button variant="outline" onClick={handlePickFile}>
                   {t("actions.open")}
                 </Button>
               </div>

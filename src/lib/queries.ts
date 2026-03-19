@@ -49,9 +49,7 @@ import type {
   ScheduleDayInput,
   ScheduleDepartmentInput,
   ScheduleGenerationRequest,
-  MediaLibraryCategory,
   MediaLibraryCategoryInput,
-  MediaLibraryItem,
   MediaLibraryItemInput,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
@@ -760,7 +758,7 @@ export function useUpsertMediaLibraryCategory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: MediaLibraryCategoryInput) => upsertMediaLibraryCategory(input),
-    onSuccess: (_, input) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mediaLibrary", "categories"] });
     },
   });
