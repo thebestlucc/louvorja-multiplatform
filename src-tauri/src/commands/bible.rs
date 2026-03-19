@@ -43,7 +43,7 @@ fn broadcast_bible_stream_payloads(
 pub fn get_bible_versions(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<BibleVersion>, AppError> {
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -57,7 +57,7 @@ pub fn get_books(
     version_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Book>, AppError> {
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -73,7 +73,7 @@ pub fn get_verses(
     chapter: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Verse>, AppError> {
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -91,7 +91,7 @@ pub fn get_verse_range(
     end: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Verse>, AppError> {
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -106,7 +106,7 @@ pub fn search_bible(
     version_id: Option<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<BibleSearchResult>, AppError> {
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -125,7 +125,7 @@ pub fn project_bible_verse(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -238,7 +238,7 @@ pub fn navigate_bible_verse(
     let reference = slide.title.as_deref().unwrap_or("");
     let (book, chapter, verse_start) = parse_bible_reference(reference)?;
 
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
@@ -446,10 +446,24 @@ pub fn import_bible_version(
     state: tauri::State<'_, AppState>,
 ) -> Result<i64, AppError> {
     let verses: Vec<(String, i64, i64, String)> = serde_json::from_str(&verses_json)?;
-    let (conn, err) = catcher(state.db.get());
+    let (conn, err) = catcher(state.bible_db.get());
     if let Some(e) = err {
         return Err(e);
     }
     let conn = conn.unwrap();
     crate::db::queries::bible::import_bible_version(&conn, &name, &abbreviation, &language, &verses)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn search_bible_global(
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<BibleSearchResult>, AppError> {
+    let (conn, err) = catcher(state.bible_db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::bible::search_bible_global(&conn, &query)
 }
