@@ -165,36 +165,36 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
     }
 
     Ok(())
-    }
+}
 
-    fn migrate_v30(conn: &Connection) -> Result<(), AppError> {
-        conn.execute_batch(
-            "
-            CREATE TABLE IF NOT EXISTS media_library_categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                id_language TEXT NOT NULL DEFAULT 'pt'
-            );
+fn migrate_v30(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS media_library_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            id_language TEXT NOT NULL DEFAULT 'pt'
+        );
 
-            CREATE TABLE IF NOT EXISTS media_library_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category_id INTEGER NOT NULL REFERENCES media_library_categories(id) ON DELETE CASCADE,
-                name TEXT NOT NULL,
-                file_path TEXT NOT NULL,
-                file_type TEXT NOT NULL,
-                thumbnail_path TEXT,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
+        CREATE TABLE IF NOT EXISTS media_library_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category_id INTEGER NOT NULL REFERENCES media_library_categories(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            thumbnail_path TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
 
-            CREATE INDEX IF NOT EXISTS idx_media_library_items_category ON media_library_items(category_id);
-            ",
-        )?;
-        Ok(())
-    }
+        CREATE INDEX IF NOT EXISTS idx_media_library_items_category ON media_library_items(category_id);
+        ",
+    )?;
+    Ok(())
+}
 
-    fn migrate_v29(conn: &Connection) -> Result<(), AppError> {
+fn migrate_v29(conn: &Connection) -> Result<(), AppError> {
 
     // Recreate hymns_fts triggers with proper category filtering.
     // This fixes "database disk image is malformed" errors caused by undefined behavior 
