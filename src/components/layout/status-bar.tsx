@@ -27,6 +27,9 @@ export function StatusBar() {
   const { data: timerState } = useTimerState();
   const legacyFetchProgress = useLegacyFetchStore((s) => s.progress);
   const contentSyncProgress = useContentSyncStore((s) => s.progress);
+  const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
+  const packSyncRunning = packSyncProgress != null &&
+    (packSyncProgress.status === "pending" || packSyncProgress.status === "running");
   
   const isRunning = status?.isRunning ?? false;
   const hasTimerProgress = Boolean(
@@ -62,6 +65,14 @@ export function StatusBar() {
       </span>
 
       <div className="flex items-center gap-3">
+        {packSyncRunning && (
+          <span className="text-xs text-muted-foreground">
+            {t("settings.packSync.statusBar", {
+              current: packSyncProgress!.packsProcessed,
+              total: packSyncProgress!.packsTotal,
+            })}
+          </span>
+        )}
         {showContentSyncIndicator && (
           <button
             onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
