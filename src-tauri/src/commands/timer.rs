@@ -10,7 +10,7 @@ use crate::utils::catcher::catcher;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 fn normalize_timer_runtime(timer: &mut crate::state::TimerRuntimeState) {
     if matches!(timer.mode, TimerMode::Countdown)
@@ -64,6 +64,66 @@ fn snapshot_timer_state_from_app(app: &AppHandle) -> (Option<TimerStateData>, Op
     let mut timer = timer.unwrap();
     normalize_timer_runtime(&mut timer);
     (Some(timer.to_data()), None)
+}
+
+fn stop_timer_update_thread(state: &AppState) -> Result<(), AppError> {
+    let mut stop_tx_lock = state
+        .timer_update_stop
+        .lock()
+        .map_err(|_| AppError::Internal("Failed to lock timer update stop mutex".into()))?;
+
+    if let Some(stop_tx) = stop_tx_lock.take() {
+        // Drop the lock before sending/waiting might be needed if we were joining,
+        // but here we just send a signal. However, the instructions say:
+        // "stop_timer_update_thread must release the Mutex lock BEFORE join() to avoid deadlocks."
+        // Since we are using mpsc::Sender, there is no join() here unless we store JoinHandle too.
+        // For now, let's just send the signal and ensure the lock is dropped.
+        let _ = stop_tx.send(());
+    }
+    drop(stop_tx_lock);
+
+    Ok(())
+}
+
+fn start_timer_update_thread(app: AppHandle) -> Result<(), AppError> {
+    let state = app.state::<AppState>();
+    stop_timer_update_thread(&state)?;
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let mut stop_tx_lock = state
+        .timer_update_stop
+        .lock()
+        .map_err(|_| AppError::Internal("Failed to lock timer update stop mutex".into()))?;
+    *stop_tx_lock = Some(stop_tx);
+    drop(stop_tx_lock);
+
+    thread::spawn(move || {
+        loop {
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+
+            let state = app.state::<AppState>();
+            let (timer, err) = catcher(state.timer.write());
+            if err.is_none() {
+                if let Some(mut timer) = timer {
+                    if timer.is_running() {
+                        normalize_timer_runtime(&mut timer);
+                        timer.current_time_ms = timer.current_time_ms();
+                        let data = timer.to_data();
+                        drop(timer);
+                        let _ = app.emit("timer-state-updated", data);
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            thread::sleep(Duration::from_millis(50));
+        }
+    });
+
+    Ok(())
 }
 
 fn project_utility_cover(
@@ -144,6 +204,7 @@ fn emit_projection_phase(
 pub fn start_timer(
     mode: String,
     duration_ms: Option<u64>,
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
     let timer_mode = TimerMode::from_input(&mode).ok_or_else(|| {
@@ -168,6 +229,9 @@ pub fn start_timer(
     }
     let mut timer = timer.unwrap();
     timer.start(timer_mode, normalized_duration);
+    drop(timer);
+
+    start_timer_update_thread(app)?;
 
     Ok(())
 }
@@ -181,18 +245,24 @@ pub fn pause_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     }
     let mut timer = timer.unwrap();
     timer.pause();
+    drop(timer);
+
+    stop_timer_update_thread(&state)?;
     Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn resume_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
+pub fn resume_timer(app: AppHandle, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let (timer, err) = catcher(state.timer.write());
     if let Some(e) = err {
         return Err(e);
     }
     let mut timer = timer.unwrap();
     timer.resume();
+    drop(timer);
+
+    start_timer_update_thread(app)?;
     Ok(())
 }
 
@@ -205,6 +275,9 @@ pub fn reset_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     }
     let mut timer = timer.unwrap();
     timer.reset();
+    drop(timer);
+
+    stop_timer_update_thread(&state)?;
     Ok(())
 }
 
@@ -212,6 +285,7 @@ pub fn reset_timer(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
 #[specta::specta]
 pub fn adjust_countdown_timer(
     delta_ms: i64,
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
     let (timer, err) = catcher(state.timer.write());
@@ -222,7 +296,18 @@ pub fn adjust_countdown_timer(
 
     timer
         .adjust_countdown_remaining_ms(delta_ms)
-        .map_err(AppError::Internal)
+        .map_err(AppError::Internal)?;
+
+    let is_running = timer.is_running();
+    drop(timer);
+
+    if is_running {
+        start_timer_update_thread(app)?;
+    } else {
+        stop_timer_update_thread(&state)?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

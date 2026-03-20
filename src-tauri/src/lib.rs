@@ -318,6 +318,7 @@ pub fn run() {
                 content_sync: Mutex::new(crate::content_sync::ContentSyncRuntimeState::default()),
                 pack_sync: Mutex::new(crate::state::PackSyncRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
+                timer_update_stop: Mutex::new(None),
                 current_slide: RwLock::new(None),
                 projector_open: AtomicBool::new(false),
                 overlay: RwLock::new(OverlayRuntimeState::default()),
