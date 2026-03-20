@@ -1,5 +1,6 @@
 export type ContentSyncSummaryMode = "smart" | "degraded";
 export type ContentSyncFallbackAction = "start_full_sync";
+export type ContentSyncMetadataSource = "db_snapshot" | "api_fallback";
 export type ContentSyncRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 export type ContentSyncRunMode = "check" | "selective" | "full" | "repair";
 export type ContentSyncPlanItemStatus = "pending" | "running" | "completed" | "skipped" | "failed";
@@ -23,6 +24,7 @@ export interface ContentSyncSummary {
   changedAlbumCount: number;
   missingAssetCount: number;
   fallbackAction: ContentSyncFallbackAction | null;
+  metadataSource: ContentSyncMetadataSource | null;
   lastCheckedAt: string | null;
   lastSyncedAt: string | null;
   lastSyncStatus: ContentSyncRunStatus | null;
@@ -57,6 +59,44 @@ export interface ContentSyncProgress {
   itemsProcessed: number;
 }
 
+export interface PackSyncFileItem {
+  path: string;
+  hymnApiId: number | null;
+  albumApiId: number | null;
+  fileType: string;
+  size: number;
+}
+
+export interface PackSyncPlanItem {
+  packId: string;
+  packUrl: string;
+  packVersion: number;
+  packSize: number;
+  packSha256: string;
+  localExtractedVersion: number;
+  localDbVersion: number;
+  needsDownload: boolean;
+  needsDbUpdate: boolean;
+  fileCount: number;
+  files: PackSyncFileItem[];
+}
+
+export interface PackSyncPlan {
+  manifestVersion: number;
+  items: PackSyncPlanItem[];
+  totalDownloadSize: number;
+  totalDownloadCount: number;
+}
+
+export interface PackSyncProgress {
+  runId: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  percent: number;
+  message: string | null;
+  packsTotal: number;
+  packsProcessed: number;
+}
+
 export interface ContentSyncReport {
   runId: string;
   mode: ContentSyncRunMode;
@@ -67,6 +107,7 @@ export interface ContentSyncReport {
   skippedCount: number;
   failedCount: number;
   fallbackUsed: boolean;
+  metadataSource: ContentSyncMetadataSource | null;
   resultJson: string | null;
   errorJson: string | null;
   createdAt: string;

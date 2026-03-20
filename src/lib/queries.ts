@@ -32,6 +32,7 @@ import {
   getSetting, setSetting, getAllSettings, clearDatabase,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
   getContentSyncSummary, planContentSync, startContentSync, getContentSyncProgress, cancelContentSync, getContentSyncReport,
+  planPackSync, startPackSync, cancelPackSync,
   listFtpFiles, downloadFtpFiles,
   restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
@@ -118,6 +119,7 @@ export const queryKeys = {
     report: (runId: string) => ["legacyFetch", "report", runId] as const,
     params: ["legacyFetch", "params"] as const,
   },
+  packSyncPlan: ["packSync", "plan"] as const,
   contentSync: {
     summary: ["contentSync", "summary"] as const,
     plan: ["contentSync", "plan"] as const,
@@ -1173,6 +1175,32 @@ export function useCancelLegacyFetch() {
       queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
     },
+  });
+}
+
+// Pack Sync
+export function usePlanPackSync(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.packSyncPlan,
+    queryFn: () => planPackSync(),
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useStartPackSync() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => startPackSync(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+    },
+  });
+}
+
+export function useCancelPackSync() {
+  return useMutation({
+    mutationFn: (runId: string) => cancelPackSync(runId),
   });
 }
 
