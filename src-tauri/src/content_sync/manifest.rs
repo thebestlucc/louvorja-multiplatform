@@ -5,42 +5,33 @@ const MAX_MANIFEST_BYTES: usize = 1 * 1024 * 1024; // 1 MiB limit for manifest J
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ManifestFile {
+    pub path: String,
+    pub hymn_api_id: Option<i64>,
+    pub album_api_id: Option<i64>,
+    #[serde(rename = "type")]
+    pub file_type: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ManifestPack {
     pub id: String,
     pub url: String,
     pub version: u32,
     pub size: u64,
-    // TODO(review): sha256 is currently optional; before using pack ZIPs in production,
-    // add integrity verification at the download layer (Task 3/5). Consider making sha256
-    // required in a future manifest schema version. - Security Reviewer, 2026-03-19, Severity: Low
-    pub sha256: Option<String>,
-    pub hymn_ids: Vec<i64>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ManifestUpdate {
-    pub id: i64,
-    pub audio_cdn_url: Option<String>,
-    pub audio_ftp_path: Option<String>,
-    pub audio_size: Option<u64>,
-    pub playback_cdn_url: Option<String>,
-    pub playback_ftp_path: Option<String>,
-    pub playback_size: Option<u64>,
-    pub cover_cdn_url: Option<String>,
-    pub cover_ftp_path: Option<String>,
-    pub cover_size: Option<u64>,
+    pub sha256: String,
+    pub files: Vec<ManifestFile>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentManifest {
     pub manifest_version: i64,
-    pub db_version: Option<i64>,
+    pub generated_at: Option<String>,
     #[serde(default)]
     pub packs: Vec<ManifestPack>,
-    #[serde(default)]
-    pub updates: Vec<ManifestUpdate>,
 }
 
 /// Fetch and deserialize a manifest JSON from a URL.
@@ -96,100 +87,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_manifest_with_packs_and_updates() {
+    fn parse_manifest_with_pack_files() {
         let json = r#"{
-            "manifestVersion": 1,
-            "dbVersion": 1234,
+            "manifestVersion": 42,
+            "generatedAt": "2026-03-20T15:00:00Z",
             "packs": [
                 {
-                    "id": "album-hinario",
-                    "url": "https://example.r2.dev/packs/album-hinario-v2.zip",
-                    "version": 2,
-                    "size": 52428800,
-                    "sha256": null,
-                    "hymnIds": [1, 2, 3]
-                }
-            ],
-            "updates": [
-                {
-                    "id": 1043,
-                    "audioCdnUrl": "https://example.r2.dev/updates/1043.mp3",
-                    "audioFtpPath": "config/musicas/colecao/1043.mp3",
-                    "audioSize": 3456789,
-                    "playbackCdnUrl": null,
-                    "playbackFtpPath": null,
-                    "playbackSize": null,
-                    "coverCdnUrl": null,
-                    "coverFtpPath": "config/imagens/1043.jpg",
-                    "coverSize": 85000
+                    "id": "hymnal-pt-001",
+                    "url": "https://pub-xxx.r2.dev/packs/hymnal-pt-001-v3.zip",
+                    "version": 3,
+                    "size": 456000000,
+                    "sha256": "e3b0c44298fc1c149afb",
+                    "files": [
+                        {
+                            "path": "media/audio/123/hino123.mp3",
+                            "hymnApiId": 123,
+                            "albumApiId": null,
+                            "type": "audio",
+                            "size": 5200000
+                        },
+                        {
+                            "path": "media/images/456/album456.jpg",
+                            "hymnApiId": null,
+                            "albumApiId": 456,
+                            "type": "album_cover",
+                            "size": 120000
+                        }
+                    ]
                 }
             ]
         }"#;
-
         let manifest: ContentManifest = serde_json::from_str(json).unwrap();
-        assert_eq!(manifest.manifest_version, 1);
+        assert_eq!(manifest.manifest_version, 42);
+        assert_eq!(manifest.generated_at.as_deref(), Some("2026-03-20T15:00:00Z"));
         assert_eq!(manifest.packs.len(), 1);
-        assert_eq!(manifest.packs[0].id, "album-hinario");
-        assert_eq!(manifest.packs[0].version, 2);
-        assert_eq!(manifest.packs[0].hymn_ids, vec![1, 2, 3]);
-        assert_eq!(manifest.updates.len(), 1);
-        assert_eq!(manifest.updates[0].id, 1043);
-        assert_eq!(
-            manifest.updates[0].audio_cdn_url.as_deref(),
-            Some("https://example.r2.dev/updates/1043.mp3")
-        );
-        assert_eq!(manifest.packs[0].url, "https://example.r2.dev/packs/album-hinario-v2.zip");
-        assert_eq!(manifest.packs[0].size, 52428800);
-        assert!(manifest.packs[0].sha256.is_none());
-        assert_eq!(manifest.updates[0].audio_ftp_path.as_deref(), Some("config/musicas/colecao/1043.mp3"));
-        assert_eq!(manifest.updates[0].audio_size, Some(3456789));
-        assert_eq!(manifest.updates[0].cover_ftp_path.as_deref(), Some("config/imagens/1043.jpg"));
-        assert_eq!(manifest.updates[0].cover_size, Some(85000));
-        assert!(manifest.updates[0].playback_cdn_url.is_none());
-        assert!(manifest.updates[0].playback_ftp_path.is_none());
-        assert_eq!(manifest.db_version, Some(1234));
+        let pack = &manifest.packs[0];
+        assert_eq!(pack.id, "hymnal-pt-001");
+        assert_eq!(pack.version, 3);
+        assert_eq!(pack.sha256, "e3b0c44298fc1c149afb");
+        assert_eq!(pack.files.len(), 2);
+        assert_eq!(pack.files[0].path, "media/audio/123/hino123.mp3");
+        assert_eq!(pack.files[0].hymn_api_id, Some(123));
+        assert_eq!(pack.files[0].album_api_id, None);
+        assert_eq!(pack.files[0].file_type, "audio");
+        assert_eq!(pack.files[1].album_api_id, Some(456));
     }
 
     #[test]
-    fn parse_manifest_minimal_fields() {
-        // Test with only required fields (no optional fields)
-        let json = r#"{
-            "manifestVersion": 1,
-            "packs": [],
-            "updates": []
-        }"#;
-
+    fn parse_manifest_minimal() {
+        let json = r#"{"manifestVersion": 1}"#;
         let manifest: ContentManifest = serde_json::from_str(json).unwrap();
         assert_eq!(manifest.manifest_version, 1);
-        assert!(manifest.db_version.is_none());
+        assert!(manifest.generated_at.is_none());
         assert!(manifest.packs.is_empty());
-        assert!(manifest.updates.is_empty());
     }
 
     #[test]
-    fn parse_manifest_update_with_all_optional_fields_absent() {
-        let json = r#"{
-            "manifestVersion": 1,
-            "packs": [],
-            "updates": [
-                {
-                    "id": 9999
-                }
-            ]
-        }"#;
-
+    fn parse_manifest_empty_packs() {
+        let json = r#"{"manifestVersion": 1, "packs": []}"#;
         let manifest: ContentManifest = serde_json::from_str(json).unwrap();
-        let update = &manifest.updates[0];
-        assert_eq!(update.id, 9999);
-        assert!(update.audio_cdn_url.is_none());
-        assert!(update.audio_ftp_path.is_none());
-        assert!(update.audio_size.is_none());
-        assert!(update.playback_cdn_url.is_none());
-        assert!(update.playback_ftp_path.is_none());
-        assert!(update.playback_size.is_none());
-        assert!(update.cover_cdn_url.is_none());
-        assert!(update.cover_ftp_path.is_none());
-        assert!(update.cover_size.is_none());
+        assert!(manifest.packs.is_empty());
     }
 
     #[tokio::test]

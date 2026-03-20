@@ -1,8 +1,8 @@
-use crate::content_sync::{self, ContentSyncRunState};
+use crate::content_sync::{self, snapshot::SnapshotManifest, ContentSyncRunState};
 use crate::db::models::{
-    ContentSyncPlan, ContentSyncProgress, ContentSyncRemoteEntityInput, ContentSyncReport,
-    ContentSyncRunStatus, ContentSyncSummary, ContentSyncPlanItemAction, FtpFileEntry,
-    FtpDownloadProgress,
+    ContentSyncMetadataSource, ContentSyncPlan, ContentSyncPlanItemAction,
+    ContentSyncProgress, ContentSyncRemoteEntityInput, ContentSyncReport,
+    ContentSyncRunStatus, ContentSyncSummary, FtpDownloadProgress, FtpFileEntry,
 };
 use crate::error::AppError;
 use crate::state::AppState;
@@ -36,37 +36,88 @@ pub fn get_content_sync_summary(
     content_sync::load_summary(&conn, file_exists)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn plan_content_sync(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<ContentSyncPlan, AppError> {
-    // Fetch remote params to get db_version
+enum PreparedRemoteMetadata {
+    Snapshot {
+        remote_version: Option<i64>,
+        manifest: SnapshotManifest,
+    },
+    ApiFallback {
+        remote_version: Option<i64>,
+        hymn_inputs: Vec<ContentSyncRemoteEntityInput>,
+        album_inputs: Vec<ContentSyncRemoteEntityInput>,
+    },
+    Degraded {
+        remote_version: Option<i64>,
+        reason: Option<String>,
+    },
+}
+
+async fn fetch_content_sync_remote_metadata(
+    app: &AppHandle,
+) -> Result<PreparedRemoteMetadata, AppError> {
     let params_res = legacy_fetch::fetcher::fetch_params().await;
-    let remote_version = match &params_res {
-        Ok(p) => p.db_version,
-        Err(_) => None,
-    };
-
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
-
-    // Record the check timestamp + remote version
-    let _ = crate::db::queries::content_sync::mark_content_sync_checked(&conn, remote_version, None);
-
-    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-    let file_exists = |rel_path: &str| {
-        let full_path = app_data_dir.join(rel_path);
-        std::fs::metadata(full_path).is_ok()
-    };
-
-    // Attempt smart manifest plan if API is reachable
-    let lang = get_app_lang(&app);
+    let remote_version = params_res.as_ref().ok().and_then(|params| params.db_version);
+    let lang = get_app_lang(app);
     let api_lang = lang_to_api_language(&lang);
+    let mut degraded_reason = None::<String>;
+
+    if let Ok(params) = &params_res {
+        if let Some(conn_ftp_url) = params.conn_ftp.as_deref() {
+            match ftp_sync::credentials::fetch_ftp_credentials(conn_ftp_url, &lang).await {
+                Ok(ftp_settings) => {
+                    let database_snapshot_path = params
+                        .database_snapshot_path
+                        .clone()
+                        .or_else(|| ftp_settings.database_snapshot_path.clone());
+
+                    if let Some(database_snapshot_path) = database_snapshot_path {
+                        let ftp_settings = ftp_settings.clone();
+                        let lang = lang.clone();
+                        let log_snapshot_path = database_snapshot_path.clone();
+                        let log_lang = lang.clone();
+                        match tauri::async_runtime::spawn_blocking(move || {
+                            crate::content_sync::snapshot::load_remote_snapshot_manifest(
+                                &ftp_settings,
+                                &database_snapshot_path,
+                                &lang,
+                            )
+                        })
+                        .await
+                        .map_err(|error| {
+                            AppError::Internal(format!(
+                                "DB snapshot task failed to join: {}",
+                                error
+                            ))
+                        })? {
+                            Ok(snapshot_manifest) if snapshot_manifest.has_content() => {
+                                return Ok(PreparedRemoteMetadata::Snapshot {
+                                    remote_version,
+                                    manifest: snapshot_manifest,
+                                });
+                            }
+                            Ok(_) => {
+                                degraded_reason = Some(format!(
+                                    "DB snapshot '{}' has no content for language '{}'.",
+                                    log_snapshot_path, log_lang
+                                ));
+                            }
+                            Err(error) => {
+                                eprintln!("[plan] remote snapshot load failed: {}", error);
+                                degraded_reason = Some(format!(
+                                    "DB snapshot metadata is unavailable: {}",
+                                    error
+                                ));
+                            }
+                        }
+                    }
+                }
+                Err(error) => {
+                    eprintln!("[plan] FTP credentials fetch failed: {}", error);
+                    degraded_reason = Some(format!("FTP credentials are unavailable: {}", error));
+                }
+            }
+        }
+    }
 
     let hymns_res = fetch_all_hymnal_pages(api_lang).await;
     let albums_res = fetch_all_album_pages(api_lang).await;
@@ -77,26 +128,114 @@ pub async fn plan_content_sync(
                 hymns.iter().map(api_music_to_entity_input).collect();
             let album_inputs: Vec<ContentSyncRemoteEntityInput> =
                 albums.iter().map(api_album_to_entity_input).collect();
+            Ok(PreparedRemoteMetadata::ApiFallback {
+                remote_version,
+                hymn_inputs,
+                album_inputs,
+            })
+        }
+        (hymns_res, albums_res) => {
+            if let Err(error) = hymns_res {
+                eprintln!("[plan] fetch_all_hymnal_pages failed: {}", error);
+                if degraded_reason.is_none() {
+                    degraded_reason = Some(error.to_string());
+                }
+            }
+            if let Err(error) = albums_res {
+                eprintln!("[plan] fetch_all_album_pages failed: {}", error);
+                if degraded_reason.is_none() {
+                    degraded_reason = Some(error.to_string());
+                }
+            }
+            Ok(PreparedRemoteMetadata::Degraded {
+                remote_version,
+                reason: degraded_reason,
+            })
+        }
+    }
+}
 
-            content_sync::build_manifest_plan(
-                &conn,
+fn finalize_content_sync_plan(
+    app: &AppHandle,
+    conn: &rusqlite::Connection,
+    remote_metadata: PreparedRemoteMetadata,
+) -> Result<(ContentSyncPlan, Option<SnapshotManifest>), AppError> {
+    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+    let file_exists = |rel_path: &str| {
+        let full_path = app_data_dir.join(rel_path);
+        std::fs::metadata(full_path).is_ok()
+    };
+
+    match remote_metadata {
+        PreparedRemoteMetadata::Snapshot {
+            remote_version,
+            manifest,
+        } => {
+            let hymn_inputs = manifest.hymn_inputs();
+            let album_inputs = manifest.album_inputs();
+            let plan = content_sync::build_manifest_plan_with_source(
+                conn,
                 remote_version,
                 &hymn_inputs,
                 &album_inputs,
                 &file_exists,
-            )
+                Some(ContentSyncMetadataSource::DbSnapshot),
+            )?;
+            let _ = crate::db::queries::content_sync::mark_content_sync_checked(
+                conn,
+                remote_version,
+                None,
+            );
+            Ok((plan, Some(manifest)))
         }
-        (hymns_res, albums_res) => {
-            if let Err(e) = hymns_res {
-                eprintln!("[plan] fetch_all_hymnal_pages failed: {}", e);
-            }
-            if let Err(e) = albums_res {
-                eprintln!("[plan] fetch_all_album_pages failed: {}", e);
-            }
-            let summary = content_sync::load_summary(&conn, &file_exists)?;
-            content_sync::build_degraded_plan(&conn, summary, &file_exists)
+        PreparedRemoteMetadata::ApiFallback {
+            remote_version,
+            hymn_inputs,
+            album_inputs,
+        } => {
+            let plan = content_sync::build_manifest_plan_with_source(
+                conn,
+                remote_version,
+                &hymn_inputs,
+                &album_inputs,
+                &file_exists,
+                Some(ContentSyncMetadataSource::ApiFallback),
+            )?;
+            let _ = crate::db::queries::content_sync::mark_content_sync_checked(
+                conn,
+                remote_version,
+                None,
+            );
+            Ok((plan, None))
+        }
+        PreparedRemoteMetadata::Degraded {
+            remote_version,
+            reason,
+        } => {
+            let _ = crate::db::queries::content_sync::mark_content_sync_checked(
+                conn,
+                remote_version,
+                reason.as_deref(),
+            );
+            let summary = content_sync::load_summary(conn, &file_exists)?;
+            Ok((content_sync::build_degraded_plan(conn, summary, &file_exists)?, None))
         }
     }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn plan_content_sync(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<ContentSyncPlan, AppError> {
+    let remote_metadata = fetch_content_sync_remote_metadata(&app).await?;
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    finalize_content_sync_plan(&app, &conn, remote_metadata).map(|(plan, _)| plan)
 }
 
 #[tauri::command]
@@ -131,48 +270,10 @@ pub fn start_content_sync(
         return Err(e);
     }
     let conn = conn.unwrap();
-
-    // Fetch current remote version so the plan matches what plan_content_sync computed
-    let params_res = tauri::async_runtime::block_on(legacy_fetch::fetcher::fetch_params());
-    let remote_version = params_res.ok().and_then(|p| p.db_version);
-    let _ = crate::db::queries::content_sync::mark_content_sync_checked(&conn, remote_version, None);
-
-    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-    let file_exists = |rel_path: &str| {
-        let full_path = app_data_dir.join(rel_path);
-        std::fs::metadata(full_path).is_ok()
-    };
-
-    // Attempt smart manifest plan; fall back to degraded if API unreachable
-    let lang = get_app_lang(&app);
-    let api_lang = lang_to_api_language(&lang);
-
-    let hymns_res = tauri::async_runtime::block_on(fetch_all_hymnal_pages(api_lang));
-    let albums_res = tauri::async_runtime::block_on(fetch_all_album_pages(api_lang));
-
-    let plan = match (hymns_res, albums_res) {
-        (Ok(hymns), Ok(albums)) => {
-            let hymn_inputs: Vec<ContentSyncRemoteEntityInput> =
-                hymns.iter().map(api_music_to_entity_input).collect();
-            let album_inputs: Vec<ContentSyncRemoteEntityInput> =
-                albums.iter().map(api_album_to_entity_input).collect();
-            content_sync::build_manifest_plan(
-                &conn,
-                remote_version,
-                &hymn_inputs,
-                &album_inputs,
-                &file_exists,
-            )?
-        }
-        _ => {
-            let summary = content_sync::load_summary(&conn, &file_exists)?;
-            content_sync::build_degraded_plan(&conn, summary, &file_exists)?
-        }
-    };
     let run_id = content_sync::new_run_id();
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    let initial_progress = content_sync::initial_progress(&run_id, &plan);
-    content_sync::begin_runtime_run(&conn, &run_id, &plan)?;
+    let initial_progress = content_sync::pending_progress(&run_id);
+    content_sync::begin_pending_runtime_run(&conn, &run_id)?;
     drop(conn);
 
     {
@@ -197,7 +298,7 @@ pub fn start_content_sync(
 
     let run_id_clone = run_id.clone();
     std::thread::spawn(move || {
-        run_content_sync_background(app, run_id_clone, plan, cancel_flag);
+        prepare_and_run_content_sync_background(app, run_id_clone, cancel_flag);
     });
 
     Ok(run_id)
@@ -292,6 +393,7 @@ fn run_content_sync_background(
     run_id: String,
     plan: ContentSyncPlan,
     cancel_flag: Arc<AtomicBool>,
+    snapshot_manifest: Option<SnapshotManifest>,
 ) {
     emit_progress(
         &app,
@@ -307,8 +409,9 @@ fn run_content_sync_background(
     let mut applied_count = 0i32;
     let mut skipped_count = 0i32;
     let mut failed_count = 0i32;
+    let lang = get_app_lang(&app);
+    let api_lang = lang_to_api_language(&lang);
 
-    // FTP state — lazily initialized on first RepairMedia item
     let mut ftp_settings: Option<ftp_sync::credentials::FtpSettings> = None;
     let mut ftp_stream: Option<FtpStream> = None;
 
@@ -324,16 +427,7 @@ fn run_content_sync_background(
                 Some("Content sync cancelled.".to_string()),
                 processed,
             );
-            finish_run(
-                &app,
-                &run_id,
-                &plan,
-                ContentSyncRunStatus::Cancelled,
-                applied_count,
-                skipped_count,
-                failed_count,
-                Some("Content sync cancelled before completion.".to_string()),
-            );
+            finish_run(&app, &run_id, &plan, ContentSyncRunStatus::Cancelled, applied_count, skipped_count, failed_count, Some("Content sync cancelled before completion.".to_string()));
             if let Some(mut stream) = ftp_stream {
                 let _ = stream.quit();
             }
@@ -360,547 +454,149 @@ fn run_content_sync_background(
             }
 
             ContentSyncPlanItemAction::RepairMedia => {
-                emit_progress(
-                    &app,
-                    &run_id,
-                    "executing",
-                    ContentSyncRunStatus::Running,
-                    percent,
-                    item.reason.clone(),
-                    processed,
-                );
-
-                // Lazy-fetch FTP credentials (once per run)
-                if ftp_settings.is_none() {
-                    let lang = get_app_lang(&app);
-                    let params_res = tauri::async_runtime::block_on(legacy_fetch::fetcher::fetch_params());
-                    if let Ok(params) = params_res {
-                        if let Some(conn_ftp_url) = params.conn_ftp {
-                            let creds_res = tauri::async_runtime::block_on(
-                                ftp_sync::credentials::fetch_ftp_credentials(&conn_ftp_url, &lang)
-                            );
-                            match creds_res {
-                                Ok(settings) => ftp_settings = Some(settings),
-                                Err(e) => {
-                                    eprintln!("[sync] Failed to fetch FTP credentials: {}", e);
-                                }
-                            }
-                        }
+                if item.entity_type == "album" {
+                    let normalized_action = ContentSyncPlanItemAction::UpdateAlbum;
+                    if let Some(api_id) = item.remote_id {
+                        emit_progress(&app, &run_id, "executing", ContentSyncRunStatus::Running, percent, Some(format!("Repairing album media (api_id={})…", api_id)), processed);
                     }
-                }
-
-                let Some(ref settings) = ftp_settings else {
-                    eprintln!("[sync] Skipping RepairMedia item — FTP credentials unavailable");
-                    skipped_count += 1;
-                    continue;
-                };
-
-                // Lazy-connect FTP stream (once per run, reused for all files)
-                if ftp_stream.is_none() {
-                    match ftp_sync::client::get_ftp_client(settings) {
-                        Ok(stream) => ftp_stream = Some(stream),
-                        Err(e) => {
-                            eprintln!("[sync] FTP connect failed: {}", e);
-                            failed_count += 1;
-                            continue;
-                        }
-                    }
-                }
-
-                let Some(ref mut stream) = ftp_stream else {
-                    failed_count += 1;
-                    continue;
-                };
-
-                let local_id = item.local_id.unwrap_or(0);
-
-                // Load media paths for this item from the DB
-                let media = {
-                    let Ok(conn) = app.try_state::<AppState>()
-                        .ok_or(())
-                        .and_then(|s| s.db.get().map_err(|_| ()))
-                    else {
-                        failed_count += 1;
-                        continue;
-                    };
-
-                    match item.entity_type.as_str() {
-                        "hymn" => crate::db::queries::content_sync::get_hymn_media_paths(&conn, local_id),
-                        "album" => crate::db::queries::content_sync::get_album_media_paths(&conn, local_id),
-                        _ => Ok(None),
-                    }.unwrap_or(None)
-                };
-
-                let Some(media) = media else {
-                    skipped_count += 1;
-                    continue;
-                };
-
-                let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-
-                // Re-fetch music detail for hymns to get accurate remote URLs
-                let music_detail: Option<crate::legacy_fetch::ApiMusic> =
-                    if item.entity_type == "hymn" {
-                        item.remote_id.and_then(|api_id| {
-                            tauri::async_runtime::block_on(
-                                crate::legacy_fetch::fetcher::fetch_music_detail(
-                                    crate::legacy_fetch::ApiLanguage::Pt,
-                                    api_id,
-                                )
-                            ).ok()
-                        })
-                    } else {
-                        None
-                    };
-
-                let mut item_success = true;
-
-                // Download each missing asset — (column, local_rel_path, remote_url).
-                // local_rel_path may be None for managed hymns never downloaded before;
-                // in that case, derive the local path from the remote URL and update the DB after download.
-                let assets: Vec<(&str, Option<String>, Option<String>)> = vec![
-                    ("audio", media.audio_path.clone(), music_detail.as_ref().and_then(|d| d.url_music.clone())),
-                    ("playback", media.playback_path.clone(), music_detail.as_ref().and_then(|d| d.url_instrumental_music.clone())),
-                    ("cover", media.cover_path.clone(), music_detail.as_ref().and_then(|d| d.url_image.clone())),
-                ];
-
-                let api_id = item.remote_id.unwrap_or(local_id);
-
-                for (col, local_rel_path, remote_url) in &assets {
-                    // Determine effective local path:
-                    // - If already in DB, use existing path (preserves HTTP-importer layout).
-                    // - If null (never downloaded), derive using HTTP-importer path format
-                    //   (media/{subfolder}/{api_id}/{filename}) so FTP and HTTP files are co-located.
-                    let effective_path = match (local_rel_path, remote_url) {
-                        (Some(p), _) => p.clone(),
-                        (None, Some(url)) => {
-                            let subfolder = match *col {
-                                "audio" => "audio",
-                                "playback" => "playback",
-                                "cover" => "images",
-                                _ => "misc",
-                            };
-                            content_sync::derive_local_media_path(url, subfolder, api_id)
-                        }
-                        (None, None) => {
-                            // No local path and no remote URL — asset is unavailable on the server.
-                            // Write a sentinel so future load_summary counts stop flagging this hymn.
-                            // The sentinel is non-NULL so the managed_null_count query ignores it,
-                            // and media_paths_missing() skips "_na_" paths explicitly.
-                            if item.entity_type == "hymn" {
-                                if let Ok(conn) = app.try_state::<AppState>().ok_or(()).and_then(|s| s.db.get().map_err(|_| ())) {
-                                    save_hymn_path(&conn, local_id, col, "_na_");
-                                }
-                            }
-                            continue;
-                        }
-                    };
-
-                    let full_path = app_data_dir.join(&effective_path);
-                    if full_path.exists() {
-                        // File already present; if path was never saved to DB, record it now
-                        if local_rel_path.is_none() && item.entity_type == "hymn" {
-                            if let Ok(conn) = app.try_state::<AppState>().ok_or(()).and_then(|s| s.db.get().map_err(|_| ())) {
-                                save_hymn_path(&conn, local_id, col, &effective_path);
-                            }
-                        }
-                        continue;
-                    }
-
-                    // Resolve FTP remote path — requires a remote URL
-                    let Some(ref url) = remote_url else {
-                        eprintln!("[sync] Skipping asset '{}': no remote URL to resolve FTP path", effective_path);
-                        continue;
-                    };
-
-                    let remote_path = content_sync::resolve_remote_path_from_url(url);
-
-                    emit_progress(
+                    match sync_album_item(
                         &app,
                         &run_id,
-                        "downloading",
-                        ContentSyncRunStatus::Running,
+                        item,
+                        &normalized_action,
+                        api_lang,
+                        &cancel_flag,
+                        &mut ftp_settings,
+                        &mut ftp_stream,
+                        snapshot_manifest.as_ref(),
                         percent,
-                        Some(format!("Downloading: {}", remote_path)),
                         processed,
-                    );
-
-                    match ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path) {
-                        Ok(()) => {
-                            // If this was a never-before-downloaded path, persist it in the DB
-                            if local_rel_path.is_none() && item.entity_type == "hymn" {
-                                if let Ok(conn) = app.try_state::<AppState>().ok_or(()).and_then(|s| s.db.get().map_err(|_| ())) {
-                                    save_hymn_path(&conn, local_id, col, &effective_path);
-                                }
+                    ) {
+                        ItemExecutionResult::Applied => applied_count += 1,
+                        ItemExecutionResult::Skipped => skipped_count += 1,
+                        ItemExecutionResult::Failed => failed_count += 1,
+                        ItemExecutionResult::Cancelled => {
+                            finish_run(&app, &run_id, &plan, ContentSyncRunStatus::Cancelled, applied_count, skipped_count, failed_count, Some("Content sync cancelled before completion.".to_string()));
+                            if let Some(mut stream) = ftp_stream {
+                                let _ = stream.quit();
                             }
-                        }
-                        Err(e) => {
-                            let err_msg = format!("FTP error for '{}': {}", remote_path, e);
-                            eprintln!("[sync] {}", err_msg);
-                            emit_progress(
-                                &app,
-                                &run_id,
-                                "downloading",
-                                ContentSyncRunStatus::Running,
-                                percent,
-                                Some(err_msg),
-                                processed,
-                            );
-                            item_success = false;
+                            return;
                         }
                     }
+                    continue;
                 }
 
-                if item_success {
-                    applied_count += 1;
-                } else {
-                    failed_count += 1;
+                let normalized_action = ContentSyncPlanItemAction::UpdateHymn;
+                if let Some(api_id) = item.remote_id {
+                    emit_progress(&app, &run_id, "executing", ContentSyncRunStatus::Running, percent, Some(format!("Repairing hymn media (api_id={})…", api_id)), processed);
+                }
+                match sync_hymn_item(
+                    &app,
+                    item,
+                    &normalized_action,
+                    api_lang,
+                    &mut ftp_settings,
+                    &mut ftp_stream,
+                    snapshot_manifest.as_ref(),
+                ) {
+                    ItemExecutionResult::Applied => applied_count += 1,
+                    ItemExecutionResult::Skipped => skipped_count += 1,
+                    ItemExecutionResult::Failed => failed_count += 1,
+                    ItemExecutionResult::Cancelled => {
+                        finish_run(&app, &run_id, &plan, ContentSyncRunStatus::Cancelled, applied_count, skipped_count, failed_count, Some("Content sync cancelled before completion.".to_string()));
+                        if let Some(mut stream) = ftp_stream {
+                            let _ = stream.quit();
+                        }
+                        return;
+                    }
                 }
             }
 
             ContentSyncPlanItemAction::CreateHymn | ContentSyncPlanItemAction::UpdateHymn => {
-                let is_update =
-                    matches!(item.action, ContentSyncPlanItemAction::UpdateHymn);
-                let Some(api_id) = item.remote_id else {
-                    eprintln!("[sync] {:?}: skipping — no remote_id", item.action);
-                    skipped_count += 1;
-                    continue;
-                };
-
                 emit_progress(
                     &app,
                     &run_id,
                     "executing",
                     ContentSyncRunStatus::Running,
                     percent,
-                    Some(format!(
-                        "{} hymn (api_id={})…",
-                        if is_update { "Updating" } else { "Creating" },
-                        api_id
-                    )),
+                    item.remote_id.map(|api_id| {
+                        format!(
+                            "{} hymn (api_id={})…",
+                            if matches!(item.action, ContentSyncPlanItemAction::UpdateHymn) {
+                                "Updating"
+                            } else {
+                                "Creating"
+                            },
+                            api_id
+                        )
+                    }),
                     processed,
                 );
-
-                // Ensure FTP is ready (credentials + connection)
-                if !ensure_ftp_ready(&app, &mut ftp_settings, &mut ftp_stream) {
-                    eprintln!("[sync] {:?}: FTP unavailable — skipping api_id={}", item.action, api_id);
-                    skipped_count += 1;
-                    continue;
-                }
-
-                // Fetch full hymn detail (includes lyrics)
-                let lang = get_app_lang(&app);
-                let api_lang = lang_to_api_language(&lang);
-                let detail_res = tauri::async_runtime::block_on(
-                    crate::legacy_fetch::fetcher::fetch_music_detail(api_lang, api_id),
-                );
-                let music = match detail_res {
-                    Ok(m) => m,
-                    Err(e) => {
-                        eprintln!(
-                            "[sync] {:?}: fetch_music_detail failed for api_id={}: {}",
-                            item.action, api_id, e
-                        );
-                        failed_count += 1;
-                        continue;
-                    }
-                };
-
-                let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-
-                // Download assets via FTP
-                let audio_path = download_asset_via_ftp(
+                match sync_hymn_item(
+                    &app,
+                    item,
+                    &item.action,
+                    api_lang,
+                    &mut ftp_settings,
                     &mut ftp_stream,
-                    &music.url_music,
-                    "audio",
-                    api_id,
-                    &app_data_dir,
-                );
-                let playback_path = download_asset_via_ftp(
-                    &mut ftp_stream,
-                    &music.url_instrumental_music,
-                    "playback",
-                    api_id,
-                    &app_data_dir,
-                );
-                let cover_path = download_asset_via_ftp(
-                    &mut ftp_stream,
-                    &music.url_image,
-                    "images",
-                    api_id,
-                    &app_data_dir,
-                );
-
-                // Import (upsert) into DB
-                let conn_res = app
-                    .try_state::<AppState>()
-                    .ok_or(())
-                    .and_then(|s| s.db.get().map_err(|_| ()));
-                let Ok(conn) = conn_res else {
-                    eprintln!("[sync] {:?}: DB connection unavailable", item.action);
-                    failed_count += 1;
-                    continue;
-                };
-
-                match crate::content_sync::importer::import_music_to_db(
-                    &conn,
-                    &music,
-                    audio_path.as_deref(),
-                    playback_path.as_deref(),
-                    cover_path.as_deref(),
-                    is_update, // replace_existing = true for UpdateHymn
-                    None,       // album_name — not known at hymn level
-                    Some(api_id),
-                    Some("hymnal"),
+                    snapshot_manifest.as_ref(),
                 ) {
-                    Ok((_, Some(local_id))) => {
-                        // Persist the local_id into content_sync_entities so future plan
-                        // runs can resolve this entity without re-creating it.
-                        let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
-                            &conn,
-                            "hymn",
-                            api_id,
-                            local_id,
-                        );
-                        applied_count += 1;
-                    }
-                    Ok((_, None)) => {
-                        eprintln!(
-                            "[sync] {:?}: import returned no local id for api_id={}",
-                            item.action, api_id
-                        );
-                        failed_count += 1;
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "[sync] {:?}: import_music_to_db failed for api_id={}: {}",
-                            item.action, api_id, e
-                        );
-                        failed_count += 1;
+                    ItemExecutionResult::Applied => applied_count += 1,
+                    ItemExecutionResult::Skipped => skipped_count += 1,
+                    ItemExecutionResult::Failed => failed_count += 1,
+                    ItemExecutionResult::Cancelled => {
+                        finish_run(&app, &run_id, &plan, ContentSyncRunStatus::Cancelled, applied_count, skipped_count, failed_count, Some("Content sync cancelled before completion.".to_string()));
+                        if let Some(mut stream) = ftp_stream {
+                            let _ = stream.quit();
+                        }
+                        return;
                     }
                 }
             }
 
             ContentSyncPlanItemAction::CreateAlbum | ContentSyncPlanItemAction::UpdateAlbum => {
-                let is_update =
-                    matches!(item.action, ContentSyncPlanItemAction::UpdateAlbum);
-                let Some(api_id) = item.remote_id else {
-                    eprintln!("[sync] {:?}: skipping — no remote_id", item.action);
-                    skipped_count += 1;
-                    continue;
-                };
-
                 emit_progress(
                     &app,
                     &run_id,
                     "executing",
                     ContentSyncRunStatus::Running,
                     percent,
-                    Some(format!(
-                        "{} album (api_id={})…",
-                        if is_update { "Updating" } else { "Creating" },
-                        api_id
-                    )),
+                    item.remote_id.map(|api_id| {
+                        format!(
+                            "{} album (api_id={})…",
+                            if matches!(item.action, ContentSyncPlanItemAction::UpdateAlbum) {
+                                "Updating"
+                            } else {
+                                "Creating"
+                            },
+                            api_id
+                        )
+                    }),
                     processed,
                 );
-
-                // Ensure FTP is ready
-                if !ensure_ftp_ready(&app, &mut ftp_settings, &mut ftp_stream) {
-                    eprintln!("[sync] {:?}: FTP unavailable — skipping api_id={}", item.action, api_id);
-                    skipped_count += 1;
-                    continue;
-                }
-
-                let lang = get_app_lang(&app);
-                let api_lang = lang_to_api_language(&lang);
-
-                // Fetch all song pages for this album
-                let mut all_musics: Vec<crate::legacy_fetch::ApiMusic> = Vec::new();
-                let mut page = 1i64;
-                let mut fetch_failed = false;
-                loop {
-                    let page_res = tauri::async_runtime::block_on(
-                        crate::legacy_fetch::fetcher::fetch_album_musics_page(api_lang, api_id, page),
-                    );
-                    match page_res {
-                        Ok(resp) => {
-                            let is_last = resp.data.is_empty()
-                                || resp.last_page.map_or(true, |lp| page >= lp);
-                            all_musics.extend(resp.data);
-                            if is_last {
-                                break;
-                            }
-                            page += 1;
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "[sync] {:?}: fetch_album_musics_page failed for api_id={} page={}: {}",
-                                item.action, api_id, page, e
-                            );
-                            fetch_failed = true;
-                            break;
-                        }
-                    }
-                }
-                if fetch_failed {
-                    failed_count += 1;
-                    continue;
-                }
-
-                // Try to obtain album cover URL by fetching all album pages
-                let album_cover_url: Option<String> = {
-                    let albums_res = tauri::async_runtime::block_on(
-                        fetch_all_album_pages(api_lang),
-                    );
-                    albums_res.ok().and_then(|albums| {
-                        albums
-                            .into_iter()
-                            .find(|a| a.id_album == api_id)
-                            .and_then(|a| a.url_image)
-                    })
-                };
-
-                let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-
-                // Download album cover via FTP
-                let cover_path = download_asset_via_ftp(
+                match sync_album_item(
+                    &app,
+                    &run_id,
+                    item,
+                    &item.action,
+                    api_lang,
+                    &cancel_flag,
+                    &mut ftp_settings,
                     &mut ftp_stream,
-                    &album_cover_url,
-                    "album_covers",
-                    api_id,
-                    &app_data_dir,
-                );
-
-                // Build ApiAlbum for upsert_api_album_collection
-                let album_name = item
-                    .label
-                    .clone()
-                    .unwrap_or_else(|| format!("Album {}", api_id));
-                let api_album = crate::legacy_fetch::ApiAlbum {
-                    id_album: api_id,
-                    name: album_name.clone(),
-                    url_image: album_cover_url.clone(),
-                    subtitle: None,
-                    color: None,
-                    id_file_image: None,
-                    order: None,
-                    image_version: None,
-                    musics: Vec::new(), // songs imported separately below
-                };
-
-                let release_year = album_cover_url
-                    .as_deref()
-                    .and_then(crate::content_sync::importer::extract_year_from_url);
-
-                let conn_res = app
-                    .try_state::<AppState>()
-                    .ok_or(())
-                    .and_then(|s| s.db.get().map_err(|_| ()));
-                let Ok(conn) = conn_res else {
-                    eprintln!("[sync] {:?}: DB connection unavailable", item.action);
-                    failed_count += 1;
-                    continue;
-                };
-
-                let collection_id = match crate::content_sync::importer::upsert_api_album_collection(
-                    &conn,
-                    &api_album,
-                    cover_path.as_deref(),
-                    release_year,
+                    snapshot_manifest.as_ref(),
+                    percent,
+                    processed,
                 ) {
-                    Ok((id, _)) => id,
-                    Err(e) => {
-                        eprintln!(
-                            "[sync] {:?}: upsert_api_album_collection failed for api_id={}: {}",
-                            item.action, api_id, e
-                        );
-                        failed_count += 1;
-                        continue;
+                    ItemExecutionResult::Applied => applied_count += 1,
+                    ItemExecutionResult::Skipped => skipped_count += 1,
+                    ItemExecutionResult::Failed => failed_count += 1,
+                    ItemExecutionResult::Cancelled => {
+                        finish_run(&app, &run_id, &plan, ContentSyncRunStatus::Cancelled, applied_count, skipped_count, failed_count, Some("Content sync cancelled before completion.".to_string()));
+                        if let Some(mut stream) = ftp_stream {
+                            let _ = stream.quit();
+                        }
+                        return;
                     }
-                };
-
-                // Persist local_id in content_sync_entities
-                let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
-                    &conn,
-                    "album",
-                    api_id,
-                    collection_id,
-                );
-
-                // Import each song and link it to the collection
-                let music_count = all_musics.len();
-                let mut success_count = 0usize;
-                for (i, music_stub) in all_musics.iter().enumerate() {
-                    // Fetch full music detail for lyrics
-                    let full_music_res = tauri::async_runtime::block_on(
-                        crate::legacy_fetch::fetcher::fetch_music_detail(api_lang, music_stub.id_music),
-                    );
-                    let music = full_music_res.unwrap_or_else(|e| {
-                        eprintln!(
-                            "[sync] Album {}: fetch_music_detail failed for song id={}: {} — using stub",
-                            api_id, music_stub.id_music, e
-                        );
-                        music_stub.clone()
-                    });
-
-                    let audio = download_asset_via_ftp(
-                        &mut ftp_stream,
-                        &music.url_music,
-                        "audio",
-                        music.id_music,
-                        &app_data_dir,
-                    );
-                    let playback = download_asset_via_ftp(
-                        &mut ftp_stream,
-                        &music.url_instrumental_music,
-                        "playback",
-                        music.id_music,
-                        &app_data_dir,
-                    );
-                    let song_cover = download_asset_via_ftp(
-                        &mut ftp_stream,
-                        &music.url_image,
-                        "images",
-                        music.id_music,
-                        &app_data_dir,
-                    );
-                    let media = crate::content_sync::importer::DownloadedMusicMedia {
-                        audio_path: audio,
-                        playback_path: playback,
-                        cover_path: song_cover,
-                    };
-
-                    if let Err(e) = crate::content_sync::importer::import_music_and_link_to_collection(
-                        &conn,
-                        collection_id,
-                        &music,
-                        &media,
-                        is_update,
-                        Some(&album_name),
-                        Some("album"),
-                        (i as i64) + 1,
-                    ) {
-                        eprintln!(
-                            "[sync] Album {}: import_music_and_link failed for song id={}: {}",
-                            api_id, music.id_music, e
-                        );
-                    } else {
-                        success_count += 1;
-                    }
-                }
-
-                if success_count > 0 || music_count == 0 {
-                    eprintln!(
-                        "[sync] {:?}: album api_id={} done — {}/{} songs imported",
-                        item.action, api_id, success_count, music_count
-                    );
-                    applied_count += 1;
-                } else {
-                    eprintln!(
-                        "[sync] {:?}: album api_id={} failed — no songs imported",
-                        item.action, api_id
-                    );
-                    failed_count += 1;
                 }
             }
 
@@ -989,6 +685,662 @@ fn run_content_sync_background(
     );
 }
 
+fn prepare_and_run_content_sync_background(
+    app: AppHandle,
+    run_id: String,
+    cancel_flag: Arc<AtomicBool>,
+) {
+    emit_progress(
+        &app,
+        &run_id,
+        "planning",
+        ContentSyncRunStatus::Running,
+        1.0,
+        Some("Fetching remote content metadata.".to_string()),
+        0,
+    );
+
+    if content_sync::is_run_cancelled(&cancel_flag) {
+        finish_run_without_plan(
+            &app,
+            &run_id,
+            ContentSyncRunStatus::Cancelled,
+            Some("Content sync cancelled before preparation completed.".to_string()),
+        );
+        return;
+    }
+
+    let remote_metadata =
+        match tauri::async_runtime::block_on(fetch_content_sync_remote_metadata(&app)) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                finish_run_without_plan(
+                    &app,
+                    &run_id,
+                    ContentSyncRunStatus::Failed,
+                    Some(format!("Failed to prepare content sync: {}", error)),
+                );
+                return;
+            }
+        };
+
+    if content_sync::is_run_cancelled(&cancel_flag) {
+        finish_run_without_plan(
+            &app,
+            &run_id,
+            ContentSyncRunStatus::Cancelled,
+            Some("Content sync cancelled before preparation completed.".to_string()),
+        );
+        return;
+    }
+
+    let Some(state) = app.try_state::<AppState>() else {
+        finish_run_without_plan(
+            &app,
+            &run_id,
+            ContentSyncRunStatus::Failed,
+            Some("App state is unavailable for content sync.".to_string()),
+        );
+        return;
+    };
+
+    let (conn, err) = catcher(state.db.get());
+    if let Some(error) = err {
+        finish_run_without_plan(
+            &app,
+            &run_id,
+            ContentSyncRunStatus::Failed,
+            Some(format!("Failed to access local database: {}", error)),
+        );
+        return;
+    }
+    let conn = conn.unwrap();
+
+    let (plan, snapshot_manifest) = match finalize_content_sync_plan(&app, &conn, remote_metadata) {
+        Ok(result) => result,
+        Err(error) => {
+            finish_run_without_plan(
+                &app,
+                &run_id,
+                ContentSyncRunStatus::Failed,
+                Some(format!("Failed to build content sync plan: {}", error)),
+            );
+            return;
+        }
+    };
+
+    if let Err(error) = content_sync::prepare_runtime_run(&conn, &run_id, &plan) {
+        finish_run_without_plan(
+            &app,
+            &run_id,
+            ContentSyncRunStatus::Failed,
+            Some(format!("Failed to persist content sync plan: {}", error)),
+        );
+        return;
+    }
+    drop(conn);
+
+    let prepared_progress = content_sync::initial_progress(&run_id, &plan);
+    replace_progress(&app, prepared_progress);
+
+    if content_sync::is_run_cancelled(&cancel_flag) {
+        finish_run(
+            &app,
+            &run_id,
+            &plan,
+            ContentSyncRunStatus::Cancelled,
+            0,
+            0,
+            0,
+            Some("Content sync cancelled before execution started.".to_string()),
+        );
+        return;
+    }
+
+    run_content_sync_background(app, run_id, plan, cancel_flag, snapshot_manifest);
+}
+
+enum ItemExecutionResult {
+    Applied,
+    Skipped,
+    Failed,
+    Cancelled,
+}
+
+fn sync_hymn_item(
+    app: &AppHandle,
+    item: &crate::db::models::ContentSyncPlanItem,
+    action: &ContentSyncPlanItemAction,
+    api_lang: crate::legacy_fetch::ApiLanguage,
+    ftp_settings: &mut Option<ftp_sync::credentials::FtpSettings>,
+    ftp_stream: &mut Option<FtpStream>,
+    snapshot_manifest: Option<&SnapshotManifest>,
+) -> ItemExecutionResult {
+    let Some(api_id) = item.remote_id else {
+        eprintln!("[sync] {:?}: skipping hymn — no remote_id", action);
+        return ItemExecutionResult::Skipped;
+    };
+
+    if !ensure_ftp_ready(app, ftp_settings, ftp_stream) {
+        eprintln!("[sync] {:?}: FTP unavailable — skipping api_id={}", action, api_id);
+        return ItemExecutionResult::Skipped;
+    }
+
+    let conn_res = app
+        .try_state::<AppState>()
+        .ok_or(())
+        .and_then(|state| state.db.get().map_err(|_| ()));
+    let Ok(conn) = conn_res else {
+        eprintln!("[sync] {:?}: DB connection unavailable", action);
+        return ItemExecutionResult::Failed;
+    };
+
+    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+    let replace_existing = item.local_id.is_some()
+        || matches!(
+            action,
+            ContentSyncPlanItemAction::UpdateHymn | ContentSyncPlanItemAction::RepairMedia
+        );
+
+    if let Some(record) = snapshot_manifest.and_then(|manifest| manifest.hymn_by_id(api_id)) {
+        let audio_path = download_remote_asset_via_ftp(
+            ftp_stream,
+            record.audio_remote_path.as_deref(),
+            "audio",
+            api_id,
+            &app_data_dir,
+        );
+        let playback_path = download_remote_asset_via_ftp(
+            ftp_stream,
+            record.playback_remote_path.as_deref(),
+            "playback",
+            api_id,
+            &app_data_dir,
+        );
+        let cover_path = download_remote_asset_via_ftp(
+            ftp_stream,
+            record.cover_remote_path.as_deref(),
+            "images",
+            api_id,
+            &app_data_dir,
+        );
+
+        match crate::content_sync::importer::import_music_to_db(
+            &conn,
+            &record.music,
+            audio_path.as_deref(),
+            playback_path.as_deref(),
+            cover_path.as_deref(),
+            replace_existing,
+            record.album_name.as_deref(),
+            Some(api_id),
+            record.category.as_deref().or(Some("hymnal")),
+        ) {
+            Ok((_, Some(local_id))) => {
+                persist_missing_hymn_asset_sentinels(
+                    &conn,
+                    local_id,
+                    record.audio_remote_path.is_none(),
+                    record.playback_remote_path.is_none(),
+                    record.cover_remote_path.is_none(),
+                );
+                let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
+                    &conn, "hymn", api_id, local_id,
+                );
+                ItemExecutionResult::Applied
+            }
+            Ok((_, None)) => {
+                eprintln!(
+                    "[sync] {:?}: snapshot hymn import returned no local id for api_id={}",
+                    action, api_id
+                );
+                ItemExecutionResult::Failed
+            }
+            Err(error) => {
+                eprintln!(
+                    "[sync] {:?}: snapshot hymn import failed for api_id={}: {}",
+                    action, api_id, error
+                );
+                ItemExecutionResult::Failed
+            }
+        }
+    } else {
+        let fallback_track = conn
+            .query_row(
+                "SELECT remote_version
+                 FROM content_sync_entities
+                 WHERE entity_type = 'hymn' AND remote_id = ?1",
+                rusqlite::params![api_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .ok()
+            .flatten();
+        let detail_res =
+            tauri::async_runtime::block_on(crate::legacy_fetch::fetcher::fetch_music_detail(
+                api_lang, api_id,
+            ));
+        let music = match detail_res {
+            Ok(music) => merge_music_track_fallback(music, fallback_track),
+            Err(error) => {
+                eprintln!(
+                    "[sync] {:?}: fetch_music_detail failed for api_id={}: {}",
+                    action, api_id, error
+                );
+                return ItemExecutionResult::Failed;
+            }
+        };
+
+        let audio_path =
+            download_asset_via_ftp(ftp_stream, &music.url_music, "audio", api_id, &app_data_dir);
+        let playback_path = download_asset_via_ftp(
+            ftp_stream,
+            &music.url_instrumental_music,
+            "playback",
+            api_id,
+            &app_data_dir,
+        );
+        let cover_path =
+            download_asset_via_ftp(ftp_stream, &music.url_image, "images", api_id, &app_data_dir);
+
+        match crate::content_sync::importer::import_music_to_db(
+            &conn,
+            &music,
+            audio_path.as_deref(),
+            playback_path.as_deref(),
+            cover_path.as_deref(),
+            replace_existing,
+            None,
+            Some(api_id),
+            Some("hymnal"),
+        ) {
+            Ok((_, Some(local_id))) => {
+                let audio_missing_remote = music
+                    .url_music
+                    .as_deref()
+                    .map(|value| value.is_empty())
+                    .unwrap_or(true);
+                let playback_missing_remote = music
+                    .url_instrumental_music
+                    .as_deref()
+                    .map(|value| value.is_empty())
+                    .unwrap_or(true);
+                let cover_missing_remote = music
+                    .url_image
+                    .as_deref()
+                    .map(|value| value.is_empty())
+                    .unwrap_or(true);
+                persist_missing_hymn_asset_sentinels(
+                    &conn,
+                    local_id,
+                    audio_missing_remote,
+                    playback_missing_remote,
+                    cover_missing_remote,
+                );
+                let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
+                    &conn, "hymn", api_id, local_id,
+                );
+                ItemExecutionResult::Applied
+            }
+            Ok((_, None)) => {
+                eprintln!(
+                    "[sync] {:?}: import returned no local id for api_id={}",
+                    action, api_id
+                );
+                ItemExecutionResult::Failed
+            }
+            Err(error) => {
+                eprintln!(
+                    "[sync] {:?}: import_music_to_db failed for api_id={}: {}",
+                    action, api_id, error
+                );
+                ItemExecutionResult::Failed
+            }
+        }
+    }
+}
+
+fn merge_music_track_fallback(
+    mut music: crate::legacy_fetch::ApiMusic,
+    fallback_track: Option<i64>,
+) -> crate::legacy_fetch::ApiMusic {
+    if music.track.is_none() {
+        music.track = fallback_track;
+    }
+    music
+}
+
+fn sync_album_item(
+    app: &AppHandle,
+    run_id: &str,
+    item: &crate::db::models::ContentSyncPlanItem,
+    action: &ContentSyncPlanItemAction,
+    api_lang: crate::legacy_fetch::ApiLanguage,
+    cancel_flag: &Arc<AtomicBool>,
+    ftp_settings: &mut Option<ftp_sync::credentials::FtpSettings>,
+    ftp_stream: &mut Option<FtpStream>,
+    snapshot_manifest: Option<&SnapshotManifest>,
+    percent: f64,
+    processed: u64,
+) -> ItemExecutionResult {
+    let Some(api_id) = item.remote_id else {
+        eprintln!("[sync] {:?}: skipping album — no remote_id", action);
+        return ItemExecutionResult::Skipped;
+    };
+
+    if !ensure_ftp_ready(app, ftp_settings, ftp_stream) {
+        eprintln!("[sync] {:?}: FTP unavailable — skipping api_id={}", action, api_id);
+        return ItemExecutionResult::Skipped;
+    }
+
+    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+    let conn_res = app
+        .try_state::<AppState>()
+        .ok_or(())
+        .and_then(|state| state.db.get().map_err(|_| ()));
+    let Ok(conn) = conn_res else {
+        eprintln!("[sync] {:?}: DB connection unavailable", action);
+        return ItemExecutionResult::Failed;
+    };
+
+    let replace_existing = item.local_id.is_some()
+        || matches!(
+            action,
+            ContentSyncPlanItemAction::UpdateAlbum | ContentSyncPlanItemAction::RepairMedia
+        );
+
+    if let Some(record) = snapshot_manifest.and_then(|manifest| manifest.album_by_id(api_id)) {
+        if record.musics.is_empty() {
+            eprintln!(
+                "[sync] {:?}: snapshot album {} has no songs; falling back to API",
+                action, api_id
+            );
+        } else {
+            let cover_path = download_remote_asset_via_ftp(
+                ftp_stream,
+                record.cover_remote_path.as_deref(),
+                "album_covers",
+                api_id,
+                &app_data_dir,
+            );
+
+            let release_year = record
+                .cover_remote_path
+                .as_deref()
+                .and_then(crate::content_sync::importer::extract_year_from_url);
+
+            let collection_id = match crate::content_sync::importer::upsert_api_album_collection(
+                &conn,
+                &record.album,
+                cover_path.as_deref(),
+                release_year,
+            ) {
+                Ok((collection_id, _)) => collection_id,
+                Err(error) => {
+                    eprintln!(
+                        "[sync] {:?}: snapshot album upsert failed for api_id={}: {}",
+                        action, api_id, error
+                    );
+                    return ItemExecutionResult::Failed;
+                }
+            };
+
+            let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
+                &conn,
+                "album",
+                api_id,
+                collection_id,
+            );
+
+            let mut success_count = 0usize;
+            for (index, music_record) in record.musics.iter().enumerate() {
+                if content_sync::is_run_cancelled(cancel_flag) {
+                    emit_progress(
+                        app,
+                        run_id,
+                        "cancelled",
+                        ContentSyncRunStatus::Cancelled,
+                        percent,
+                        Some("Content sync cancelled.".to_string()),
+                        processed,
+                    );
+                    return ItemExecutionResult::Cancelled;
+                }
+
+                emit_progress(
+                    app,
+                    run_id,
+                    "downloading",
+                    ContentSyncRunStatus::Running,
+                    percent,
+                    Some(format!(
+                        "Syncing album song {} ({}/{})",
+                        music_record.music.name,
+                        index + 1,
+                        record.musics.len()
+                    )),
+                    processed,
+                );
+
+                let media = crate::content_sync::importer::DownloadedMusicMedia {
+                    audio_path: download_remote_asset_via_ftp(
+                        ftp_stream,
+                        music_record.audio_remote_path.as_deref(),
+                        "audio",
+                        music_record.music.id_music,
+                        &app_data_dir,
+                    ),
+                    playback_path: download_remote_asset_via_ftp(
+                        ftp_stream,
+                        music_record.playback_remote_path.as_deref(),
+                        "playback",
+                        music_record.music.id_music,
+                        &app_data_dir,
+                    ),
+                    cover_path: download_remote_asset_via_ftp(
+                        ftp_stream,
+                        music_record.cover_remote_path.as_deref(),
+                        "images",
+                        music_record.music.id_music,
+                        &app_data_dir,
+                    ),
+                };
+
+                if crate::content_sync::importer::import_music_and_link_to_collection(
+                    &conn,
+                    collection_id,
+                    &music_record.music,
+                    &media,
+                    replace_existing,
+                    Some(&record.album.name),
+                    Some("album"),
+                    (index as i64) + 1,
+                )
+                .is_ok()
+                {
+                    success_count += 1;
+                }
+            }
+
+            return if success_count > 0 || record.musics.is_empty() {
+                ItemExecutionResult::Applied
+            } else {
+                ItemExecutionResult::Failed
+            };
+        }
+    }
+
+    let mut all_musics: Vec<crate::legacy_fetch::ApiMusic> = Vec::new();
+    let mut page = 1i64;
+    loop {
+        let page_res = tauri::async_runtime::block_on(
+            crate::legacy_fetch::fetcher::fetch_album_musics_page(api_lang, api_id, page),
+        );
+        match page_res {
+            Ok(resp) => {
+                let is_last = resp.data.is_empty() || resp.last_page.map_or(true, |last| page >= last);
+                all_musics.extend(resp.data);
+                if is_last {
+                    break;
+                }
+                page += 1;
+            }
+            Err(error) => {
+                eprintln!(
+                    "[sync] {:?}: fetch_album_musics_page failed for api_id={} page={}: {}",
+                    action, api_id, page, error
+                );
+                return ItemExecutionResult::Failed;
+            }
+        }
+    }
+
+    let album_cover_url = tauri::async_runtime::block_on(fetch_all_album_pages(api_lang))
+        .ok()
+        .and_then(|albums| {
+            albums
+                .into_iter()
+                .find(|album| album.id_album == api_id)
+                .and_then(|album| album.url_image)
+        });
+
+    let album_name = item
+        .label
+        .clone()
+        .unwrap_or_else(|| format!("Album {}", api_id));
+    let api_album = crate::legacy_fetch::ApiAlbum {
+        id_album: api_id,
+        name: album_name.clone(),
+        url_image: album_cover_url.clone(),
+        subtitle: None,
+        color: None,
+        id_file_image: None,
+        order: Some(i64::try_from(all_musics.len()).unwrap_or_default()),
+        image_version: album_cover_url.clone(),
+        musics: Vec::new(),
+    };
+
+    let release_year = album_cover_url
+        .as_deref()
+        .and_then(crate::content_sync::importer::extract_year_from_url);
+    let cover_path = download_asset_via_ftp(
+        ftp_stream,
+        &album_cover_url,
+        "album_covers",
+        api_id,
+        &app_data_dir,
+    );
+
+    let collection_id = match crate::content_sync::importer::upsert_api_album_collection(
+        &conn,
+        &api_album,
+        cover_path.as_deref(),
+        release_year,
+    ) {
+        Ok((collection_id, _)) => collection_id,
+        Err(error) => {
+            eprintln!(
+                "[sync] {:?}: upsert_api_album_collection failed for api_id={}: {}",
+                action, api_id, error
+            );
+            return ItemExecutionResult::Failed;
+        }
+    };
+
+    let _ = crate::db::queries::content_sync::set_content_sync_entity_local_id(
+        &conn,
+        "album",
+        api_id,
+        collection_id,
+    );
+
+    let mut success_count = 0usize;
+    for (index, music_stub) in all_musics.iter().enumerate() {
+        if content_sync::is_run_cancelled(cancel_flag) {
+            emit_progress(
+                app,
+                run_id,
+                "cancelled",
+                ContentSyncRunStatus::Cancelled,
+                percent,
+                Some("Content sync cancelled.".to_string()),
+                processed,
+            );
+            return ItemExecutionResult::Cancelled;
+        }
+
+        let full_music_res = tauri::async_runtime::block_on(
+            crate::legacy_fetch::fetcher::fetch_music_detail(api_lang, music_stub.id_music),
+        );
+        let music = merge_music_track_fallback(full_music_res.unwrap_or_else(|error| {
+            eprintln!(
+                "[sync] Album {}: fetch_music_detail failed for song id={}: {} — using stub",
+                api_id, music_stub.id_music, error
+            );
+            music_stub.clone()
+        }), music_stub.track);
+
+        emit_progress(
+            app,
+            run_id,
+            "downloading",
+            ContentSyncRunStatus::Running,
+            percent,
+            Some(format!(
+                "Syncing album song {} ({}/{})",
+                music.name,
+                index + 1,
+                all_musics.len()
+            )),
+            processed,
+        );
+
+        let media = crate::content_sync::importer::DownloadedMusicMedia {
+            audio_path: download_asset_via_ftp(
+                ftp_stream,
+                &music.url_music,
+                "audio",
+                music.id_music,
+                &app_data_dir,
+            ),
+            playback_path: download_asset_via_ftp(
+                ftp_stream,
+                &music.url_instrumental_music,
+                "playback",
+                music.id_music,
+                &app_data_dir,
+            ),
+            cover_path: download_asset_via_ftp(
+                ftp_stream,
+                &music.url_image,
+                "images",
+                music.id_music,
+                &app_data_dir,
+            ),
+        };
+
+        if crate::content_sync::importer::import_music_and_link_to_collection(
+            &conn,
+            collection_id,
+            &music,
+            &media,
+            replace_existing,
+            Some(&album_name),
+            Some("album"),
+            (index as i64) + 1,
+        )
+        .is_ok()
+        {
+            success_count += 1;
+        }
+    }
+
+    if success_count > 0 || all_musics.is_empty() {
+        ItemExecutionResult::Applied
+    } else {
+        ItemExecutionResult::Failed
+    }
+}
+
 fn finish_run(
     app: &AppHandle,
     run_id: &str,
@@ -1043,6 +1395,66 @@ fn finish_run(
     }
 }
 
+fn finish_run_without_plan(
+    app: &AppHandle,
+    run_id: &str,
+    status: ContentSyncRunStatus,
+    message: Option<String>,
+) {
+    if let Some(state) = app.try_state::<AppState>() {
+        let (conn, err) = catcher(state.db.get());
+        if err.is_some() {
+            return;
+        }
+        let conn = conn.unwrap();
+
+        let report_result = content_sync::finalize_runtime_run_without_plan(
+            &conn,
+            run_id,
+            status.clone(),
+            message.clone(),
+        );
+
+        if let Ok(report) = report_result {
+            let (runtime_state, err) = catcher(state.content_sync.lock());
+            if err.is_some() {
+                return;
+            }
+            let mut runtime_state = runtime_state.unwrap();
+
+            if let Some(run) = runtime_state.runs.get_mut(run_id) {
+                run.report = Some(report.clone());
+                run.progress.status = status.clone();
+                run.progress.percent = 100.0;
+                run.progress.message = message.clone();
+            }
+            if runtime_state.active_run_id.as_deref() == Some(run_id) {
+                runtime_state.active_run_id = None;
+            }
+            if let Some(run) = runtime_state.runs.get(run_id) {
+                let _ = app.emit("content-sync-progress", &run.progress);
+            }
+
+            let _ = app.emit("content-sync-report", &report);
+        }
+    }
+}
+
+fn replace_progress(app: &AppHandle, progress: ContentSyncProgress) {
+    if let Some(state) = app.try_state::<AppState>() {
+        let (runtime_state, err) = catcher(state.content_sync.lock());
+        if err.is_some() {
+            return;
+        }
+        let mut runtime_state = runtime_state.unwrap();
+
+        if let Some(updated) = content_sync::replace_runtime_progress(&mut runtime_state, progress)
+        {
+            let _ = app.emit("content-sync-progress", &updated);
+        }
+    }
+}
+
 /// Persist a downloaded media path into the hymn row for future file-existence checks.
 /// Called only when the DB path was previously NULL (managed hymn, never downloaded before).
 fn save_hymn_path(conn: &rusqlite::Connection, hymn_id: i64, col: &str, path: &str) {
@@ -1054,6 +1466,24 @@ fn save_hymn_path(conn: &rusqlite::Connection, hymn_id: i64, col: &str, path: &s
     };
     if let Err(e) = result {
         eprintln!("[sync] Failed to persist hymn path '{}' for col '{}': {}", path, col, e);
+    }
+}
+
+fn persist_missing_hymn_asset_sentinels(
+    conn: &rusqlite::Connection,
+    hymn_id: i64,
+    missing_audio: bool,
+    missing_playback: bool,
+    missing_cover: bool,
+) {
+    if missing_audio {
+        save_hymn_path(conn, hymn_id, "audio", "_na_");
+    }
+    if missing_playback {
+        save_hymn_path(conn, hymn_id, "playback", "_na_");
+    }
+    if missing_cover {
+        save_hymn_path(conn, hymn_id, "cover", "_na_");
     }
 }
 
@@ -1390,7 +1820,11 @@ fn resolve_local_path_for_remote(
 
     // Try to find a mapping to a structured path used by the HTTP fetcher
     if let Some(entry) = path_map.get(remote_path) {
-        return Some(format!("media/{}/{}/{}", entry.subfolder, entry.api_id, filename));
+        return Some(content_sync::derive_local_media_path(
+            remote_path,
+            &entry.subfolder,
+            entry.api_id,
+        ));
     }
 
     // Fallback: use the "browser" subfolder if mapping is unknown, 
@@ -1463,29 +1897,24 @@ fn lang_to_api_language(lang: &str) -> crate::legacy_fetch::ApiLanguage {
 }
 
 /// Download a single asset file via the already-open FTP stream.
-/// Derives the local relative path from the HTTP URL (same layout as the HTTP importer:
-/// `media/{subfolder}/{api_id}/{filename}`), skips if the file already exists locally,
-/// and returns the relative path on success.
-///
-/// Returns `None` if the URL is absent, the FTP stream is not available,
-/// or the download fails (errors are logged, not propagated).
-fn download_asset_via_ftp(
+/// Uses the HTTP-importer local layout: `media/{subfolder}/{api_id}/{filename}`.
+/// Returns `None` if the remote path is absent or the download fails.
+fn download_remote_asset_via_ftp(
     ftp_stream: &mut Option<FtpStream>,
-    url: &Option<String>,
+    remote_path: Option<&str>,
     subfolder: &str,
     api_id: i64,
     app_data_dir: &std::path::Path,
 ) -> Option<String> {
-    let url = url.as_ref()?;
-    if url.is_empty() {
+    let remote_path = remote_path?;
+    if remote_path.is_empty() {
         return None;
     }
-    let rel_path = content_sync::derive_local_media_path(url, subfolder, api_id);
+    let rel_path = content_sync::derive_local_media_path(remote_path, subfolder, api_id);
     let full_path = app_data_dir.join(&rel_path);
     if full_path.exists() {
         return Some(rel_path);
     }
-    let remote_path = content_sync::resolve_remote_path_from_url(url);
     let stream_result = ftp_stream
         .as_mut()
         .map(|stream| ftp_sync::client::sync_file_on_stream(stream, &remote_path, &full_path));
@@ -1503,6 +1932,30 @@ fn download_asset_via_ftp(
         None => {}
     }
     None
+}
+
+/// Download a single asset file via the already-open FTP stream.
+/// Derives the FTP remote path from the API URL and stores the file using the
+/// same local layout as the HTTP importer.
+fn download_asset_via_ftp(
+    ftp_stream: &mut Option<FtpStream>,
+    url: &Option<String>,
+    subfolder: &str,
+    api_id: i64,
+    app_data_dir: &std::path::Path,
+) -> Option<String> {
+    let url = url.as_ref()?;
+    if url.is_empty() {
+        return None;
+    }
+    let remote_path = content_sync::resolve_remote_path_from_url(url);
+    download_remote_asset_via_ftp(
+        ftp_stream,
+        Some(remote_path.as_str()),
+        subfolder,
+        api_id,
+        app_data_dir,
+    )
 }
 
 /// Ensure FTP credentials and stream are initialized.
@@ -1604,6 +2057,7 @@ fn api_music_to_entity_input(music: &crate::legacy_fetch::ApiMusic) -> ContentSy
         playback_version: music.url_instrumental_music.clone(),
         updated_at: None,
         deleted: false,
+        label: Some(music.name.clone()),
     }
 }
 
@@ -1621,12 +2075,31 @@ fn api_album_to_entity_input(album: &crate::legacy_fetch::ApiAlbum) -> ContentSy
         playback_version: None,
         updated_at: None,
         deleted: false,
+        label: Some(album.name.clone()),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::content_sync::resolve_remote_path_from_url;
+    use crate::legacy_fetch::ApiMusic;
+    use super::merge_music_track_fallback;
+
+    fn make_api_music(id: i64, name: &str, track: Option<i64>) -> ApiMusic {
+        ApiMusic {
+            id_music: id,
+            name: name.to_string(),
+            track,
+            id_file_image: None,
+            id_file_music: None,
+            id_file_instrumental_music: None,
+            url_image: None,
+            url_music: None,
+            url_instrumental_music: None,
+            id_language: None,
+            lyrics: vec![],
+        }
+    }
 
     #[test]
     fn resolve_remote_path_pt_music_url() {
@@ -1647,8 +2120,46 @@ mod tests {
     }
 
     #[test]
+    fn resolve_remote_path_decodes_encoded_image_url() {
+        let url =
+            "https://api.louvorja.com.br/file/images/covers/Hino%2067%20%C3%81rvore.jpg";
+        assert_eq!(
+            resolve_remote_path_from_url(url),
+            "config/imagens/covers/Hino 67 Árvore.jpg"
+        );
+    }
+
+    #[test]
+    fn resolve_remote_path_decodes_encoded_music_url() {
+        let url =
+            "https://api.louvorja.com.br/file/musics/pt/hinario/Hino%2067%20%C3%81rvore.mp3";
+        assert_eq!(
+            resolve_remote_path_from_url(url),
+            "config/musicas/hinario/Hino 67 Árvore.mp3"
+        );
+    }
+
+    #[test]
     fn resolve_remote_path_returns_input_unchanged_for_unknown_url() {
         let url = "https://example.com/unknown/path.mp3";
         assert_eq!(resolve_remote_path_from_url(url), url);
+    }
+
+    #[test]
+    fn merge_music_track_fallback_keeps_track_from_stub_when_detail_is_missing_it() {
+        let detail_music = make_api_music(42, "Test Hymn", None);
+
+        let merged = merge_music_track_fallback(detail_music, Some(18));
+
+        assert_eq!(merged.track, Some(18));
+    }
+
+    #[test]
+    fn merge_music_track_fallback_preserves_detail_track_when_present() {
+        let detail_music = make_api_music(42, "Test Hymn", Some(7));
+
+        let merged = merge_music_track_fallback(detail_music, Some(18));
+
+        assert_eq!(merged.track, Some(7));
     }
 }
