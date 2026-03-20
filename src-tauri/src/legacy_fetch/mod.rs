@@ -266,6 +266,8 @@ pub struct ApiParams {
     #[serde(default)]
     pub conn_ftp: Option<String>,
     #[serde(default)]
+    pub database_snapshot_path: Option<String>,
+    #[serde(default)]
     #[specta(type = f64)]
     pub db_version: Option<i64>,
     #[serde(default)]

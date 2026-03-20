@@ -111,6 +111,7 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
         DELETE FROM content_sync_runs;
         DELETE FROM content_sync_entities;
         DELETE FROM content_sync_state;
+        DELETE FROM content_sync_packs;
 
         -- Clear schedule tables (child to parent)
         DELETE FROM schedule_assignments;
@@ -129,15 +130,14 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
         -- Reset monitor configs but keep settings
         DELETE FROM monitor_configs;
 
+        -- Reset pack sync manifest version so the planner re-checks all packs
+        DELETE FROM settings WHERE key = 'pack_sync.manifest_version';
+
         -- Clear and fix FTS indexes
         -- hymns_fts is an external content table, so we use 'delete-all'.
         INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');
         -- collections_fts is a standard FTS5 table, so we use DELETE.
         DELETE FROM collections_fts;
-
-        -- REPAIR: Rebuild bible_fts to ensure preserved Bible data is healthy.
-        -- Bible FTS corruption is a common source of 'malformed' errors even when not deleting it.
-        INSERT INTO bible_fts(bible_fts) VALUES('rebuild');
 
         -- Re-create triggers (optimized with v29 logic)
         CREATE TRIGGER hymns_ai
@@ -174,4 +174,53 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
     tx.commit().map_err(AppError::Database)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clear_database;
+    use crate::db::migrations::run_migrations;
+    use rusqlite::Connection;
+
+    #[test]
+    fn clear_database_succeeds_when_main_db_has_no_bible_tables() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        run_migrations(&conn).expect("run migrations");
+
+        let bible_fts_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'bible_fts'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query bible_fts existence");
+        assert_eq!(bible_fts_exists, 0, "main db should not contain bible_fts after v32");
+
+        conn.execute(
+            "UPDATE settings SET value = 'pt' WHERE key = 'app.language'",
+            [],
+        )
+        .expect("update setting");
+        conn.execute(
+            "INSERT INTO hymns (title, category) VALUES ('Test Hymn', 'hymnal')",
+            [],
+        )
+        .expect("insert hymn");
+
+        clear_database(&conn).expect("clear database without bible tables");
+
+        let hymn_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM hymns", [], |row| row.get(0))
+            .expect("query hymns");
+        assert_eq!(hymn_count, 0, "user hymn data should be cleared");
+
+        let language: String = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'app.language'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read preserved setting");
+        assert_eq!(language, "pt", "settings should be preserved");
+    }
 }

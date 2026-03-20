@@ -234,6 +234,7 @@ pub fn run() {
             commands::utility::copy_image_to_media,
             commands::utility::get_video_metadata,
             commands::utility::resolve_media_path,
+            commands::utility::open_media_folder,
             // Spotlight
             commands::spotlight::spotlight_open,
             commands::spotlight::spotlight_select,
@@ -242,6 +243,7 @@ pub fn run() {
             commands::pack_sync::plan_pack_sync,
             commands::pack_sync::start_pack_sync,
             commands::pack_sync::cancel_pack_sync,
+            commands::pack_sync::clear_manifest_cache,
         ]);
 
     #[cfg(debug_assertions)]

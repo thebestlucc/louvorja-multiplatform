@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Check, Keyboard, Languages, Palette, Search } from "lucide-react";
+import { Bell, Check, Keyboard, Languages, Palette, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
@@ -10,16 +10,26 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useThemeStore } from "../../stores/theme-store";
+import { useContentSyncStore } from "../../stores/content-sync-store";
 import {
   type Language,
   LANGUAGES,
   type Theme,
   THEMES,
 } from "../../lib/constants";
-import { useSetSetting, useSetting } from "../../lib/queries";
+import { useSetSetting, useSetting, useStartPackSync, useClearManifestCache } from "../../lib/queries";
 import { comboToDisplayKeys, normalizeShortcutCombo } from "../../lib/shortcut-definitions";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
 import { spotlightOpen } from "../../lib/tauri";
+import { catcher } from "../../lib/catcher";
+import { toast } from "sonner";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1000 * 1000) return `${(bytes / 1000).toFixed(1)} KB`;
+  if (bytes < 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
+  return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
+}
 
 const LOCALE_BY_LANGUAGE: Record<Language, string> = {
   pt: "pt-BR",
@@ -30,6 +40,13 @@ const LOCALE_BY_LANGUAGE: Record<Language, string> = {
 export function Header() {
   const { t } = useTranslation();
   const { theme, language, setTheme, setLanguage } = useThemeStore();
+  const packSyncPendingCount = useContentSyncStore((s) => s.packSyncPendingCount);
+  const packSyncPlan = useContentSyncStore((s) => s.packSyncPlan);
+  const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
+  const setPackSyncPendingCount = useContentSyncStore((s) => s.setPackSyncPendingCount);
+  const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
+  const startPackSync = useStartPackSync();
+  const clearCacheMutation = useClearManifestCache();
   const setSettingMutation = useSetSetting();
   const { data: spotlightShortcutSetting } = useSetting("shortcut.app-command-palette.local");
   const { data: shortcutsHelpSetting } = useSetting("shortcut.app-shortcuts-help.local");
@@ -107,6 +124,66 @@ export function Header() {
         <span className="text-sm tabular-nums text-muted-foreground">
           {dateLabel} {timeLabel}
         </span>
+
+        {packSyncPendingCount > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-8 w-8"
+                aria-label={t("settings.packSync.newPacksAvailable")}
+              >
+                <Bell className="h-4 w-4" />
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 p-0" onCloseAutoFocus={(e) => e.preventDefault()}>
+              <div className="px-3 py-2.5 border-b border-border">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t("header.notifications")}
+                </p>
+              </div>
+              <div className="px-3 py-3 space-y-1">
+                <p className="text-sm font-medium">{t("settings.packSync.newPacksAvailable")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("header.packNotification", {
+                    count: packSyncPlan?.totalDownloadCount ?? packSyncPendingCount,
+                    size: packSyncPlan ? formatBytes(packSyncPlan.totalDownloadSize) : "",
+                  })}
+                </p>
+              </div>
+              <div className="flex gap-2 border-t border-border px-3 py-2.5">
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  disabled={startPackSync.isPending || clearCacheMutation.isPending}
+                  onClick={async () => {
+                    const [runId, err] = await catcher(startPackSync.mutateAsync());
+                    if (err) { toast.error(String(err)); return; }
+                    if (runId) useContentSyncStore.getState().setPackSyncRunId(runId);
+                    setPackSyncPendingCount(0);
+                    setPackSyncPlan(null);
+                  }}
+                >
+                  {startPackSync.isPending ? t("settings.packSync.starting") : t("settings.packSync.downloadNow")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={startPackSync.isPending || clearCacheMutation.isPending}
+                  onClick={async () => {
+                    await catcher(clearCacheMutation.mutateAsync());
+                    setPackSyncPendingCount(0);
+                    setPackSyncPlan(null);
+                  }}
+                >
+                  {t("settings.packSync.later")}
+                </Button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <Button
           variant="ghost"

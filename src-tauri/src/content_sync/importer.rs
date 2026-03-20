@@ -64,8 +64,9 @@ pub fn lyrics_to_sync_json(lyrics: &[ApiLyric]) -> Option<String> {
     serde_json::to_string(&sync_lyrics).ok()
 }
 
-fn filename_from_url(url: &str, default_ext: &str) -> String {
-    url.rsplit('/')
+pub(crate) fn filename_from_pathish(pathish: &str, default_ext: &str) -> String {
+    pathish
+        .rsplit('/')
         .next()
         .map(|segment| {
             let decoded = urlencoding::decode(segment).unwrap_or_else(|_| segment.into());
@@ -103,7 +104,7 @@ pub async fn download_media_file(
         return None;
     }
 
-    let filename = filename_from_url(url, default_ext);
+    let filename = filename_from_pathish(url, default_ext);
     let relative_path = format!("media/{}/{}/{}", subfolder, remote_id, filename);
     let full_path = media_dir
         .join(subfolder)

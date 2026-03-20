@@ -3,7 +3,7 @@ use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::utils::catcher::catcher;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use specta::Type;
 
@@ -175,12 +175,35 @@ pub fn update_global_shortcut(
 
 #[tauri::command]
 #[specta::specta]
-pub fn clear_database(state: tauri::State<'_, AppState>) -> Result<ClearDatabaseResult, AppError> {
+pub fn clear_database(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<ClearDatabaseResult, AppError> {
     let (conn, err) = catcher(state.db.get());
     if let Some(e) = err {
         return Err(e);
     }
     let conn = conn.unwrap();
     crate::db::queries::settings::clear_database(&conn)?;
+
+    // Remove the cached manifest so the next check fetches fresh from CDN
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
+    let _ = std::fs::remove_file(data_dir.join("manifest_cache.json"));
+
+    // Delete all files inside the media folder
+    let media_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?
+        .join("media");
+
+    if media_dir.exists() {
+        std::fs::remove_dir_all(&media_dir)
+            .map_err(|e| AppError::Io(e))?;
+    }
+
     Ok(ClearDatabaseResult { success: true })
 }

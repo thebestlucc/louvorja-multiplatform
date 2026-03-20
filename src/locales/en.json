@@ -1,4 +1,8 @@
 {
+  "header": {
+    "notifications": "Notifications",
+    "packNotification": "{{count}} pack(s) · {{size}}"
+  },
   "actions": {
     "add": "Add",
     "cancel": "Cancel",
@@ -580,6 +584,12 @@
       "unknown": "Unknown",
       "yes": "Yes"
     },
+    "storage": {
+      "title": "Storage",
+      "mediaFolder": "Media Folder",
+      "mediaFolderDesc": "Open the folder where LouvorJA stores audio, covers, and other media files.",
+      "openFolder": "Open Folder"
+    },
     "dangerZone": {
       "clearDatabase": "Reset App Data",
       "clearDatabaseButton": "Reset App",
@@ -631,6 +641,7 @@
       "packsAvailable": "{{count}} pack(s) available",
       "later": "Later",
       "downloadAndApply": "Download & Apply",
+      "downloadNow": "Download Now",
       "starting": "Starting…",
       "checkNow": "Check Now",
       "checking": "Checking…",
@@ -638,7 +649,14 @@
       "fetchFailedFirstInstall": "Could not fetch content packs from the server. Go to Settings → Synchronization to retry.",
       "manifestVersion": "Manifest version",
       "lastSynced": "Last synced",
-      "checkError": "Could not check for updates: {{error}}"
+      "checkError": "Could not check for updates: {{error}}",
+      "newPacksAvailable": "New content packs available",
+      "fileType": {
+        "audio": "Audio",
+        "playback": "Playback",
+        "cover": "Cover",
+        "album_cover": "Album Cover"
+      }
     },
     "language": "Language",
     "languageDesc": "Choose the app language.",

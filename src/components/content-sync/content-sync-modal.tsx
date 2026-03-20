@@ -14,18 +14,14 @@ interface ContentSyncModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   summary: ContentSyncSummary | null;
-  onStartSync: () => void;
   onOpenSettings: () => void;
-  isStarting?: boolean;
 }
 
 export function ContentSyncModal({
   open,
   onOpenChange,
   summary,
-  onStartSync,
   onOpenSettings,
-  isStarting = false,
 }: ContentSyncModalProps) {
   const { t } = useTranslation();
   if (!summary) {
@@ -33,6 +29,11 @@ export function ContentSyncModal({
   }
 
   const isDegraded = summary.mode === "degraded";
+  const metadataSourceLabel = summary.metadataSource === "db_snapshot"
+    ? t("settings.contentSync.metadataSourceSnapshot")
+    : summary.metadataSource === "api_fallback"
+    ? t("settings.contentSync.metadataSourceApiFallback")
+    : t("settings.contentSync.unknown");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,6 +53,7 @@ export function ContentSyncModal({
           <Metric label={t("settings.contentSync.changedHymns")} value={summary.changedHymnCount} />
           <Metric label={t("settings.contentSync.changedAlbums")} value={summary.changedAlbumCount} />
           <Metric label={t("settings.contentSync.missingAssets")} value={summary.missingAssetCount} />
+          <Metric label={t("settings.contentSync.metadataSource")} value={metadataSourceLabel} />
           <Metric label={t("settings.contentSync.lastStatus")} value={summary.lastSyncStatus ?? t("settings.contentSync.unknown")} />
         </div>
 
@@ -62,19 +64,14 @@ export function ContentSyncModal({
         ) : null}
 
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="outline" onClick={onOpenSettings}>
-            {t("settings.contentSync.openSettings")}
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t("settings.contentSync.later")}
           </Button>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              {t("settings.contentSync.later")}
-            </Button>
-            <Button onClick={onStartSync} disabled={isStarting}>
-              {isDegraded
-                ? t("settings.contentSync.prepareFallback")
-                : t("settings.contentSync.startSync")}
-            </Button>
-          </div>
+          <Button onClick={onOpenSettings}>
+            {isDegraded
+              ? t("settings.contentSync.openSyncFallback")
+              : t("settings.contentSync.openSync")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

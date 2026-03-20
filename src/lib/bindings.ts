@@ -1387,6 +1387,14 @@ async resolveMediaPath(path: string) : Promise<Result<string, AppErrorResponse>>
     else return { status: "error", error: e  as any };
 }
 },
+async openMediaFolder() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_media_folder") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async spotlightOpen() : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("spotlight_open") };
@@ -1419,6 +1427,38 @@ async spotlightHide() : Promise<Result<null, AppErrorResponse>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async planPackSync(forceRefresh: boolean | null) : Promise<Result<PackSyncPlan, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plan_pack_sync", { forceRefresh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async startPackSync() : Promise<Result<string, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_pack_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelPackSync(runId: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_pack_sync", { runId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async clearManifestCache() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_manifest_cache") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1441,7 +1481,7 @@ export type ApiLanguage = "pt" | "en" | "es"
 /**
  * Params response from /params endpoint
  */
-export type ApiParams = { conn_ftp?: string | null; db_version?: number; download_win?: string | null; download_mac?: string | null; download_linux?: string | null; version_win?: string | null; version_mac?: string | null; version_linux?: string | null; help_pt?: string | null; help_en?: string | null; help_es?: string | null }
+export type ApiParams = { conn_ftp?: string | null; database_snapshot_path?: string | null; db_version?: number; download_win?: string | null; download_mac?: string | null; download_linux?: string | null; version_win?: string | null; version_mac?: string | null; version_linux?: string | null; help_pt?: string | null; help_en?: string | null; help_es?: string | null }
 export type AppErrorResponse = { code: string; message: string; details: string | null }
 export type AudioStatusPayload = { positionMs: number; durationMs: number; isPlaying: boolean; isPaused: boolean; volume: number; currentFile: string | null }
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string; versionAbbreviation: string }
@@ -1454,15 +1494,16 @@ export type CollectionSong = { id: number; collectionId: number; sourcePath: str
 export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "error"
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
 export type ContentSyncFallbackAction = "start_full_sync"
+export type ContentSyncMetadataSource = "db_snapshot" | "api_fallback"
 export type ContentSyncPlan = { mode: ContentSyncRunMode; summary: ContentSyncSummary; items: ContentSyncPlanItem[] }
 export type ContentSyncPlanItem = { id: string; entityType: string; remoteId: number; localId: number; action: ContentSyncPlanItemAction; status: ContentSyncPlanItemStatus; reason: string | null; remotePath: string | null; label: string | null }
 export type ContentSyncPlanItemAction = "create_hymn" | "update_hymn" | "create_album" | "update_album" | "relink_collection_hymn" | "repair_media" | "delete_remote_managed_hymn" | "delete_remote_managed_album" | "full_sync_fallback"
 export type ContentSyncPlanItemStatus = "pending" | "running" | "completed" | "skipped" | "failed"
 export type ContentSyncProgress = { runId: string; step: string; status: ContentSyncRunStatus; percent: number; message: string | null; itemsTotal: number; itemsProcessed: number }
-export type ContentSyncReport = { runId: string; mode: ContentSyncRunMode; status: ContentSyncRunStatus; requestedVersion: number | null; completedVersion: number | null; appliedCount: number; skippedCount: number; failedCount: number; fallbackUsed: boolean; resultJson: string | null; errorJson: string | null; createdAt: string; finishedAt: string | null; message: string | null }
+export type ContentSyncReport = { runId: string; mode: ContentSyncRunMode; status: ContentSyncRunStatus; requestedVersion: number | null; completedVersion: number | null; appliedCount: number; skippedCount: number; failedCount: number; fallbackUsed: boolean; metadataSource: ContentSyncMetadataSource | null; resultJson: string | null; errorJson: string | null; createdAt: string; finishedAt: string | null; message: string | null }
 export type ContentSyncRunMode = "check" | "selective" | "full" | "repair"
 export type ContentSyncRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled"
-export type ContentSyncSummary = { mode: ContentSyncSummaryMode; currentVersion: number | null; remoteVersion: number | null; hasUpdates: boolean; changedHymnCount: number; changedAlbumCount: number; missingAssetCount: number; fallbackAction: ContentSyncFallbackAction | null; lastCheckedAt: string | null; lastSyncedAt: string | null; lastSyncStatus: ContentSyncRunStatus | null; lastError: string | null }
+export type ContentSyncSummary = { mode: ContentSyncSummaryMode; currentVersion: number | null; remoteVersion: number | null; hasUpdates: boolean; changedHymnCount: number; changedAlbumCount: number; missingAssetCount: number; fallbackAction: ContentSyncFallbackAction | null; metadataSource: ContentSyncMetadataSource | null; lastCheckedAt: string | null; lastSyncedAt: string | null; lastSyncStatus: ContentSyncRunStatus | null; lastError: string | null }
 export type ContentSyncSummaryMode = "smart" | "degraded"
 /**
  * Check if the API has a newer db_version than what we have stored locally.
@@ -1527,6 +1568,9 @@ export type MissingFile = { path: string; sourceType: string; sourceId: number; 
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
+export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number }
+export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number }
+export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[] }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
 export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }

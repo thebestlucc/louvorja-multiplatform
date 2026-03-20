@@ -62,7 +62,7 @@ import {
   isProjectorScreenDefaultContentType,
 } from "../../lib/projector-screen-defaults";
 import { useMediaSource } from "../../hooks/use-media-source";
-import { closeProjectorWindow, closeReturnWindow, openProjectorWindow, openReturnWindow } from "../../lib/tauri";
+import { closeProjectorWindow, closeReturnWindow, openProjectorWindow, openReturnWindow, openMediaFolder } from "../../lib/tauri";
 import { resolveProjectionMonitorIndexes } from "../../lib/monitor-resolution";
 import { getPreferredMonitorName } from "../../lib/monitor-display-name";
 
@@ -1178,17 +1178,17 @@ function SyncSection() {
 
 function PackSyncSettingsInline() {
   const { t } = useTranslation();
-  const planQuery = usePlanPackSync({ enabled: false });
+  const planQuery = usePlanPackSync({ enabled: false, forceRefresh: true });
   const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
   const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
   const isRunning = packSyncProgress != null &&
     (packSyncProgress.status === "pending" || packSyncProgress.status === "running");
 
   const handleCheckNow = async () => {
-    const result = await planQuery.refetch();
+    const result = await planQuery.refetch({ cancelRefetch: true });
     if (result.error) {
-      const msg = result.error instanceof Error ? result.error.message : String(result.error);
-      // Show short, readable portion of the error
+      const err = result.error as { message?: string } | Error;
+      const msg = err instanceof Error ? err.message : (err.message ?? String(err));
       toast.error(t("settings.packSync.checkError", { error: msg.slice(0, 120) }));
       return;
     }
@@ -1357,8 +1357,29 @@ function DataSection() {
     }
   };
 
+  const handleOpenMediaFolder = async () => {
+    await catcher(openMediaFolder(), { notify: true });
+  };
+
   return (
-    <>
+    <div className="space-y-4">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-medium">{t("settings.storage.title")}</h2>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <label className="text-sm font-medium">{t("settings.storage.mediaFolder")}</label>
+            <p className="text-xs text-muted-foreground">{t("settings.storage.mediaFolderDesc")}</p>
+          </div>
+          <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void handleOpenMediaFolder()}>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            {t("settings.storage.openFolder")}
+          </Button>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-destructive/50 bg-card p-4">
         <div className="mb-4 flex items-center gap-2">
           <Trash2 className="h-5 w-5 text-destructive" />
@@ -1410,7 +1431,7 @@ function DataSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
 

@@ -32,7 +32,7 @@ import {
   getSetting, setSetting, getAllSettings, clearDatabase,
   startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
   getContentSyncSummary, planContentSync, startContentSync, getContentSyncProgress, cancelContentSync, getContentSyncReport,
-  planPackSync, startPackSync, cancelPackSync,
+  planPackSync, startPackSync, cancelPackSync, clearManifestCache,
   listFtpFiles, downloadFtpFiles,
   restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
@@ -52,8 +52,10 @@ import type {
   ScheduleGenerationRequest,
   MediaLibraryCategoryInput,
   MediaLibraryItemInput,
+  TimerStateData,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
+import { useEffect } from "react";
 
 export const queryKeys = {
   hymns: {
@@ -1179,10 +1181,11 @@ export function useCancelLegacyFetch() {
 }
 
 // Pack Sync
-export function usePlanPackSync(options?: { enabled?: boolean }) {
+export function usePlanPackSync(options?: { enabled?: boolean; forceRefresh?: boolean }) {
+  const forceRefresh = options?.forceRefresh ?? false;
   return useQuery({
-    queryKey: queryKeys.packSyncPlan,
-    queryFn: () => planPackSync(),
+    queryKey: [...queryKeys.packSyncPlan, forceRefresh],
+    queryFn: () => planPackSync(forceRefresh),
     enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });
@@ -1192,6 +1195,18 @@ export function useStartPackSync() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => startPackSync(),
+    onSuccess: () => {
+      // Clear the manifest cache so the bell disappears and the next check fetches fresh
+      void clearManifestCache();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+    },
+  });
+}
+
+export function useClearManifestCache() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => clearManifestCache(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
     },
@@ -1227,12 +1242,42 @@ export function useInstallUpdate() {
 
 // Utilities
 export function useTimerState(options?: { enabled?: boolean }) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (options?.enabled === false) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    const setup = async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const unsubscribe = await listen<TimerStateData>("timer-state-updated", (event) => {
+        if (cancelled) return;
+        queryClient.setQueryData(queryKeys.utilities.timerState, event.payload);
+      });
+
+      if (cancelled) {
+        unsubscribe();
+        return;
+      }
+      unlisten = unsubscribe;
+    };
+
+    void setup();
+
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [queryClient, options?.enabled]);
+
   return useQuery({
     queryKey: queryKeys.utilities.timerState,
     queryFn: () => getTimerState(),
-    refetchInterval: (query) => (query.state.data?.isRunning ? 250 : 2000),
-    refetchIntervalInBackground: true,
     enabled: options?.enabled,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 5,
   });
 }
 
