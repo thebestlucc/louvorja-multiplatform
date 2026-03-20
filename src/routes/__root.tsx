@@ -1,7 +1,6 @@
 import { createRootRoute, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
@@ -16,7 +15,8 @@ import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
-import { queryKeys, useContentSyncSummary, useMonitorConfigs, useMonitors, useStartContentSync } from "../lib/queries";
+import { PackSyncDialog } from "../components/content-sync/pack-sync-dialog";
+import { queryKeys, useMonitorConfigs, useMonitors, usePlanContentSync, usePlanPackSync } from "../lib/queries";
 import { setMonitorConfig } from "../lib/tauri";
 import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
@@ -26,7 +26,7 @@ import { catcher } from "../lib/catcher";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
 import type { LegacyFetchProgress, LegacyFetchReport } from "../lib/bindings";
-import type { ContentSyncProgress, ContentSyncReport } from "../types/content-sync";
+import type { ContentSyncProgress, ContentSyncReport, PackSyncProgress } from "../types/content-sync";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -121,11 +121,14 @@ function RootLayout() {
   const contentSyncPromptOpen = useContentSyncStore((s) => s.isPromptOpen);
   const openContentSyncPrompt = useContentSyncStore((s) => s.openPrompt);
   const closeContentSyncPrompt = useContentSyncStore((s) => s.closePrompt);
-  const setContentSyncRunId = useContentSyncStore((s) => s.setRunId);
   const setContentSyncProgress = useContentSyncStore((s) => s.setProgress);
   const setContentSyncReport = useContentSyncStore((s) => s.setReport);
-  const startContentSyncMutation = useStartContentSync();
-  const contentSyncSummaryQuery = useContentSyncSummary({ enabled: !isBareRoute });
+  const contentSyncPlanQuery = usePlanContentSync({ enabled: !isBareRoute });
+  const contentSyncPromptShownRef = useRef(false);
+  const packSyncPlanQuery = usePlanPackSync({ enabled: !isBareRoute });
+  const packSyncPlanShownRef = useRef(false);
+  const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
+  const setPackSyncProgress = useContentSyncStore((s) => s.setPackSyncProgress);
 
   useEffect(() => {
     const unlistenProgress = listen<LegacyFetchProgress>("legacy-fetch-progress", (event) => {
@@ -235,10 +238,35 @@ function RootLayout() {
     if (isBareRoute) {
       return;
     }
-    if (contentSyncSummaryQuery.data?.hasUpdates) {
-      openContentSyncPrompt(contentSyncSummaryQuery.data);
+    if (contentSyncPromptShownRef.current) {
+      return;
     }
-  }, [contentSyncSummaryQuery.data, isBareRoute, openContentSyncPrompt]);
+    const summary = contentSyncPlanQuery.data?.summary;
+    const hasActionableItems = (contentSyncPlanQuery.data?.items.length ?? 0) > 0;
+    if (summary && hasActionableItems) {
+      contentSyncPromptShownRef.current = true;
+      openContentSyncPrompt(summary);
+    }
+  }, [contentSyncPlanQuery.data, isBareRoute, openContentSyncPrompt]);
+
+  // Show pack sync dialog on startup if there are items
+  useEffect(() => {
+    if (isBareRoute || packSyncPlanShownRef.current) return;
+    const plan = packSyncPlanQuery.data;
+    if (plan && plan.items.length > 0) {
+      packSyncPlanShownRef.current = true;
+      openPackSyncPlan();
+    }
+  }, [packSyncPlanQuery.data, isBareRoute, openPackSyncPlan]);
+
+  // Listen for pack-sync-progress events
+  useEffect(() => {
+    if (isBareRoute) return;
+    const unlisten = listen<PackSyncProgress>("pack-sync-progress", (event) => {
+      setPackSyncProgress(event.payload);
+    });
+    return () => { void unlisten.then((fn) => fn()); };
+  }, [isBareRoute, setPackSyncProgress]);
 
   usePlaybackCoordinator();
   useKeyboard({ enabled: !isBareRoute });
@@ -306,18 +334,6 @@ function RootLayout() {
     return <Outlet />;
   }
 
-  const handleStartContentSync = async () => {
-    const [runId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
-    if (error) {
-      toast.error(error.details ?? error.message);
-      return;
-    }
-    if (runId) {
-      setContentSyncRunId(runId);
-      closeContentSyncPrompt();
-    }
-  };
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
@@ -337,13 +353,12 @@ function RootLayout() {
           }
         }}
         summary={contentSyncPromptSummary}
-        onStartSync={() => void handleStartContentSync()}
         onOpenSettings={() => {
           closeContentSyncPrompt();
           void router.navigate({ to: "/settings", search: { tab: "sync" } });
         }}
-        isStarting={startContentSyncMutation.isPending}
       />
+      <PackSyncDialog />
       <UpdateNotification />
       <AppToaster />
     </div>
