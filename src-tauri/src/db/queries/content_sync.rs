@@ -545,6 +545,85 @@ pub fn set_pack_local_version(conn: &Connection, pack_id: &str, version: u32) ->
     .map_err(AppError::Database)
 }
 
+pub fn get_pack_extracted_version(conn: &Connection, pack_id: &str) -> Result<u32, AppError> {
+    conn.query_row(
+        "SELECT extracted_version FROM content_sync_packs WHERE pack_id = ?1",
+        rusqlite::params![pack_id],
+        |row| row.get::<_, u32>(0),
+    )
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(0),
+        other => Err(AppError::Database(other)),
+    })
+}
+
+pub fn set_pack_extracted_version(conn: &Connection, pack_id: &str, version: u32) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO content_sync_packs (pack_id, extracted_version, extracted_at)
+         VALUES (?1, ?2, datetime('now'))
+         ON CONFLICT(pack_id) DO UPDATE SET extracted_version = ?2, extracted_at = datetime('now')",
+        rusqlite::params![pack_id, version],
+    )
+    .map(|_| ())
+    .map_err(AppError::Database)
+}
+
+pub fn get_pack_db_version(conn: &Connection, pack_id: &str) -> Result<u32, AppError> {
+    conn.query_row(
+        "SELECT db_version FROM content_sync_packs WHERE pack_id = ?1",
+        rusqlite::params![pack_id],
+        |row| row.get::<_, u32>(0),
+    )
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(0),
+        other => Err(AppError::Database(other)),
+    })
+}
+
+pub fn set_pack_db_version(conn: &Connection, pack_id: &str, version: u32) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO content_sync_packs (pack_id, db_version)
+         VALUES (?1, ?2)
+         ON CONFLICT(pack_id) DO UPDATE SET db_version = ?2",
+        rusqlite::params![pack_id, version],
+    )
+    .map(|_| ())
+    .map_err(AppError::Database)
+}
+
+/// Update a hymn's media path based on API ID and file type.
+pub fn update_hymn_path_by_api_id(
+    conn: &Connection,
+    api_music_id: i64,
+    file_type: &str,
+    path: &str,
+) -> Result<(), AppError> {
+    let col = match file_type {
+        "audio" => "audio_path",
+        "playback" => "playback_path",
+        "cover" => "cover_path",
+        _ => return Err(AppError::Internal(format!("Unknown hymn file type: {}", file_type))),
+    };
+    let sql = format!("UPDATE hymns SET {} = ?1 WHERE api_music_id = ?2", col);
+    conn.execute(&sql, rusqlite::params![path, api_music_id])
+        .map(|_| ())
+        .map_err(AppError::Database)
+}
+
+/// Update a collection's cover path based on API album ID.
+pub fn update_collection_cover_by_api_id(
+    conn: &Connection,
+    api_album_id: i64,
+    path: &str,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE collections SET cover_path = ?1 WHERE api_album_id = ?2",
+        rusqlite::params![path, api_album_id],
+    )
+    .map(|_| ())
+    .map_err(AppError::Database)
+}
+
 pub fn list_content_sync_runs(
     conn: &Connection,
     limit: usize,
@@ -624,5 +703,69 @@ mod tests {
         ).unwrap();
         assert!(extracted_at.is_some(), "extracted_at must be set after set_pack_local_version");
         assert!(!extracted_at.unwrap().is_empty(), "extracted_at must not be empty");
+    }
+
+    #[test]
+    fn get_pack_extracted_version_returns_zero_for_unknown() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        let v = get_pack_extracted_version(&conn, "unknown").unwrap();
+        assert_eq!(v, 0);
+    }
+
+    #[test]
+    fn set_and_get_pack_extracted_version_roundtrip() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_pack_extracted_version(&conn, "pack-a", 5).unwrap();
+        assert_eq!(get_pack_extracted_version(&conn, "pack-a").unwrap(), 5);
+    }
+
+    #[test]
+    fn get_pack_db_version_returns_zero_for_unknown() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        let v = get_pack_db_version(&conn, "unknown").unwrap();
+        assert_eq!(v, 0);
+    }
+
+    #[test]
+    fn set_and_get_pack_db_version_roundtrip() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_pack_db_version(&conn, "pack-a", 3).unwrap();
+        assert_eq!(get_pack_db_version(&conn, "pack-a").unwrap(), 3);
+    }
+
+    #[test]
+    fn update_hymn_path_by_api_id_sets_audio() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO hymns (title, api_music_id) VALUES ('Test', 123)",
+            [],
+        ).unwrap();
+        update_hymn_path_by_api_id(&conn, 123, "audio", "media/audio/123/song.mp3").unwrap();
+        let path: String = conn.query_row(
+            "SELECT audio_path FROM hymns WHERE api_music_id = 123", [],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(path, "media/audio/123/song.mp3");
+    }
+
+    #[test]
+    fn update_collection_cover_by_api_id_sets_path() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO collections (name, api_album_id) VALUES ('Album', 456)",
+            [],
+        ).unwrap();
+        update_collection_cover_by_api_id(&conn, 456, "media/images/456/cover.jpg").unwrap();
+        let path: String = conn.query_row(
+            "SELECT cover_path FROM collections WHERE api_album_id = 456", [],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(path, "media/images/456/cover.jpg");
     }
 }
