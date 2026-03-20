@@ -53,6 +53,7 @@ import type {
   ContentSyncProgress,
   ContentSyncReport,
   ContentSyncSummary,
+  PackSyncPlan,
 } from "../types/content-sync";
 import type { TextFormat } from "../types/utilities";
 
@@ -679,6 +680,19 @@ export async function cancelContentSync(runId: string): Promise<void> {
 
 export async function getContentSyncReport(runId: string): Promise<ContentSyncReport | null> {
   return tauriInvoke<ContentSyncReport | null>("get_content_sync_report", { runId });
+}
+
+// Pack Sync
+export async function planPackSync(): Promise<PackSyncPlan> {
+  return tauriInvoke<PackSyncPlan>("plan_pack_sync");
+}
+
+export async function startPackSync(): Promise<string> {
+  return tauriInvoke<string>("start_pack_sync");
+}
+
+export async function cancelPackSync(runId: string): Promise<void> {
+  return tauriInvoke<void>("cancel_pack_sync", { runId });
 }
 
 // FTP File Browser
