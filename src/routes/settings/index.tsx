@@ -7,8 +7,11 @@ import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
 import {
+  useCancelContentSync,
   useCancelLegacyFetch,
   useClearDatabase,
+  useContentSyncProgress,
+  useContentSyncReport,
   useCopyImageToMedia,
   useFetchLegacyParams,
   useLegacyFetchProgress,
@@ -16,13 +19,18 @@ import {
   useMonitorConfigs,
   useMonitors,
   useIdentifyMonitors,
+  usePlanContentSync,
+  usePlanPackSync,
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
+  useStartContentSync,
   useStartLegacyFetch,
 } from "../../lib/queries";
 import { FtpFileBrowser } from "../../components/content-sync/ftp-file-browser";
+import { ContentSyncReportCard } from "../../components/content-sync/content-sync-report";
 import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
+import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import type {
   LegacyFetchOptions,
@@ -1034,13 +1042,118 @@ function StreamingSection() {
 
 function SyncSection() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const runId = useContentSyncStore((s) => s.runId);
+  const setRunId = useContentSyncStore((s) => s.setRunId);
+  const storeProgress = useContentSyncStore((s) => s.progress);
+  const storeReport = useContentSyncStore((s) => s.report);
+  const planQuery = usePlanContentSync();
+  const startContentSyncMutation = useStartContentSync();
+  const cancelContentSyncMutation = useCancelContentSync();
+  const progressQuery = useContentSyncProgress(runId, { enabled: Boolean(runId) });
+  const progressStatus = storeProgress?.status ?? progressQuery.data?.status;
+  const reportQuery = useContentSyncReport(runId, {
+    enabled: Boolean(runId && progressStatus && !["pending", "running"].includes(progressStatus)),
+  });
+  const progress = storeProgress ?? progressQuery.data ?? null;
+  const report = storeReport ?? reportQuery.data ?? null;
+  const plan = planQuery.data ?? null;
+  const isRunning = progress != null && ["pending", "running"].includes(progress.status);
+  const metadataSource = plan?.summary.metadataSource ?? null;
+  const metadataSourceLabel = metadataSource === "db_snapshot"
+    ? t("settings.contentSync.metadataSourceSnapshot")
+    : metadataSource === "api_fallback"
+    ? t("settings.contentSync.metadataSourceApiFallback")
+    : t("settings.contentSync.unknown");
+
+  const handleStart = async () => {
+    const [nextRunId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
+    if (error) {
+      notify.error(error.details ?? error.message);
+      return;
+    }
+    if (nextRunId) {
+      setRunId(nextRunId);
+    }
+  };
+
+  const handleCancel = () => {
+    if (!runId) {
+      return;
+    }
+    cancelContentSyncMutation.mutate(runId, {
+      onError: (error) => notify.error(error.message),
+    });
+  };
 
   return (
     <div className="space-y-6">
-      {/* FTP File Browser */}
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="mb-4 flex items-center gap-2">
           <Cloud className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium">{t("settings.contentSync.title")}</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {t("settings.contentSync.description")}
+        </p>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <MetricCard label={t("settings.contentSync.currentVersion")} value={plan?.summary.currentVersion ?? t("settings.contentSync.unknown")} />
+          <MetricCard label={t("settings.contentSync.remoteVersion")} value={plan?.summary.remoteVersion ?? t("settings.contentSync.unknown")} />
+          <MetricCard label={t("settings.contentSync.metadataSource")} value={metadataSourceLabel} />
+          <MetricCard label={t("settings.contentSync.changedHymns")} value={plan?.summary.changedHymnCount ?? 0} />
+          <MetricCard label={t("settings.contentSync.changedAlbums")} value={plan?.summary.changedAlbumCount ?? 0} />
+          <MetricCard label={t("settings.contentSync.missingAssets")} value={plan?.summary.missingAssetCount ?? 0} />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void planQuery.refetch()}
+            disabled={planQuery.isFetching || isRunning}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {planQuery.isFetching
+              ? t("settings.contentSync.refreshing")
+              : t("settings.contentSync.refresh")}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void handleStart()}
+            disabled={isRunning || startContentSyncMutation.isPending || (plan?.items.length ?? 0) === 0}
+          >
+            {startContentSyncMutation.isPending
+              ? t("settings.contentSync.starting")
+              : t("settings.contentSync.startSync")}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleCancel}
+            disabled={!isRunning || cancelContentSyncMutation.isPending}
+          >
+            {cancelContentSyncMutation.isPending
+              ? t("settings.contentSync.cancelling")
+              : t("settings.contentSync.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void navigate({ to: "/settings", search: { tab: "migration" } })}
+          >
+            {t("settings.contentSync.openLegacyFallback")}
+          </Button>
+        </div>
+
+        <div className="mt-4">
+          <ContentSyncReportCard progress={progress} report={report} plan={plan} />
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-medium">{t("settings.ftpBrowser.title")}</h2>
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
@@ -1048,6 +1161,52 @@ function SyncSection() {
         </p>
         <FtpFileBrowser />
       </section>
+
+      <section className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-base font-medium">{t("settings.packSync.title")}</h2>
+        </div>
+        <p className="mb-3 text-sm text-muted-foreground">
+          {t("settings.packSync.description")}
+        </p>
+        <PackSyncSettingsInline />
+      </section>
+    </div>
+  );
+}
+
+function PackSyncSettingsInline() {
+  const { t } = useTranslation();
+  const planQuery = usePlanPackSync();
+  const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
+  const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
+  const isRunning = packSyncProgress != null &&
+    (packSyncProgress.status === "pending" || packSyncProgress.status === "running");
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="text-sm text-muted-foreground">
+        {planQuery.data && planQuery.data.items.length > 0
+          ? t("settings.packSync.packsAvailable", { count: planQuery.data.totalDownloadCount })
+          : t("settings.packSync.upToDate")}
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => { void planQuery.refetch(); openPackSyncPlan(); }}
+        disabled={planQuery.isFetching || isRunning}
+      >
+        {planQuery.isFetching ? t("settings.packSync.checking") : t("settings.packSync.checkNow")}
+      </Button>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-base font-medium text-foreground">{value}</div>
     </div>
   );
 }
