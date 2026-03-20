@@ -15,6 +15,7 @@
   },
   "include": [
     "tests/lib/audio-sync.test.ts",
+    "tests/lib/content-sync-presentation.test.ts",
     "tests/lib/hymn-slides.test.ts",
     "tests/media-path.test.ts",
     "tests/monitor-resolution.test.ts",
@@ -29,6 +30,7 @@
     "tests/stores/audio-store.test.ts",
     "tests/components/playing-queue.test.tsx",
     "src/lib/audio-sync.ts",
+    "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
     "src/lib/media-path.ts",
     "src/lib/monitor-resolution.ts",

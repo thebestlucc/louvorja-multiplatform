@@ -134,6 +134,7 @@ allow = [
     "copy_image_to_media",
     "get_video_metadata",
     "resolve_media_path",
+    "open_media_folder",
     "start_timer",
     "pause_timer",
     "resume_timer",
@@ -196,7 +197,8 @@ allow = [
     "download_ftp_files",
     "plan_pack_sync",
     "start_pack_sync",
-    "cancel_pack_sync"
+    "cancel_pack_sync",
+    "clear_manifest_cache"
 ]
 
 [[permission]]

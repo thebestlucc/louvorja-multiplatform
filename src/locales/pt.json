@@ -1,4 +1,8 @@
 {
+  "header": {
+    "notifications": "Notificações",
+    "packNotification": "{{count}} pacote(s) · {{size}}"
+  },
   "actions": {
     "add": "Adicionar",
     "cancel": "Cancelar",
@@ -580,6 +584,12 @@
       "unknown": "Desconhecida",
       "yes": "Sim"
     },
+    "storage": {
+      "title": "Armazenamento",
+      "mediaFolder": "Pasta de Mídia",
+      "mediaFolderDesc": "Abrir a pasta onde o LouvorJA armazena áudios, capas e outros arquivos de mídia.",
+      "openFolder": "Abrir Pasta"
+    },
     "dangerZone": {
       "clearDatabase": "Redefinir Dados do App",
       "clearDatabaseButton": "Redefinir App",
@@ -631,6 +641,7 @@
       "packsAvailable": "{{count}} pacote(s) disponível(is)",
       "later": "Depois",
       "downloadAndApply": "Baixar e Aplicar",
+      "downloadNow": "Baixar Agora",
       "starting": "Iniciando…",
       "checkNow": "Verificar Agora",
       "checking": "Verificando…",
@@ -638,7 +649,14 @@
       "fetchFailedFirstInstall": "Não foi possível buscar os pacotes de conteúdo. Vá em Configurações → Sincronização para tentar novamente.",
       "manifestVersion": "Versão do manifesto",
       "lastSynced": "Última sincronização",
-      "checkError": "Não foi possível verificar atualizações: {{error}}"
+      "checkError": "Não foi possível verificar atualizações: {{error}}",
+      "newPacksAvailable": "Novos pacotes de conteúdo disponíveis",
+      "fileType": {
+        "audio": "Áudio",
+        "playback": "Playback",
+        "cover": "Capa",
+        "album_cover": "Capa do Álbum"
+      }
     },
     "language": "Idioma",
     "languageDesc": "Escolha o idioma do aplicativo.",

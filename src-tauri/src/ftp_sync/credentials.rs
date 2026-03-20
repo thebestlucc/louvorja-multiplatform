@@ -4,7 +4,7 @@ use crate::legacy_fetch::API_TOKEN;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::Client;
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FtpSettings {
     pub host: String,
@@ -13,6 +13,7 @@ pub struct FtpSettings {
     pub port: u16,
     pub root: String,
     pub lang: String,
+    pub database_snapshot_path: Option<String>,
 }
 
 /// Fetch FTP credentials from the dynamic `conn_ftp` URL.
@@ -92,6 +93,9 @@ pub async fn fetch_ftp_credentials(url: &str, lang: &str) -> Result<FtpSettings,
                 "port" => settings.port = value.parse().unwrap_or(21),
                 "root" => settings.root = value.to_string(),
                 "lang" => settings.lang = value.to_string(),
+                "database_snapshot_path" | "database_db" | "database_path" => {
+                    settings.database_snapshot_path = Some(value.to_string())
+                }
                 _ => {}
             }
         }
@@ -127,6 +131,9 @@ mod tests {
                     "port" => settings.port = value.parse().unwrap_or(21),
                     "root" => settings.root = value.to_string(),
                     "lang" => settings.lang = value.to_string(),
+                    "database_snapshot_path" | "database_db" | "database_path" => {
+                        settings.database_snapshot_path = Some(value.to_string())
+                    }
                     _ => {}
                 }
             }
@@ -138,6 +145,7 @@ mod tests {
         assert_eq!(settings.port, 21);
         assert_eq!(settings.root, "/");
         assert_eq!(settings.lang, "pt");
+        assert_eq!(settings.database_snapshot_path, None);
     }
 
     #[test]

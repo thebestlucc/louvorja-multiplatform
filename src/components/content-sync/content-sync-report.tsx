@@ -3,6 +3,11 @@ import { useTranslation } from "react-i18next";
 import type { ContentSyncProgress, ContentSyncReport, ContentSyncPlan } from "../../types/content-sync";
 import { ScrollArea } from "../ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import {
+  formatContentSyncEntityType,
+  formatContentSyncPlanItemLabel,
+  formatContentSyncReason,
+} from "../../lib/content-sync-presentation";
 
 interface ContentSyncReportProps {
   progress?: ContentSyncProgress | null;
@@ -34,6 +39,12 @@ export function ContentSyncReportCard({
   };
 
   const translatedStep = stepLabelMap[step] ?? step;
+  const metadataSource = report?.metadataSource ?? plan?.summary.metadataSource ?? null;
+  const metadataSourceLabel = metadataSource === "db_snapshot"
+    ? t("settings.contentSync.metadataSourceSnapshot")
+    : metadataSource === "api_fallback"
+    ? t("settings.contentSync.metadataSourceApiFallback")
+    : t("settings.contentSync.unknown");
 
   return (
     <section className="rounded-lg border border-border bg-card p-4">
@@ -93,6 +104,7 @@ export function ContentSyncReportCard({
           <Metric label={t("settings.contentSync.skipped")} value={report.skippedCount} />
           <Metric label={t("settings.contentSync.failed")} value={report.failedCount} />
           <Metric label={t("settings.contentSync.fallback")} value={report.fallbackUsed ? t("settings.contentSync.yes") : t("settings.contentSync.no")} />
+          <Metric label={t("settings.contentSync.metadataSource")} value={metadataSourceLabel} />
           <Metric label={t("settings.contentSync.requestedVersion")} value={report.requestedVersion ?? t("settings.contentSync.unknown")} />
           <Metric label={t("settings.contentSync.completedVersion")} value={report.completedVersion ?? t("settings.contentSync.unknown")} />
           {report.message ? (
@@ -123,9 +135,15 @@ export function ContentSyncReportCard({
               <TableBody>
                 {plan.items.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="py-2 text-xs font-medium">{item.label ?? item.id}</TableCell>
-                    <TableCell className="py-2 text-xs text-muted-foreground capitalize">{item.entityType}</TableCell>
-                    <TableCell className="py-2 text-xs text-muted-foreground font-mono break-all">{item.reason}</TableCell>
+                    <TableCell className="py-2 text-xs font-medium">
+                      {formatContentSyncPlanItemLabel(item, t) || item.id}
+                    </TableCell>
+                    <TableCell className="py-2 text-xs text-muted-foreground">
+                      {formatContentSyncEntityType(item.entityType, t)}
+                    </TableCell>
+                    <TableCell className="py-2 text-xs text-muted-foreground break-all">
+                      {formatContentSyncReason(item.reason, t)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -1,4 +1,8 @@
 {
+  "header": {
+    "notifications": "Notificaciones",
+    "packNotification": "{{count}} paquete(s) · {{size}}"
+  },
   "actions": {
     "add": "Agregar",
     "cancel": "Cancelar",
@@ -580,6 +584,12 @@
       "unknown": "Desconocida",
       "yes": "Sí"
     },
+    "storage": {
+      "title": "Almacenamiento",
+      "mediaFolder": "Carpeta de Medios",
+      "mediaFolderDesc": "Abrir la carpeta donde LouvorJA almacena audios, portadas y otros archivos multimedia.",
+      "openFolder": "Abrir Carpeta"
+    },
     "dangerZone": {
       "clearDatabase": "Restablecer Datos de la App",
       "clearDatabaseButton": "Restablecer App",
@@ -631,6 +641,7 @@
       "packsAvailable": "{{count}} paquete(s) disponible(s)",
       "later": "Después",
       "downloadAndApply": "Descargar y Aplicar",
+      "downloadNow": "Descargar Ahora",
       "starting": "Iniciando…",
       "checkNow": "Verificar Ahora",
       "checking": "Verificando…",
@@ -638,7 +649,14 @@
       "fetchFailedFirstInstall": "No se pudieron obtener los paquetes de contenido. Ve a Configuración → Sincronización para volver a intentarlo.",
       "manifestVersion": "Versión del manifiesto",
       "lastSynced": "Última sincronización",
-      "checkError": "No se pudo verificar actualizaciones: {{error}}"
+      "checkError": "No se pudo verificar actualizaciones: {{error}}",
+      "newPacksAvailable": "Nuevos paquetes de contenido disponibles",
+      "fileType": {
+        "audio": "Audio",
+        "playback": "Playback",
+        "cover": "Portada",
+        "album_cover": "Portada del Álbum"
+      }
     },
     "language": "Idioma",
     "languageDesc": "Elija el idioma de la aplicación.",

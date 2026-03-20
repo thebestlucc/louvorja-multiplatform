@@ -4,6 +4,7 @@ import type {
   ContentSyncReport,
   ContentSyncSummary,
   PackSyncProgress,
+  PackSyncPlan,
 } from "../types/content-sync";
 
 interface ContentSyncState {
@@ -15,6 +16,8 @@ interface ContentSyncState {
   packSyncRunId: string | null;
   packSyncProgress: PackSyncProgress | null;
   packSyncPlanOpen: boolean;
+  packSyncPendingCount: number;
+  packSyncPlan: PackSyncPlan | null;
   setRunId: (runId: string | null) => void;
   setProgress: (progress: ContentSyncProgress | null) => void;
   setReport: (report: ContentSyncReport | null) => void;
@@ -25,6 +28,8 @@ interface ContentSyncState {
   setPackSyncProgress: (progress: PackSyncProgress | null) => void;
   openPackSyncPlan: () => void;
   closePackSyncPlan: () => void;
+  setPackSyncPendingCount: (count: number) => void;
+  setPackSyncPlan: (plan: PackSyncPlan | null) => void;
 }
 
 export const useContentSyncStore = create<ContentSyncState>((set) => ({
@@ -36,6 +41,8 @@ export const useContentSyncStore = create<ContentSyncState>((set) => ({
   packSyncRunId: null,
   packSyncProgress: null,
   packSyncPlanOpen: false,
+  packSyncPendingCount: 0,
+  packSyncPlan: null,
   setRunId: (runId) => set({ runId }),
   setProgress: (progress) => set({ progress }),
   setReport: (report) => set({ report }),
@@ -46,4 +53,6 @@ export const useContentSyncStore = create<ContentSyncState>((set) => ({
   setPackSyncProgress: (progress) => set({ packSyncProgress: progress }),
   openPackSyncPlan: () => set({ packSyncPlanOpen: true }),
   closePackSyncPlan: () => set({ packSyncPlanOpen: false }),
+  setPackSyncPendingCount: (count) => set({ packSyncPendingCount: count }),
+  setPackSyncPlan: (plan) => set({ packSyncPlan: plan }),
 }));

@@ -683,8 +683,12 @@ export async function getContentSyncReport(runId: string): Promise<ContentSyncRe
 }
 
 // Pack Sync
-export async function planPackSync(): Promise<PackSyncPlan> {
-  return tauriInvoke<PackSyncPlan>("plan_pack_sync");
+export async function planPackSync(forceRefresh?: boolean): Promise<PackSyncPlan> {
+  return tauriInvoke<PackSyncPlan>("plan_pack_sync", { forceRefresh: forceRefresh ?? false });
+}
+
+export async function clearManifestCache(): Promise<void> {
+  return tauriInvoke<void>("clear_manifest_cache");
 }
 
 export async function startPackSync(): Promise<string> {
@@ -895,6 +899,10 @@ export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
 
 export async function resolveMediaPath(path: string): Promise<string> {
   return tauriInvoke<string>("resolve_media_path", { path });
+}
+
+export async function openMediaFolder(): Promise<void> {
+  return tauriInvoke<void>("open_media_folder");
 }
 
 export async function updateGlobalShortcut(

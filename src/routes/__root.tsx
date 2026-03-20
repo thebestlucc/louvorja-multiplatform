@@ -129,6 +129,8 @@ function RootLayout() {
   const packSyncPlanShownRef = useRef(false);
   const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
   const setPackSyncProgress = useContentSyncStore((s) => s.setPackSyncProgress);
+  const setPackSyncPendingCount = useContentSyncStore((s) => s.setPackSyncPendingCount);
+  const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
 
   useEffect(() => {
     const unlistenProgress = listen<LegacyFetchProgress>("legacy-fetch-progress", (event) => {
@@ -248,6 +250,14 @@ function RootLayout() {
       openContentSyncPrompt(summary);
     }
   }, [contentSyncPlanQuery.data, isBareRoute, openContentSyncPrompt]);
+
+  // Track pending pack count + plan for bell notification
+  useEffect(() => {
+    const plan = packSyncPlanQuery.data ?? null;
+    const count = plan?.items.length ?? 0;
+    setPackSyncPendingCount(count);
+    setPackSyncPlan(count > 0 ? plan : null);
+  }, [packSyncPlanQuery.data, setPackSyncPendingCount, setPackSyncPlan]);
 
   // Show pack sync dialog on startup if there are items
   useEffect(() => {

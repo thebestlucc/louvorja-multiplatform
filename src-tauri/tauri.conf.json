@@ -41,9 +41,11 @@
   },
   "plugins": {
     "updater": {
-      "active": false,
+      "active": true,
       "pubkey": "",
-      "endpoints": []
+      "endpoints": [
+        "https://example.com/updater/{{target}}/{{current_version}}"
+      ]
     }
   }
 }

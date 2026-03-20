@@ -533,6 +533,25 @@ fn load_ffprobe_settings(
     Ok((enabled, path))
 }
 
+#[tauri::command]
+#[specta::specta]
+pub fn open_media_folder(app: AppHandle) -> Result<(), AppError> {
+    let media_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?
+        .join("media");
+
+    // Create the folder if it doesn't exist yet so opener doesn't fail
+    if !media_dir.exists() {
+        std::fs::create_dir_all(&media_dir)
+            .map_err(|e| AppError::Io(e))?;
+    }
+
+    tauri_plugin_opener::open_path(media_dir, None::<&str>)
+        .map_err(|e| AppError::Internal(format!("Could not open folder: {}", e)))
+}
+
 fn ensure_supported_cover_image(path: &Path) -> Result<&'static str, AppError> {
     let extension = path
         .extension()

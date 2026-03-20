@@ -515,6 +515,13 @@ pub enum ContentSyncFallbackAction {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum ContentSyncMetadataSource {
+    DbSnapshot,
+    ApiFallback,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum ContentSyncRunMode {
     Check,
     Selective,
@@ -655,6 +662,7 @@ pub struct ContentSyncRemoteEntityInput {
     pub playback_version: Option<String>,
     pub updated_at: Option<String>,
     pub deleted: bool,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -683,6 +691,7 @@ pub struct ContentSyncSummary {
     pub changed_album_count: i32,
     pub missing_asset_count: i32,
     pub fallback_action: Option<ContentSyncFallbackAction>,
+    pub metadata_source: Option<ContentSyncMetadataSource>,
     pub last_checked_at: Option<String>,
     pub last_synced_at: Option<String>,
     pub last_sync_status: Option<ContentSyncRunStatus>,
@@ -758,6 +767,7 @@ pub struct ContentSyncReport {
     pub skipped_count: i32,
     pub failed_count: i32,
     pub fallback_used: bool,
+    pub metadata_source: Option<ContentSyncMetadataSource>,
     pub result_json: Option<String>,
     pub error_json: Option<String>,
     pub created_at: String,
@@ -875,6 +885,7 @@ impl ContentSyncReport {
             skipped_count: i32,
             failed_count: i32,
             fallback_used: bool,
+            metadata_source: Option<ContentSyncMetadataSource>,
             message: Option<String>,
         }
 
@@ -903,6 +914,7 @@ impl ContentSyncReport {
             skipped_count: stored_result.skipped_count,
             failed_count,
             fallback_used: stored_result.fallback_used || fallback_from_plan,
+            metadata_source: stored_result.metadata_source,
             result_json: run.result_json,
             error_json: run.error_json.clone(),
             created_at: run.created_at,

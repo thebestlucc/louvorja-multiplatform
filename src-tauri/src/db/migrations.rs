@@ -183,20 +183,56 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (32)", [])?;
     }
 
-    if current_version < 33 {
+    let v33_missing = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='content_sync_packs'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0) == 0;
+
+    if current_version < 33 || v33_missing {
         migrate_v33(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (33)", [])?;
+        conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (33)", [])?;
     }
 
-    if current_version < 34 {
+    if current_version < 34 || v33_missing {
         migrate_v34(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (34)", [])?;
+        conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (34)", [])?;
+    }
+
+    if current_version < 35 {
+        migrate_v35(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (35)", [])?;
     }
 
     Ok(())
-}
+    }
 
-fn migrate_v31(conn: &Connection) -> Result<(), AppError> {
+    fn migrate_v35(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.slides-next.local', 'ArrowRight');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.slides-next.global', 'Alt+Right');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.slides-prev.local', 'ArrowLeft');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.slides-prev.global', 'Alt+Left');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.slides-clear.local', 'Escape');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.display-projector.local', 'F5');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.display-return.local', 'Shift+F5');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.display-black.local', 'b');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.display-black.global', 'Alt+B');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.display-logo.local', 'l');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.display-logo.global', 'Alt+L');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.app-command-palette.local', 'Meta+k');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.app-command-palette.global', 'CmdOrCtrl+Shift+K');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.app-shortcuts-help.local', 'Meta+/');
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut.app-shortcuts-help.global', 'Alt+H');
+        ",
+    )?;
+    Ok(())
+    }
+
+    fn migrate_v31(conn: &Connection) -> Result<(), AppError> {
     add_column_if_missing(
         conn,
         "media_library_items",
@@ -1336,7 +1372,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 34);
+        assert_eq!(schema_version, 35);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1440,7 +1476,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v32() {
+    fn fresh_migration_chain_stepwise_reaches_v35() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1478,6 +1514,7 @@ mod tests {
             (32, migrate_v32),
             (33, migrate_v33),
             (34, migrate_v34),
+            (35, migrate_v35),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));

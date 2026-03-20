@@ -1,14 +1,41 @@
+use crate::content_sync::manifest::ContentManifest;
 use crate::error::AppError;
 use crate::pack_sync::{self, executor::PackSyncProgress, planner::PackSyncPlan};
 use crate::state::{AppState, PackSyncRuntimeState};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+
+const MANIFEST_CACHE_FILE: &str = "manifest_cache.json";
+
+fn manifest_cache_path(app: &AppHandle) -> Result<std::path::PathBuf, AppError> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?
+        .join(MANIFEST_CACHE_FILE))
+}
+
+fn load_cached_manifest(app: &AppHandle) -> Option<ContentManifest> {
+    let path = manifest_cache_path(app).ok()?;
+    let bytes = std::fs::read(&path).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn save_manifest_cache(app: &AppHandle, manifest: &ContentManifest) {
+    if let Ok(path) = manifest_cache_path(app) {
+        if let Ok(json) = serde_json::to_vec(manifest) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+}
 
 #[tauri::command]
 #[specta::specta]
 pub async fn plan_pack_sync(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
+    force_refresh: Option<bool>,
 ) -> Result<PackSyncPlan, AppError> {
     if !pack_sync::is_pack_sync_enabled() {
         return Ok(PackSyncPlan {
@@ -17,6 +44,33 @@ pub async fn plan_pack_sync(
             total_download_size: 0,
             total_download_count: 0,
         });
+    }
+
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let stored_version = crate::db::queries::settings::get_setting(&conn, "pack_sync.manifest_version")
+        .ok()
+        .and_then(|s| s.value.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    // Use cached manifest if available and not forcing a refresh.
+    // The cache is only useful when the stored manifest version already matches
+    // what was fetched last time — meaning the user dismissed the dialog but we
+    // still know which packs are pending without hitting the CDN again.
+    let use_cache = force_refresh != Some(true);
+    if use_cache {
+        if let Some(cached) = load_cached_manifest(&app) {
+            let plan = pack_sync::planner::build_plan(&conn, &cached, stored_version)?;
+            if !plan.items.is_empty() {
+                return Ok(plan);
+            }
+            // Cache says up-to-date — trust it if the manifest version hasn't changed
+            if cached.manifest_version == stored_version || stored_version == 0 {
+                // Still fetch to detect a newer manifest version
+            } else {
+                return Ok(plan);
+            }
+        }
     }
 
     let client = reqwest::Client::builder()
@@ -28,12 +82,8 @@ pub async fn plan_pack_sync(
         &client, pack_sync::CDN_MANIFEST_URL,
     ).await?;
 
-    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let stored_version = crate::db::queries::settings::get_setting(&conn, "pack_sync.manifest_version")
-        .ok()
-        .and_then(|s| s.value.parse::<i64>().ok())
-        .unwrap_or(0);
+    // Persist manifest to local cache so subsequent launches avoid this CDN call
+    save_manifest_cache(&app, &manifest);
 
     pack_sync::planner::build_plan(&conn, &manifest, stored_version)
 }
@@ -64,6 +114,16 @@ pub fn start_pack_sync(
     });
 
     Ok(run_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_manifest_cache(app: AppHandle) -> Result<(), AppError> {
+    let path = manifest_cache_path(&app)?;
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(AppError::Io)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -17,10 +17,10 @@ import { ChevronRight } from "lucide-react";
 import type { PackSyncPlanItem } from "../../types/content-sync";
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1000 * 1000) return `${(bytes / 1000).toFixed(1)} KB`;
+  if (bytes < 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
+  return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
 }
 
 const FILE_TYPE_BADGE: Record<string, string> = {
@@ -38,7 +38,7 @@ function PackRow({ item }: { item: PackSyncPlanItem }) {
 
   useEffect(() => {
     if (!innerRef.current) return;
-    setHeight(expanded ? innerRef.current.scrollHeight : 0);
+    setHeight(expanded ? Math.min(innerRef.current.scrollHeight, 208) : 0);
   }, [expanded]);
 
   return (
@@ -61,13 +61,13 @@ function PackRow({ item }: { item: PackSyncPlanItem }) {
       <div
         style={{ height, overflow: "hidden", transition: "height 220ms cubic-bezier(0.4,0,0.2,1)" }}
       >
-        <div ref={innerRef} className="border-t border-border/50 bg-muted/20 px-3 py-2 space-y-1 max-h-52 overflow-y-auto">
+        <div ref={innerRef} className="border-t border-border/50 bg-muted/20 px-3 py-2 space-y-1 overflow-y-auto" style={{ maxHeight: 208 }}>
           {item.files.map((file, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
               <span
                 className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${FILE_TYPE_BADGE[file.fileType] ?? "bg-muted text-muted-foreground"}`}
               >
-                {file.fileType}
+                {t(`settings.packSync.fileType.${file.fileType}`, { defaultValue: file.fileType })}
               </span>
               <span className="flex-1 truncate font-mono text-muted-foreground" title={file.path}>
                 {file.path}
@@ -102,7 +102,7 @@ export function PackSyncDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
-      <DialogContent className="max-w-2xl text-base">
+      <DialogContent className="max-w-3xl text-base">
         <DialogHeader>
           <DialogTitle>{t("settings.packSync.dialogTitle")}</DialogTitle>
           <DialogDescription>
@@ -138,7 +138,7 @@ export function PackSyncDialog() {
           >
             {startMutation.isPending
               ? t("settings.packSync.starting")
-              : t("settings.packSync.downloadAndApply")}
+              : t("settings.packSync.downloadNow")}
           </Button>
         </DialogFooter>
       </DialogContent>
