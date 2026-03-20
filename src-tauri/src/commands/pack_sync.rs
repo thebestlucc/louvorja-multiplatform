@@ -1,7 +1,7 @@
 use crate::content_sync::manifest::ContentManifest;
 use crate::error::AppError;
-use crate::pack_sync::{self, executor::PackSyncProgress, planner::PackSyncPlan};
-use crate::state::{AppState, PackSyncRuntimeState};
+use crate::pack_sync::{self, planner::PackSyncPlan};
+use crate::state::AppState;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};

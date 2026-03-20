@@ -42,7 +42,6 @@ export function Header() {
   const { theme, language, setTheme, setLanguage } = useThemeStore();
   const packSyncPendingCount = useContentSyncStore((s) => s.packSyncPendingCount);
   const packSyncPlan = useContentSyncStore((s) => s.packSyncPlan);
-  const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
   const setPackSyncPendingCount = useContentSyncStore((s) => s.setPackSyncPendingCount);
   const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
   const startPackSync = useStartPackSync();

@@ -9,8 +9,6 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
-use super::planner::PackSyncPlan;
-
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PackSyncProgress {
