@@ -8,6 +8,7 @@ mod error;
 mod ftp_sync;
 mod http_sync;
 mod legacy_fetch;
+mod pack_sync;
 mod migration;
 mod projection;
 mod state;
