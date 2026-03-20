@@ -4,6 +4,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
+import { toast } from "sonner";
 import { catcher } from "../../lib/catcher";
 import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
 import {
@@ -1177,23 +1178,42 @@ function SyncSection() {
 
 function PackSyncSettingsInline() {
   const { t } = useTranslation();
-  const planQuery = usePlanPackSync();
+  const planQuery = usePlanPackSync({ enabled: false });
   const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
   const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
   const isRunning = packSyncProgress != null &&
     (packSyncProgress.status === "pending" || packSyncProgress.status === "running");
 
+  const handleCheckNow = async () => {
+    const result = await planQuery.refetch();
+    if (result.error) {
+      const msg = result.error instanceof Error ? result.error.message : String(result.error);
+      // Show short, readable portion of the error
+      toast.error(t("settings.packSync.checkError", { error: msg.slice(0, 120) }));
+      return;
+    }
+    const plan = result.data;
+    if (!plan || plan.items.length === 0) {
+      toast.success(t("settings.packSync.upToDate"));
+      return;
+    }
+    openPackSyncPlan();
+  };
+
   return (
     <div className="flex items-center justify-between">
       <div className="text-sm text-muted-foreground">
-        {planQuery.data && planQuery.data.items.length > 0
-          ? t("settings.packSync.packsAvailable", { count: planQuery.data.totalDownloadCount })
-          : t("settings.packSync.upToDate")}
+        {isRunning
+          ? t("settings.packSync.statusBar", {
+              current: packSyncProgress!.packsProcessed,
+              total: packSyncProgress!.packsTotal,
+            })
+          : t("settings.packSync.description")}
       </div>
       <Button
         size="sm"
         variant="outline"
-        onClick={() => { void planQuery.refetch(); openPackSyncPlan(); }}
+        onClick={() => void handleCheckNow()}
         disabled={planQuery.isFetching || isRunning}
       >
         {planQuery.isFetching ? t("settings.packSync.checking") : t("settings.packSync.checkNow")}

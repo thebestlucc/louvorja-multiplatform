@@ -477,7 +477,6 @@
       "scheduled_category": "Scheduled Item (Dynamic)",
       "url": "URL"
     },
-
     "items": "Items",
     "new": "New Service",
     "noItems": "No items. Click \"Add Item\" to get started.",
@@ -638,7 +637,8 @@
       "statusBar": "Downloading packs ({{current}}/{{total}})",
       "fetchFailedFirstInstall": "Could not fetch content packs from the server. Go to Settings → Synchronization to retry.",
       "manifestVersion": "Manifest version",
-      "lastSynced": "Last synced"
+      "lastSynced": "Last synced",
+      "checkError": "Could not check for updates: {{error}}"
     },
     "language": "Language",
     "languageDesc": "Choose the app language.",

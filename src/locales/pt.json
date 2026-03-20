@@ -477,7 +477,6 @@
       "scheduled_category": "Item Agendado (Dinâmico)",
       "url": "URL"
     },
-
     "items": "Itens",
     "new": "Novo Culto",
     "noItems": "Sem itens. Clique em \"Adicionar Item\" para começar.",
@@ -638,7 +637,8 @@
       "statusBar": "Baixando pacotes ({{current}}/{{total}})",
       "fetchFailedFirstInstall": "Não foi possível buscar os pacotes de conteúdo. Vá em Configurações → Sincronização para tentar novamente.",
       "manifestVersion": "Versão do manifesto",
-      "lastSynced": "Última sincronização"
+      "lastSynced": "Última sincronização",
+      "checkError": "Não foi possível verificar atualizações: {{error}}"
     },
     "language": "Idioma",
     "languageDesc": "Escolha o idioma do aplicativo.",
