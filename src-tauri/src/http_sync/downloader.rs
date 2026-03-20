@@ -10,12 +10,6 @@ pub enum DownloadResult {
     Skipped,
 }
 
-#[derive(Debug)]
-pub enum PackResult {
-    Extracted { files_count: usize },
-    Skipped,
-}
-
 /// Returns true if the local file already exists with the expected size.
 /// When `expected_size` is None, always returns false (force download).
 pub fn should_skip_download(local_path: &Path, expected_size: Option<u64>) -> bool {
@@ -137,55 +131,19 @@ pub async fn download_file_http(
     download_bytes_to_path(client, url, local_path, expected_size).await
 }
 
-/// Download a ZIP pack from CDN and extract into `app_data_dir`.
-/// Skips download+extraction when `local_version >= expected_version`.
-/// ZIP entries are extracted preserving their internal paths relative to `app_data_dir`.
-pub async fn download_and_extract_pack(
-    client: &reqwest::Client,
-    pack_url: &str,
-    local_version: u32,
-    expected_version: u32,
-    app_data_dir: &Path,
-) -> Result<PackResult, AppError> {
-    validate_https_url(pack_url)?;
-
-    if local_version >= expected_version {
-        return Ok(PackResult::Skipped);
-    }
-
-    std::fs::create_dir_all(app_data_dir).map_err(AppError::Io)?;
-
-    // Download ZIP to a unique temp file in app_data_dir
-    let nonce = uuid::Uuid::new_v4().simple().to_string();
-    let temp_zip = app_data_dir.join(format!("pack_download_{}_{}.zip.tmp", expected_version, nonce));
-
-    let download = download_bytes_to_path(client, pack_url, &temp_zip, None).await;
-    if let Err(e) = download {
-        let _ = std::fs::remove_file(&temp_zip);
-        return Err(e);
-    }
-
-    // Extract ZIP
-    let extract_result = extract_zip(&temp_zip, app_data_dir);
-    let _ = std::fs::remove_file(&temp_zip); // always clean up
-
-    extract_result
-}
-
-/// Public wrapper for extracting a ZIP file to a destination directory.
-/// Used by pack_sync executor after downloading a pack.
-pub fn extract_zip_to(zip_path: &Path, dest_dir: &Path) -> Result<PackResult, AppError> {
+/// Extract a ZIP file into `dest_dir`, preserving internal paths.
+/// Used by the pack_sync executor after SHA-256 verification.
+pub fn extract_zip_to(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     extract_zip(zip_path, dest_dir)
 }
 
-fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<PackResult, AppError> {
+fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     std::fs::create_dir_all(dest_dir).map_err(AppError::Io)?;
     let canonical_dest = dest_dir.canonicalize().map_err(AppError::Io)?;
     let file = std::fs::File::open(zip_path).map_err(AppError::Io)?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| AppError::Internal(format!("ZIP open failed: {}", e)))?;
 
-    let mut files_count = 0;
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -221,10 +179,9 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<PackResult, AppError>
 
         let mut out = std::fs::File::create(&dest_path).map_err(AppError::Io)?;
         std::io::copy(&mut entry, &mut out).map_err(AppError::Io)?;
-        files_count += 1;
     }
 
-    Ok(PackResult::Extracted { files_count })
+    Ok(())
 }
 
 #[cfg(test)]
@@ -301,13 +258,7 @@ mod tests {
         let dest = dir.path().join("extracted");
         std::fs::create_dir(&dest).unwrap();
 
-        let result = extract_zip(&zip_path, &dest).unwrap();
-        match result {
-            PackResult::Extracted { files_count } => {
-                assert_eq!(files_count, 1, "Should extract exactly 1 file (skipping dir + traversal)");
-            }
-            PackResult::Skipped => panic!("Should not be skipped"),
-        }
+        extract_zip(&zip_path, &dest).unwrap();
 
         // Normal file should exist
         assert!(dest.join("media/audio/test.mp3").exists());
