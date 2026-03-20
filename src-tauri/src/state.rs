@@ -184,6 +184,12 @@ pub struct OverlayRuntimeState {
     pub alert: AlertState,
 }
 
+#[derive(Default)]
+pub struct PackSyncRuntimeState {
+    pub active_run_id: Option<String>,
+    pub cancel_flags: std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+}
+
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
     pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
@@ -191,6 +197,7 @@ pub struct AppState {
     pub migration: Mutex<MigrationRuntimeState>,
     pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
     pub content_sync: Mutex<ContentSyncRuntimeState>,
+    pub pack_sync: Mutex<PackSyncRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: RwLock<Option<SlideContent>>,
     pub projector_open: AtomicBool,

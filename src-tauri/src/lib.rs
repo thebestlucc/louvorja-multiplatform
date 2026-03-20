@@ -238,6 +238,10 @@ pub fn run() {
             commands::spotlight::spotlight_open,
             commands::spotlight::spotlight_select,
             commands::spotlight::spotlight_hide,
+            // Pack Sync
+            commands::pack_sync::plan_pack_sync,
+            commands::pack_sync::start_pack_sync,
+            commands::pack_sync::cancel_pack_sync,
         ]);
 
     #[cfg(debug_assertions)]
@@ -312,6 +316,7 @@ pub fn run() {
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
                 content_sync: Mutex::new(crate::content_sync::ContentSyncRuntimeState::default()),
+                pack_sync: Mutex::new(crate::state::PackSyncRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 current_slide: RwLock::new(None),
                 projector_open: AtomicBool::new(false),
