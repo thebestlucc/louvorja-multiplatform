@@ -172,6 +172,12 @@ pub async fn download_and_extract_pack(
     extract_result
 }
 
+/// Public wrapper for extracting a ZIP file to a destination directory.
+/// Used by pack_sync executor after downloading a pack.
+pub fn extract_zip_to(zip_path: &Path, dest_dir: &Path) -> Result<PackResult, AppError> {
+    extract_zip(zip_path, dest_dir)
+}
+
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<PackResult, AppError> {
     std::fs::create_dir_all(dest_dir).map_err(AppError::Io)?;
     let canonical_dest = dest_dir.canonicalize().map_err(AppError::Io)?;
