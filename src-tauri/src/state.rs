@@ -52,6 +52,8 @@ pub struct TimerRuntimeState {
     pub accumulated_ms: u64,
     pub started_at: Option<Instant>,
     pub laps: Vec<u64>,
+    /// Pre-calculated current time to avoid Instant::now() calls during serialization
+    pub current_time_ms: u64,
 }
 
 impl Default for TimerRuntimeState {
@@ -62,6 +64,7 @@ impl Default for TimerRuntimeState {
             accumulated_ms: 0,
             started_at: None,
             laps: Vec::new(),
+            current_time_ms: 0,
         }
     }
 }
@@ -199,6 +202,7 @@ pub struct AppState {
     pub content_sync: Mutex<ContentSyncRuntimeState>,
     pub pack_sync: Mutex<PackSyncRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
+    pub timer_update_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: RwLock<Option<SlideContent>>,
     pub projector_open: AtomicBool,
     pub overlay: RwLock<OverlayRuntimeState>,
