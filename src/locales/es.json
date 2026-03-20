@@ -477,7 +477,6 @@
       "scheduled_category": "Ítem Agendado (Dinámico)",
       "url": "URL"
     },
-
     "items": "Elementos",
     "new": "Nuevo Culto",
     "noItems": "Sin elementos. Haga clic en \"Agregar Elemento\" para comenzar.",
@@ -638,7 +637,8 @@
       "statusBar": "Descargando paquetes ({{current}}/{{total}})",
       "fetchFailedFirstInstall": "No se pudieron obtener los paquetes de contenido. Ve a Configuración → Sincronización para volver a intentarlo.",
       "manifestVersion": "Versión del manifiesto",
-      "lastSynced": "Última sincronización"
+      "lastSynced": "Última sincronización",
+      "checkError": "No se pudo verificar actualizaciones: {{error}}"
     },
     "language": "Idioma",
     "languageDesc": "Elija el idioma de la aplicación.",
@@ -934,7 +934,6 @@
       "addItem": "Agregar Elemento",
       "showAllCategoryItems": "Ver todos los elementos de esta categoría",
       "description": "Gestione una biblioteca de videos, imágenes y PDF para uso rápido en el culto.",
-
       "editItem": "Editar Elemento",
       "filePathLabel": "Ruta del Archivo",
       "filePathPlaceholder": "Seleccione un archivo...",

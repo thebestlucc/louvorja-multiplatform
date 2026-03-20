@@ -193,7 +193,10 @@ allow = [
     "restore_hymn_from_api",
     "restore_album_from_api",
     "list_ftp_files",
-    "download_ftp_files"
+    "download_ftp_files",
+    "plan_pack_sync",
+    "start_pack_sync",
+    "cancel_pack_sync"
 ]
 
 [[permission]]
