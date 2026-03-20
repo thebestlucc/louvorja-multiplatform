@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import { useContentSyncStore } from "../../stores/content-sync-store";
 import { usePlanPackSync, useStartPackSync } from "../../lib/queries";
 import { catcher } from "../../lib/catcher";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { PackSyncPlanItem } from "../../types/content-sync";
 
 function formatBytes(bytes: number): string {
@@ -33,29 +33,35 @@ const FILE_TYPE_BADGE: Record<string, string> = {
 function PackRow({ item }: { item: PackSyncPlanItem }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation();
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    if (!innerRef.current) return;
+    setHeight(expanded ? innerRef.current.scrollHeight : 0);
+  }, [expanded]);
 
   return (
     <div className="border-b border-border last:border-b-0">
-      {/* Pack header — clickable to expand */}
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted/40 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        )}
+        <ChevronRight
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200"
+          style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+        />
         <span className="flex-1 text-left font-medium">{item.packId}</span>
         <span className="text-muted-foreground">
           v{item.packVersion} · {item.fileCount} {t("settings.packSync.files")} · {formatBytes(item.packSize)}
         </span>
       </button>
 
-      {/* Expandable file list */}
-      {expanded && (
-        <div className="border-t border-border/50 bg-muted/20 px-3 py-2 space-y-1 max-h-48 overflow-y-auto">
+      <div
+        style={{ height, overflow: "hidden", transition: "height 220ms cubic-bezier(0.4,0,0.2,1)" }}
+      >
+        <div ref={innerRef} className="border-t border-border/50 bg-muted/20 px-3 py-2 space-y-1 max-h-52 overflow-y-auto">
           {item.files.map((file, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
               <span
@@ -70,7 +76,7 @@ function PackRow({ item }: { item: PackSyncPlanItem }) {
             </div>
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -96,7 +102,7 @@ export function PackSyncDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl text-base">
         <DialogHeader>
           <DialogTitle>{t("settings.packSync.dialogTitle")}</DialogTitle>
           <DialogDescription>
