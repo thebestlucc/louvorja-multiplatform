@@ -188,6 +188,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (33)", [])?;
     }
 
+    if current_version < 34 {
+        migrate_v34(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (34)", [])?;
+    }
+
     Ok(())
 }
 
@@ -1293,6 +1298,12 @@ fn migrate_v33(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v34(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(conn, "content_sync_packs", "extracted_version", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(conn, "content_sync_packs", "db_version", "INTEGER NOT NULL DEFAULT 0")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1325,7 +1336,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 33);
+        assert_eq!(schema_version, 34);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1466,6 +1477,7 @@ mod tests {
             (31, migrate_v31),
             (32, migrate_v32),
             (33, migrate_v33),
+            (34, migrate_v34),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
