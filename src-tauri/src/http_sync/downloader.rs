@@ -368,58 +368,10 @@ mod tests {
         assert!(err_msg.contains("HTTPS"));
     }
 
-    // ── download_and_extract_pack skip-logic tests ──────────────────────────
+    // ── extract_zip_to tests ─────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn download_and_extract_pack_skips_when_up_to_date() {
-        let dir = tempdir().unwrap();
-        let client = reqwest::Client::new();
-        // local_version (3) == expected_version (3) → should skip without any HTTP call
-        let result = download_and_extract_pack(&client, "https://unused.invalid/pack.zip", 3, 3, dir.path()).await.unwrap();
-        assert!(matches!(result, PackResult::Skipped));
-    }
-
-    #[tokio::test]
-    async fn download_and_extract_pack_skips_when_local_version_gte_expected() {
-        let dir = tempdir().unwrap();
-        let client = reqwest::Client::new();
-
-        // local_version (5) >= expected_version (5) → should skip without any HTTP call
-        let result = download_and_extract_pack(
-            &client,
-            "https://this-should-not-be-called.invalid/pack.zip",
-            5, // local_version
-            5, // expected_version
-            dir.path(),
-        )
-        .await
-        .unwrap();
-
-        assert!(matches!(result, PackResult::Skipped));
-    }
-
-    #[tokio::test]
-    async fn download_and_extract_pack_skips_when_local_version_gt_expected() {
-        let dir = tempdir().unwrap();
-        let client = reqwest::Client::new();
-
-        // local_version (7) > expected_version (5) → should skip
-        let result = download_and_extract_pack(
-            &client,
-            "https://this-should-not-be-called.invalid/pack.zip",
-            7, // local_version
-            5, // expected_version
-            dir.path(),
-        )
-        .await
-        .unwrap();
-
-        assert!(matches!(result, PackResult::Skipped));
-    }
-
-    #[tokio::test]
-    async fn download_and_extract_pack_extracts_when_local_version_less_than_expected() {
-        // Create an in-memory ZIP with one file
+    async fn extract_zip_to_extracts_files_correctly() {
         let mut zip_bytes = Vec::new();
         {
             let cursor = std::io::Cursor::new(&mut zip_bytes);
@@ -440,17 +392,12 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let url = format!("{}/pack.zip", server.uri());
-
-        // download_bytes_to_path bypasses the HTTPS guard; call it directly to download
-        // and feed the zip into extract_zip — mirrors what download_and_extract_pack does
-        // internally once the HTTPS guard passes in production.
         let client = reqwest::Client::new();
         let zip_path = dir.path().join("pack.zip");
         let dl = download_bytes_to_path(&client, &url, &zip_path, None).await.unwrap();
         assert!(matches!(dl, DownloadResult::Downloaded));
 
-        let result = extract_zip(&zip_path, dir.path()).unwrap();
-        assert!(matches!(result, PackResult::Extracted { files_count: 1 }));
+        extract_zip_to(&zip_path, dir.path()).unwrap();
         assert!(dir.path().join("media/audio/test.mp3").exists());
     }
 }
