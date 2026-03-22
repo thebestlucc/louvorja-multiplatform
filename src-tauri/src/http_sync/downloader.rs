@@ -62,6 +62,11 @@ async fn download_bytes_to_path(
     let result = async {
         let mut response = client
             .get(url)
+            // Disable transfer-encoding compression for binary downloads.
+            // CDNs (Cloudflare R2, etc.) may add Content-Encoding: gzip even for
+            // .zip/.db files. reqwest's auto-decompression then tries to gunzip an
+            // already-compressed binary, producing "error decoding response body".
+            .header(reqwest::header::ACCEPT_ENCODING, "identity")
             .timeout(std::time::Duration::from_secs(120))
             .send()
             .await
