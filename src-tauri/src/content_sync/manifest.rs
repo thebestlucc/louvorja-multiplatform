@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::error::AppError;
 
@@ -31,6 +32,15 @@ pub struct ManifestPack {
     pub size: u64,
     pub sha256: String,
     pub files: Vec<ManifestFile>,
+    #[serde(default)]
+    pub language: String,    // BCP 47 tag, e.g. "pt-BR"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DbEntry {
+    pub url: String,
+    pub version: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,10 +50,8 @@ pub struct ContentManifest {
     pub generated_at: Option<String>,
     #[serde(default)]
     pub packs: Vec<ManifestPack>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub db_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub db_version: Option<i64>,
+    #[serde(default)]
+    pub databases: HashMap<String, DbEntry>,   // keyed by BCP 47 tag
 }
 
 /// Fetch and deserialize a manifest JSON from a URL.
