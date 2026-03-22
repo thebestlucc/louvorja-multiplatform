@@ -914,6 +914,7 @@ pub fn delete_collection_hymn(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn find_collection_by_api_album_id(conn: &Connection, api_album_id: i64) -> Option<i64> {
     conn.query_row(
         "SELECT id FROM collections WHERE api_album_id = ?1",
