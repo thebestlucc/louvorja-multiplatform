@@ -93,6 +93,16 @@ function detectFileType(relativePath: string): FileType {
 }
 
 /**
+ * Returns true for macOS metadata files (.DS_Store), __MACOSX folders,
+ * and any other hidden/system path segments.
+ */
+function isSystemFile(relativePath: string): boolean {
+  return relativePath.split("/").some(
+    (seg) => seg.startsWith(".") || seg === "__MACOSX"
+  );
+}
+
+/**
  * Returns true for "Hinário Adventista" and its language/spelling variants.
  * Files under these folders go into the flat media path (no album subfolder).
  */
@@ -194,6 +204,7 @@ function groupFiles(
   const buckets = new Map<string, LocalFile[]>();
   for (const file of files) {
     if (file.detectedType === "unknown") continue;
+    if (file.relativePath.split("/").some((s) => s.startsWith(".") || s === "__MACOSX")) continue;
     const parts = file.relativePath.split("/");
     const subfolder = parts.length >= 3 ? parts[1] : "misc";
     const bucket = buckets.get(subfolder) ?? [];
@@ -273,6 +284,7 @@ export default function NewPackPage() {
       const relativePath =
         (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
         file.name;
+      if (isSystemFile(relativePath)) continue;
       // Detect root-level .db files (only 2 path segments: folder/file.db)
       const pathParts = relativePath.split("/");
       if (pathParts.length === 2 && relativePath.toLowerCase().endsWith(".db")) {
