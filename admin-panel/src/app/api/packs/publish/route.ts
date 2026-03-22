@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPackZip, type FileEntry } from "@/lib/pack-builder";
+import { unlink } from "fs/promises";
+import { createPackZip, openPackReadStream, type FileEntry } from "@/lib/pack-builder";
 import { uploadToR2, deleteFromR2, existsOnR2, getCdnUrl } from "@/lib/r2";
-import { fetchManifest, uploadManifest, incrementManifestVersion, type ManifestPack, type ManifestFile } from "@/lib/manifest";
+import { fetchManifest, uploadManifest, incrementManifestVersion, type ContentManifest, type ManifestPack, type ManifestFile } from "@/lib/manifest";
 
 interface PublishPackRequest {
   packId: string;
@@ -11,19 +12,57 @@ interface PublishPackRequest {
 
 interface PublishRequest {
   packs: PublishPackRequest[];
+  /** When true, increment manifest version and save. Only set on the last pack. */
+  finalizeManifest?: boolean;
+  /** CDN URL of the database file to embed in the manifest (passed when the DB
+   *  was uploaded with updateManifest=false, so a single manifest version is
+   *  created containing both packs and the DB reference). */
+  dbUrl?: string;
+  /** Timestamp version of the database file, matching what /api/db returned. */
+  dbVersion?: number;
+  /** In-memory manifest passed from the frontend to avoid redundant R2 reads.
+   *  When provided, skips fetchManifest(). Falls back to fetchManifest() when absent
+   *  for backward compatibility. */
+  currentManifest?: ContentManifest;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body: PublishRequest = await req.json() as PublishRequest;
-    const manifest = await fetchManifest();
-    const updated = incrementManifestVersion(manifest);
+    const { finalizeManifest = true, dbUrl, dbVersion } = body;
+    // Use the manifest passed by the caller when available; fall back to fetching
+    // from R2 for backward compatibility (e.g. direct API calls without a frontend).
+    const manifest: ContentManifest | null = body.currentManifest ?? await fetchManifest();
+    const base: ContentManifest = manifest ?? {
+      manifestVersion: 0,
+      generatedAt: new Date().toISOString(),
+      packs: [],
+    };
+    const updated = finalizeManifest
+      ? incrementManifestVersion(manifest)
+      : { ...base };
+
+    // Carry over existing dbUrl/dbVersion so they are never lost on partial updates.
+    if (manifest?.dbUrl && !updated.dbUrl) updated.dbUrl = manifest.dbUrl;
+    if (manifest?.dbVersion && !updated.dbVersion) updated.dbVersion = manifest.dbVersion;
+
+    // When the caller passes dbUrl/dbVersion (Case A: packs + db in the same
+    // folder), embed them in this manifest version so a single version contains
+    // both the packs and the DB reference.
+    if (finalizeManifest && dbUrl) {
+      updated.dbUrl = dbUrl;
+      updated.dbVersion = dbVersion;
+    }
 
     for (const pack of body.packs) {
-      const { buffer, sha256 } = await createPackZip(pack.files);
+      const { tempPath, sha256, size } = await createPackZip(pack.files);
       const zipKey = `packs/${pack.packId}-v${pack.version}.zip`;
 
-      await uploadToR2(zipKey, buffer, "application/zip");
+      try {
+        await uploadToR2(zipKey, openPackReadStream(tempPath), "application/zip", size);
+      } finally {
+        await unlink(tempPath).catch(() => {});
+      }
 
       // N-2 cleanup
       const nMinus2Version = pack.version - 2;
@@ -36,17 +75,16 @@ export async function POST(req: NextRequest) {
 
       const manifestFiles: ManifestFile[] = pack.files.map((f) => ({
         path: f.packPath,
-        hymnApiId: f.hymnApiId,
-        albumApiId: f.albumApiId,
         type: f.fileType,
         size: f.size,
+        ...(f.albumName ? { albumName: f.albumName } : {}),
       }));
 
       const manifestPack: ManifestPack = {
         id: pack.packId,
         url: getCdnUrl(zipKey),
         version: pack.version,
-        size: buffer.length,
+        size,
         sha256,
         files: manifestFiles,
       };
@@ -59,8 +97,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await uploadManifest(updated);
-    return NextResponse.json({ success: true, manifestVersion: updated.manifestVersion });
+    if (finalizeManifest) {
+      await uploadManifest(updated);
+    }
+    return NextResponse.json({ success: true, manifestVersion: updated.manifestVersion, manifest: updated });
   } catch (error) {
     console.error("[publish] Error:", error);
     return NextResponse.json(

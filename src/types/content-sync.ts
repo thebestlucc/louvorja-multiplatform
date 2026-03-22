@@ -65,6 +65,7 @@ export interface PackSyncFileItem {
   albumApiId: number | null;
   fileType: string;
   size: number;
+  albumName: string | null;
 }
 
 export interface PackSyncPlanItem {
@@ -81,11 +82,17 @@ export interface PackSyncPlanItem {
   files: PackSyncFileItem[];
 }
 
+export interface LegacyDbSyncItem {
+  url: string;
+  version: number;
+}
+
 export interface PackSyncPlan {
   manifestVersion: number;
   items: PackSyncPlanItem[];
   totalDownloadSize: number;
   totalDownloadCount: number;
+  legacyDb?: LegacyDbSyncItem | null;
 }
 
 export interface PackSyncProgress {
@@ -95,6 +102,8 @@ export interface PackSyncProgress {
   message: string | null;
   packsTotal: number;
   packsProcessed: number;
+  /** Per-pack status keyed by packId. Values: pending | downloading | verifying | ready | extracting | db_update | done | failed | skipped */
+  packStatuses: Record<string, string>;
 }
 
 export interface ContentSyncReport {

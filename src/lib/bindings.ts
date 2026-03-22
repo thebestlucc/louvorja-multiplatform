@@ -1436,9 +1436,9 @@ async planPackSync(forceRefresh: boolean | null) : Promise<Result<PackSyncPlan, 
     else return { status: "error", error: e  as any };
 }
 },
-async startPackSync() : Promise<Result<string, AppErrorResponse>> {
+async startPackSync(items: PackSyncPlanItem[] | null, legacyDb: LegacyDbSyncItem | null) : Promise<Result<string, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("start_pack_sync") };
+    return { status: "ok", data: await TAURI_INVOKE("start_pack_sync", { items, legacyDb }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1513,6 +1513,7 @@ export type DbVersionCheckResult = { hasNewVersion: boolean; newVersion: number 
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
+export type LegacyDbSyncItem = { url: string; version: number }
 /**
  * Error during legacy fetch
  */
@@ -1568,8 +1569,13 @@ export type MissingFile = { path: string; sourceType: string; sourceId: number; 
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
-export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number }
-export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number }
+export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
+export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; 
+/**
+ * Present when the manifest advertises a legacy DB that is newer than the
+ * locally stored `pack_sync.legacy_db_version`.
+ */
+legacyDb?: LegacyDbSyncItem | null }
 export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[] }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }

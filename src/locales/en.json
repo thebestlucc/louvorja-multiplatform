@@ -651,6 +651,22 @@
       "lastSynced": "Last synced",
       "checkError": "Could not check for updates: {{error}}",
       "newPacksAvailable": "New content packs available",
+      "downloadSingle": "Download this pack",
+      "progressTitle": "Downloading Packs",
+      "progressDone": "Download complete.",
+      "close": "Close",
+      "runningInBackground": "Running in background…",
+      "packStatus": {
+        "pending": "Pending",
+        "downloading": "Downloading",
+        "verifying": "Verifying",
+        "ready": "Ready",
+        "extracting": "Extracting",
+        "db_update": "Updating",
+        "done": "Done",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
       "fileType": {
         "audio": "Audio",
         "playback": "Playback",

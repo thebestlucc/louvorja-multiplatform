@@ -13,6 +13,7 @@ pub struct PackSyncFileItem {
     pub album_api_id: Option<i64>,
     pub file_type: String,
     pub size: u64,
+    pub album_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -33,11 +34,22 @@ pub struct PackSyncPlanItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct LegacyDbSyncItem {
+    pub url: String,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct PackSyncPlan {
     pub manifest_version: i64,
     pub items: Vec<PackSyncPlanItem>,
     pub total_download_size: u64,
     pub total_download_count: usize,
+    /// Present when the manifest advertises a legacy DB that is newer than the
+    /// locally stored `pack_sync.legacy_db_version`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub legacy_db: Option<LegacyDbSyncItem>,
 }
 
 /// Build a plan by comparing the remote manifest against local pack state.
@@ -47,11 +59,29 @@ pub fn build_plan(
     stored_manifest_version: i64,
 ) -> Result<PackSyncPlan, AppError> {
     if manifest.manifest_version == stored_manifest_version && stored_manifest_version > 0 {
+        // Even if the manifest version hasn't changed, we still need to check
+        // whether a legacy DB is pending (e.g. the user dismissed the dialog before
+        // importing, or the app was updated and dbVersion needs re-checking).
+        let legacy_db = match (&manifest.db_url, manifest.db_version) {
+            (Some(url), Some(remote_version)) => {
+                let local_version = content_sync::get_legacy_db_version(conn)?.unwrap_or(0);
+                if remote_version > local_version {
+                    Some(LegacyDbSyncItem {
+                        url: url.clone(),
+                        version: remote_version,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
         return Ok(PackSyncPlan {
             manifest_version: manifest.manifest_version,
             items: vec![],
             total_download_size: 0,
             total_download_count: 0,
+            legacy_db,
         });
     }
 
@@ -81,6 +111,7 @@ pub fn build_plan(
             album_api_id: f.album_api_id,
             file_type: f.file_type.clone(),
             size: f.size,
+            album_name: f.album_name.clone(),
         }).collect();
 
         items.push(PackSyncPlanItem {
@@ -98,10 +129,27 @@ pub fn build_plan(
         });
     }
 
+    // Check if the manifest advertises a legacy DB that we haven't imported yet.
+    let legacy_db = match (&manifest.db_url, manifest.db_version) {
+        (Some(url), Some(remote_version)) => {
+            let local_version = content_sync::get_legacy_db_version(conn)?.unwrap_or(0);
+            if remote_version > local_version {
+                Some(LegacyDbSyncItem {
+                    url: url.clone(),
+                    version: remote_version,
+                })
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
     Ok(PackSyncPlan {
         manifest_version: manifest.manifest_version,
         items,
         total_download_size,
         total_download_count,
+        legacy_db,
     })
 }

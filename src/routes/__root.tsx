@@ -15,7 +15,7 @@ import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
-import { PackSyncDialog } from "../components/content-sync/pack-sync-dialog";
+import { PackSyncDialog, PackSyncProgressDialog } from "../components/content-sync/pack-sync-dialog";
 import { queryKeys, useMonitorConfigs, useMonitors, usePlanContentSync, usePlanPackSync } from "../lib/queries";
 import { setMonitorConfig } from "../lib/tauri";
 import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
@@ -369,6 +369,7 @@ function RootLayout() {
         }}
       />
       <PackSyncDialog />
+      <PackSyncProgressDialog />
       <UpdateNotification />
       <AppToaster />
     </div>

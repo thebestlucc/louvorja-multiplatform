@@ -7,11 +7,19 @@ const MAX_MANIFEST_BYTES: usize = 1 * 1024 * 1024; // 1 MiB limit for manifest J
 #[serde(rename_all = "camelCase")]
 pub struct ManifestFile {
     pub path: String,
+    /// Deprecated: executor now derives the ID from the canonical path (media/{subfolder}/{id}/…).
+    /// Kept optional for backward compat with older manifests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hymn_api_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub album_api_id: Option<i64>,
     #[serde(rename = "type")]
     pub file_type: String,
     pub size: u64,
+    /// Album/collection name for audio and playback files.
+    /// Absent for hinário files (main hymnal) and non-audio file types.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub album_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +40,10 @@ pub struct ContentManifest {
     pub generated_at: Option<String>,
     #[serde(default)]
     pub packs: Vec<ManifestPack>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub db_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub db_version: Option<i64>,
 }
 
 /// Fetch and deserialize a manifest JSON from a URL.

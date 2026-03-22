@@ -28,6 +28,7 @@ export function StatusBar() {
   const legacyFetchProgress = useLegacyFetchStore((s) => s.progress);
   const contentSyncProgress = useContentSyncStore((s) => s.progress);
   const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
+  const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
   const packSyncRunning = packSyncProgress != null &&
     (packSyncProgress.status === "pending" || packSyncProgress.status === "running");
   
@@ -66,12 +67,18 @@ export function StatusBar() {
 
       <div className="flex items-center gap-3">
         {packSyncRunning && (
-          <span className="text-xs text-muted-foreground">
-            {t("settings.packSync.statusBar", {
-              current: packSyncProgress!.packsProcessed,
-              total: packSyncProgress!.packsTotal,
-            })}
-          </span>
+          <button
+            onClick={openPackSyncProgress}
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-sky-400 hover:bg-white/10"
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>
+              {t("settings.packSync.statusBar", {
+                current: packSyncProgress!.packsProcessed,
+                total: packSyncProgress!.packsTotal,
+              })}
+            </span>
+          </button>
         )}
         {showContentSyncIndicator && (
           <button
