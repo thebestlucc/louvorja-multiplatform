@@ -62,19 +62,20 @@ pub fn build_plan(
         // Even if the manifest version hasn't changed, we still need to check
         // whether a legacy DB is pending (e.g. the user dismissed the dialog before
         // importing, or the app was updated and dbVersion needs re-checking).
-        let legacy_db = match (&manifest.db_url, manifest.db_version) {
-            (Some(url), Some(remote_version)) => {
+        // TODO: Task 2 will rework legacy_db logic to iterate manifest.databases
+        let legacy_db = match manifest.databases.get("pt-BR") {
+            Some(entry) => {
                 let local_version = content_sync::get_legacy_db_version(conn)?.unwrap_or(0);
-                if remote_version > local_version {
+                if entry.version > local_version {
                     Some(LegacyDbSyncItem {
-                        url: url.clone(),
-                        version: remote_version,
+                        url: entry.url.clone(),
+                        version: entry.version,
                     })
                 } else {
                     None
                 }
             }
-            _ => None,
+            None => None,
         };
         return Ok(PackSyncPlan {
             manifest_version: manifest.manifest_version,
@@ -129,20 +130,20 @@ pub fn build_plan(
         });
     }
 
-    // Check if the manifest advertises a legacy DB that we haven't imported yet.
-    let legacy_db = match (&manifest.db_url, manifest.db_version) {
-        (Some(url), Some(remote_version)) => {
+    // TODO: Task 2 will rework legacy_db logic to iterate manifest.databases
+    let legacy_db = match manifest.databases.get("pt-BR") {
+        Some(entry) => {
             let local_version = content_sync::get_legacy_db_version(conn)?.unwrap_or(0);
-            if remote_version > local_version {
+            if entry.version > local_version {
                 Some(LegacyDbSyncItem {
-                    url: url.clone(),
-                    version: remote_version,
+                    url: entry.url.clone(),
+                    version: entry.version,
                 })
             } else {
                 None
             }
         }
-        _ => None,
+        None => None,
     };
 
     Ok(PackSyncPlan {
