@@ -710,6 +710,301 @@ pub fn resolve_hymn_audio_path(
     Ok(legacy_path)
 }
 
+/// Query hymnal from the content DB (downloaded legacy DB).
+/// Returns Hymn structs with file paths ready for app_data_dir resolution.
+pub fn get_hymns_from_content_db(
+    content_db: &Connection,
+    lang_bcp47: &str,
+) -> Result<Vec<Hymn>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+
+    let mut stmt = content_db
+        .prepare(
+            "SELECT
+                m.id_music                    AS id,
+                am.track                      AS number,
+                m.name                        AS title,
+                NULL                          AS author,
+                a.name                        AS album,
+                NULL                          AS lyrics,
+                NULL                          AS chords,
+                fa.dir || '/' || fa.name      AS audio_path,
+                fp.dir || '/' || fp.name      AS playback_path,
+                'hymnal'                      AS category,
+                NULL                          AS notes,
+                fi.dir || '/' || fi.name      AS cover_path,
+                NULL                          AS lyrics_sync,
+                m.id_music                    AS api_music_id,
+                m.created_at                  AS created_at,
+                m.updated_at                  AS updated_at
+             FROM musics m
+             LEFT JOIN albums_musics am ON am.id_music = m.id_music
+             LEFT JOIN albums        a  ON a.id_album  = am.id_album
+             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+             WHERE m.id_language = ?1
+             ORDER BY a.name, am.track",
+        )
+        .map_err(AppError::Database)?;
+
+    let hymns = stmt
+        .query_map([lang_short], |row| {
+            Ok(Hymn {
+                id: row.get("id")?,
+                number: row.get("number")?,
+                title: row.get("title")?,
+                author: row.get("author")?,
+                album: row.get("album")?,
+                lyrics: row.get("lyrics")?,
+                chords: row.get("chords")?,
+                audio_path: row.get("audio_path")?,
+                playback_path: row.get("playback_path")?,
+                category: row.get("category")?,
+                notes: row.get("notes")?,
+                cover_path: row.get("cover_path")?,
+                lyrics_sync: row.get("lyrics_sync")?,
+                api_music_id: row.get("api_music_id")?,
+                created_at: row
+                    .get::<_, Option<String>>("created_at")?
+                    .unwrap_or_default(),
+                updated_at: row
+                    .get::<_, Option<String>>("updated_at")?
+                    .unwrap_or_default(),
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+
+    Ok(hymns)
+}
+
+/// Search hymnal in the content DB using FTS5 (musics_fts table).
+/// Falls back to `get_hymns_from_content_db` when query is empty or FTS table is missing.
+pub fn search_hymns_content_db(
+    content_db: &Connection,
+    query: &str,
+    lang_bcp47: &str,
+) -> Result<Vec<Hymn>, AppError> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return get_hymns_from_content_db(content_db, lang_bcp47);
+    }
+
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+
+    // Sanitize query: keep alphanumeric + whitespace, then build FTS5 prefix query.
+    let sanitized: String = trimmed
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ");
+    if sanitized.is_empty() {
+        return get_hymns_from_content_db(content_db, lang_bcp47);
+    }
+    let fts_query = format!("{}*", sanitized);
+
+    // Check if FTS table exists
+    let fts_exists: bool = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    if !fts_exists {
+        return get_hymns_from_content_db(content_db, lang_bcp47);
+    }
+
+    let mut stmt = content_db
+        .prepare(
+            "SELECT
+                m.id_music AS id, am.track AS number, m.name AS title,
+                NULL AS author, a.name AS album, NULL AS lyrics, NULL AS chords,
+                fa.dir || '/' || fa.name AS audio_path,
+                fp.dir || '/' || fp.name AS playback_path,
+                'hymnal' AS category, NULL AS notes,
+                fi.dir || '/' || fi.name AS cover_path,
+                NULL AS lyrics_sync, m.id_music AS api_music_id,
+                m.created_at, m.updated_at
+             FROM musics_fts
+             JOIN musics m ON musics_fts.rowid = m.id_music
+             LEFT JOIN albums_musics am ON am.id_music = m.id_music
+             LEFT JOIN albums        a  ON a.id_album  = am.id_album
+             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+             WHERE musics_fts MATCH ?1
+               AND m.id_language = ?2
+             ORDER BY rank
+             LIMIT 50",
+        )
+        .map_err(AppError::Database)?;
+
+    let hymns = stmt
+        .query_map(params![fts_query, lang_short], |row| {
+            Ok(Hymn {
+                id: row.get("id")?,
+                number: row.get("number")?,
+                title: row.get("title")?,
+                author: row.get("author")?,
+                album: row.get("album")?,
+                lyrics: row.get("lyrics")?,
+                chords: row.get("chords")?,
+                audio_path: row.get("audio_path")?,
+                playback_path: row.get("playback_path")?,
+                category: row.get("category")?,
+                notes: row.get("notes")?,
+                cover_path: row.get("cover_path")?,
+                lyrics_sync: row.get("lyrics_sync")?,
+                api_music_id: row.get("api_music_id")?,
+                created_at: row
+                    .get::<_, Option<String>>("created_at")?
+                    .unwrap_or_default(),
+                updated_at: row
+                    .get::<_, Option<String>>("updated_at")?
+                    .unwrap_or_default(),
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+
+    Ok(hymns)
+}
+
+/// Query album/collection list from the content DB (downloaded legacy DB).
+pub fn get_collections_from_content_db(
+    content_db: &Connection,
+    lang_bcp47: &str,
+) -> Result<Vec<crate::db::models::Collection>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+
+    let mut stmt = content_db
+        .prepare(
+            "SELECT
+                a.id_album                                   AS id,
+                a.name                                       AS name,
+                NULL                                         AS description,
+                CAST(SUBSTR(a.name, 1, 4) AS INTEGER)        AS year,
+                f.dir || '/' || f.name                       AS cover_path,
+                NULL                                         AS auto_cover_path,
+                COUNT(am.id_music)                           AS song_count,
+                'api'                                        AS source_type,
+                a.id_album                                   AS api_album_id,
+                a.created_at,
+                a.updated_at
+             FROM albums a
+             LEFT JOIN files f ON f.id_file = a.id_file_image
+             LEFT JOIN albums_musics am ON am.id_album = a.id_album
+             WHERE a.id_language = ?1
+             GROUP BY a.id_album
+             ORDER BY a.name",
+        )
+        .map_err(AppError::Database)?;
+
+    let collections = stmt
+        .query_map([lang_short], |row| {
+            let year_raw: Option<i64> = row.get("year")?;
+            let year =
+                year_raw.and_then(|y| if (1900..=2100).contains(&y) { Some(y as i32) } else { None });
+            Ok(crate::db::models::Collection {
+                id: row.get("id")?,
+                name: row.get("name")?,
+                description: row.get("description")?,
+                year,
+                cover_path: row.get("cover_path")?,
+                auto_cover_path: row.get("auto_cover_path")?,
+                song_count: row.get::<_, i64>("song_count")? as i32,
+                source_type: row.get("source_type")?,
+                api_album_id: row.get("api_album_id")?,
+                created_at: row
+                    .get::<_, Option<String>>("created_at")?
+                    .unwrap_or_default(),
+                updated_at: row
+                    .get::<_, Option<String>>("updated_at")?
+                    .unwrap_or_default(),
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+
+    Ok(collections)
+}
+
+/// Query hymns belonging to a specific album in the content DB.
+pub fn get_collection_hymns_from_content_db(
+    content_db: &Connection,
+    album_id: i64,
+    lang_bcp47: &str,
+) -> Result<Vec<Hymn>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+
+    let mut stmt = content_db
+        .prepare(
+            "SELECT
+                m.id_music AS id, am.track AS number, m.name AS title,
+                NULL AS author, a.name AS album, NULL AS lyrics, NULL AS chords,
+                fa.dir || '/' || fa.name AS audio_path,
+                fp.dir || '/' || fp.name AS playback_path,
+                'hymnal' AS category, NULL AS notes,
+                fi.dir || '/' || fi.name AS cover_path,
+                NULL AS lyrics_sync, m.id_music AS api_music_id,
+                m.created_at, m.updated_at
+             FROM musics m
+             JOIN albums_musics am ON am.id_music = m.id_music
+             LEFT JOIN albums    a  ON a.id_album  = am.id_album
+             LEFT JOIN files     fa ON fa.id_file  = m.id_file_music
+             LEFT JOIN files     fp ON fp.id_file  = m.id_file_instrumental_music
+             LEFT JOIN files     fi ON fi.id_file  = m.id_file_image
+             WHERE am.id_album = ?1
+               AND m.id_language = ?2
+             ORDER BY am.track",
+        )
+        .map_err(AppError::Database)?;
+
+    let hymns = stmt
+        .query_map(params![album_id, lang_short], |row| {
+            Ok(Hymn {
+                id: row.get("id")?,
+                number: row.get("number")?,
+                title: row.get("title")?,
+                author: row.get("author")?,
+                album: row.get("album")?,
+                lyrics: row.get("lyrics")?,
+                chords: row.get("chords")?,
+                audio_path: row.get("audio_path")?,
+                playback_path: row.get("playback_path")?,
+                category: row.get("category")?,
+                notes: row.get("notes")?,
+                cover_path: row.get("cover_path")?,
+                lyrics_sync: row.get("lyrics_sync")?,
+                api_music_id: row.get("api_music_id")?,
+                created_at: row
+                    .get::<_, Option<String>>("created_at")?
+                    .unwrap_or_default(),
+                updated_at: row
+                    .get::<_, Option<String>>("updated_at")?
+                    .unwrap_or_default(),
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+
+    Ok(hymns)
+}
+
 pub fn find_hymn_by_api_music_id(conn: &Connection, api_music_id: i64) -> Option<i64> {
     conn.query_row(
         "SELECT id FROM hymns WHERE api_music_id = ?1",
