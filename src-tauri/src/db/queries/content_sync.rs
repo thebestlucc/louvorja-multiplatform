@@ -886,4 +886,44 @@ mod tests {
         ).unwrap();
         assert_eq!(path, "media/images/456/cover.jpg");
     }
+
+    #[test]
+    fn bcp47_to_lang_code_maps_known_tags() {
+        assert_eq!(bcp47_to_lang_code("pt-BR"), "pt");
+        assert_eq!(bcp47_to_lang_code("en-US"), "en");
+        assert_eq!(bcp47_to_lang_code("es"),    "es");
+    }
+
+    #[test]
+    fn bcp47_to_lang_code_passes_through_unknown() {
+        assert_eq!(bcp47_to_lang_code("fr"), "fr");
+        assert_eq!(bcp47_to_lang_code("zh-CN"), "zh-CN");
+    }
+
+    #[test]
+    fn selected_languages_default_empty() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        let langs = get_selected_languages(&conn);
+        assert!(langs.is_empty(), "should default to empty vec");
+    }
+
+    #[test]
+    fn set_and_get_selected_languages_roundtrip() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_selected_languages(&conn, &["pt-BR".to_string(), "es".to_string()]).unwrap();
+        let langs = get_selected_languages(&conn);
+        assert_eq!(langs, vec!["pt-BR".to_string(), "es".to_string()]);
+    }
+
+    #[test]
+    fn set_selected_languages_overwrites_previous() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        set_selected_languages(&conn, &["pt-BR".to_string()]).unwrap();
+        set_selected_languages(&conn, &["en-US".to_string()]).unwrap();
+        let langs = get_selected_languages(&conn);
+        assert_eq!(langs, vec!["en-US".to_string()]);
+    }
 }
