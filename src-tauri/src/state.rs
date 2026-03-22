@@ -12,7 +12,7 @@ use specta::Type;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Type)]
@@ -196,6 +196,9 @@ pub struct PackSyncRuntimeState {
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
     pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
+    /// Content DBs keyed by BCP 47 language tag (e.g. "pt-BR").
+    /// Populated on startup (scan for content-*.db) and after each content sync.
+    pub content_dbs: Arc<Mutex<HashMap<String, Pool<SqliteConnectionManager>>>>,
     pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
