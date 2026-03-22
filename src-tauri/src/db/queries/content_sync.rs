@@ -1,11 +1,27 @@
 #![allow(dead_code)]
 
+use std::path::{Path, PathBuf};
+
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, Connection, OptionalExtension, Row};
+
 use crate::db::models::{
     ContentSyncEntity, ContentSyncLocalMediaPaths, ContentSyncRemoteEntityInput, ContentSyncRun,
     ContentSyncRunMode, ContentSyncRunStatus, ContentSyncState,
 };
 use crate::error::AppError;
-use rusqlite::{params, Connection, OptionalExtension, Row};
+
+/// Maps BCP 47 content language tags to the 2-letter code used
+/// as id_language in the legacy DB files table.
+pub fn bcp47_to_lang_code(tag: &str) -> &str {
+    match tag {
+        "pt-BR" => "pt",
+        "en-US" => "en",
+        "es" => "es",
+        other => other,
+    }
+}
 
 fn map_state_row(row: &Row<'_>) -> Result<ContentSyncState, rusqlite::Error> {
     let last_sync_status = row
@@ -657,10 +673,73 @@ pub fn update_collection_cover_by_api_id(
     .map_err(AppError::Database)
 }
 
-/// Return the selected languages for pack sync.
-/// Stub: Task 4 will add the real implementation that reads from settings.
-pub fn get_selected_languages(_conn: &Connection) -> Vec<String> {
-    vec![]
+/// Returns the list of BCP 47 language tags the user has selected for sync.
+/// Returns empty Vec if the setting is not set.
+pub fn get_selected_languages(conn: &Connection) -> Vec<String> {
+    crate::db::queries::settings::get_setting(conn, "pack_sync.selected_languages")
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s.value).ok())
+        .unwrap_or_default()
+}
+
+pub fn set_selected_languages(conn: &Connection, langs: &[String]) -> Result<(), AppError> {
+    let json = serde_json::to_string(langs).map_err(AppError::SerdeJson)?;
+    crate::db::queries::settings::set_setting(conn, "pack_sync.selected_languages", &json)
+}
+
+/// Renames the downloaded temp DB file to its final content-{lang}.db path.
+/// Returns the final path.
+pub fn save_content_db(
+    tmp_path: &Path,
+    lang_bcp47: &str,
+    app_data_dir: &Path,
+) -> Result<PathBuf, AppError> {
+    let filename = format!("content-{}.db", lang_bcp47);
+    let dest = app_data_dir.join(&filename);
+    std::fs::rename(tmp_path, &dest).map_err(AppError::Io)?;
+    Ok(dest)
+}
+
+/// Creates and populates musics_fts on the content DB.
+/// Safe to call multiple times — skips if table already populated.
+pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), AppError> {
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL;
+         PRAGMA cache_size=-8000;
+         CREATE VIRTUAL TABLE IF NOT EXISTS musics_fts USING fts5(name, lyrics);",
+    )
+    .map_err(AppError::Database)?;
+
+    // Guard: skip if already populated (handles interrupted-init recovery)
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM musics_fts", [], |r| r.get(0))
+        .map_err(AppError::Database)?;
+    if count > 0 {
+        return Ok(());
+    }
+
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let mut stmt = conn
+        .prepare(
+            "INSERT INTO musics_fts(rowid, name, lyrics)
+             SELECT m.id_music, m.name, COALESCE(GROUP_CONCAT(l.lyric, ' '), '')
+             FROM musics m
+             LEFT JOIN lyrics l ON l.id_music = m.id_music AND l.id_language = ?1
+             GROUP BY m.id_music",
+        )
+        .map_err(AppError::Database)?;
+    stmt.execute([lang_short]).map_err(AppError::Database)?;
+    Ok(())
+}
+
+/// Opens an r2d2 pool for a content DB file.
+pub fn open_content_db_pool(path: &Path) -> Result<Pool<SqliteConnectionManager>, AppError> {
+    let manager = SqliteConnectionManager::file(path);
+    Pool::builder()
+        .min_idle(Some(1))
+        .max_size(3)
+        .build(manager)
+        .map_err(|e| AppError::Internal(format!("Content DB pool error: {}", e)))
 }
 
 /// Return the remote legacy DB version that was last successfully imported.
