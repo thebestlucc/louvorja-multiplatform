@@ -28,6 +28,9 @@ interface ContentSyncState {
   setPackSyncProgress: (progress: PackSyncProgress | null) => void;
   openPackSyncPlan: () => void;
   closePackSyncPlan: () => void;
+  packSyncProgressOpen: boolean;
+  openPackSyncProgress: () => void;
+  closePackSyncProgress: () => void;
   setPackSyncPendingCount: (count: number) => void;
   setPackSyncPlan: (plan: PackSyncPlan | null) => void;
 }
@@ -41,6 +44,7 @@ export const useContentSyncStore = create<ContentSyncState>((set) => ({
   packSyncRunId: null,
   packSyncProgress: null,
   packSyncPlanOpen: false,
+  packSyncProgressOpen: false,
   packSyncPendingCount: 0,
   packSyncPlan: null,
   setRunId: (runId) => set({ runId }),
@@ -53,6 +57,8 @@ export const useContentSyncStore = create<ContentSyncState>((set) => ({
   setPackSyncProgress: (progress) => set({ packSyncProgress: progress }),
   openPackSyncPlan: () => set({ packSyncPlanOpen: true }),
   closePackSyncPlan: () => set({ packSyncPlanOpen: false }),
+  openPackSyncProgress: () => set({ packSyncProgressOpen: true }),
+  closePackSyncProgress: () => set({ packSyncProgressOpen: false }),
   setPackSyncPendingCount: (count) => set({ packSyncPendingCount: count }),
   setPackSyncPlan: (plan) => set({ packSyncPlan: plan }),
 }));

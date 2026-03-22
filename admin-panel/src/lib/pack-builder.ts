@@ -1,14 +1,17 @@
 import archiver from "archiver";
 import { createHash } from "crypto";
-import { Writable } from "stream";
+import { createWriteStream, createReadStream } from "fs";
+import { Transform } from "stream";
+import { tmpdir } from "os";
+import { join } from "path";
+import { randomUUID } from "crypto";
 
 export interface FileEntry {
   localPath: string;
   packPath: string;
-  hymnApiId: number | null;
-  albumApiId: number | null;
   fileType: "audio" | "playback" | "cover" | "album_cover";
   size: number;
+  albumName?: string;
 }
 
 export interface PackGroup {
@@ -17,9 +20,8 @@ export interface PackGroup {
   totalSize: number;
 }
 
-const MAX_PACK_SIZE = 500 * 1024 * 1024; // 500 MB
+const MAX_PACK_SIZE = 500 * 1000 * 1000; // 500 MB decimal — matches display units and stays under Cloudflare's 512 MB CDN cache limit
 
-/** Greedy bin-packing: sort files by size desc, fill packs up to MAX_PACK_SIZE. */
 export function groupIntoPacks(files: FileEntry[], packIdPrefix: string): PackGroup[] {
   const sorted = [...files].sort((a, b) => b.size - a.size);
   const packs: PackGroup[] = [];
@@ -43,31 +45,63 @@ export function groupIntoPacks(files: FileEntry[], packIdPrefix: string): PackGr
   return packs;
 }
 
-/** Create a STORED (no compression) ZIP and return the buffer + SHA-256. */
-export async function createPackZip(files: FileEntry[]): Promise<{ buffer: Buffer; sha256: string }> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    const writable = new Writable({
-      write(chunk: Buffer, _encoding: string, callback: () => void) {
-        chunks.push(chunk);
-        callback();
-      },
-    });
+class HashPassThrough extends Transform {
+  private hasher = createHash("sha256");
+  private _byteCount = 0;
 
+  _transform(chunk: Buffer, _enc: string, cb: () => void) {
+    this.hasher.update(chunk);
+    this._byteCount += chunk.length;
+    this.push(chunk);
+    cb();
+  }
+
+  digest() {
+    return this.hasher.digest("hex");
+  }
+
+  get byteCount() {
+    return this._byteCount;
+  }
+}
+
+/**
+ * Build a STORED ZIP, stream it to a temp file (never held fully in RAM),
+ * hash it on the fly, and return the temp path + SHA-256 + byte size.
+ * Caller is responsible for deleting the temp file after use.
+ */
+export async function createPackZip(
+  files: FileEntry[],
+): Promise<{ tempPath: string; sha256: string; size: number }> {
+  const tempPath = join(tmpdir(), `louvorja-pack-${randomUUID()}.zip`);
+
+  return new Promise((resolve, reject) => {
+    const writeStream = createWriteStream(tempPath);
+    const hashPassthrough = new HashPassThrough();
     const archive = archiver("zip", { store: true });
+
     archive.on("error", reject);
-    archive.pipe(writable);
+    writeStream.on("error", reject);
+    hashPassthrough.on("error", reject);
+
+    archive.pipe(hashPassthrough).pipe(writeStream);
 
     for (const file of files) {
       archive.file(file.localPath, { name: file.packPath });
     }
 
-    writable.on("finish", () => {
-      const buffer = Buffer.concat(chunks);
-      const sha256 = createHash("sha256").update(buffer).digest("hex");
-      resolve({ buffer, sha256 });
+    writeStream.on("finish", () => {
+      resolve({
+        tempPath,
+        sha256: hashPassthrough.digest(),
+        size: hashPassthrough.byteCount,
+      });
     });
 
     archive.finalize();
   });
+}
+
+export function openPackReadStream(tempPath: string) {
+  return createReadStream(tempPath);
 }

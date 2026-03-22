@@ -651,6 +651,22 @@
       "lastSynced": "Última sincronização",
       "checkError": "Não foi possível verificar atualizações: {{error}}",
       "newPacksAvailable": "Novos pacotes de conteúdo disponíveis",
+      "downloadSingle": "Baixar este pacote",
+      "progressTitle": "Baixando Pacotes",
+      "progressDone": "Download concluído.",
+      "close": "Fechar",
+      "runningInBackground": "Executando em segundo plano…",
+      "packStatus": {
+        "pending": "Pendente",
+        "downloading": "Baixando",
+        "verifying": "Verificando",
+        "ready": "Pronto",
+        "extracting": "Extraindo",
+        "db_update": "Atualizando",
+        "done": "Concluído",
+        "failed": "Falhou",
+        "skipped": "Ignorado"
+      },
       "fileType": {
         "audio": "Áudio",
         "playback": "Playback",

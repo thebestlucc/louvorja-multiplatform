@@ -610,6 +610,39 @@ pub fn update_hymn_path_by_api_id(
         .map_err(AppError::Database)
 }
 
+/// Ensure a collection with the given name exists (CDN/API-sourced).
+/// Returns the existing collection id if already present, otherwise inserts and returns the new id.
+/// If the collection exists with a non-api source_type (e.g. 'remote' from an older sync),
+/// it is upgraded to 'api' so it appears in the Albums tab.
+pub fn ensure_collection_by_name(conn: &Connection, name: &str) -> Result<i64, AppError> {
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM collections WHERE name = ?1 LIMIT 1",
+            params![name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(AppError::Database)?;
+
+    if let Some(id) = existing {
+        // Upgrade source_type to 'api' if it was created with an older value (e.g. 'remote').
+        conn.execute(
+            "UPDATE collections SET source_type = 'api' WHERE id = ?1 AND source_type != 'api'",
+            params![id],
+        )
+        .map_err(AppError::Database)?;
+        return Ok(id);
+    }
+
+    conn.execute(
+        "INSERT INTO collections (name, source_type) VALUES (?1, 'api')",
+        params![name],
+    )
+    .map_err(AppError::Database)?;
+
+    Ok(conn.last_insert_rowid())
+}
+
 /// Update a collection's cover path based on API album ID.
 pub fn update_collection_cover_by_api_id(
     conn: &Connection,
@@ -622,6 +655,132 @@ pub fn update_collection_cover_by_api_id(
     )
     .map(|_| ())
     .map_err(AppError::Database)
+}
+
+/// Return the remote legacy DB version that was last successfully imported.
+/// Returns `None` if no import has ever been performed.
+/// The version is stored as a settings key (`pack_sync.legacy_db_version`).
+pub fn get_legacy_db_version(conn: &Connection) -> Result<Option<i64>, AppError> {
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = 'pack_sync.legacy_db_version'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .optional()
+    .map_err(AppError::Database)
+    .map(|opt| opt.and_then(|s| s.parse::<i64>().ok()))
+}
+
+/// Persist the remote legacy DB version after a successful import.
+pub fn set_legacy_db_version(conn: &Connection, version: i64) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('pack_sync.legacy_db_version', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![version.to_string()],
+    )
+    .map(|_| ())
+    .map_err(AppError::Database)
+}
+
+/// Download a legacy Delphi-schema database (already saved to `legacy_db_path`)
+/// and import its hymn data into the current app database via ATTACH DATABASE.
+///
+/// This mirrors `migrate_v13` but operates cross-DB, using `legacy.*` table prefixes.
+/// Import is skipped when the local `pack_sync.legacy_db_version` is already >= `remote_version`.
+/// Returns the number of hymns inserted (0 when skipped).
+pub fn import_legacy_db(
+    current_conn: &Connection,
+    legacy_db_path: &str,
+    remote_version: i64,
+) -> Result<usize, AppError> {
+    // Skip if we already imported this version or a newer one.
+    let local_version = get_legacy_db_version(current_conn)?.unwrap_or(0);
+    if local_version >= remote_version {
+        return Ok(0);
+    }
+
+    // Escape single quotes in the path to prevent SQL injection in ATTACH.
+    let safe_path = legacy_db_path.replace('\'', "''");
+    current_conn
+        .execute_batch(&format!(
+            "ATTACH DATABASE '{}' AS legacy;",
+            safe_path
+        ))
+        .map_err(AppError::Database)?;
+
+    // Run the import using cross-DB queries.
+    // `legacy.musics`, `legacy.albums_musics`, `legacy.albums`, `legacy.lyrics`, `legacy.files`,
+    // `legacy.categories`, `legacy.categories_albums` mirror the same tables from migrate_v13.
+    let result = (|| -> Result<usize, AppError> {
+        // Check that the required legacy tables actually exist in the attached DB.
+        let musics_exists: i64 = current_conn
+            .query_row(
+                "SELECT COUNT(*) FROM legacy.sqlite_master WHERE type='table' AND name='musics'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(AppError::Database)?;
+        if musics_exists == 0 {
+            return Ok(0);
+        }
+
+        // Count hymns before insert so we can return the delta.
+        let before: i64 = current_conn
+            .query_row("SELECT COUNT(*) FROM hymns", [], |row| row.get(0))
+            .map_err(AppError::Database)?;
+
+        current_conn
+            .execute_batch(
+                "
+                INSERT OR IGNORE INTO hymns (number, title, album, lyrics, audio_path, category)
+                SELECT
+                    am.track,
+                    m.name,
+                    a.name,
+                    (
+                        SELECT GROUP_CONCAT(l.lyric, char(10) || char(10))
+                        FROM legacy.lyrics l
+                        WHERE l.id_music = m.id_music
+                          AND l.id_language = 'pt'
+                        ORDER BY l.\"order\"
+                    ),
+                    CASE
+                        WHEN f.dir IS NOT NULL AND f.name IS NOT NULL
+                        THEN f.dir || '/' || f.name
+                        ELSE NULL
+                    END,
+                    COALESCE(cat.slug, 'hymnal')
+                FROM legacy.musics m
+                INNER JOIN legacy.albums_musics am ON am.id_album = (
+                    SELECT MIN(id_album) FROM legacy.albums_musics WHERE id_music = m.id_music
+                ) AND am.id_music = m.id_music
+                INNER JOIN legacy.albums a ON a.id_album = am.id_album
+                LEFT JOIN legacy.files f ON f.id_file = m.id_file_music
+                LEFT JOIN legacy.categories_albums ca ON ca.id_album = a.id_album
+                    AND ca.id_language = 'pt'
+                LEFT JOIN legacy.categories cat ON cat.id_category = ca.id_category
+                WHERE m.id_language = 'pt'
+                ORDER BY am.track;
+
+                INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');
+                INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
+                SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
+                FROM hymns;
+                ",
+            )
+            .map_err(AppError::Database)?;
+
+        let after: i64 = current_conn
+            .query_row("SELECT COUNT(*) FROM hymns", [], |row| row.get(0))
+            .map_err(AppError::Database)?;
+
+        Ok((after - before).max(0) as usize)
+    })();
+
+    // Always detach, even on error.
+    let _ = current_conn.execute_batch("DETACH DATABASE legacy;");
+
+    result
 }
 
 pub fn list_content_sync_runs(

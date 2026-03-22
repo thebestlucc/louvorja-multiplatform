@@ -13,7 +13,8 @@ import { useContentSyncStore } from "../../stores/content-sync-store";
 import { usePlanPackSync, useStartPackSync } from "../../lib/queries";
 import { catcher } from "../../lib/catcher";
 import { toast } from "sonner";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, CheckCircle2, XCircle, Loader2, Clock, Download } from "lucide-react";
+import { cn } from "../../lib/utils";
 import type { PackSyncPlanItem } from "../../types/content-sync";
 
 function formatBytes(bytes: number): string {
@@ -30,7 +31,7 @@ const FILE_TYPE_BADGE: Record<string, string> = {
   album_cover: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
 };
 
-function PackRow({ item }: { item: PackSyncPlanItem }) {
+function PackRow({ item, onDownload }: { item: PackSyncPlanItem; onDownload: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation();
   const innerRef = useRef<HTMLDivElement>(null);
@@ -43,20 +44,30 @@ function PackRow({ item }: { item: PackSyncPlanItem }) {
 
   return (
     <div className="border-b border-border last:border-b-0">
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted/40 transition-colors"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <ChevronRight
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200"
-          style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
-        />
-        <span className="flex-1 text-left font-medium">{item.packId}</span>
-        <span className="text-muted-foreground">
-          v{item.packVersion} · {item.fileCount} {t("settings.packSync.files")} · {formatBytes(item.packSize)}
-        </span>
-      </button>
+      <div className="flex w-full items-center gap-2 px-3 py-2.5 text-sm">
+        <button
+          type="button"
+          className="flex flex-1 items-center gap-2 min-w-0 hover:bg-muted/40 transition-colors rounded -mx-1 px-1"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <ChevronRight
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200"
+            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+          />
+          <span className="flex-1 text-left font-medium truncate">{item.packId}</span>
+          <span className="shrink-0 text-muted-foreground">
+            v{item.packVersion} · {item.fileCount} {t("settings.packSync.files")} · {formatBytes(item.packSize)}
+          </span>
+        </button>
+        <button
+          type="button"
+          title={t("settings.packSync.downloadSingle")}
+          className="cursor-pointer shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+          onClick={onDownload}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      </div>
 
       <div
         style={{ height, overflow: "hidden", transition: "height 220ms cubic-bezier(0.4,0,0.2,1)" }}
@@ -90,14 +101,19 @@ export function PackSyncDialog() {
   const startMutation = useStartPackSync();
   const plan = planQuery.data;
 
-  const handleStart = async () => {
-    const [runId, error] = await catcher(startMutation.mutateAsync());
+  const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
+
+  const handleStart = async (items?: PackSyncPlanItem[]) => {
+    // When starting a full sync (no specific items), also include the legacy DB if present.
+    const legacyDb = !items ? plan?.legacyDb : undefined;
+    const [runId, error] = await catcher(startMutation.mutateAsync({ items, legacyDb }));
     if (error) {
       toast.error(String(error));
       return;
     }
     if (runId) setRunId(runId);
     close();
+    openPackSyncProgress();
   };
 
   return (
@@ -111,17 +127,24 @@ export function PackSyncDialog() {
         </DialogHeader>
 
         <div className="mt-2">
-          {plan && plan.items.length > 0 ? (
+          {plan && (plan.items.length > 0 || plan.legacyDb != null) ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Metric label={t("settings.packSync.packsToDownload")} value={plan.totalDownloadCount} />
                 <Metric label={t("settings.packSync.totalSize")} value={formatBytes(plan.totalDownloadSize)} />
               </div>
-              <div className="rounded-md border border-border overflow-hidden">
-                {plan.items.map((item) => (
-                  <PackRow key={item.packId} item={item} />
-                ))}
-              </div>
+              {plan.items.length > 0 && (
+                <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
+                  {plan.items.map((item) => (
+                    <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
+                  ))}
+                </div>
+              )}
+              {plan.legacyDb != null && (
+                <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                  {t("settings.packSync.legacyDbPending", { defaultValue: "Database file update available (v{{version}})", version: plan.legacyDb.version })}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">{t("settings.packSync.upToDate")}</p>
@@ -133,8 +156,8 @@ export function PackSyncDialog() {
             {t("settings.packSync.later")}
           </Button>
           <Button
-            onClick={() => void handleStart()}
-            disabled={!plan || plan.items.length === 0 || startMutation.isPending}
+            onClick={() => void handleStart(undefined)}
+            disabled={!plan || (plan.items.length === 0 && plan.legacyDb == null) || startMutation.isPending}
           >
             {startMutation.isPending
               ? t("settings.packSync.starting")
@@ -152,5 +175,105 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-base font-medium text-foreground">{value}</div>
     </div>
+  );
+}
+
+const ACTIVE_STATUSES = new Set(["downloading", "verifying", "extracting", "db_update"]);
+const DONE_STATUSES = new Set(["done", "ready"]);
+const FAILED_STATUSES = new Set(["failed"]);
+const SKIPPED_STATUSES = new Set(["skipped"]);
+
+function PackStatusIcon({ status }: { status: string }) {
+  if (ACTIVE_STATUSES.has(status))
+    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-sky-400" />;
+  if (DONE_STATUSES.has(status))
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />;
+  if (FAILED_STATUSES.has(status))
+    return <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />;
+  if (SKIPPED_STATUSES.has(status))
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+  return <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+}
+
+export function PackSyncProgressDialog() {
+  const { t } = useTranslation();
+  const open = useContentSyncStore((s) => s.packSyncProgressOpen);
+  const close = useContentSyncStore((s) => s.closePackSyncProgress);
+  const plan = useContentSyncStore((s) => s.packSyncPlan);
+  const progress = useContentSyncStore((s) => s.packSyncProgress);
+
+  const statuses = progress?.packStatuses ?? {};
+  const percent = progress?.percent ?? 0;
+  const isDone = progress?.status === "completed" || progress?.status === "failed" || progress?.status === "cancelled";
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && close()}>
+      <DialogContent className="max-w-2xl text-base">
+        <DialogHeader>
+          <DialogTitle>{t("settings.packSync.progressTitle")}</DialogTitle>
+          <DialogDescription>
+            {isDone
+              ? t("settings.packSync.progressDone")
+              : t("settings.packSync.statusBar", {
+                  current: progress?.packsProcessed ?? 0,
+                  total: progress?.packsTotal ?? 0,
+                })}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-2 space-y-3">
+          {/* Progress bar */}
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-sky-500 transition-all duration-300"
+              style={{ width: `${Math.min(percent, 100)}%` }}
+            />
+          </div>
+
+          {/* Per-pack list */}
+          {plan && plan.items.length > 0 && (
+            <div className="rounded-md border border-border overflow-hidden max-h-80 overflow-y-auto">
+              {plan.items.map((item) => {
+                const status = statuses[item.packId] ?? "pending";
+                return (
+                  <div
+                    key={item.packId}
+                    className={cn(
+                      "flex items-center gap-3 border-b border-border last:border-b-0 px-3 py-2 text-sm",
+                      status === "failed" && "bg-destructive/5",
+                    )}
+                  >
+                    <PackStatusIcon status={status} />
+                    <span className="flex-1 font-medium truncate">{item.packId}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatBytes(item.packSize)}
+                    </span>
+                    <span className={cn(
+                      "shrink-0 text-xs",
+                      ACTIVE_STATUSES.has(status) && "text-sky-400",
+                      DONE_STATUSES.has(status) && "text-emerald-500",
+                      FAILED_STATUSES.has(status) && "text-destructive",
+                      !ACTIVE_STATUSES.has(status) && !DONE_STATUSES.has(status) && !FAILED_STATUSES.has(status) && "text-muted-foreground",
+                    )}>
+                      {t(`settings.packSync.packStatus.${status}`, { defaultValue: status })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {progress?.message && (
+            <p className="text-xs text-muted-foreground truncate">{progress.message}</p>
+          )}
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="ghost" onClick={close} disabled={!isDone}>
+            {isDone ? t("settings.packSync.close") : t("settings.packSync.runningInBackground")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

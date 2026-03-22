@@ -1,9 +1,8 @@
 export interface ManifestFile {
   path: string;
-  hymnApiId: number | null;
-  albumApiId: number | null;
   type: "audio" | "playback" | "cover" | "album_cover";
   size: number;
+  albumName?: string;
 }
 
 export interface ManifestPack {
@@ -19,6 +18,8 @@ export interface ContentManifest {
   manifestVersion: number;
   generatedAt: string;
   packs: ManifestPack[];
+  dbUrl?: string;
+  dbVersion?: number;
 }
 
 const MANIFEST_KEY = "manifest.json";

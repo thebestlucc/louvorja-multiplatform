@@ -13,12 +13,18 @@ const r2 = new S3Client({
 const BUCKET = process.env.R2_BUCKET!;
 const CDN_BASE = process.env.R2_PUBLIC_CDN_BASE!;
 
-export async function uploadToR2(key: string, body: Buffer | Readable, contentType?: string): Promise<string> {
+export async function uploadToR2(
+  key: string,
+  body: Buffer | Readable,
+  contentType?: string,
+  contentLength?: number,
+): Promise<string> {
   await r2.send(new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
     Body: body,
     ContentType: contentType,
+    ContentLength: contentLength,
   }));
   return `${CDN_BASE}/${key}`;
 }

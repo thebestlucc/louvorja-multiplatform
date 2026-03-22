@@ -54,6 +54,8 @@ import type {
   ContentSyncReport,
   ContentSyncSummary,
   PackSyncPlan,
+  PackSyncPlanItem,
+  LegacyDbSyncItem,
 } from "../types/content-sync";
 import type { TextFormat } from "../types/utilities";
 
@@ -691,8 +693,14 @@ export async function clearManifestCache(): Promise<void> {
   return tauriInvoke<void>("clear_manifest_cache");
 }
 
-export async function startPackSync(): Promise<string> {
-  return tauriInvoke<string>("start_pack_sync");
+export async function startPackSync(
+  items?: PackSyncPlanItem[] | null,
+  legacyDb?: LegacyDbSyncItem | null,
+): Promise<string> {
+  return tauriInvoke<string>("start_pack_sync", {
+    items: items ?? null,
+    legacyDb: legacyDb ?? null,
+  });
 }
 
 export async function cancelPackSync(runId: string): Promise<void> {

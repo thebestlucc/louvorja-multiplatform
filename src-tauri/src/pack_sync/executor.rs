@@ -1,13 +1,17 @@
 use crate::db::queries::{content_sync, settings};
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::catcher::catcher;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
+
+const MAX_CONCURRENT_DOWNLOADS: usize = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +22,9 @@ pub struct PackSyncProgress {
     pub message: Option<String>,
     pub packs_total: usize,
     pub packs_processed: usize,
+    /// Per-pack download/extract status keyed by pack_id.
+    /// Values: "pending" | "downloading" | "verifying" | "ready" | "extracting" | "db_update" | "done" | "failed" | "skipped"
+    pub pack_statuses: HashMap<String, String>,
 }
 
 pub fn new_run_id() -> String {
@@ -28,186 +35,470 @@ pub fn execute_pack_sync(
     app: AppHandle,
     run_id: String,
     cancel_flag: Arc<AtomicBool>,
+    // When Some, skip manifest fetch and execute only these items.
+    // When None, fetch the manifest and build the full plan.
+    preset_items: Option<Vec<super::planner::PackSyncPlanItem>>,
+    // When Some, download and import this legacy DB as part of this sync run.
+    preset_legacy_db: Option<super::planner::LegacyDbSyncItem>,
 ) {
-    let emit = |status: &str, percent: f64, message: &str, processed: usize, total: usize| {
-        let _ = app.emit("pack-sync-progress", PackSyncProgress {
-            run_id: run_id.clone(),
-            status: status.to_string(),
-            percent,
-            message: Some(message.to_string()),
-            packs_total: total,
-            packs_processed: processed,
-        });
+    // Emit helper — snapshots current statuses into every event.
+    let emit = {
+        let app = app.clone();
+        let run_id = run_id.clone();
+        move |status: &str, percent: f64, message: &str, processed: usize, total: usize,
+              statuses: HashMap<String, String>| {
+            let _ = app.emit("pack-sync-progress", PackSyncProgress {
+                run_id: run_id.clone(),
+                status: status.to_string(),
+                percent,
+                message: if message.is_empty() { None } else { Some(message.to_string()) },
+                packs_total: total,
+                packs_processed: processed,
+                pack_statuses: statuses,
+            });
+        }
     };
 
-    emit("running", 0.0, "Fetching manifest…", 0, 0);
-
-    let manifest_url = super::CDN_MANIFEST_URL;
-    if manifest_url.is_empty() {
-        emit("failed", 100.0, "CDN manifest URL not configured.", 0, 0);
+    let (client, err) = catcher(
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|e| AppError::Internal(format!("HTTP client error: {}", e))),
+    );
+    if let Some(e) = err {
+        emit("failed", 100.0, &e.to_string(), 0, 0, HashMap::new());
         return;
     }
-
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build() {
-        Ok(c) => c,
-        Err(e) => {
-            emit("failed", 100.0, &format!("HTTP client error: {}", e), 0, 0);
-            return;
-        }
-    };
-
-    let manifest = match tauri::async_runtime::block_on(
-        crate::content_sync::manifest::fetch_manifest(&client, manifest_url)
-    ) {
-        Ok(m) => m,
-        Err(e) => {
-            emit("failed", 100.0, &format!("Manifest fetch failed: {}", e), 0, 0);
-            return;
-        }
-    };
+    let client = client.unwrap();
 
     let Some(state) = app.try_state::<AppState>() else {
-        emit("failed", 100.0, "App state unavailable.", 0, 0);
+        emit("failed", 100.0, "App state unavailable.", 0, 0, HashMap::new());
         return;
     };
-    let conn = match state.db.get() {
-        Ok(c) => c,
-        Err(e) => {
-            emit("failed", 100.0, &format!("DB unavailable: {}", e), 0, 0);
+    let (conn, err) = catcher(
+        state.db.get().map_err(|e| AppError::Internal(format!("DB unavailable: {}", e))),
+    );
+    if let Some(e) = err {
+        emit("failed", 100.0, &e.to_string(), 0, 0, HashMap::new());
+        return;
+    }
+    let conn = conn.unwrap();
+
+    // If items were provided directly (per-pack download), skip the manifest fetch.
+    // If not, fetch the manifest and build the full plan.
+    let (plan_items, legacy_db_item, manifest_version_to_save) = if let Some(items) = preset_items {
+        (items, preset_legacy_db, None)
+    } else {
+        let manifest_url = super::CDN_MANIFEST_URL;
+        if manifest_url.is_empty() {
+            emit("failed", 100.0, "CDN manifest URL not configured.", 0, 0, HashMap::new());
             return;
         }
-    };
 
-    let stored_version = settings::get_setting(&conn, "pack_sync.manifest_version")
-        .ok()
-        .and_then(|s| s.value.parse::<i64>().ok())
-        .unwrap_or(0);
+        emit("running", 0.0, "Buscando manifesto…", 0, 0, HashMap::new());
 
-    let plan = match super::planner::build_plan(&conn, &manifest, stored_version) {
-        Ok(p) => p,
-        Err(e) => {
-            emit("failed", 100.0, &format!("Plan failed: {}", e), 0, 0);
+        let (manifest, err) = catcher(
+            tauri::async_runtime::block_on(
+                crate::content_sync::manifest::fetch_manifest(&client, manifest_url),
+            )
+            .map_err(|e| AppError::Internal(format!("Manifesto falhou: {}", e))),
+        );
+        if let Some(e) = err {
+            emit("failed", 100.0, &e.to_string(), 0, 0, HashMap::new());
             return;
         }
+        let manifest = manifest.unwrap();
+
+        let stored_version = settings::get_setting(&conn, "pack_sync.manifest_version")
+            .ok()
+            .and_then(|s| s.value.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        let (plan, err) = catcher(super::planner::build_plan(&conn, &manifest, stored_version));
+        if let Some(e) = err {
+            emit("failed", 100.0, &e.to_string(), 0, 0, HashMap::new());
+            return;
+        }
+        let plan = plan.unwrap();
+
+        (plan.items, plan.legacy_db, Some(manifest.manifest_version.to_string()))
     };
 
-    if plan.items.is_empty() {
-        emit("completed", 100.0, "Already up to date.", 0, 0);
-        let _ = settings::set_setting(&conn, "pack_sync.manifest_version",
-            &manifest.manifest_version.to_string());
+    if plan_items.is_empty() && legacy_db_item.is_none() {
+        emit("completed", 100.0, "Já está atualizado.", 0, 0, HashMap::new());
+        if let Some(v) = manifest_version_to_save {
+            let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
+        }
         return;
     }
 
-    let total = plan.items.len();
+    // Shadow with the resolved items vec for the rest of the function.
+    let total = plan_items.len();
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
 
-    for (index, item) in plan.items.iter().enumerate() {
+    // Initialize per-pack statuses.
+    let pack_statuses: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(
+        plan_items
+            .iter()
+            .map(|i| {
+                let s = if i.needs_download || i.needs_db_update {
+                    "pending"
+                } else {
+                    "skipped"
+                };
+                (i.pack_id.clone(), s.to_string())
+            })
+            .collect(),
+    ));
+
+    let snapshot = || pack_statuses.lock().unwrap().clone();
+
+    emit("running", 0.0, "Iniciando downloads…", 0, total, snapshot());
+
+    // ── Phase 1: Concurrent downloads (up to MAX_CONCURRENT_DOWNLOADS) ──────
+
+    let items_to_download: Vec<_> = plan_items
+        .iter()
+        .filter(|i| i.needs_download)
+        .cloned()
+        .collect();
+
+    let download_total = items_to_download.len();
+    let downloaded_ok: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    let completed_count = Arc::new(AtomicUsize::new(0));
+
+    tauri::async_runtime::block_on(async {
+        use tokio::sync::Semaphore;
+        let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS));
+        let mut handles = Vec::new();
+
+        for item in items_to_download {
+            if cancel_flag.load(Ordering::Relaxed) {
+                break;
+            }
+
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let client = client.clone();
+            let app_data = app_data_dir.clone();
+            let statuses = pack_statuses.clone();
+            let ok_set = downloaded_ok.clone();
+            let count = completed_count.clone();
+            let app_clone = app.clone();
+            let run_id_clone = run_id.clone();
+
+            statuses
+                .lock()
+                .unwrap()
+                .insert(item.pack_id.clone(), "downloading".to_string());
+
+            let handle = tokio::spawn(async move {
+                let _permit = permit;
+                let zip_path = app_data.join(format!("pack_{}.zip.tmp", item.pack_id));
+
+                let dl = crate::http_sync::downloader::download_file_http(
+                    &client,
+                    &item.pack_url,
+                    &zip_path,
+                    Some(item.pack_size),
+                )
+                .await;
+
+                match dl {
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&zip_path);
+                        eprintln!("[pack-sync] Download failed for {}: {}", item.pack_id, e);
+                        statuses
+                            .lock()
+                            .unwrap()
+                            .insert(item.pack_id.clone(), "failed".to_string());
+                    }
+                    Ok(_) => {
+                        statuses
+                            .lock()
+                            .unwrap()
+                            .insert(item.pack_id.clone(), "verifying".to_string());
+
+                        match verify_sha256(&zip_path, &item.pack_sha256) {
+                            Ok(true) => {
+                                statuses
+                                    .lock()
+                                    .unwrap()
+                                    .insert(item.pack_id.clone(), "ready".to_string());
+                                ok_set.lock().unwrap().insert(item.pack_id.clone());
+                            }
+                            _ => {
+                                let _ = std::fs::remove_file(&zip_path);
+                                eprintln!(
+                                    "[pack-sync] SHA-256 mismatch for {}",
+                                    item.pack_id
+                                );
+                                statuses
+                                    .lock()
+                                    .unwrap()
+                                    .insert(item.pack_id.clone(), "failed".to_string());
+                            }
+                        }
+                    }
+                }
+
+                let done = count.fetch_add(1, Ordering::Relaxed) + 1;
+                let percent = (done as f64 / download_total as f64) * 70.0;
+                let statuses_snap = statuses.lock().unwrap().clone();
+                let _ = app_clone.emit(
+                    "pack-sync-progress",
+                    PackSyncProgress {
+                        run_id: run_id_clone,
+                        status: "running".into(),
+                        percent,
+                        message: Some(format!("Baixando pacotes ({}/{})", done, download_total)),
+                        packs_total: download_total,
+                        packs_processed: done,
+                        pack_statuses: statuses_snap,
+                    },
+                );
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            let _ = handle.await;
+        }
+    });
+
+    // ── Phase 2: Sequential extract + DB update ──────────────────────────────
+
+    let ok_set = downloaded_ok.lock().unwrap().clone();
+
+    for (index, item) in plan_items.iter().enumerate() {
         if cancel_flag.load(Ordering::Relaxed) {
-            emit("cancelled", (index as f64 / total as f64) * 100.0,
-                "Pack sync cancelled.", index, total);
+            emit(
+                "cancelled",
+                70.0 + (index as f64 / total as f64) * 30.0,
+                "Sincronização cancelada.",
+                index,
+                total,
+                snapshot(),
+            );
             return;
         }
 
-        let percent = ((index + 1) as f64 / total as f64) * 100.0;
+        let extract_percent = 70.0 + ((index + 1) as f64 / total as f64) * 30.0;
 
         if item.needs_download {
-            emit("running", percent,
-                &format!("Downloading pack {} ({}/{})…", item.pack_id, index + 1, total),
-                index, total);
+            if ok_set.contains(&item.pack_id) {
+                let zip_path =
+                    app_data_dir.join(format!("pack_{}.zip.tmp", item.pack_id));
 
-            let zip_path = app_data_dir.join(format!("pack_{}.zip.tmp", item.pack_id));
+                pack_statuses
+                    .lock()
+                    .unwrap()
+                    .insert(item.pack_id.clone(), "extracting".to_string());
+                emit(
+                    "running",
+                    extract_percent,
+                    &format!("Extraindo {}…", item.pack_id),
+                    index,
+                    total,
+                    snapshot(),
+                );
 
-            let dl_result = tauri::async_runtime::block_on(
-                crate::http_sync::downloader::download_file_http(
-                    &client, &item.pack_url, &zip_path, Some(item.pack_size),
-                )
-            );
-
-            match dl_result {
-                Ok(_) => {}
-                Err(e) => {
-                    let _ = std::fs::remove_file(&zip_path);
-                    eprintln!("[pack-sync] Download failed for {}: {}", item.pack_id, e);
-                    emit("running", percent,
-                        &format!("Download failed for {}: {}", item.pack_id, e),
-                        index + 1, total);
-                    continue;
+                match crate::http_sync::downloader::extract_zip_to(
+                    &zip_path,
+                    &app_data_dir,
+                ) {
+                    Ok(_) => {
+                        let _ = std::fs::remove_file(&zip_path);
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&zip_path);
+                        eprintln!("[pack-sync] Extract failed for {}: {}", item.pack_id, e);
+                        pack_statuses
+                            .lock()
+                            .unwrap()
+                            .insert(item.pack_id.clone(), "failed".to_string());
+                        emit(
+                            "running",
+                            extract_percent,
+                            &format!("Extração falhou para {}: {}", item.pack_id, e),
+                            index + 1,
+                            total,
+                            snapshot(),
+                        );
+                        continue;
+                    }
                 }
+
+                let _ = content_sync::set_pack_extracted_version(
+                    &conn,
+                    &item.pack_id,
+                    item.pack_version,
+                );
+            } else {
+                // Download failed — already marked, skip.
+                continue;
             }
-
-            emit("running", percent,
-                &format!("Verifying pack {}…", item.pack_id), index, total);
-            match verify_sha256(&zip_path, &item.pack_sha256) {
-                Ok(true) => {}
-                Ok(false) => {
-                    let _ = std::fs::remove_file(&zip_path);
-                    eprintln!("[pack-sync] SHA-256 mismatch for {}", item.pack_id);
-                    emit("running", percent,
-                        &format!("SHA-256 mismatch for {}. Skipped.", item.pack_id),
-                        index + 1, total);
-                    continue;
-                }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&zip_path);
-                    eprintln!("[pack-sync] SHA-256 check failed for {}: {}", item.pack_id, e);
-                    continue;
-                }
-            }
-
-            emit("running", percent,
-                &format!("Extracting pack {}…", item.pack_id), index, total);
-            match crate::http_sync::downloader::extract_zip_to(&zip_path, &app_data_dir) {
-                Ok(_) => {
-                    let _ = std::fs::remove_file(&zip_path);
-                }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&zip_path);
-                    eprintln!("[pack-sync] Extract failed for {}: {}", item.pack_id, e);
-                    continue;
-                }
-            }
-
-            let _ = content_sync::set_pack_extracted_version(&conn, &item.pack_id, item.pack_version);
         }
 
         if item.needs_db_update {
-            emit("running", percent,
-                &format!("Updating database for pack {}…", item.pack_id), index, total);
+            pack_statuses
+                .lock()
+                .unwrap()
+                .insert(item.pack_id.clone(), "db_update".to_string());
 
             for file in &item.files {
-                if let Some(hymn_api_id) = file.hymn_api_id {
-                    let _ = content_sync::update_hymn_path_by_api_id(
-                        &conn, hymn_api_id, &file.file_type, &file.path,
-                    );
+                // Ensure the collection exists when the file carries an album name.
+                if let Some(ref name) = file.album_name {
+                    if !is_hinario(name) {
+                        let _ = content_sync::ensure_collection_by_name(&conn, name);
+                    }
                 }
-                if let Some(album_api_id) = file.album_api_id {
-                    let _ = content_sync::update_collection_cover_by_api_id(
-                        &conn, album_api_id, &file.path,
-                    );
+
+                // Extract the numeric API ID from the second-to-last path segment.
+                // Works for both flat  (media/audio/123/file)
+                // and collection paths (media/audio/Album/123/file).
+                let parts: Vec<&str> = file.path.rsplitn(3, '/').collect();
+                let api_id: Option<i64> = parts.get(1).and_then(|s| s.parse().ok());
+
+                if let Some(id) = api_id {
+                    if file.path.starts_with("media/album_covers/") {
+                        let _ = content_sync::update_collection_cover_by_api_id(
+                            &conn, id, &file.path,
+                        );
+                    } else {
+                        let _ = content_sync::update_hymn_path_by_api_id(
+                            &conn, id, &file.file_type, &file.path,
+                        );
+                    }
                 }
             }
 
-            let _ = content_sync::set_pack_db_version(&conn, &item.pack_id, item.pack_version);
+            let _ = content_sync::set_pack_db_version(
+                &conn,
+                &item.pack_id,
+                item.pack_version,
+            );
+        }
+
+        pack_statuses
+            .lock()
+            .unwrap()
+            .insert(item.pack_id.clone(), "done".to_string());
+
+        emit(
+            "running",
+            extract_percent,
+            "",
+            index + 1,
+            total,
+            snapshot(),
+        );
+    }
+
+    if let Some(v) = manifest_version_to_save {
+        let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
+    }
+
+    // ── Phase 3: Legacy DB download + import (if needed) ──────────────────────
+    if let Some(legacy) = legacy_db_item {
+        if !cancel_flag.load(Ordering::Relaxed) {
+            emit(
+                "running",
+                95.0,
+                "Importando banco de dados legado…",
+                total,
+                total,
+                snapshot(),
+            );
+
+            let tmp_path = app_data_dir.join("tmp_legacy_import.db");
+
+            let dl = tauri::async_runtime::block_on(
+                crate::http_sync::downloader::download_file_http(
+                    &client,
+                    &legacy.url,
+                    &tmp_path,
+                    None,
+                ),
+            );
+
+            match dl {
+                Err(e) => {
+                    eprintln!("[pack-sync] Legacy DB download failed: {}", e);
+                    emit(
+                        "running",
+                        97.0,
+                        &format!("Falha ao baixar banco legado: {}", e),
+                        total,
+                        total,
+                        snapshot(),
+                    );
+                }
+                Ok(_) => {
+                    let tmp_str = tmp_path.to_string_lossy().into_owned();
+                    match crate::db::queries::content_sync::import_legacy_db(
+                        &conn,
+                        &tmp_str,
+                        legacy.version,
+                    ) {
+                        Ok(count) => {
+                            if count > 0 {
+                                eprintln!("[pack-sync] Legacy DB import: {} hymns inserted.", count);
+                            }
+                            let _ = crate::db::queries::content_sync::set_legacy_db_version(
+                                &conn,
+                                legacy.version,
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("[pack-sync] Legacy DB import failed: {}", e);
+                        }
+                    }
+                    let _ = std::fs::remove_file(&tmp_path);
+                }
+            }
         }
     }
 
-    let _ = settings::set_setting(&conn, "pack_sync.manifest_version",
-        &manifest.manifest_version.to_string());
+    emit(
+        "completed",
+        100.0,
+        "Sincronização de pacotes concluída.",
+        total,
+        total,
+        snapshot(),
+    );
+}
 
-    emit("completed", 100.0, "Pack sync complete.", total, total);
+/// Returns true for "Hinário Adventista" and its language/spelling variants.
+/// Files from these folders go into the flat media path without an album subfolder.
+fn is_hinario(name: &str) -> bool {
+    let norm: String = name
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' => 'i',
+            'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' => 'u',
+            c => c,
+        })
+        .collect::<String>()
+        .to_lowercase();
+    norm.starts_with("hinar") || norm.starts_with("hymnar")
 }
 
 fn verify_sha256(path: &Path, expected: &str) -> Result<bool, AppError> {
-    use std::io::Read;
     use sha2::Digest;
+    use std::io::Read;
     let mut file = std::fs::File::open(path).map_err(AppError::Io)?;
     let mut hasher = sha2::Sha256::new();
-    let mut buf = [0u8; 8192];
+    let mut buf = [0u8; 65536];
     loop {
         let n = file.read(&mut buf).map_err(AppError::Io)?;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
         hasher.update(&buf[..n]);
     }
     let result = format!("{:x}", hasher.finalize());
