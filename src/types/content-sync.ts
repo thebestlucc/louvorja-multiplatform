@@ -80,11 +80,7 @@ export interface PackSyncPlanItem {
   needsDbUpdate: boolean;
   fileCount: number;
   files: PackSyncFileItem[];
-}
-
-export interface LegacyDbSyncItem {
-  url: string;
-  version: number;
+  language: string;
 }
 
 export interface PackSyncPlan {
@@ -92,7 +88,8 @@ export interface PackSyncPlan {
   items: PackSyncPlanItem[];
   totalDownloadSize: number;
   totalDownloadCount: number;
-  legacyDb?: LegacyDbSyncItem | null;
+  availableLanguages: string[];
+  selectedLanguages: string[];
 }
 
 export interface PackSyncProgress {

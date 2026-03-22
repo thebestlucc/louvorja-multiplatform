@@ -24,6 +24,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
 }
 
+const LANG_DISPLAY: Record<string, string> = {
+  "pt-BR": "Portugues (Brasil)",
+  "es": "Espanol",
+  "en-US": "English (US)",
+};
+
 const FILE_TYPE_BADGE: Record<string, string> = {
   audio: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   playback: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
@@ -100,13 +106,18 @@ export function PackSyncDialog() {
   const planQuery = usePlanPackSync({ enabled: open });
   const startMutation = useStartPackSync();
   const plan = planQuery.data;
+  const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
 
   const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
 
+  useEffect(() => {
+    if (plan?.selectedLanguages?.length) {
+      setSelectedLangs(plan.selectedLanguages);
+    }
+  }, [plan?.selectedLanguages]);
+
   const handleStart = async (items?: PackSyncPlanItem[]) => {
-    // When starting a full sync (no specific items), also include the legacy DB if present.
-    const legacyDb = !items ? plan?.legacyDb : undefined;
-    const [runId, error] = await catcher(startMutation.mutateAsync({ items, legacyDb }));
+    const [runId, error] = await catcher(startMutation.mutateAsync({ items }));
     if (error) {
       toast.error(String(error));
       return;
@@ -127,24 +138,42 @@ export function PackSyncDialog() {
         </DialogHeader>
 
         <div className="mt-2">
-          {plan && (plan.items.length > 0 || plan.legacyDb != null) ? (
+          {plan && plan.items.length > 0 ? (
             <div className="space-y-3">
+              {plan.availableLanguages.length > 0 && (
+                <div className="space-y-2 px-3 py-2 border-b border-border">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t("settings.packSync.selectLanguages")}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {plan.availableLanguages.map((lang) => (
+                      <label key={lang} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedLangs.includes(lang)}
+                          onChange={(e) => {
+                            setSelectedLangs((prev) =>
+                              e.target.checked
+                                ? [...prev, lang]
+                                : prev.filter((l) => l !== lang)
+                            );
+                          }}
+                        />
+                        {LANG_DISPLAY[lang] ?? lang}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Metric label={t("settings.packSync.packsToDownload")} value={plan.totalDownloadCount} />
                 <Metric label={t("settings.packSync.totalSize")} value={formatBytes(plan.totalDownloadSize)} />
               </div>
-              {plan.items.length > 0 && (
-                <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
-                  {plan.items.map((item) => (
-                    <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
-                  ))}
-                </div>
-              )}
-              {plan.legacyDb != null && (
-                <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-                  {t("settings.packSync.legacyDbPending", { defaultValue: "Database file update available (v{{version}})", version: plan.legacyDb.version })}
-                </div>
-              )}
+              <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
+                {plan.items.map((item) => (
+                  <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
+                ))}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">{t("settings.packSync.upToDate")}</p>
@@ -157,7 +186,7 @@ export function PackSyncDialog() {
           </Button>
           <Button
             onClick={() => void handleStart(undefined)}
-            disabled={!plan || (plan.items.length === 0 && plan.legacyDb == null) || startMutation.isPending}
+            disabled={!plan || plan.items.length === 0 || startMutation.isPending || ((plan.availableLanguages.length ?? 0) > 0 && selectedLangs.length === 0)}
           >
             {startMutation.isPending
               ? t("settings.packSync.starting")
