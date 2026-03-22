@@ -1,5 +1,4 @@
 use crate::content_sync::manifest::ContentManifest;
-use crate::db::queries::content_sync;
 use crate::error::AppError;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -30,13 +29,7 @@ pub struct PackSyncPlanItem {
     pub needs_db_update: bool,
     pub file_count: usize,
     pub files: Vec<PackSyncFileItem>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyDbSyncItem {
-    pub url: String,
-    pub version: i64,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -46,10 +39,8 @@ pub struct PackSyncPlan {
     pub items: Vec<PackSyncPlanItem>,
     pub total_download_size: u64,
     pub total_download_count: usize,
-    /// Present when the manifest advertises a legacy DB that is newer than the
-    /// locally stored `pack_sync.legacy_db_version`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub legacy_db: Option<LegacyDbSyncItem>,
+    pub available_languages: Vec<String>,
+    pub selected_languages: Vec<String>,
 }
 
 /// Build a plan by comparing the remote manifest against local pack state.
@@ -58,32 +49,48 @@ pub fn build_plan(
     manifest: &ContentManifest,
     stored_manifest_version: i64,
 ) -> Result<PackSyncPlan, AppError> {
-    if manifest.manifest_version == stored_manifest_version && stored_manifest_version > 0 {
-        // Even if the manifest version hasn't changed, we still need to check
-        // whether a legacy DB is pending (e.g. the user dismissed the dialog before
-        // importing, or the app was updated and dbVersion needs re-checking).
-        // TODO: Task 2 will rework legacy_db logic to iterate manifest.databases
-        let legacy_db = match manifest.databases.get("pt-BR") {
-            Some(entry) => {
-                let local_version = content_sync::get_legacy_db_version(conn)?.unwrap_or(0);
-                if entry.version > local_version {
-                    Some(LegacyDbSyncItem {
-                        url: entry.url.clone(),
-                        version: entry.version,
-                    })
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
+    use crate::db::queries::content_sync::get_selected_languages;
+
+    let selected_languages = get_selected_languages(conn);
+    let available_languages: Vec<String> = {
+        let mut langs: Vec<String> = manifest
+            .packs
+            .iter()
+            .map(|p| p.language.clone())
+            .chain(manifest.databases.keys().cloned())
+            .collect();
+        langs.sort();
+        langs.dedup();
+        langs
+    };
+
+    // If nothing selected, return empty plan (dialog prompts user to pick a language).
+    if selected_languages.is_empty() {
         return Ok(PackSyncPlan {
             manifest_version: manifest.manifest_version,
             items: vec![],
             total_download_size: 0,
             total_download_count: 0,
-            legacy_db,
+            available_languages,
+            selected_languages,
         });
+    }
+
+    let effective_languages = selected_languages.clone();
+
+    // Early return if manifest version hasn't changed AND no content DB needs updating
+    if manifest.manifest_version == stored_manifest_version && stored_manifest_version > 0 {
+        let db_items = build_db_items(conn, manifest, &effective_languages)?;
+        if db_items.is_empty() {
+            return Ok(PackSyncPlan {
+                manifest_version: manifest.manifest_version,
+                items: vec![],
+                total_download_size: 0,
+                total_download_count: 0,
+                available_languages,
+                selected_languages,
+            });
+        }
     }
 
     let mut items = Vec::new();
@@ -91,29 +98,33 @@ pub fn build_plan(
     let mut total_download_count = 0usize;
 
     for pack in &manifest.packs {
-        let extracted_version = content_sync::get_pack_extracted_version(conn, &pack.id)?;
-        let db_version = content_sync::get_pack_db_version(conn, &pack.id)?;
-
-        let needs_download = pack.version > extracted_version;
-        let needs_db_update = pack.version > db_version;
-
-        if !needs_download && !needs_db_update {
+        // Filter by selected languages
+        if !effective_languages.contains(&pack.language) {
             continue;
         }
 
-        if needs_download {
-            total_download_size += pack.size;
-            total_download_count += 1;
+        let extracted_version =
+            crate::db::queries::content_sync::get_pack_extracted_version(conn, &pack.id)?;
+
+        if pack.version <= extracted_version {
+            continue;
         }
 
-        let files: Vec<PackSyncFileItem> = pack.files.iter().map(|f| PackSyncFileItem {
-            path: f.path.clone(),
-            hymn_api_id: f.hymn_api_id,
-            album_api_id: f.album_api_id,
-            file_type: f.file_type.clone(),
-            size: f.size,
-            album_name: f.album_name.clone(),
-        }).collect();
+        total_download_size += pack.size;
+        total_download_count += 1;
+
+        let files: Vec<PackSyncFileItem> = pack
+            .files
+            .iter()
+            .map(|f| PackSyncFileItem {
+                path: f.path.clone(),
+                hymn_api_id: f.hymn_api_id,
+                album_api_id: f.album_api_id,
+                file_type: f.file_type.clone(),
+                size: f.size,
+                album_name: f.album_name.clone(),
+            })
+            .collect();
 
         items.push(PackSyncPlanItem {
             pack_id: pack.id.clone(),
@@ -122,35 +133,62 @@ pub fn build_plan(
             pack_size: pack.size,
             pack_sha256: pack.sha256.clone(),
             local_extracted_version: extracted_version,
-            local_db_version: db_version,
-            needs_download,
-            needs_db_update,
+            local_db_version: 0,
+            needs_download: true,
+            needs_db_update: false,
             file_count: files.len(),
             files,
+            language: pack.language.clone(),
         });
     }
 
-    // TODO: Task 2 will rework legacy_db logic to iterate manifest.databases
-    let legacy_db = match manifest.databases.get("pt-BR") {
-        Some(entry) => {
-            let local_version = content_sync::get_legacy_db_version(conn)?.unwrap_or(0);
-            if entry.version > local_version {
-                Some(LegacyDbSyncItem {
-                    url: entry.url.clone(),
-                    version: entry.version,
-                })
-            } else {
-                None
-            }
-        }
-        None => None,
-    };
+    // Add content DB download items as pseudo-packs with empty files
+    let db_items = build_db_items(conn, manifest, &effective_languages)?;
+    items.extend(db_items);
 
     Ok(PackSyncPlan {
         manifest_version: manifest.manifest_version,
         items,
         total_download_size,
         total_download_count,
-        legacy_db,
+        available_languages,
+        selected_languages,
     })
+}
+
+/// Build plan items for content DB downloads, one per selected language.
+fn build_db_items(
+    conn: &Connection,
+    manifest: &ContentManifest,
+    selected_languages: &[String],
+) -> Result<Vec<PackSyncPlanItem>, AppError> {
+    let mut items = Vec::new();
+    for lang in selected_languages {
+        if let Some(db_entry) = manifest.databases.get(lang) {
+            let stored_version = crate::db::queries::settings::get_setting(
+                conn,
+                &format!("pack_sync.db_version.{}", lang),
+            )
+            .ok()
+            .and_then(|s| s.value.parse::<i64>().ok())
+            .unwrap_or(0);
+            if db_entry.version > stored_version {
+                items.push(PackSyncPlanItem {
+                    pack_id: format!("content-db-{}", lang),
+                    pack_url: db_entry.url.clone(),
+                    pack_version: db_entry.version as u32,
+                    pack_size: 0,
+                    pack_sha256: String::new(),
+                    local_extracted_version: stored_version as u32,
+                    local_db_version: 0,
+                    needs_download: true,
+                    needs_db_update: false,
+                    file_count: 0,
+                    files: vec![],
+                    language: lang.clone(),
+                });
+            }
+        }
+    }
+    Ok(items)
 }

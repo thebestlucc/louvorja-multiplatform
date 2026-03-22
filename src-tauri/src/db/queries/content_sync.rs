@@ -657,6 +657,12 @@ pub fn update_collection_cover_by_api_id(
     .map_err(AppError::Database)
 }
 
+/// Return the selected languages for pack sync.
+/// Stub: Task 4 will add the real implementation that reads from settings.
+pub fn get_selected_languages(_conn: &Connection) -> Vec<String> {
+    vec![]
+}
+
 /// Return the remote legacy DB version that was last successfully imported.
 /// Returns `None` if no import has ever been performed.
 /// The version is stored as a settings key (`pack_sync.legacy_db_version`).
