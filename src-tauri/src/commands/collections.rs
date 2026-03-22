@@ -35,7 +35,7 @@ fn resolve_hymn_paths(
     app_data_dir: &std::path::Path,
 ) -> Vec<Hymn> {
     for h in &mut hymns {
-        if let Some(ref p) = h.audio_path.clone() {
+        if let Some(ref p) = h.audio_path {
             h.audio_path = Some(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
@@ -43,7 +43,7 @@ fn resolve_hymn_paths(
                     .into_owned(),
             );
         }
-        if let Some(ref p) = h.playback_path.clone() {
+        if let Some(ref p) = h.playback_path {
             h.playback_path = Some(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
@@ -51,7 +51,7 @@ fn resolve_hymn_paths(
                     .into_owned(),
             );
         }
-        if let Some(ref p) = h.cover_path.clone() {
+        if let Some(ref p) = h.cover_path {
             h.cover_path = Some(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
@@ -68,7 +68,7 @@ fn resolve_collection_paths(
     app_data_dir: &std::path::Path,
 ) -> Vec<Collection> {
     for c in &mut collections {
-        if let Some(ref p) = c.cover_path.clone() {
+        if let Some(ref p) = c.cover_path {
             c.cover_path = Some(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
@@ -87,11 +87,7 @@ pub fn get_collections(
     query: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Collection>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
 
     if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
         let mut collections =
@@ -118,11 +114,7 @@ pub fn search_collections(
     query: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<CollectionSearchResult>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::collections::search_collections(&conn, &query, 8)
 }
 
@@ -132,11 +124,7 @@ pub fn get_collection(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionWithSongs, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::collections::get_collection_with_songs(&conn, id)
 }
 
@@ -157,11 +145,7 @@ pub fn create_collection(
     }
     validate_collection_year(year)?;
 
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     let id = crate::db::queries::collections::insert_collection(
         &tx,
@@ -195,11 +179,7 @@ pub fn update_collection(
     }
     validate_collection_year(year)?;
 
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::update_collection(
         &tx,
@@ -217,11 +197,7 @@ pub fn update_collection(
 #[tauri::command]
 #[specta::specta]
 pub fn delete_collection(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     let collection = crate::db::queries::collections::get_collection_with_songs(&tx, id)?;
     for song in &collection.songs {
@@ -251,11 +227,7 @@ pub fn check_collection_song_sync(
     song_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionSongSyncStatus, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     let song = crate::db::queries::collections::get_collection_song_by_id(&tx, song_id)?;
 
@@ -286,11 +258,7 @@ pub fn resync_collection_song(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionSong, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let existing = crate::db::queries::collections::get_collection_song_by_id(&conn, song_id)?;
     drop(conn);
     import_or_resync_collection_song(
@@ -308,11 +276,7 @@ pub fn remove_collection_song(
     song_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     let existing = crate::db::queries::collections::get_collection_song_by_id(&tx, song_id)?;
     crate::db::queries::collections::remove_collection_song(&tx, song_id)?;
@@ -331,11 +295,7 @@ pub fn reorder_collection_songs(
     song_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::reorder_collection_songs(&tx, collection_id, &song_ids)?;
     refresh_collection_auto_cover(&tx, collection_id)?;
@@ -387,11 +347,7 @@ fn import_or_resync_collection_song(
         }
     }
 
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     crate::db::queries::collections::get_collection_by_id(&tx, collection_id)?;
 
@@ -749,11 +705,7 @@ pub fn get_collection_hymns(
     collection_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
 
     if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
         let hymns = crate::db::queries::music::get_collection_hymns_from_content_db(
@@ -780,11 +732,7 @@ pub fn add_hymn_to_collection(
     item_order: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<bool, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::collections::insert_collection_hymn(
         &conn,
         collection_id,
@@ -800,10 +748,6 @@ pub fn remove_hymn_from_collection(
     hymn_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::collections::delete_collection_hymn(&conn, collection_id, hymn_id)
 }
