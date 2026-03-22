@@ -265,6 +265,7 @@ export default function NewPackPage() {
     progress: 0,
     message: "",
   });
+  const [language, setLanguage] = useState<"pt-BR" | "es" | "en-US" | "">("");
   const fileInputRef = useRef<HTMLInputElement>(undefined!);
 
   // ── Step 1: file selection ───────────────────────────────────────────────
@@ -315,6 +316,10 @@ export default function NewPackPage() {
   // ── Step 3: publish ─────────────────────────────────────────────────────
 
   const handlePublish = async () => {
+    if (!language) {
+      setPublishState({ status: "error", progress: 0, message: "Failed", error: "Please select a language before publishing." });
+      return;
+    }
     setStep("publish");
 
     const BATCH_SIZE = 50;
@@ -496,6 +501,7 @@ export default function NewPackPage() {
             finalizeManifest: isLastPack,
             // Pass the in-memory manifest so the server skips its own R2 fetch.
             currentManifest: workingManifest,
+            language,
             // On the last pack, pass dbUrl/dbVersion if the DB was uploaded
             // with updateManifest=false (Case A: packs + db together).
             ...(isLastPack && pendingDbUrl
@@ -570,6 +576,24 @@ export default function NewPackPage() {
                 Packs will be named <code>{packPrefix}-001</code>,{" "}
                 <code>{packPrefix}-002</code>, etc.
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="language">
+                Language <span className="text-destructive">*</span>
+              </Label>
+              <select
+                id="language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as typeof language)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                required
+              >
+                <option value="" disabled>Select a language…</option>
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="es">Español</option>
+                <option value="en-US">English (US)</option>
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -714,7 +738,7 @@ export default function NewPackPage() {
             </Button>
             <Button
               onClick={() => void handlePublish()}
-              disabled={packs.length === 0 && dbFiles.length === 0}
+              disabled={!language || (packs.length === 0 && dbFiles.length === 0)}
             >
               Publish {packs.length} Pack{packs.length !== 1 ? "s" : ""}
               {dbFiles.length > 0 ? ` + ${dbFiles.length} DB` : ""} →
