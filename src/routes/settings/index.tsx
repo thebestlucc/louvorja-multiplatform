@@ -6,35 +6,20 @@ import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
 import { toast } from "sonner";
 import { catcher } from "../../lib/catcher";
-import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Cloud, Trash2, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
+import { Wifi, Palette, Languages, Film, FolderOpen, Monitor, Upload, X, Trash2, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
 import {
-  useCancelContentSync,
-  useCancelLegacyFetch,
   useClearDatabase,
-  useContentSyncProgress,
-  useContentSyncReport,
   useCopyImageToMedia,
-  useFetchLegacyParams,
-  useLegacyFetchProgress,
-  useLegacyFetchReport,
   useMonitorConfigs,
   useMonitors,
   useIdentifyMonitors,
-  usePlanContentSync,
   usePlanPackSync,
   useSaveMonitorConfig,
   useSetting,
   useSetSetting,
-  useStartContentSync,
-  useStartLegacyFetch,
 } from "../../lib/queries";
-import { FtpFileBrowser } from "../../components/content-sync/ftp-file-browser";
-import { ContentSyncReportCard } from "../../components/content-sync/content-sync-report";
-import { LegacyFetchWizard, LegacyFetchProgressCard } from "../../components/migration/legacy-fetch-wizard";
 import { useContentSyncStore } from "../../stores/content-sync-store";
-import { useLegacyFetchStore } from "../../stores/legacy-fetch-store";
 import type {
-  LegacyFetchOptions,
   MonitorConfig,
 } from "../../lib/bindings";
 import { StreamingControls } from "../../components/streaming/streaming-controls";
@@ -66,7 +51,7 @@ import { closeProjectorWindow, closeReturnWindow, openProjectorWindow, openRetur
 import { resolveProjectionMonitorIndexes } from "../../lib/monitor-resolution";
 import { getPreferredMonitorName } from "../../lib/monitor-display-name";
 
-type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "sync" | "migration" | "data";
+type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "sync" | "data";
 
 interface SettingsSearch {
   tab?: SettingsTab;
@@ -88,7 +73,6 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentT
   { id: "monitor", labelKey: "settings.tabs.monitor", icon: Monitor },
   { id: "streaming", labelKey: "settings.tabs.streaming", icon: Wifi },
   { id: "sync", labelKey: "settings.tabs.sync", icon: RefreshCw },
-  { id: "migration", labelKey: "settings.tabs.migration", icon: Upload },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
 ];
 
@@ -137,7 +121,6 @@ function SettingsIndex() {
         {activeTab === "monitor" && <MonitorSection />}
         {activeTab === "streaming" && <StreamingSection />}
         {activeTab === "sync" && <SyncSection />}
-        {activeTab === "migration" && <MigrationSection />}
         {activeTab === "data" && <DataSection />}
       </main>
     </div>
@@ -1034,135 +1017,14 @@ function StreamingSection() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  MigrationSection                                                   */
-/* ------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------ */
 /*  SyncSection                                                        */
 /* ------------------------------------------------------------------ */
 
 function SyncSection() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const runId = useContentSyncStore((s) => s.runId);
-  const setRunId = useContentSyncStore((s) => s.setRunId);
-  const storeProgress = useContentSyncStore((s) => s.progress);
-  const storeReport = useContentSyncStore((s) => s.report);
-  const planQuery = usePlanContentSync();
-  const startContentSyncMutation = useStartContentSync();
-  const cancelContentSyncMutation = useCancelContentSync();
-  const progressQuery = useContentSyncProgress(runId, { enabled: Boolean(runId) });
-  const progressStatus = storeProgress?.status ?? progressQuery.data?.status;
-  const reportQuery = useContentSyncReport(runId, {
-    enabled: Boolean(runId && progressStatus && !["pending", "running"].includes(progressStatus)),
-  });
-  const progress = storeProgress ?? progressQuery.data ?? null;
-  const report = storeReport ?? reportQuery.data ?? null;
-  const plan = planQuery.data ?? null;
-  const isRunning = progress != null && ["pending", "running"].includes(progress.status);
-  const metadataSource = plan?.summary.metadataSource ?? null;
-  const metadataSourceLabel = metadataSource === "db_snapshot"
-    ? t("settings.contentSync.metadataSourceSnapshot")
-    : metadataSource === "api_fallback"
-    ? t("settings.contentSync.metadataSourceApiFallback")
-    : t("settings.contentSync.unknown");
-
-  const handleStart = async () => {
-    const [nextRunId, error] = await catcher(startContentSyncMutation.mutateAsync(), { notify: false });
-    if (error) {
-      notify.error(error.details ?? error.message);
-      return;
-    }
-    if (nextRunId) {
-      setRunId(nextRunId);
-    }
-  };
-
-  const handleCancel = () => {
-    if (!runId) {
-      return;
-    }
-    cancelContentSyncMutation.mutate(runId, {
-      onError: (error) => notify.error(error.message),
-    });
-  };
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-border bg-card p-4">
-        <div className="mb-4 flex items-center gap-2">
-          <Cloud className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-medium">{t("settings.contentSync.title")}</h2>
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {t("settings.contentSync.description")}
-        </p>
-
-        <div className="grid gap-3 md:grid-cols-3">
-          <MetricCard label={t("settings.contentSync.currentVersion")} value={plan?.summary.currentVersion ?? t("settings.contentSync.unknown")} />
-          <MetricCard label={t("settings.contentSync.remoteVersion")} value={plan?.summary.remoteVersion ?? t("settings.contentSync.unknown")} />
-          <MetricCard label={t("settings.contentSync.metadataSource")} value={metadataSourceLabel} />
-          <MetricCard label={t("settings.contentSync.changedHymns")} value={plan?.summary.changedHymnCount ?? 0} />
-          <MetricCard label={t("settings.contentSync.changedAlbums")} value={plan?.summary.changedAlbumCount ?? 0} />
-          <MetricCard label={t("settings.contentSync.missingAssets")} value={plan?.summary.missingAssetCount ?? 0} />
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void planQuery.refetch()}
-            disabled={planQuery.isFetching || isRunning}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {planQuery.isFetching
-              ? t("settings.contentSync.refreshing")
-              : t("settings.contentSync.refresh")}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void handleStart()}
-            disabled={isRunning || startContentSyncMutation.isPending || (plan?.items.length ?? 0) === 0}
-          >
-            {startContentSyncMutation.isPending
-              ? t("settings.contentSync.starting")
-              : t("settings.contentSync.startSync")}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={handleCancel}
-            disabled={!isRunning || cancelContentSyncMutation.isPending}
-          >
-            {cancelContentSyncMutation.isPending
-              ? t("settings.contentSync.cancelling")
-              : t("settings.contentSync.cancel")}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void navigate({ to: "/settings", search: { tab: "migration" } })}
-          >
-            {t("settings.contentSync.openLegacyFallback")}
-          </Button>
-        </div>
-
-        <div className="mt-4">
-          <ContentSyncReportCard progress={progress} report={report} plan={plan} />
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card p-4">
-        <div className="mb-4 flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-medium">{t("settings.ftpBrowser.title")}</h2>
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {t("settings.ftpBrowser.description")}
-        </p>
-        <FtpFileBrowser />
-      </section>
-
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center gap-2">
           <h2 className="text-base font-medium">{t("settings.packSync.title")}</h2>
@@ -1224,118 +1086,6 @@ function PackSyncSettingsInline() {
       >
         {planQuery.isFetching ? t("settings.packSync.checking") : t("settings.packSync.checkNow")}
       </Button>
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-md border border-border bg-muted/30 p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-base font-medium text-foreground">{value}</div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  MigrationSection                                                   */
-/* ------------------------------------------------------------------ */
-
-function MigrationSection() {
-  const { t } = useTranslation();
-
-  const legacyFetchRunId = useLegacyFetchStore((s) => s.runId);
-  const setLegacyFetchRunId = useLegacyFetchStore((s) => s.setRunId);
-  const legacyFetchStoreProgress = useLegacyFetchStore((s) => s.progress);
-  const legacyFetchStoreReport = useLegacyFetchStore((s) => s.report);
-  const legacyFetchCancelling = useLegacyFetchStore((s) => s.isCancelling);
-  const setLegacyFetchCancelling = useLegacyFetchStore((s) => s.setIsCancelling);
-  const resetLegacyFetch = useLegacyFetchStore((s) => s.reset);
-  const startLegacyFetchMutation = useStartLegacyFetch();
-  const cancelLegacyFetchMutation = useCancelLegacyFetch();
-  const legacyFetchProgressQuery = useLegacyFetchProgress(legacyFetchRunId, { enabled: Boolean(legacyFetchRunId) });
-  const legacyFetchShouldLoadReport = Boolean(
-    legacyFetchRunId
-      && legacyFetchProgressQuery.data
-      && !["pending", "fetching", "importing", "downloading"].includes(legacyFetchProgressQuery.data.status),
-  );
-  const legacyFetchReportQuery = useLegacyFetchReport(legacyFetchRunId, { enabled: legacyFetchShouldLoadReport });
-  const legacyFetchProgress = legacyFetchStoreProgress ?? legacyFetchProgressQuery.data;
-  const legacyFetchReport = legacyFetchStoreReport ?? legacyFetchReportQuery.data;
-  const legacyFetchIsRunning = legacyFetchProgress
-    && ["pending", "fetching", "importing", "downloading"].includes(legacyFetchProgress.status);
-  const legacyFetchShowProgress = Boolean(legacyFetchRunId && (legacyFetchIsRunning || legacyFetchProgress || legacyFetchReport));
-  const [connectionStatus, setConnectionStatus] = useState<"idle" | "connecting" | "connected" | "failed">("idle");
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const fetchLegacyParamsMutation = useFetchLegacyParams({ enabled: false });
-
-  const handleTestConnection = async () => {
-    setConnectionStatus("connecting");
-    setConnectionError(null);
-    const [_, error] = await catcher(fetchLegacyParamsMutation.refetch(), { notify: false });
-    if (error) {
-      setConnectionStatus("failed");
-      setConnectionError(error.message);
-    } else {
-      setConnectionStatus("connected");
-    }
-  };
-
-  const handleStartLegacyFetch = async (options: LegacyFetchOptions) => {
-    setConnectionError(null);
-    const [runId, error] = await catcher(startLegacyFetchMutation.mutateAsync(options), { notify: false });
-    if (error) {
-      setConnectionError(error.message);
-    } else if (runId) {
-      setLegacyFetchRunId(runId);
-    }
-  };
-
-  const handleCancelLegacyFetch = () => {
-    if (!legacyFetchRunId) return;
-    setLegacyFetchCancelling(true);
-    cancelLegacyFetchMutation.mutate(legacyFetchRunId, {
-      onError: () => setLegacyFetchCancelling(false),
-    });
-  };
-
-  const handleLegacyFetchDone = () => {
-    resetLegacyFetch();
-  };
-
-  const handleLegacyFetchRetry = () => {
-    resetLegacyFetch();
-    setConnectionError(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-border bg-card p-4">
-        <div className="mb-4 flex items-center gap-2">
-          <Cloud className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-medium">{t("settings.legacyFetch.title")}</h2>
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">{t("settings.legacyFetch.description")}</p>
-
-        {!legacyFetchShowProgress ? (
-          <LegacyFetchWizard
-            onStartFetch={handleStartLegacyFetch}
-            loading={startLegacyFetchMutation.isPending}
-            connectionStatus={connectionStatus}
-            connectionError={connectionError}
-            onTestConnection={handleTestConnection}
-          />
-        ) : (
-          <LegacyFetchProgressCard
-            progress={legacyFetchProgress ?? null}
-            report={legacyFetchReport ?? null}
-            cancelling={legacyFetchCancelling}
-            onCancel={handleCancelLegacyFetch}
-            onDone={handleLegacyFetchDone}
-            onRetry={handleLegacyFetchRetry}
-          />
-        )}
-      </section>
     </div>
   );
 }

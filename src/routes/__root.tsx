@@ -16,16 +16,14 @@ import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-sho
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
 import { PackSyncDialog, PackSyncProgressDialog } from "../components/content-sync/pack-sync-dialog";
-import { queryKeys, useMonitorConfigs, useMonitors, usePlanContentSync, usePlanPackSync } from "../lib/queries";
+import { queryKeys, useMonitorConfigs, useMonitors, usePlanPackSync } from "../lib/queries";
 import { setMonitorConfig } from "../lib/tauri";
 import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
 import { useContentSyncStore } from "../stores/content-sync-store";
-import { useLegacyFetchStore } from "../stores/legacy-fetch-store";
 import { catcher } from "../lib/catcher";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
-import type { LegacyFetchProgress, LegacyFetchReport } from "../lib/bindings";
 import type { ContentSyncProgress, ContentSyncReport, PackSyncProgress } from "../types/content-sync";
 
 export const Route = createRootRoute({
@@ -113,60 +111,17 @@ function RootLayout() {
     };
   }, [queryClient]);
 
-  // Global listener for legacy fetch progress events - persists across navigation
-  const setLegacyFetchProgress = useLegacyFetchStore((s) => s.setProgress);
-  const setLegacyFetchReport = useLegacyFetchStore((s) => s.setReport);
-  const prevLegacyFetchStatusRef = useRef<string | undefined>(undefined);
   const contentSyncPromptSummary = useContentSyncStore((s) => s.promptSummary);
   const contentSyncPromptOpen = useContentSyncStore((s) => s.isPromptOpen);
-  const openContentSyncPrompt = useContentSyncStore((s) => s.openPrompt);
   const closeContentSyncPrompt = useContentSyncStore((s) => s.closePrompt);
   const setContentSyncProgress = useContentSyncStore((s) => s.setProgress);
   const setContentSyncReport = useContentSyncStore((s) => s.setReport);
-  const contentSyncPlanQuery = usePlanContentSync({ enabled: !isBareRoute });
-  const contentSyncPromptShownRef = useRef(false);
   const packSyncPlanQuery = usePlanPackSync({ enabled: !isBareRoute });
   const packSyncPlanShownRef = useRef(false);
   const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
   const setPackSyncProgress = useContentSyncStore((s) => s.setPackSyncProgress);
   const setPackSyncPendingCount = useContentSyncStore((s) => s.setPackSyncPendingCount);
   const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
-
-  useEffect(() => {
-    const unlistenProgress = listen<LegacyFetchProgress>("legacy-fetch-progress", (event) => {
-      const store = useLegacyFetchStore.getState();
-      // Only update if runId matches or if no runId is set yet
-      if (!store.runId || event.payload.runId === store.runId) {
-        setLegacyFetchProgress(event.payload);
-        
-        const status = event.payload.status;
-
-        // Reset cancelling flag when a terminal status is reached
-        if (["cancelled", "completed", "failed"].includes(status) && store.isCancelling) {
-          useLegacyFetchStore.getState().setIsCancelling(false);
-        }
-
-        // Invalidate hymns when fetch completes
-        if (status === "completed" && prevLegacyFetchStatusRef.current !== "completed") {
-          queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-          queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-        }
-        prevLegacyFetchStatusRef.current = status;
-      }
-    }).catch(() => () => {});
-
-    const unlistenReport = listen<LegacyFetchReport>("legacy-fetch-report", (event) => {
-      const store = useLegacyFetchStore.getState();
-      if (!store.runId || event.payload.runId === store.runId) {
-        setLegacyFetchReport(event.payload);
-      }
-    }).catch(() => () => {});
-
-    return () => {
-      unlistenProgress.then((unlisten) => unlisten());
-      unlistenReport.then((unlisten) => unlisten());
-    };
-  }, [queryClient, setLegacyFetchProgress, setLegacyFetchReport]);
 
   useEffect(() => {
     const unlistenProgress = listen<ContentSyncProgress>("content-sync-progress", (event) => {
@@ -180,12 +135,6 @@ function RootLayout() {
       const store = useContentSyncStore.getState();
       if (!store.runId || event.payload.runId === store.runId) {
         setContentSyncReport(event.payload);
-        // Re-fetch summary and plan so the missing asset count reflects the
-        // files that were just downloaded by the background sync thread.
-        if (["completed", "cancelled", "failed"].includes(event.payload.status)) {
-          void queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.summary });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.plan });
-        }
       }
     }).catch(() => () => {});
 
@@ -236,34 +185,24 @@ function RootLayout() {
     })();
   }, [isBareRoute, monitorConfigs, monitorConfigsLoaded, monitors, monitorsLoaded, queryClient]);
 
-  useEffect(() => {
-    if (isBareRoute) {
-      return;
-    }
-    if (contentSyncPromptShownRef.current) {
-      return;
-    }
-    const summary = contentSyncPlanQuery.data?.summary;
-    const hasActionableItems = (contentSyncPlanQuery.data?.items.length ?? 0) > 0;
-    if (summary && hasActionableItems) {
-      contentSyncPromptShownRef.current = true;
-      openContentSyncPrompt(summary);
-    }
-  }, [contentSyncPlanQuery.data, isBareRoute, openContentSyncPrompt]);
 
   // Track pending pack count + plan for bell notification
   useEffect(() => {
     const plan = packSyncPlanQuery.data ?? null;
-    const count = plan?.items.length ?? 0;
+    // Only count visible (non-db) items for the bell badge
+    const visibleItems = plan?.items.filter((i) => !i.packId.startsWith("content-db-")) ?? [];
+    const count = visibleItems.length;
     setPackSyncPendingCount(count);
     setPackSyncPlan(count > 0 ? plan : null);
   }, [packSyncPlanQuery.data, setPackSyncPendingCount, setPackSyncPlan]);
 
-  // Show pack sync dialog on startup if there are items
+  // Show pack sync dialog on startup if there are items OR if language selection is needed
   useEffect(() => {
     if (isBareRoute || packSyncPlanShownRef.current) return;
     const plan = packSyncPlanQuery.data;
-    if (plan && plan.items.length > 0) {
+    const hasVisible = plan?.items.some((i) => !i.packId.startsWith("content-db-"));
+    const needsLangSetup = plan && plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
+    if (plan && (hasVisible || needsLangSetup)) {
       packSyncPlanShownRef.current = true;
       openPackSyncPlan();
     }

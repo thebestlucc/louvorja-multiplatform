@@ -10,7 +10,7 @@ CODEX_MAX_OUTPUT_TOKENS=20000
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
 Roadmap and feature decisions are tracked in `docs/phase-*` folders (`PRD.md`, `SPECS.md`, `TASKS.md`, `HANDOFF.md`).
 
-**Phases 0–10 are COMPLETE.** Phase 11 is in progress.
+**Phases 0–12 are COMPLETE** (including Monitor Screen Assignment and Playing Queue). Pack Sync (CDN) feature is IN PROGRESS.
 
 ## Tech Stack
 
@@ -92,6 +92,8 @@ src-tauri/src/                # Backend (Rust)
 ├── archive/                  # .slja read/write + .pptx import
 │   ├── mod.rs, manifest.rs, pptx.rs
 ├── audio/                    # rodio player, sync timeline
+├── content_sync/             # CDN manifest model (manifest.rs)
+├── pack_sync/                # CDN pack download/extract (planner.rs, executor.rs)
 ├── display/, streaming/      # Multi-monitor display + SSE streaming server
 └── video/                    # Video path + metadata parsing helpers
 ```
@@ -244,6 +246,11 @@ src-tauri/src/                # Backend (Rust)
 - **Pastoral error messaging:** `classifyUpdateError()` in `lib/update-errors.ts` pattern-matches error strings into 4 categories (network/disk/permission/generic), each with i18n keys for title/why/action/reassurance. Toasts use `duration: Infinity` so users must dismiss manually.
 - **Version display:** `getVersion()` from `@tauri-apps/api/app` called once in `useEffect`, shown in status bar left side as `v{version}`.
 - **CI/CD pipeline:** GitHub Actions with 5-platform matrix (macOS ARM/Intel, Linux x64/ARM, Windows). Uses `tauri-apps/tauri-action@v0` with Rust cache, Ed25519 signing, and draft releases. Signing env vars: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+- **Cancellable async run pattern:** For long-running background operations (e.g. pack sync), store `active_run_id: Option<String>` + `cancel_flags: HashMap<String, Arc<AtomicBool>>` in a `Mutex<FooRuntimeState>` on `AppState`. The executor checks the flag between items; cancel command sets the flag. Progress events carry `run_id` so the frontend can ignore stale events.
+- **Multi-language content DB:** `AppState.content_dbs: Arc<Mutex<HashMap<String, Pool<SqliteConnectionManager>>>>` keyed by BCP 47 tag (e.g. `"pt-BR"`). Populated at startup by scanning for `content-*.db` files and after each pack sync.
+- **Manifest cache pattern:** CDN manifest is cached to `manifest_cache.json` in `app_data_dir`. `plan_pack_sync` loads the cache, skips the network fetch when `manifest.manifest_version == stored_version`. Pass `force_refresh: Some(true)` to bypass.
+- **Preview-without-commit pattern:** Pass `preview_languages: Option<Vec<String>>` to `build_plan()` to compute a plan for a language selection without writing to DB. Used by the sync dialog to show pack list when the user checks a language before confirming.
+- **Admin panel:** Separate Next.js 14 App Router project at `admin-panel/`. Manages CDN pack publishing with per-language `ManifestPack` (BCP 47 `language` field) and `databases: Record<string, DbEntry>` instead of flat `dbUrl`/`dbVersion`.
 
 ## Phase Status
 
@@ -258,9 +265,12 @@ src-tauri/src/                # Backend (Rust)
 | 6 | Multi-Monitor (07) | COMPLETE |
 | 7 | Streaming (08) | COMPLETE |
 | 8 | Video/Multimedia (09) | COMPLETE |
-| 9 | Utilities & Polish (10) | COMPLETE |
-| 10 | Migration & Deploy (11) | COMPLETE |
-| 11 | Hymn CRUD + Collections (12) | IN PROGRESS |
+| 9 | Utilities & Polish (10) | Pending |
+| 10 | Migration & Deploy (11) | Pending |
+| 11 | Projection Overhaul | COMPLETE |
+| 12 | Monitor Screen Assignment | COMPLETE |
+| — | Playing Queue | COMPLETE |
+| — | Pack Sync (CDN) | IN PROGRESS |
 
 ## Self-Improvement Protocol
 

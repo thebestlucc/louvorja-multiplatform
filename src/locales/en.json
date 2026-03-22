@@ -168,14 +168,33 @@
     "utilities": "Utilities"
   },
   "dashboard": {
+    "greetingDawn": "Early start",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "whatToDo": "What shall we prepare today?",
+    "activeService": "Active service",
+    "subtitle": "Select an option from the sidebar to get started",
+    "hints": {
+      "services": "Plan and lead worship",
+      "hymnal": "Find hymns and songs",
+      "bible": "Verses and passages",
+      "presentations": "Slides and presentations",
+      "collections": "Standalone collections"
+    },
     "quickAccess": {
       "bible": "Read and project Bible verses",
-      "collections": "Manage non-hymnal songs collections",
-      "hymnal": "Browse and search hymns",
+      "collections": "Manage song collections outside the hymnal",
+      "hymnal": "Search and browse hymns",
       "presentations": "Create and edit slides",
-      "services": "Plan worship services"
+      "services": "Plan the worship order"
     },
-    "subtitle": "Select an option from the sidebar to get started",
+    "shortcuts": {
+      "title": "Quick shortcuts",
+      "search": "Search",
+      "projector": "Projector",
+      "help": "Shortcuts"
+    },
     "welcome": "Welcome to LouvorJA"
   },
   "display": {

@@ -30,11 +30,7 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, adjustCountdownTimer, getTimerState, addLap, runLottery, formatText,
   startStreamingServer, stopStreamingServer, getStreamingStatus, setStreamingBroadcast,
   getSetting, setSetting, getAllSettings, clearDatabase,
-  startLegacyFetch, getLegacyFetchProgress, cancelLegacyFetch, getLegacyFetchReport, fetchLegacyParams,
-  getContentSyncSummary, planContentSync, startContentSync, getContentSyncProgress, cancelContentSync, getContentSyncReport,
   planPackSync, startPackSync, cancelPackSync, clearManifestCache,
-  listFtpFiles, downloadFtpFiles,
-  restoreHymnFromApi, restoreAlbumFromApi,
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
   updateGlobalShortcut,
@@ -44,7 +40,6 @@ import type {
   HymnWriteInput,
   CollectionSongSyncStatus,
   TimerMode,
-  LegacyFetchOptions,
   SyncPoint,
   SlideContent,
   ScheduleAssignmentInput,
@@ -117,18 +112,7 @@ export const queryKeys = {
   },
   overlay: ["overlay"] as const,
   mediaIntegrity: ["mediaIntegrity"] as const,
-  legacyFetch: {
-    progress: (runId: string) => ["legacyFetch", "progress", runId] as const,
-    report: (runId: string) => ["legacyFetch", "report", runId] as const,
-    params: ["legacyFetch", "params"] as const,
-  },
   packSyncPlan: ["packSync", "plan"] as const,
-  contentSync: {
-    summary: ["contentSync", "summary"] as const,
-    plan: ["contentSync", "plan"] as const,
-    progress: (runId: string) => ["contentSync", "progress", runId] as const,
-    report: (runId: string) => ["contentSync", "report", runId] as const,
-  },
   updater: {
     info: ["updater", "info"] as const,
   },
@@ -423,31 +407,6 @@ export function useRemoveHymnFromCollection() {
   });
 }
 
-export function useRestoreHymnFromApi() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { hymnId: number; language: string }) =>
-      restoreHymnFromApi(vars.hymnId, vars.language),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(vars.hymnId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-    },
-  });
-}
-
-export function useRestoreAlbumFromApi() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { collectionId: number; language: string }) =>
-      restoreAlbumFromApi(vars.collectionId, vars.language),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.hymns(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(vars.collectionId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-    },
-  });
-}
 
 // Presentations
 export function usePresentations() {
@@ -1035,158 +994,17 @@ export function useClearDatabase() {
   });
 }
 
-// Legacy Fetch (From LouvorJA Server)
-export function useFetchLegacyParams(options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.legacyFetch.params,
-    queryFn: () => fetchLegacyParams(),
-    enabled: options?.enabled ?? true,
-    retry: 1,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  });
-}
-
-export function useContentSyncSummary(options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.contentSync.summary,
-    queryFn: () => getContentSyncSummary(),
-    enabled: options?.enabled ?? true,
-    retry: false,
-    staleTime: 1000 * 30,
-  });
-}
-
-export function usePlanContentSync(options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.contentSync.plan,
-    queryFn: () => planContentSync(),
-    enabled: options?.enabled ?? true,
-    retry: false,
-  });
-}
-
-export function useStartContentSync() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => startContentSync(),
-    onSuccess: (runId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.progress(runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.report(runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.summary });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.plan });
-    },
-  });
-}
-
-export function useContentSyncProgress(runId: string | null, options?: { enabled?: boolean }) {
-  const enabled = Boolean(runId && (options?.enabled ?? true));
-  return useQuery({
-    queryKey: queryKeys.contentSync.progress(runId ?? ""),
-    queryFn: () => getContentSyncProgress(runId ?? ""),
-    enabled,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === "pending" || status === "running") {
-        return 500;
-      }
-      return false;
-    },
-    refetchIntervalInBackground: true,
-  });
-}
-
-export function useContentSyncReport(runId: string | null, options?: { enabled?: boolean }) {
-  const enabled = Boolean(runId && (options?.enabled ?? true));
-  return useQuery({
-    queryKey: queryKeys.contentSync.report(runId ?? ""),
-    queryFn: () => getContentSyncReport(runId ?? ""),
-    enabled,
-    retry: false,
-  });
-}
-
-export function useCancelContentSync() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (runId: string) => cancelContentSync(runId),
-    onSuccess: (_, runId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.progress(runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contentSync.report(runId) });
-    },
-  });
-}
-
-// FTP File Browser
-export function useListFtpFiles() {
-  return useMutation({
-    mutationFn: () => listFtpFiles(),
-  });
-}
-
-export function useDownloadFtpFiles() {
-  return useMutation({
-    mutationFn: (remotePaths: string[]) => downloadFtpFiles(remotePaths),
-  });
-}
-
-export function useStartLegacyFetch() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (options: LegacyFetchOptions) => startLegacyFetch(options),
-    onSuccess: (runId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.legacyFetch.progress(runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.legacyFetch.report(runId) });
-    },
-  });
-}
-
-export function useLegacyFetchProgress(runId: string | null, options?: { enabled?: boolean }) {
-  const enabled = Boolean(runId && (options?.enabled ?? true));
-  return useQuery({
-    queryKey: queryKeys.legacyFetch.progress(runId ?? ""),
-    queryFn: () => getLegacyFetchProgress(runId ?? ""),
-    enabled,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === "pending" || status === "fetching" || status === "importing" || status === "downloading") {
-        return 500;
-      }
-      return false;
-    },
-    refetchIntervalInBackground: true,
-  });
-}
-
-export function useLegacyFetchReport(runId: string | null, options?: { enabled?: boolean }) {
-  const enabled = Boolean(runId && (options?.enabled ?? true));
-  return useQuery({
-    queryKey: queryKeys.legacyFetch.report(runId ?? ""),
-    queryFn: () => getLegacyFetchReport(runId ?? ""),
-    enabled,
-    retry: false,
-  });
-}
-
-export function useCancelLegacyFetch() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (runId: string) => cancelLegacyFetch(runId),
-    onSuccess: (_, runId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.legacyFetch.progress(runId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.legacyFetch.report(runId) });
-      // Also invalidate hymns since new ones may have been imported
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-    },
-  });
-}
-
 // Pack Sync
-export function usePlanPackSync(options?: { enabled?: boolean; forceRefresh?: boolean }) {
+export function usePlanPackSync(options?: {
+  enabled?: boolean;
+  forceRefresh?: boolean;
+  selectedLanguages?: string[];
+}) {
   const forceRefresh = options?.forceRefresh ?? false;
+  const selectedLanguages = options?.selectedLanguages?.length ? options.selectedLanguages : null;
   return useQuery({
-    queryKey: [...queryKeys.packSyncPlan, forceRefresh],
-    queryFn: () => planPackSync(forceRefresh),
+    queryKey: [...queryKeys.packSyncPlan, forceRefresh, selectedLanguages],
+    queryFn: () => planPackSync(forceRefresh, selectedLanguages),
     enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });

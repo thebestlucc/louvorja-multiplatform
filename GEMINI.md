@@ -11,7 +11,7 @@ This file provides comprehensive repository-level guidance for Gemini Code Assis
 **LouvorJA Multiplatform** is a church worship management desktop application.
 - **Stack:** Tauri 2.9.4 + React 19 + Rust (stable).
 - **Goal:** Cross-platform (Windows, macOS, Linux) migration from legacy Delphi.
-- **Key Features:** Hymnal search (FTS5), Presentation editor (.slja), Bible projection, Multi-monitor output (Playing now/Projector/Return), Audio synchronization (rodio), SSE Live Streaming, Timer/Clock projections, Spotlight (Cmd+K).
+- **Key Features:** Hymnal search (FTS5), Presentation editor (.slja), Bible projection, Multi-monitor output (Playing now/Projector/Return), Audio synchronization (rodio), SSE Live Streaming, Timer/Clock projections, Spotlight (Cmd+K), CDN Pack Sync (multi-language content bundles).
 
 ---
 

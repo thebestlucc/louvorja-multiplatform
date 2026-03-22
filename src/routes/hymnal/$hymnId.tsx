@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Copy, Monitor, Music, Pencil, RefreshCw, Square, Trash2 } from "lucide-react";
-import { useDeleteHymn, useHymn, useRestoreHymnFromApi, useSyncPoints, useUpdateHymn } from "../../lib/queries";
+import { ArrowLeft, Copy, Monitor, Music, Pencil, Square, Trash2 } from "lucide-react";
+import { useDeleteHymn, useHymn, useSyncPoints, useUpdateHymn } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useHymnPlayback, hymnToSlides } from "../../hooks/use-hymn-playback";
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/hymnal/$hymnId")({
 
 function HymnDetail() {
   const { hymnId } = Route.useParams();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const id = Number(hymnId);
   const { data: hymn, isLoading } = useHymn(id);
@@ -68,7 +68,6 @@ function HymnDetail() {
   const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
   const updateMutation = useUpdateHymn();
   const deleteMutation = useDeleteHymn();
-  const restoreMutation = useRestoreHymnFromApi();
 
   const generatedSlides = useMemo(() => {
     if (!hymn) return [];
@@ -251,26 +250,6 @@ function HymnDetail() {
             <Pencil className="mr-2 h-4 w-4" />
             {t("actions.edit")}
           </Button>
-          {hymn.apiMusicId != null && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={restoreMutation.isPending}
-              onClick={async () => {
-                const lang = (i18n.language as "pt" | "en" | "es") || "pt";
-                const [_, error] = await catcher(
-                  restoreMutation.mutateAsync({ hymnId: id, language: lang }),
-                  { notify: true, fallbackMessage: t("hymn.restoreFailed", { error: "" }) }
-                );
-                if (!error) {
-                  notify.success(t("hymn.restoreSuccess"));
-                }
-              }}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${restoreMutation.isPending ? "animate-spin" : ""}`} />
-              {t("hymn.restoreFromApi")}
-            </Button>
-          )}
           {isProjecting ? (
             <>
               <Button

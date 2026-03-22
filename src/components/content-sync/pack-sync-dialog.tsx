@@ -103,12 +103,17 @@ export function PackSyncDialog() {
   const open = useContentSyncStore((s) => s.packSyncPlanOpen);
   const close = useContentSyncStore((s) => s.closePackSyncPlan);
   const setRunId = useContentSyncStore((s) => s.setPackSyncRunId);
-  const planQuery = usePlanPackSync({ enabled: open });
+  const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
+  const planQuery = usePlanPackSync({
+    enabled: open,
+    selectedLanguages: selectedLangs.length > 0 ? selectedLangs : undefined,
+  });
   const startMutation = useStartPackSync();
   const plan = planQuery.data;
-  const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
 
   const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
+  // content-db-* items are internal — only visible packs from manifest.packs shown to user
+  const visibleItems = plan?.items.filter((i) => !i.packId.startsWith("content-db-")) ?? [];
 
   useEffect(() => {
     if (plan?.selectedLanguages?.length) {
@@ -140,7 +145,7 @@ export function PackSyncDialog() {
         <div className="mt-2">
           {(() => {
             const needsLangSetup = !!plan && plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
-            const hasItems = !!plan && plan.items.length > 0;
+            const hasItems = visibleItems.length > 0;
 
             if (hasItems || needsLangSetup) {
               return (
@@ -173,12 +178,12 @@ export function PackSyncDialog() {
                   {hasItems && (
                     <>
                       <div className="grid grid-cols-2 gap-3 text-sm">
-                        <Metric label={t("settings.packSync.packsToDownload")} value={plan!.totalDownloadCount} />
-                        <Metric label={t("settings.packSync.totalSize")} value={formatBytes(plan!.totalDownloadSize)} />
+                        <Metric label={t("settings.packSync.packsToDownload")} value={visibleItems.length} />
+                        <Metric label={t("settings.packSync.totalSize")} value={formatBytes(visibleItems.reduce((s, i) => s + i.packSize, 0))} />
                       </div>
                       <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
                         {Object.entries(
-                          plan!.items.reduce<Record<string, typeof plan.items>>((acc, item) => {
+                          visibleItems.reduce<Record<string, typeof visibleItems>>((acc, item) => {
                             (acc[item.language] ??= []).push(item);
                             return acc;
                           }, {})
@@ -219,7 +224,7 @@ export function PackSyncDialog() {
               !plan ||
               startMutation.isPending ||
               selectedLangs.length === 0 ||
-              (plan.items.length === 0 && plan.selectedLanguages.length > 0)
+              (visibleItems.length === 0 && plan.selectedLanguages.length > 0)
             }
           >
             {startMutation.isPending
