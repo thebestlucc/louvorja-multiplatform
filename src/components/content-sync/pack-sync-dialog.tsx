@@ -177,8 +177,21 @@ export function PackSyncDialog() {
                         <Metric label={t("settings.packSync.totalSize")} value={formatBytes(plan!.totalDownloadSize)} />
                       </div>
                       <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
-                        {plan!.items.map((item) => (
-                          <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
+                        {Object.entries(
+                          plan!.items.reduce<Record<string, typeof plan.items>>((acc, item) => {
+                            (acc[item.language] ??= []).push(item);
+                            return acc;
+                          }, {})
+                        ).map(([lang, items]) => (
+                          <div key={lang}>
+                            <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 bg-muted/60 backdrop-blur-sm border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                              {LANG_DISPLAY[lang] ?? lang}
+                              <span className="ml-auto font-normal normal-case">{items.length} {t("settings.packSync.packs", { defaultValue: "packs" })}</span>
+                            </div>
+                            {items.map((item) => (
+                              <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
+                            ))}
+                          </div>
                         ))}
                       </div>
                     </>
