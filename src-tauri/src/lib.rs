@@ -314,6 +314,9 @@ pub fn run() {
             app.manage(AppState {
                 db: pool.clone(),
                 bible_db: bible_pool,
+                content_dbs: std::sync::Arc::new(std::sync::Mutex::new(
+                    std::collections::HashMap::new(),
+                )),
                 timer: RwLock::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
@@ -333,6 +336,40 @@ pub fn run() {
 
             // Initialize Streaming Server State
             app.manage(StreamingState::default());
+
+            // Startup scan: open existing content-*.db files so they are
+            // available for queries immediately (no sync required).
+            {
+                let state = app.state::<AppState>();
+                if let Ok(entries) = std::fs::read_dir(&app_data_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let name = path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if name.starts_with("content-") && name.ends_with(".db") {
+                            let lang = name
+                                .strip_prefix("content-")
+                                .unwrap_or("")
+                                .strip_suffix(".db")
+                                .unwrap_or("")
+                                .to_string();
+                            if !lang.is_empty() {
+                                if let Ok(p) =
+                                    crate::db::queries::content_sync::open_content_db_pool(&path)
+                                {
+                                    if let Ok(conn) = p.get() {
+                                        let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
+                                    }
+                                    state.content_dbs.lock().unwrap().insert(lang, p);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             commands::display::start_monitor_hotplug_watcher(app.handle().clone());
 

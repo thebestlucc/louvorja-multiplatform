@@ -1,11 +1,27 @@
 #![allow(dead_code)]
 
+use std::path::{Path, PathBuf};
+
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, Connection, OptionalExtension, Row};
+
 use crate::db::models::{
     ContentSyncEntity, ContentSyncLocalMediaPaths, ContentSyncRemoteEntityInput, ContentSyncRun,
     ContentSyncRunMode, ContentSyncRunStatus, ContentSyncState,
 };
 use crate::error::AppError;
-use rusqlite::{params, Connection, OptionalExtension, Row};
+
+/// Maps BCP 47 content language tags to the 2-letter code used
+/// as id_language in the legacy DB files table.
+pub fn bcp47_to_lang_code(tag: &str) -> &str {
+    match tag {
+        "pt-BR" => "pt",
+        "en-US" => "en",
+        "es" => "es",
+        other => other,
+    }
+}
 
 fn map_state_row(row: &Row<'_>) -> Result<ContentSyncState, rusqlite::Error> {
     let last_sync_status = row
@@ -657,130 +673,73 @@ pub fn update_collection_cover_by_api_id(
     .map_err(AppError::Database)
 }
 
-/// Return the remote legacy DB version that was last successfully imported.
-/// Returns `None` if no import has ever been performed.
-/// The version is stored as a settings key (`pack_sync.legacy_db_version`).
-pub fn get_legacy_db_version(conn: &Connection) -> Result<Option<i64>, AppError> {
-    conn.query_row(
-        "SELECT value FROM settings WHERE key = 'pack_sync.legacy_db_version'",
-        [],
-        |row| row.get::<_, String>(0),
-    )
-    .optional()
-    .map_err(AppError::Database)
-    .map(|opt| opt.and_then(|s| s.parse::<i64>().ok()))
+/// Returns the list of BCP 47 language tags the user has selected for sync.
+/// Returns empty Vec if the setting is not set.
+pub fn get_selected_languages(conn: &Connection) -> Vec<String> {
+    crate::db::queries::settings::get_setting(conn, "pack_sync.selected_languages")
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s.value).ok())
+        .unwrap_or_default()
 }
 
-/// Persist the remote legacy DB version after a successful import.
-pub fn set_legacy_db_version(conn: &Connection, version: i64) -> Result<(), AppError> {
-    conn.execute(
-        "INSERT INTO settings (key, value) VALUES ('pack_sync.legacy_db_version', ?1)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        rusqlite::params![version.to_string()],
-    )
-    .map(|_| ())
-    .map_err(AppError::Database)
+pub fn set_selected_languages(conn: &Connection, langs: &[String]) -> Result<(), AppError> {
+    let json = serde_json::to_string(langs).map_err(AppError::SerdeJson)?;
+    crate::db::queries::settings::set_setting(conn, "pack_sync.selected_languages", &json)
 }
 
-/// Download a legacy Delphi-schema database (already saved to `legacy_db_path`)
-/// and import its hymn data into the current app database via ATTACH DATABASE.
-///
-/// This mirrors `migrate_v13` but operates cross-DB, using `legacy.*` table prefixes.
-/// Import is skipped when the local `pack_sync.legacy_db_version` is already >= `remote_version`.
-/// Returns the number of hymns inserted (0 when skipped).
-pub fn import_legacy_db(
-    current_conn: &Connection,
-    legacy_db_path: &str,
-    remote_version: i64,
-) -> Result<usize, AppError> {
-    // Skip if we already imported this version or a newer one.
-    let local_version = get_legacy_db_version(current_conn)?.unwrap_or(0);
-    if local_version >= remote_version {
-        return Ok(0);
+/// Renames the downloaded temp DB file to its final content-{lang}.db path.
+/// Returns the final path.
+pub fn save_content_db(
+    tmp_path: &Path,
+    lang_bcp47: &str,
+    app_data_dir: &Path,
+) -> Result<PathBuf, AppError> {
+    let filename = format!("content-{}.db", lang_bcp47);
+    let dest = app_data_dir.join(&filename);
+    std::fs::rename(tmp_path, &dest).map_err(AppError::Io)?;
+    Ok(dest)
+}
+
+/// Creates and populates musics_fts on the content DB.
+/// Safe to call multiple times — skips if table already populated.
+pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), AppError> {
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL;
+         PRAGMA cache_size=-8000;
+         CREATE VIRTUAL TABLE IF NOT EXISTS musics_fts USING fts5(name, lyrics);",
+    )
+    .map_err(AppError::Database)?;
+
+    // Guard: skip if already populated (handles interrupted-init recovery)
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM musics_fts", [], |r| r.get(0))
+        .map_err(AppError::Database)?;
+    if count > 0 {
+        return Ok(());
     }
 
-    // Escape single quotes in the path to prevent SQL injection in ATTACH.
-    let safe_path = legacy_db_path.replace('\'', "''");
-    current_conn
-        .execute_batch(&format!(
-            "ATTACH DATABASE '{}' AS legacy;",
-            safe_path
-        ))
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let mut stmt = conn
+        .prepare(
+            "INSERT INTO musics_fts(rowid, name, lyrics)
+             SELECT m.id_music, m.name, COALESCE(GROUP_CONCAT(l.lyric, ' '), '')
+             FROM musics m
+             LEFT JOIN lyrics l ON l.id_music = m.id_music AND l.id_language = ?1
+             GROUP BY m.id_music",
+        )
         .map_err(AppError::Database)?;
+    stmt.execute([lang_short]).map_err(AppError::Database)?;
+    Ok(())
+}
 
-    // Run the import using cross-DB queries.
-    // `legacy.musics`, `legacy.albums_musics`, `legacy.albums`, `legacy.lyrics`, `legacy.files`,
-    // `legacy.categories`, `legacy.categories_albums` mirror the same tables from migrate_v13.
-    let result = (|| -> Result<usize, AppError> {
-        // Check that the required legacy tables actually exist in the attached DB.
-        let musics_exists: i64 = current_conn
-            .query_row(
-                "SELECT COUNT(*) FROM legacy.sqlite_master WHERE type='table' AND name='musics'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(AppError::Database)?;
-        if musics_exists == 0 {
-            return Ok(0);
-        }
-
-        // Count hymns before insert so we can return the delta.
-        let before: i64 = current_conn
-            .query_row("SELECT COUNT(*) FROM hymns", [], |row| row.get(0))
-            .map_err(AppError::Database)?;
-
-        current_conn
-            .execute_batch(
-                "
-                INSERT OR IGNORE INTO hymns (number, title, album, lyrics, audio_path, category)
-                SELECT
-                    am.track,
-                    m.name,
-                    a.name,
-                    (
-                        SELECT GROUP_CONCAT(l.lyric, char(10) || char(10))
-                        FROM legacy.lyrics l
-                        WHERE l.id_music = m.id_music
-                          AND l.id_language = 'pt'
-                        ORDER BY l.\"order\"
-                    ),
-                    CASE
-                        WHEN f.dir IS NOT NULL AND f.name IS NOT NULL
-                        THEN f.dir || '/' || f.name
-                        ELSE NULL
-                    END,
-                    COALESCE(cat.slug, 'hymnal')
-                FROM legacy.musics m
-                INNER JOIN legacy.albums_musics am ON am.id_album = (
-                    SELECT MIN(id_album) FROM legacy.albums_musics WHERE id_music = m.id_music
-                ) AND am.id_music = m.id_music
-                INNER JOIN legacy.albums a ON a.id_album = am.id_album
-                LEFT JOIN legacy.files f ON f.id_file = m.id_file_music
-                LEFT JOIN legacy.categories_albums ca ON ca.id_album = a.id_album
-                    AND ca.id_language = 'pt'
-                LEFT JOIN legacy.categories cat ON cat.id_category = ca.id_category
-                WHERE m.id_language = 'pt'
-                ORDER BY am.track;
-
-                INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');
-                INSERT INTO hymns_fts(rowid, title, lyrics, author, album)
-                SELECT id, title, COALESCE(lyrics, ''), COALESCE(author, ''), COALESCE(album, '')
-                FROM hymns;
-                ",
-            )
-            .map_err(AppError::Database)?;
-
-        let after: i64 = current_conn
-            .query_row("SELECT COUNT(*) FROM hymns", [], |row| row.get(0))
-            .map_err(AppError::Database)?;
-
-        Ok((after - before).max(0) as usize)
-    })();
-
-    // Always detach, even on error.
-    let _ = current_conn.execute_batch("DETACH DATABASE legacy;");
-
-    result
+/// Opens an r2d2 pool for a content DB file.
+pub fn open_content_db_pool(path: &Path) -> Result<Pool<SqliteConnectionManager>, AppError> {
+    let manager = SqliteConnectionManager::file(path);
+    Pool::builder()
+        .min_idle(Some(1))
+        .max_size(3)
+        .build(manager)
+        .map_err(|e| AppError::Internal(format!("Content DB pool error: {}", e)))
 }
 
 pub fn list_content_sync_runs(

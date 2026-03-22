@@ -158,8 +158,7 @@ export function Header() {
                   className="flex-1"
                   disabled={startPackSync.isPending || clearCacheMutation.isPending}
                   onClick={async () => {
-                    const legacyDb = packSyncPlan?.legacyDb;
-                    const [runId, err] = await catcher(startPackSync.mutateAsync({ legacyDb }));
+                    const [runId, err] = await catcher(startPackSync.mutateAsync({}));
                     if (err) { toast.error(String(err)); return; }
                     if (runId) useContentSyncStore.getState().setPackSyncRunId(runId);
                     setPackSyncPendingCount(0);

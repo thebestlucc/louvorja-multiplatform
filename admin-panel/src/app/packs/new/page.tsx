@@ -93,6 +93,21 @@ function detectFileType(relativePath: string): FileType {
 }
 
 /**
+ * Returns true for macOS metadata files (.DS_Store), __MACOSX folders,
+ * and any other hidden/system path segments.
+ */
+function isSystemFile(relativePath: string): boolean {
+  return relativePath.split("/").some(
+    (seg) => seg.startsWith(".") || seg === "__MACOSX"
+  );
+}
+
+function bcp47ToLangShort(tag: string): string {
+  const map: Record<string, string> = { "pt-BR": "pt", "en-US": "en", es: "es" };
+  return map[tag] ?? tag;
+}
+
+/**
  * Returns true for "Hinário Adventista" and its language/spelling variants.
  * Files under these folders go into the flat media path (no album subfolder).
  */
@@ -125,45 +140,47 @@ function extractAlbumName(relativePath: string): string | null {
 }
 
 /**
- * Transform an FTP-structured relative path to the canonical app media path.
- * The ID is extracted from the parent directory of the file (second-to-last segment)
- * — no external ID lookup needed.
+ * Transform an FTP-structured path to the canonical DB-aligned path.
+ * Paths must match what the legacy DB files table stores so extracted
+ * files can be resolved with a simple app_data_dir.join(path).
  *
- * FTP layout → canonical:
- *   config/musicas/{album}/{id}/{file}     → media/audio|playback/{album}/{file}
- *   config/musicas/{hinario}/{id}/{file}   → media/audio|playback/{id}/{file}  (no album folder)
- *   config/musicas/{year}/{id}/{file}      → media/audio|playback/{id}/{file}  (year is not an album)
- *   config/imagens/{id}/{file}             → media/images/{id}/{file}
- *   config/capas/{id}/{file}              → media/album_covers/{id}/{file}
- *   EN/config/… or ES/config/…            → same, after stripping lang prefix
+ *   config/musicas/{album}/{id}/{file}  → musics/{lang}/{album}/{file}
+ *   config/capas/{id}/{file}            → covers/{file}
+ *   config/imagens/{id}/{file}          → images/{file}
+ *   Unrecognised paths                  → null (caller skips these)
  */
-function canonicalPackPath(relativePath: string, fileType: FileType): string {
+function canonicalPackPath(
+  relativePath: string,
+  _fileType: FileType,
+  lang: string,         // BCP 47 tag, e.g. "pt-BR"
+): string | null {
   const lower = relativePath.toLowerCase();
-  const parts = relativePath.split("/");
-  const filename = parts[parts.length - 1] ?? relativePath;
-  const id = parts.length >= 2 ? parseInt(parts[parts.length - 2], 10) : NaN;
-  if (isNaN(id)) return relativePath;
-
   const stripped = lower.replace(/^(en|es|pt)\//, "");
-  const originalStripped = relativePath.replace(/^(en|es|pt)\//i, "");
+  const parts = relativePath.replace(/^(en|es|pt)\//i, "").split("/");
+  const filename = parts[parts.length - 1];
+  if (!filename) return null;
 
-  if (stripped.startsWith("config/capas/"))
-    return `media/album_covers/${id}/${filename}`;
+  const langShort = bcp47ToLangShort(lang);
 
-  if (stripped.startsWith("config/imagens/") || stripped.startsWith("config/images/"))
-    return `media/images/${id}/${filename}`;
-
-  if (stripped.startsWith("config/musicas/") || stripped.startsWith("config/musics/")) {
-    const subfolder = fileType === "playback" ? "playback" : "audio";
-    const albumName = originalStripped.split("/")[2];
-    // Skip the album folder if it looks like a bare year (4 digits) or is a Hinario variant
-    if (albumName && !isHinario(albumName) && !/^\d{4}$/.test(albumName)) {
-      return `media/${subfolder}/${albumName}/${filename}`;
-    }
-    return `media/${subfolder}/${id}/${filename}`;
+  // Album covers: config/capas/{id}/{file} → covers/{file}
+  if (stripped.startsWith("config/capas/")) {
+    return `covers/${filename}`;
   }
 
-  return relativePath;
+  // Song covers/images: config/imagens/{id}/{file} → images/{file}
+  if (stripped.startsWith("config/imagens/") || stripped.startsWith("config/images/")) {
+    return `images/${filename}`;
+  }
+
+  // Audio/playback: config/musicas/{album}/{id}/{file} → musics/{lang}/{album}/{file}
+  if (stripped.startsWith("config/musicas/") || stripped.startsWith("config/musics/")) {
+    const albumName = parts[2]; // e.g. "Cânticos de Esperança"
+    if (!albumName) return null;
+    return `musics/${langShort}/${albumName}/${filename}`;
+  }
+
+  // Unrecognised — skip
+  return null;
 }
 
 /** Format bytes matching the OS file manager convention.
@@ -194,6 +211,7 @@ function groupFiles(
   const buckets = new Map<string, LocalFile[]>();
   for (const file of files) {
     if (file.detectedType === "unknown") continue;
+    if (file.relativePath.split("/").some((s) => s.startsWith(".") || s === "__MACOSX")) continue;
     const parts = file.relativePath.split("/");
     const subfolder = parts.length >= 3 ? parts[1] : "misc";
     const bucket = buckets.get(subfolder) ?? [];
@@ -254,6 +272,7 @@ export default function NewPackPage() {
     progress: 0,
     message: "",
   });
+  const [language, setLanguage] = useState<"pt-BR" | "es" | "en-US" | "">("");
   const fileInputRef = useRef<HTMLInputElement>(undefined!);
 
   // ── Step 1: file selection ───────────────────────────────────────────────
@@ -273,6 +292,7 @@ export default function NewPackPage() {
       const relativePath =
         (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
         file.name;
+      if (isSystemFile(relativePath)) continue;
       // Detect root-level .db files (only 2 path segments: folder/file.db)
       const pathParts = relativePath.split("/");
       if (pathParts.length === 2 && relativePath.toLowerCase().endsWith(".db")) {
@@ -303,6 +323,10 @@ export default function NewPackPage() {
   // ── Step 3: publish ─────────────────────────────────────────────────────
 
   const handlePublish = async () => {
+    if (!language) {
+      setPublishState({ status: "error", progress: 0, message: "Failed", error: "Please select a language before publishing." });
+      return;
+    }
     setStep("publish");
 
     const BATCH_SIZE = 50;
@@ -461,7 +485,8 @@ export default function NewPackPage() {
       const fileEntries = pack.files
         .map((lf) => {
           const serverFile = serverFileMap.get(lf.relativePath);
-          const packPath = canonicalPackPath(lf.relativePath, lf.detectedType);
+          const packPath = canonicalPackPath(lf.relativePath, lf.detectedType, language);
+          if (!packPath) return null;
           const rawAlbum = extractAlbumName(lf.relativePath);
           const albumName = rawAlbum && !isHinario(rawAlbum) ? rawAlbum : undefined;
           return {
@@ -472,7 +497,7 @@ export default function NewPackPage() {
             ...(albumName ? { albumName } : {}),
           };
         })
-        .filter((f) => f.localPath !== "");
+        .filter((f): f is NonNullable<typeof f> => f !== null && f.localPath !== "");
 
       const isLastPack = packIndex === totalPacks - 1;
       const [publishRes, publishFetchErr] = await catcher(
@@ -484,6 +509,7 @@ export default function NewPackPage() {
             finalizeManifest: isLastPack,
             // Pass the in-memory manifest so the server skips its own R2 fetch.
             currentManifest: workingManifest,
+            language,
             // On the last pack, pass dbUrl/dbVersion if the DB was uploaded
             // with updateManifest=false (Case A: packs + db together).
             ...(isLastPack && pendingDbUrl
@@ -558,6 +584,24 @@ export default function NewPackPage() {
                 Packs will be named <code>{packPrefix}-001</code>,{" "}
                 <code>{packPrefix}-002</code>, etc.
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="language">
+                Language <span className="text-destructive">*</span>
+              </Label>
+              <select
+                id="language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as typeof language)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                required
+              >
+                <option value="" disabled>Select a language…</option>
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="es">Español</option>
+                <option value="en-US">English (US)</option>
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -702,7 +746,7 @@ export default function NewPackPage() {
             </Button>
             <Button
               onClick={() => void handlePublish()}
-              disabled={packs.length === 0 && dbFiles.length === 0}
+              disabled={!language || (packs.length === 0 && dbFiles.length === 0)}
             >
               Publish {packs.length} Pack{packs.length !== 1 ? "s" : ""}
               {dbFiles.length > 0 ? ` + ${dbFiles.length} DB` : ""} →

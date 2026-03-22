@@ -667,6 +667,7 @@
         "failed": "Falhou",
         "skipped": "Ignorado"
       },
+      "selectLanguages": "Selecione os idiomas para sincronizar",
       "fileType": {
         "audio": "Áudio",
         "playback": "Playback",
