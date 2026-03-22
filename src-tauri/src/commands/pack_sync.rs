@@ -43,7 +43,8 @@ pub async fn plan_pack_sync(
             items: vec![],
             total_download_size: 0,
             total_download_count: 0,
-            legacy_db: None,
+            available_languages: vec![],
+            selected_languages: vec![],
         });
     }
 
@@ -62,7 +63,7 @@ pub async fn plan_pack_sync(
     if use_cache {
         if let Some(cached) = load_cached_manifest(&app) {
             let plan = pack_sync::planner::build_plan(&conn, &cached, stored_version)?;
-            if !plan.items.is_empty() || plan.legacy_db.is_some() {
+            if !plan.items.is_empty() {
                 return Ok(plan);
             }
             // Cache says up-to-date — trust it if the manifest version hasn't changed
@@ -95,7 +96,6 @@ pub fn start_pack_sync(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
     items: Option<Vec<crate::pack_sync::planner::PackSyncPlanItem>>,
-    legacy_db: Option<crate::pack_sync::planner::LegacyDbSyncItem>,
 ) -> Result<String, AppError> {
     if !pack_sync::is_pack_sync_enabled() {
         return Err(AppError::Internal("Pack sync is not configured.".into()));
@@ -113,7 +113,7 @@ pub fn start_pack_sync(
 
     let run_id_clone = run_id.clone();
     std::thread::spawn(move || {
-        pack_sync::executor::execute_pack_sync(app, run_id_clone, cancel_flag, items, legacy_db);
+        pack_sync::executor::execute_pack_sync(app, run_id_clone, cancel_flag, items);
     });
 
     Ok(run_id)

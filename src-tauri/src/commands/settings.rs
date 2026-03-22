@@ -194,16 +194,48 @@ pub fn clear_database(
     let _ = std::fs::remove_file(data_dir.join("manifest_cache.json"));
 
     // Delete all files inside the media folder
-    let media_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?
-        .join("media");
-
+    let media_dir = data_dir.join("media");
     if media_dir.exists() {
-        std::fs::remove_dir_all(&media_dir)
-            .map_err(|e| AppError::Io(e))?;
+        std::fs::remove_dir_all(&media_dir).map_err(AppError::Io)?;
     }
+
+    // --- Content DB / pack-sync cleanup ---
+
+    // 1. Drain all content DB pools so file handles are released
+    {
+        let mut map = state.content_dbs.lock().unwrap();
+        map.clear();
+    }
+
+    // 2. Delete content-*.db files, extracted pack dirs, and temp files
+    if let Ok(entries) = std::fs::read_dir(&data_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            // Content databases
+            if name.starts_with("content-") && name.ends_with(".db") {
+                let _ = std::fs::remove_file(&path);
+            }
+            // Extracted pack directories
+            if matches!(name, "musics" | "covers" | "images") {
+                let _ = std::fs::remove_dir_all(&path);
+            }
+            // Temp files from downloads
+            if name.ends_with(".db.tmp") || name.ends_with(".zip.tmp") {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+
+    // 3. Reset pack_sync-related settings
+    conn.execute(
+        "DELETE FROM settings WHERE key LIKE ?1",
+        rusqlite::params!["pack_sync.%"],
+    )
+    .ok();
 
     Ok(ClearDatabaseResult { success: true })
 }
