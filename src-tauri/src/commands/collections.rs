@@ -12,9 +12,78 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager};
 
+/// Gets a PooledConnection from content_dbs for the first selected language.
+/// Returns None if no content DB is available.
+fn get_content_db_conn(
+    state: &AppState,
+    conn: &rusqlite::Connection,
+) -> Option<(
+    r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    String,
+)> {
+    let langs = crate::db::queries::content_sync::get_selected_languages(conn);
+    let lang = langs.into_iter().next()?;
+    let map = state.content_dbs.lock().ok()?;
+    let pool = map.get(&lang)?.clone(); // clone pool before dropping lock
+    drop(map); // release lock before .get()
+    let pooled = pool.get().ok()?;
+    Some((pooled, lang))
+}
+
+fn resolve_hymn_paths(
+    mut hymns: Vec<Hymn>,
+    app_data_dir: &std::path::Path,
+) -> Vec<Hymn> {
+    for h in &mut hymns {
+        if let Some(ref p) = h.audio_path.clone() {
+            h.audio_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        if let Some(ref p) = h.playback_path.clone() {
+            h.playback_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        if let Some(ref p) = h.cover_path.clone() {
+            h.cover_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+    hymns
+}
+
+fn resolve_collection_paths(
+    mut collections: Vec<Collection>,
+    app_data_dir: &std::path::Path,
+) -> Vec<Collection> {
+    for c in &mut collections {
+        if let Some(ref p) = c.cover_path.clone() {
+            c.cover_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+    collections
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn get_collections(
+    app: AppHandle,
     query: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Collection>, AppError> {
@@ -23,6 +92,23 @@ pub fn get_collections(
         return Err(e);
     }
     let conn = conn.unwrap();
+
+    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+        let mut collections =
+            crate::db::queries::music::get_collections_from_content_db(&content_conn, &lang)?;
+        // Apply query filter if provided (simple case-insensitive name match)
+        if let Some(ref q) = query {
+            let q_lower = q.to_lowercase();
+            collections.retain(|c| c.name.to_lowercase().contains(&q_lower));
+        }
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        return Ok(resolve_collection_paths(collections, &app_data));
+    }
+
+    // Fallback to main DB
     crate::db::queries::collections::get_collections(&conn, query.as_deref())
 }
 
@@ -659,6 +745,7 @@ fn uniquify_relative_path(media_root: &Path, original: &Path) -> PathBuf {
 #[tauri::command]
 #[specta::specta]
 pub fn get_collection_hymns(
+    app: AppHandle,
     collection_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
@@ -667,6 +754,21 @@ pub fn get_collection_hymns(
         return Err(e);
     }
     let conn = conn.unwrap();
+
+    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+        let hymns = crate::db::queries::music::get_collection_hymns_from_content_db(
+            &content_conn,
+            collection_id,
+            &lang,
+        )?;
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        return Ok(resolve_hymn_paths(hymns, &app_data));
+    }
+
+    // Fallback to main DB
     crate::db::queries::collections::get_collection_hymns(&conn, collection_id)
 }
 
