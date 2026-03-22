@@ -39,7 +39,7 @@ import {
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
   updateGlobalShortcut,
 } from "./tauri";
-import type { PackSyncPlanItem, LegacyDbSyncItem } from "../types/content-sync";
+import type { PackSyncPlanItem } from "../types/content-sync";
 import type {
   HymnWriteInput,
   CollectionSongSyncStatus,
@@ -1195,8 +1195,8 @@ export function usePlanPackSync(options?: { enabled?: boolean; forceRefresh?: bo
 export function useStartPackSync() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars?: { items?: PackSyncPlanItem[] | null; legacyDb?: LegacyDbSyncItem | null }) =>
-      startPackSync(vars?.items, vars?.legacyDb),
+    mutationFn: (vars?: { items?: PackSyncPlanItem[] | null }) =>
+      startPackSync(vars?.items),
     onSuccess: () => {
       // Clear the manifest cache so the bell disappears and the next check fetches fresh
       void clearManifestCache();
