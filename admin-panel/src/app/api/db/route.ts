@@ -71,10 +71,12 @@ export async function POST(req: NextRequest) {
     const chunks: Buffer[] = [];
     let gotFile = false;
     let updateManifestField = "true"; // default: update manifest
+    let languageField = "pt-BR"; // default language for DB entry
 
     await new Promise<void>((resolve, reject) => {
       bb.on("field", (name, value) => {
         if (name === "updateManifest") updateManifestField = value;
+        if (name === "language") languageField = value;
       });
       bb.on("file", (_fieldName, fileStream) => {
         gotFile = true;
@@ -119,8 +121,8 @@ export async function POST(req: NextRequest) {
       }),
     );
 
-    // Update manifest to include dbUrl + dbVersion so Tauri clients
-    // can detect and download the new legacy DB during pack sync.
+    // Update manifest databases entry so Tauri clients can detect and
+    // download the new DB during pack sync.
     // When updateManifest=false, skip the manifest step — the caller will
     // include dbUrl/dbVersion in a later pack-publish call instead.
     const dbCdnUrl = getCdnUrl(DB_KEY);
@@ -129,8 +131,10 @@ export async function POST(req: NextRequest) {
       try {
         const existing = await fetchManifest();
         const manifest = incrementManifestVersion(existing);
-        manifest.dbUrl = dbCdnUrl;
-        manifest.dbVersion = dbVersion;
+        manifest.databases[languageField] = {
+          url: dbCdnUrl,
+          version: dbVersion,
+        };
         await uploadManifest(manifest);
       } catch (manifestErr) {
         // Non-fatal: DB was uploaded successfully; manifest update failure
