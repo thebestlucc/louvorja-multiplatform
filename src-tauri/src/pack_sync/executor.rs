@@ -440,25 +440,6 @@ pub fn execute_pack_sync(
     );
 }
 
-/// Returns true for "Hinário Adventista" and its language/spelling variants.
-/// Files from these folders go into the flat media path without an album subfolder.
-#[allow(dead_code)]
-fn is_hinario(name: &str) -> bool {
-    let norm: String = name
-        .chars()
-        .map(|c| match c {
-            'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
-            'é' | 'è' | 'ê' | 'ë' => 'e',
-            'í' | 'ì' | 'î' | 'ï' => 'i',
-            'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
-            'ú' | 'ù' | 'û' | 'ü' => 'u',
-            c => c,
-        })
-        .collect::<String>()
-        .to_lowercase();
-    norm.starts_with("hinar") || norm.starts_with("hymnar")
-}
-
 fn verify_sha256(path: &Path, expected: &str) -> Result<bool, AppError> {
     use sha2::Digest;
     use std::io::Read;
