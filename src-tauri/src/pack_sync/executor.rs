@@ -139,7 +139,7 @@ pub fn execute_pack_sync(
         plan_items
             .iter()
             .map(|i| {
-                let s = if i.needs_download || i.needs_db_update {
+                let s = if i.needs_download {
                     "pending"
                 } else {
                     "skipped"
@@ -191,7 +191,13 @@ pub fn execute_pack_sync(
 
             let handle = tokio::spawn(async move {
                 let _permit = permit;
-                let zip_path = app_data.join(format!("pack_{}.zip.tmp", item.pack_id));
+                let is_content_db = item.pack_id.starts_with("content-db-");
+                let tmp_filename = if is_content_db {
+                    format!("{}.db.tmp", item.pack_id)
+                } else {
+                    format!("pack_{}.zip.tmp", item.pack_id)
+                };
+                let zip_path = app_data.join(&tmp_filename);
 
                 let dl = crate::http_sync::downloader::download_file_http(
                     &client,
@@ -283,99 +289,75 @@ pub fn execute_pack_sync(
 
         let extract_percent = 70.0 + ((index + 1) as f64 / total as f64) * 30.0;
 
+        let is_content_db = item.pack_id.starts_with("content-db-");
+
         if item.needs_download {
             if ok_set.contains(&item.pack_id) {
-                let zip_path =
-                    app_data_dir.join(format!("pack_{}.zip.tmp", item.pack_id));
+                // Content DB items are not ZIPs — skip extraction (handled in Phase 3).
+                if is_content_db {
+                    pack_statuses
+                        .lock()
+                        .unwrap()
+                        .insert(item.pack_id.clone(), "ready".to_string());
+                    // Record extracted version so planner doesn't re-download next time
+                    let _ = content_sync::set_pack_extracted_version(
+                        &conn,
+                        &item.pack_id,
+                        item.pack_version,
+                    );
+                } else {
+                    let zip_path =
+                        app_data_dir.join(format!("pack_{}.zip.tmp", item.pack_id));
 
-                pack_statuses
-                    .lock()
-                    .unwrap()
-                    .insert(item.pack_id.clone(), "extracting".to_string());
-                emit(
-                    "running",
-                    extract_percent,
-                    &format!("Extraindo {}…", item.pack_id),
-                    index,
-                    total,
-                    snapshot(),
-                );
+                    pack_statuses
+                        .lock()
+                        .unwrap()
+                        .insert(item.pack_id.clone(), "extracting".to_string());
+                    emit(
+                        "running",
+                        extract_percent,
+                        &format!("Extraindo {}…", item.pack_id),
+                        index,
+                        total,
+                        snapshot(),
+                    );
 
-                match crate::http_sync::downloader::extract_zip_to(
-                    &zip_path,
-                    &app_data_dir,
-                ) {
-                    Ok(_) => {
-                        let _ = std::fs::remove_file(&zip_path);
+                    match crate::http_sync::downloader::extract_zip_to(
+                        &zip_path,
+                        &app_data_dir,
+                    ) {
+                        Ok(_) => {
+                            let _ = std::fs::remove_file(&zip_path);
+                        }
+                        Err(e) => {
+                            let _ = std::fs::remove_file(&zip_path);
+                            eprintln!("[pack-sync] Extract failed for {}: {}", item.pack_id, e);
+                            pack_statuses
+                                .lock()
+                                .unwrap()
+                                .insert(item.pack_id.clone(), "failed".to_string());
+                            emit(
+                                "running",
+                                extract_percent,
+                                &format!("Extração falhou para {}: {}", item.pack_id, e),
+                                index + 1,
+                                total,
+                                snapshot(),
+                            );
+                            continue;
+                        }
                     }
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&zip_path);
-                        eprintln!("[pack-sync] Extract failed for {}: {}", item.pack_id, e);
-                        pack_statuses
-                            .lock()
-                            .unwrap()
-                            .insert(item.pack_id.clone(), "failed".to_string());
-                        emit(
-                            "running",
-                            extract_percent,
-                            &format!("Extração falhou para {}: {}", item.pack_id, e),
-                            index + 1,
-                            total,
-                            snapshot(),
-                        );
-                        continue;
-                    }
+
+                    let _ = content_sync::set_pack_extracted_version(
+                        &conn,
+                        &item.pack_id,
+                        item.pack_version,
+                    );
                 }
-
-                let _ = content_sync::set_pack_extracted_version(
-                    &conn,
-                    &item.pack_id,
-                    item.pack_version,
-                );
             } else {
                 // Download failed — already marked, skip.
                 continue;
             }
-        }
-
-        if item.needs_db_update {
-            pack_statuses
-                .lock()
-                .unwrap()
-                .insert(item.pack_id.clone(), "db_update".to_string());
-
-            for file in &item.files {
-                // Ensure the collection exists when the file carries an album name.
-                if let Some(ref name) = file.album_name {
-                    if !is_hinario(name) {
-                        let _ = content_sync::ensure_collection_by_name(&conn, name);
-                    }
-                }
-
-                // Extract the numeric API ID from the second-to-last path segment.
-                // Works for both flat  (media/audio/123/file)
-                // and collection paths (media/audio/Album/123/file).
-                let parts: Vec<&str> = file.path.rsplitn(3, '/').collect();
-                let api_id: Option<i64> = parts.get(1).and_then(|s| s.parse().ok());
-
-                if let Some(id) = api_id {
-                    if file.path.starts_with("media/album_covers/") {
-                        let _ = content_sync::update_collection_cover_by_api_id(
-                            &conn, id, &file.path,
-                        );
-                    } else {
-                        let _ = content_sync::update_hymn_path_by_api_id(
-                            &conn, id, &file.file_type, &file.path,
-                        );
-                    }
-                }
-            }
-
-            let _ = content_sync::set_pack_db_version(
-                &conn,
-                &item.pack_id,
-                item.pack_version,
-            );
         }
 
         pack_statuses
@@ -391,6 +373,57 @@ pub fn execute_pack_sync(
             total,
             snapshot(),
         );
+    }
+
+    // ── Phase 3: Save and hot-swap content DB files ─────────────────────────
+
+    for item in &plan_items {
+        if !item.pack_id.starts_with("content-db-") {
+            continue;
+        }
+
+        let lang = &item.language;
+        let tmp_path = app_data_dir.join(format!("{}.db.tmp", item.pack_id));
+
+        if !tmp_path.exists() {
+            continue;
+        }
+
+        let dest = match content_sync::save_content_db(&tmp_path, lang, &app_data_dir) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("[pack-sync] Failed to save content DB for {}: {}", lang, e);
+                continue;
+            }
+        };
+
+        // Open new pool and initialise FTS5 index
+        match content_sync::open_content_db_pool(&dest) {
+            Ok(new_pool) => {
+                match new_pool.get() {
+                    Ok(content_conn) => {
+                        let _ = content_sync::init_content_db_fts(&content_conn, lang);
+                    }
+                    Err(e) => {
+                        eprintln!("[pack-sync] FTS init failed for {}: {}", lang, e);
+                    }
+                }
+                // Hot-swap in AppState
+                {
+                    let mut content_dbs = state.content_dbs.lock().unwrap();
+                    content_dbs.insert(lang.clone(), new_pool);
+                }
+                // Record the DB version so the planner knows it's current
+                let _ = settings::set_setting(
+                    &conn,
+                    &format!("pack_sync.db_version.{}", lang),
+                    &item.pack_version.to_string(),
+                );
+            }
+            Err(e) => {
+                eprintln!("[pack-sync] Pool open failed for {}: {}", lang, e);
+            }
+        }
     }
 
     if let Some(v) = manifest_version_to_save {
@@ -409,6 +442,7 @@ pub fn execute_pack_sync(
 
 /// Returns true for "Hinário Adventista" and its language/spelling variants.
 /// Files from these folders go into the flat media path without an album subfolder.
+#[allow(dead_code)]
 fn is_hinario(name: &str) -> bool {
     let norm: String = name
         .chars()
