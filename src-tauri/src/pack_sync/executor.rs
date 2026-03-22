@@ -38,8 +38,6 @@ pub fn execute_pack_sync(
     // When Some, skip manifest fetch and execute only these items.
     // When None, fetch the manifest and build the full plan.
     preset_items: Option<Vec<super::planner::PackSyncPlanItem>>,
-    // When Some, download and import this legacy DB as part of this sync run.
-    preset_legacy_db: Option<super::planner::LegacyDbSyncItem>,
 ) {
     // Emit helper — snapshots current statuses into every event.
     let emit = {
@@ -86,8 +84,8 @@ pub fn execute_pack_sync(
 
     // If items were provided directly (per-pack download), skip the manifest fetch.
     // If not, fetch the manifest and build the full plan.
-    let (plan_items, legacy_db_item, manifest_version_to_save) = if let Some(items) = preset_items {
-        (items, preset_legacy_db, None)
+    let (plan_items, manifest_version_to_save) = if let Some(items) = preset_items {
+        (items, None)
     } else {
         let manifest_url = super::CDN_MANIFEST_URL;
         if manifest_url.is_empty() {
@@ -121,10 +119,10 @@ pub fn execute_pack_sync(
         }
         let plan = plan.unwrap();
 
-        (plan.items, plan.legacy_db, Some(manifest.manifest_version.to_string()))
+        (plan.items, Some(manifest.manifest_version.to_string()))
     };
 
-    if plan_items.is_empty() && legacy_db_item.is_none() {
+    if plan_items.is_empty() {
         emit("completed", 100.0, "Já está atualizado.", 0, 0, HashMap::new());
         if let Some(v) = manifest_version_to_save {
             let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
@@ -397,67 +395,6 @@ pub fn execute_pack_sync(
 
     if let Some(v) = manifest_version_to_save {
         let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
-    }
-
-    // ── Phase 3: Legacy DB download + import (if needed) ──────────────────────
-    if let Some(legacy) = legacy_db_item {
-        if !cancel_flag.load(Ordering::Relaxed) {
-            emit(
-                "running",
-                95.0,
-                "Importando banco de dados legado…",
-                total,
-                total,
-                snapshot(),
-            );
-
-            let tmp_path = app_data_dir.join("tmp_legacy_import.db");
-
-            let dl = tauri::async_runtime::block_on(
-                crate::http_sync::downloader::download_file_http(
-                    &client,
-                    &legacy.url,
-                    &tmp_path,
-                    None,
-                ),
-            );
-
-            match dl {
-                Err(e) => {
-                    eprintln!("[pack-sync] Legacy DB download failed: {}", e);
-                    emit(
-                        "running",
-                        97.0,
-                        &format!("Falha ao baixar banco legado: {}", e),
-                        total,
-                        total,
-                        snapshot(),
-                    );
-                }
-                Ok(_) => {
-                    let tmp_str = tmp_path.to_string_lossy().into_owned();
-                    match crate::db::queries::content_sync::import_legacy_db(
-                        &conn,
-                        &tmp_str,
-                        legacy.version,
-                    ) {
-                        Ok(count) => {
-                            if count > 0 {
-                                eprintln!("[pack-sync] Legacy DB import: {} hymns inserted.", count);
-                            }
-                            let _ = crate::db::queries::content_sync::set_legacy_db_version(
-                                &conn,
-                                legacy.version,
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!("[pack-sync] Legacy DB import failed: {}", e);
-                        }
-                    }
-                    let _ = std::fs::remove_file(&tmp_path);
-                }
-            }
-        }
     }
 
     emit(
