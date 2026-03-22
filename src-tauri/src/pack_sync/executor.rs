@@ -441,6 +441,10 @@ pub fn execute_pack_sync(
 }
 
 fn verify_sha256(path: &Path, expected: &str) -> Result<bool, AppError> {
+    // No checksum provided (e.g. content-DB entries in manifest) — skip verification.
+    if expected.is_empty() {
+        return Ok(true);
+    }
     use sha2::Digest;
     use std::io::Read;
     let mut file = std::fs::File::open(path).map_err(AppError::Io)?;

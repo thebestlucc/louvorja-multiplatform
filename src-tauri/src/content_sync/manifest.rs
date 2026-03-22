@@ -41,6 +41,10 @@ pub struct ManifestPack {
 pub struct DbEntry {
     pub url: String,
     pub version: i64,
+    /// Optional SHA-256 checksum. When present, executor verifies the download.
+    /// When absent (legacy manifests), download is trusted without verification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

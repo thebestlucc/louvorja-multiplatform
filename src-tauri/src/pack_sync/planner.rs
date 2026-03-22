@@ -185,7 +185,7 @@ fn build_db_items(
                     pack_url: db_entry.url.clone(),
                     pack_version: db_entry.version as u32,
                     pack_size: 0,
-                    pack_sha256: String::new(),
+                    pack_sha256: db_entry.sha256.clone().unwrap_or_default(),
                     local_extracted_version: stored_version as u32,
                     local_db_version: 0,
                     needs_download: true,
