@@ -12,6 +12,8 @@ interface PublishPackRequest {
 
 interface PublishRequest {
   packs: PublishPackRequest[];
+  /** BCP 47 language tag for the packs being published (e.g. "pt-BR"). */
+  language: string;
   /** When true, increment manifest version and save. Only set on the last pack. */
   finalizeManifest?: boolean;
   /** CDN URL of the database file to embed in the manifest (passed when the DB
@@ -29,7 +31,7 @@ interface PublishRequest {
 export async function POST(req: NextRequest) {
   try {
     const body: PublishRequest = await req.json() as PublishRequest;
-    const { finalizeManifest = true, dbUrl, dbVersion } = body;
+    const { finalizeManifest = true, dbUrl, dbVersion, language } = body;
     // Use the manifest passed by the caller when available; fall back to fetching
     // from R2 for backward compatibility (e.g. direct API calls without a frontend).
     const manifest: ContentManifest | null = body.currentManifest ?? await fetchManifest();
@@ -37,21 +39,21 @@ export async function POST(req: NextRequest) {
       manifestVersion: 0,
       generatedAt: new Date().toISOString(),
       packs: [],
+      databases: {},
     };
     const updated = finalizeManifest
       ? incrementManifestVersion(manifest)
       : { ...base };
 
-    // Carry over existing dbUrl/dbVersion so they are never lost on partial updates.
-    if (manifest?.dbUrl && !updated.dbUrl) updated.dbUrl = manifest.dbUrl;
-    if (manifest?.dbVersion && !updated.dbVersion) updated.dbVersion = manifest.dbVersion;
-
     // When the caller passes dbUrl/dbVersion (Case A: packs + db in the same
     // folder), embed them in this manifest version so a single version contains
-    // both the packs and the DB reference.
-    if (finalizeManifest && dbUrl) {
-      updated.dbUrl = dbUrl;
-      updated.dbVersion = dbVersion;
+    // both the packs and the DB reference, keyed by the pack language.
+    if (finalizeManifest && dbUrl && dbVersion != null) {
+      updated.databases ??= {};
+      updated.databases[language] = {
+        url: dbUrl,
+        version: dbVersion,
+      };
     }
 
     for (const pack of body.packs) {
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
         size,
         sha256,
         files: manifestFiles,
+        language,
       };
 
       const idx = updated.packs.findIndex((p) => p.id === pack.packId);
