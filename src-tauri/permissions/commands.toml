@@ -17,6 +17,7 @@ allow = [
     "toggle_favorite",
     "get_favorites",
     "get_favorite_hymns",
+    "get_favorite_collections",
     "is_favorite"
 ]
 
@@ -51,6 +52,7 @@ allow = [
     "get_verses",
     "get_verse_range",
     "search_bible",
+    "search_bible_global",
     "project_bible_verse",
     "import_bible_version",
     "navigate_bible_verse"
