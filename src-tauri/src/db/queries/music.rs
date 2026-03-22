@@ -1327,4 +1327,38 @@ mod content_db_tests {
         let hymns = get_hymns_by_album_from_content_db(&conn, "Unknown Album", "pt-BR").unwrap();
         assert!(hymns.is_empty());
     }
+
+    #[test]
+    fn get_hymns_from_content_db_returns_list() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        assert_eq!(hymns[0].title, "Santo");
+        assert_eq!(hymns[0].album.as_deref(), Some("1992 - Brilha Jesus"));
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_empty_db() {
+        let conn = make_content_db();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        assert!(hymns.is_empty());
+    }
+
+    #[test]
+    fn get_collection_hymns_from_content_db_returns_hymns_in_album() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_collection_hymns_from_content_db(&conn, 1, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        assert_eq!(hymns[0].title, "Santo");
+    }
+
+    #[test]
+    fn get_collection_hymns_from_content_db_empty_for_unknown_album() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_collection_hymns_from_content_db(&conn, 999, "pt-BR").unwrap();
+        assert!(hymns.is_empty());
+    }
 }
