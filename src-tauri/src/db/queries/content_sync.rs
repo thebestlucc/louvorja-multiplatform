@@ -926,4 +926,106 @@ mod tests {
         let langs = get_selected_languages(&conn);
         assert_eq!(langs, vec!["en-US".to_string()]);
     }
+
+    /// Creates a minimal in-memory DB with the legacy content-DB schema.
+    fn make_content_db_for_fts() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE musics (
+                id_music INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                id_language TEXT,
+                id_file_music INTEGER,
+                id_file_instrumental_music INTEGER,
+                id_file_image INTEGER,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE albums (
+                id_album INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                id_language TEXT,
+                id_file_image INTEGER,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE albums_musics (
+                id_album INTEGER,
+                id_music INTEGER,
+                track INTEGER
+            );
+            CREATE TABLE files (
+                id_file INTEGER PRIMARY KEY,
+                dir TEXT,
+                name TEXT
+            );
+            CREATE TABLE lyrics (
+                id_music INTEGER,
+                id_language TEXT,
+                lyric TEXT
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn save_content_db_renames_tmp_to_final() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp_path = dir.path().join("content-pt-BR.db.tmp");
+        std::fs::write(&tmp_path, b"fake db content").unwrap();
+
+        let dest = save_content_db(&tmp_path, "pt-BR", dir.path()).unwrap();
+
+        assert!(!tmp_path.exists(), "tmp file must be gone after rename");
+        assert!(dest.exists(), "final file must exist");
+        assert_eq!(dest.file_name().unwrap(), "content-pt-BR.db");
+    }
+
+    #[test]
+    fn init_content_db_fts_populates_on_empty_db() {
+        let conn = make_content_db_for_fts();
+        conn.execute(
+            "INSERT INTO musics (id_music, name, id_language) VALUES (1, 'Song A', 'pt')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO lyrics (id_music, id_language, lyric) VALUES (1, 'pt', 'letra da musica')",
+            [],
+        ).unwrap();
+
+        init_content_db_fts(&conn, "pt-BR").unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM musics_fts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "FTS table must have one row after init");
+    }
+
+    #[test]
+    fn init_content_db_fts_is_idempotent() {
+        let conn = make_content_db_for_fts();
+        conn.execute(
+            "INSERT INTO musics (id_music, name, id_language) VALUES (1, 'Song A', 'pt')",
+            [],
+        ).unwrap();
+
+        init_content_db_fts(&conn, "pt-BR").unwrap();
+        init_content_db_fts(&conn, "pt-BR").unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM musics_fts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "idempotent call must not double-insert rows");
+    }
+
+    #[test]
+    fn init_content_db_fts_empty_db_no_rows() {
+        let conn = make_content_db_for_fts();
+        init_content_db_fts(&conn, "pt-BR").unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM musics_fts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
 }
