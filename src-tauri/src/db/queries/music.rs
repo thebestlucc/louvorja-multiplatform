@@ -1015,6 +1015,118 @@ pub fn find_hymn_by_api_music_id(conn: &Connection, api_music_id: i64) -> Option
     .ok()
 }
 
+/// Fetch a single hymn from the content DB by its id_music.
+pub fn get_hymn_by_id_from_content_db(
+    content_db: &rusqlite::Connection,
+    id: i64,
+    lang_bcp47: &str,
+) -> Result<crate::db::models::Hymn, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    content_db
+        .query_row(
+            "SELECT
+                m.id_music                    AS id,
+                am.track                      AS number,
+                m.name                        AS title,
+                NULL                          AS author,
+                a.name                        AS album,
+                NULL                          AS lyrics,
+                NULL                          AS chords,
+                fa.dir || '/' || fa.name      AS audio_path,
+                fp.dir || '/' || fp.name      AS playback_path,
+                'hymnal'                      AS category,
+                NULL                          AS notes,
+                fi.dir || '/' || fi.name      AS cover_path,
+                NULL                          AS lyrics_sync,
+                m.id_music                    AS api_music_id,
+                COALESCE(m.created_at, '')    AS created_at,
+                COALESCE(m.updated_at, '')    AS updated_at
+             FROM musics m
+             LEFT JOIN albums_musics am ON am.id_music = m.id_music
+             LEFT JOIN albums        a  ON a.id_album  = am.id_album
+             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+             WHERE m.id_music = ?1 AND m.id_language = ?2",
+            rusqlite::params![id, lang_short],
+            map_hymn_row,
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::NotFound(format!("Hymn {} not found in content DB", id))
+            }
+            other => AppError::Database(other),
+        })
+}
+
+/// Returns album names + hymn counts from the content DB.
+pub fn get_albums_from_content_db(
+    content_db: &rusqlite::Connection,
+    lang_bcp47: &str,
+) -> Result<Vec<crate::db::models::Album>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let mut stmt = content_db.prepare(
+        "SELECT a.name AS album, COUNT(am.id_music) AS hymn_count
+         FROM albums a
+         LEFT JOIN albums_musics am ON am.id_album = a.id_album
+         WHERE a.id_language = ?1
+         GROUP BY a.id_album
+         ORDER BY a.name",
+    )?;
+    let albums = stmt
+        .query_map([lang_short], |row| {
+            Ok(crate::db::models::Album {
+                name: row.get("album")?,
+                hymn_count: row.get::<_, i64>("hymn_count")? as i32,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(albums)
+}
+
+/// Returns hymns belonging to the named album from the content DB.
+pub fn get_hymns_by_album_from_content_db(
+    content_db: &rusqlite::Connection,
+    album: &str,
+    lang_bcp47: &str,
+) -> Result<Vec<crate::db::models::Hymn>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let mut stmt = content_db.prepare(
+        "SELECT
+            m.id_music                    AS id,
+            am.track                      AS number,
+            m.name                        AS title,
+            NULL                          AS author,
+            a.name                        AS album,
+            NULL                          AS lyrics,
+            NULL                          AS chords,
+            fa.dir || '/' || fa.name      AS audio_path,
+            fp.dir || '/' || fp.name      AS playback_path,
+            'hymnal'                      AS category,
+            NULL                          AS notes,
+            fi.dir || '/' || fi.name      AS cover_path,
+            NULL                          AS lyrics_sync,
+            m.id_music                    AS api_music_id,
+            COALESCE(m.created_at, '')    AS created_at,
+            COALESCE(m.updated_at, '')    AS updated_at
+         FROM musics m
+         JOIN albums_musics am ON am.id_music = m.id_music
+         JOIN albums        a  ON a.id_album  = am.id_album
+         LEFT JOIN files    fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files    fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files    fi ON fi.id_file  = m.id_file_image
+         WHERE a.name = ?1 AND m.id_language = ?2
+         ORDER BY am.track, m.name",
+    )?;
+    let hymns = stmt
+        .query_map(rusqlite::params![album, lang_short], map_hymn_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(hymns)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1116,5 +1228,103 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(0, 0), (1, 9000), (2, 20000), (3, 25000), (4, 30000)]
         );
+    }
+}
+
+#[cfg(test)]
+mod content_db_tests {
+    use super::*;
+
+    fn make_content_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE musics (
+                id_music INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                id_language TEXT,
+                id_file_music INTEGER,
+                id_file_instrumental_music INTEGER,
+                id_file_image INTEGER,
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            );
+            CREATE TABLE albums (
+                id_album INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                id_language TEXT,
+                id_file_image INTEGER,
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            );
+            CREATE TABLE albums_musics (
+                id_album INTEGER,
+                id_music INTEGER,
+                track INTEGER
+            );
+            CREATE TABLE files (
+                id_file INTEGER PRIMARY KEY,
+                dir TEXT,
+                name TEXT
+            );",
+        ).unwrap();
+        conn
+    }
+
+    fn seed_basic(conn: &rusqlite::Connection) {
+        conn.execute_batch(
+            "INSERT INTO files VALUES (10, '/musics/pt/BrilhaJesus', 'song01.mp3');
+             INSERT INTO files VALUES (11, '/musics/pt/BrilhaJesus', 'song01_instrumental.mp3');
+             INSERT INTO files VALUES (12, '/covers', 'brj.jpg');
+             INSERT INTO albums VALUES (1, '1992 - Brilha Jesus', 'pt', 12, '', '');
+             INSERT INTO musics VALUES (1, 'Santo', 'pt', 10, 11, 12, '', '');
+             INSERT INTO albums_musics VALUES (1, 1, 1);",
+        ).unwrap();
+    }
+
+    #[test]
+    fn get_hymn_by_id_from_content_db_returns_hymn() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymn = get_hymn_by_id_from_content_db(&conn, 1, "pt-BR").unwrap();
+        assert_eq!(hymn.id, 1);
+        assert_eq!(hymn.title, "Santo");
+        assert_eq!(hymn.audio_path.as_deref(), Some("/musics/pt/BrilhaJesus/song01.mp3"));
+        assert_eq!(hymn.cover_path.as_deref(), Some("/covers/brj.jpg"));
+    }
+
+    #[test]
+    fn get_hymn_by_id_from_content_db_not_found() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let result = get_hymn_by_id_from_content_db(&conn, 999, "pt-BR");
+        assert!(result.is_err(), "must return Err for unknown id");
+    }
+
+    #[test]
+    fn get_albums_from_content_db_lists_album() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let albums = get_albums_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].name, "1992 - Brilha Jesus");
+        assert_eq!(albums[0].hymn_count, 1);
+    }
+
+    #[test]
+    fn get_hymns_by_album_from_content_db_returns_hymns() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_hymns_by_album_from_content_db(&conn, "1992 - Brilha Jesus", "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        assert_eq!(hymns[0].title, "Santo");
+        assert_eq!(hymns[0].number, Some(1));
+    }
+
+    #[test]
+    fn get_hymns_by_album_from_content_db_empty_for_unknown_album() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_hymns_by_album_from_content_db(&conn, "Unknown Album", "pt-BR").unwrap();
+        assert!(hymns.is_empty());
     }
 }
