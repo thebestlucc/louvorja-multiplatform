@@ -500,6 +500,7 @@ pub struct ScheduleAssignmentInput {
     pub member_ids: Vec<i64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentSyncSummaryMode {
@@ -507,12 +508,14 @@ pub enum ContentSyncSummaryMode {
     Degraded,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentSyncFallbackAction {
     StartFullSync,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentSyncMetadataSource {
@@ -583,6 +586,7 @@ impl ContentSyncRunStatus {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentSyncPlanItemAction {
@@ -597,6 +601,7 @@ pub enum ContentSyncPlanItemAction {
     FullSyncFallback,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentSyncPlanItemStatus {
@@ -678,6 +683,7 @@ pub struct ContentSyncLocalMediaPaths {
     pub language: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentSyncSummary {
@@ -698,6 +704,7 @@ pub struct ContentSyncSummary {
     pub last_error: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentSyncPlanItem {
@@ -714,6 +721,7 @@ pub struct ContentSyncPlanItem {
     pub label: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentSyncPlan {
@@ -722,6 +730,7 @@ pub struct ContentSyncPlan {
     pub items: Vec<ContentSyncPlanItem>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentSyncProgress {
@@ -753,6 +762,7 @@ pub struct ContentSyncRun {
     pub finished_at: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentSyncReport {
@@ -777,6 +787,7 @@ pub struct ContentSyncReport {
 
 /// A single file entry returned by `list_ftp_files`.
 /// Not persisted — used only as a Tauri command return type.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FtpFileEntry {
@@ -790,6 +801,7 @@ pub struct FtpFileEntry {
     pub file_size: Option<u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FtpDownloadProgress {
@@ -877,6 +889,7 @@ pub struct MediaLibraryItemInput {
 }
 
 impl ContentSyncReport {
+    #[allow(dead_code)]
     pub fn from_run(run: ContentSyncRun) -> Self {
         #[derive(Deserialize, Default)]
         #[serde(rename_all = "camelCase")]

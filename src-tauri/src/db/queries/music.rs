@@ -1006,6 +1006,7 @@ pub fn get_collection_hymns_from_content_db(
     Ok(hymns)
 }
 
+#[allow(dead_code)]
 pub fn find_hymn_by_api_music_id(conn: &Connection, api_music_id: i64) -> Option<i64> {
     conn.query_row(
         "SELECT id FROM hymns WHERE api_music_id = ?1",

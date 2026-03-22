@@ -282,11 +282,15 @@ pub fn run() {
                 } else {
                     app.path().resource_dir()?.join("bible.db")
                 };
-                let tmp_path = bible_db_path.with_extension("db.tmp");
-                std::fs::copy(&resource_path, &tmp_path)
-                    .map_err(|e| format!("Failed to copy bible.db from {}: {e}", resource_path.display()))?;
-                std::fs::rename(&tmp_path, &bible_db_path)
-                    .map_err(|e| format!("Failed to install bible.db: {e}"))?;
+                if resource_path.exists() {
+                    let tmp_path = bible_db_path.with_extension("db.tmp");
+                    std::fs::copy(&resource_path, &tmp_path)
+                        .map_err(|e| format!("Failed to copy bible.db from {}: {e}", resource_path.display()))?;
+                    std::fs::rename(&tmp_path, &bible_db_path)
+                        .map_err(|e| format!("Failed to install bible.db: {e}"))?;
+                } else {
+                    eprintln!("[app] bible.db resource not found at {} — skipping copy, bible features will be unavailable", resource_path.display());
+                }
             }
             let bible_pool = db::init_bible_db(&bible_db_path)
                 .map_err(|e| format!("Failed to initialize bible database: {e}"))?;
