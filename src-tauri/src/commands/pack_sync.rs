@@ -96,9 +96,16 @@ pub fn start_pack_sync(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
     items: Option<Vec<crate::pack_sync::planner::PackSyncPlanItem>>,
+    selected_languages: Option<Vec<String>>,
 ) -> Result<String, AppError> {
     if !pack_sync::is_pack_sync_enabled() {
         return Err(AppError::Internal("Pack sync is not configured.".into()));
+    }
+
+    // Save language preference before executor builds its plan
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    if let Some(ref langs) = selected_languages {
+        crate::db::queries::content_sync::set_selected_languages(&conn, langs)?;
     }
 
     let run_id = pack_sync::executor::new_run_id();

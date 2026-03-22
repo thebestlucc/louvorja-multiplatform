@@ -1195,8 +1195,8 @@ export function usePlanPackSync(options?: { enabled?: boolean; forceRefresh?: bo
 export function useStartPackSync() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars?: { items?: PackSyncPlanItem[] | null }) =>
-      startPackSync(vars?.items),
+    mutationFn: (vars?: { items?: PackSyncPlanItem[] | null; selectedLanguages?: string[] | null }) =>
+      startPackSync(vars?.items, vars?.selectedLanguages),
     onSuccess: () => {
       // Clear the manifest cache so the bell disappears and the next check fetches fresh
       void clearManifestCache();
