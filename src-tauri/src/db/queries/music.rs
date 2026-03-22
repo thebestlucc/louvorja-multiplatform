@@ -800,14 +800,15 @@ pub fn search_hymns_content_db(
     let sanitized: String = trimmed
         .chars()
         .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-        .collect::<String>()
+        .collect::<String>();
+    let fts_query: String = sanitized
         .split_whitespace()
-        .collect::<Vec<&str>>()
+        .map(|t| format!("{}*", t))
+        .collect::<Vec<_>>()
         .join(" ");
-    if sanitized.is_empty() {
+    if fts_query.is_empty() {
         return get_hymns_from_content_db(content_db, lang_bcp47);
     }
-    let fts_query = format!("{}*", sanitized);
 
     // Check if FTS table exists
     let fts_exists: bool = content_db
