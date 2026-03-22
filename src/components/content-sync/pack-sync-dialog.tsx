@@ -117,7 +117,7 @@ export function PackSyncDialog() {
   }, [plan?.selectedLanguages]);
 
   const handleStart = async (items?: PackSyncPlanItem[]) => {
-    const [runId, error] = await catcher(startMutation.mutateAsync({ items }));
+    const [runId, error] = await catcher(startMutation.mutateAsync({ items, selectedLanguages: selectedLangs.length > 0 ? selectedLangs : null }));
     if (error) {
       toast.error(String(error));
       return;
@@ -138,46 +138,62 @@ export function PackSyncDialog() {
         </DialogHeader>
 
         <div className="mt-2">
-          {plan && plan.items.length > 0 ? (
-            <div className="space-y-3">
-              {plan.availableLanguages.length > 0 && (
-                <div className="space-y-2 px-3 py-2 border-b border-border">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {t("settings.packSync.selectLanguages")}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {plan.availableLanguages.map((lang) => (
-                      <label key={lang} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedLangs.includes(lang)}
-                          onChange={(e) => {
-                            setSelectedLangs((prev) =>
-                              e.target.checked
-                                ? [...prev, lang]
-                                : prev.filter((l) => l !== lang)
-                            );
-                          }}
-                        />
-                        {LANG_DISPLAY[lang] ?? lang}
-                      </label>
-                    ))}
-                  </div>
+          {(() => {
+            const needsLangSetup = !!plan && plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
+            const hasItems = !!plan && plan.items.length > 0;
+
+            if (hasItems || needsLangSetup) {
+              return (
+                <div className="space-y-3">
+                  {plan!.availableLanguages.length > 0 && (
+                    <div className="space-y-2 px-3 py-2 border-b border-border">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {t("settings.packSync.selectLanguages")}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {plan!.availableLanguages.map((lang) => (
+                          <label key={lang} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedLangs.includes(lang)}
+                              onChange={(e) => {
+                                setSelectedLangs((prev) =>
+                                  e.target.checked
+                                    ? [...prev, lang]
+                                    : prev.filter((l) => l !== lang)
+                                );
+                              }}
+                            />
+                            {LANG_DISPLAY[lang] ?? lang}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {hasItems && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <Metric label={t("settings.packSync.packsToDownload")} value={plan!.totalDownloadCount} />
+                        <Metric label={t("settings.packSync.totalSize")} value={formatBytes(plan!.totalDownloadSize)} />
+                      </div>
+                      <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
+                        {plan!.items.map((item) => (
+                          <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {needsLangSetup && !hasItems && (
+                    <p className="text-sm text-muted-foreground px-1">
+                      {t("settings.packSync.selectLanguagesHint", { defaultValue: "Select a language above, then click Download to get started." })}
+                    </p>
+                  )}
                 </div>
-              )}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <Metric label={t("settings.packSync.packsToDownload")} value={plan.totalDownloadCount} />
-                <Metric label={t("settings.packSync.totalSize")} value={formatBytes(plan.totalDownloadSize)} />
-              </div>
-              <div className="rounded-md border border-border overflow-hidden max-h-72 overflow-y-auto">
-                {plan.items.map((item) => (
-                  <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("settings.packSync.upToDate")}</p>
-          )}
+              );
+            }
+
+            return <p className="text-sm text-muted-foreground">{t("settings.packSync.upToDate")}</p>;
+          })()}
         </div>
 
         <DialogFooter className="mt-6 gap-2 sm:justify-between">
@@ -186,7 +202,12 @@ export function PackSyncDialog() {
           </Button>
           <Button
             onClick={() => void handleStart(undefined)}
-            disabled={!plan || plan.items.length === 0 || startMutation.isPending || ((plan.availableLanguages.length ?? 0) > 0 && selectedLangs.length === 0)}
+            disabled={
+              !plan ||
+              startMutation.isPending ||
+              selectedLangs.length === 0 ||
+              (plan.items.length === 0 && plan.selectedLanguages.length > 0)
+            }
           >
             {startMutation.isPending
               ? t("settings.packSync.starting")

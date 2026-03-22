@@ -1193,7 +1193,13 @@ function PackSyncSettingsInline() {
       return;
     }
     const plan = result.data;
-    if (!plan || plan.items.length === 0) {
+    if (!plan) {
+      toast.success(t("settings.packSync.upToDate"));
+      return;
+    }
+    // No language selected yet but languages are available on CDN → open dialog for setup
+    const needsLanguageSetup = plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
+    if (plan.items.length === 0 && !needsLanguageSetup) {
       toast.success(t("settings.packSync.upToDate"));
       return;
     }

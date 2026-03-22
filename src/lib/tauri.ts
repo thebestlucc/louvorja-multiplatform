@@ -694,9 +694,11 @@ export async function clearManifestCache(): Promise<void> {
 
 export async function startPackSync(
   items?: PackSyncPlanItem[] | null,
+  selectedLanguages?: string[] | null,
 ): Promise<string> {
   return tauriInvoke<string>("start_pack_sync", {
     items: items ?? null,
+    selectedLanguages: selectedLanguages ?? null,
   });
 }
 
