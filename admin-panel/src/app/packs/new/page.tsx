@@ -102,6 +102,11 @@ function isSystemFile(relativePath: string): boolean {
   );
 }
 
+function bcp47ToLangShort(tag: string): string {
+  const map: Record<string, string> = { "pt-BR": "pt", "en-US": "en", es: "es" };
+  return map[tag] ?? tag;
+}
+
 /**
  * Returns true for "Hinário Adventista" and its language/spelling variants.
  * Files under these folders go into the flat media path (no album subfolder).
@@ -135,45 +140,47 @@ function extractAlbumName(relativePath: string): string | null {
 }
 
 /**
- * Transform an FTP-structured relative path to the canonical app media path.
- * The ID is extracted from the parent directory of the file (second-to-last segment)
- * — no external ID lookup needed.
+ * Transform an FTP-structured path to the canonical DB-aligned path.
+ * Paths must match what the legacy DB files table stores so extracted
+ * files can be resolved with a simple app_data_dir.join(path).
  *
- * FTP layout → canonical:
- *   config/musicas/{album}/{id}/{file}     → media/audio|playback/{album}/{file}
- *   config/musicas/{hinario}/{id}/{file}   → media/audio|playback/{id}/{file}  (no album folder)
- *   config/musicas/{year}/{id}/{file}      → media/audio|playback/{id}/{file}  (year is not an album)
- *   config/imagens/{id}/{file}             → media/images/{id}/{file}
- *   config/capas/{id}/{file}              → media/album_covers/{id}/{file}
- *   EN/config/… or ES/config/…            → same, after stripping lang prefix
+ *   config/musicas/{album}/{id}/{file}  → musics/{lang}/{album}/{file}
+ *   config/capas/{id}/{file}            → covers/{file}
+ *   config/imagens/{id}/{file}          → images/{file}
+ *   Unrecognised paths                  → null (caller skips these)
  */
-function canonicalPackPath(relativePath: string, fileType: FileType): string {
+function canonicalPackPath(
+  relativePath: string,
+  _fileType: FileType,
+  lang: string,         // BCP 47 tag, e.g. "pt-BR"
+): string | null {
   const lower = relativePath.toLowerCase();
-  const parts = relativePath.split("/");
-  const filename = parts[parts.length - 1] ?? relativePath;
-  const id = parts.length >= 2 ? parseInt(parts[parts.length - 2], 10) : NaN;
-  if (isNaN(id)) return relativePath;
-
   const stripped = lower.replace(/^(en|es|pt)\//, "");
-  const originalStripped = relativePath.replace(/^(en|es|pt)\//i, "");
+  const parts = relativePath.replace(/^(en|es|pt)\//i, "").split("/");
+  const filename = parts[parts.length - 1];
+  if (!filename) return null;
 
-  if (stripped.startsWith("config/capas/"))
-    return `media/album_covers/${id}/${filename}`;
+  const langShort = bcp47ToLangShort(lang);
 
-  if (stripped.startsWith("config/imagens/") || stripped.startsWith("config/images/"))
-    return `media/images/${id}/${filename}`;
-
-  if (stripped.startsWith("config/musicas/") || stripped.startsWith("config/musics/")) {
-    const subfolder = fileType === "playback" ? "playback" : "audio";
-    const albumName = originalStripped.split("/")[2];
-    // Skip the album folder if it looks like a bare year (4 digits) or is a Hinario variant
-    if (albumName && !isHinario(albumName) && !/^\d{4}$/.test(albumName)) {
-      return `media/${subfolder}/${albumName}/${filename}`;
-    }
-    return `media/${subfolder}/${id}/${filename}`;
+  // Album covers: config/capas/{id}/{file} → covers/{file}
+  if (stripped.startsWith("config/capas/")) {
+    return `covers/${filename}`;
   }
 
-  return relativePath;
+  // Song covers/images: config/imagens/{id}/{file} → images/{file}
+  if (stripped.startsWith("config/imagens/") || stripped.startsWith("config/images/")) {
+    return `images/${filename}`;
+  }
+
+  // Audio/playback: config/musicas/{album}/{id}/{file} → musics/{lang}/{album}/{file}
+  if (stripped.startsWith("config/musicas/") || stripped.startsWith("config/musics/")) {
+    const albumName = parts[2]; // e.g. "Cânticos de Esperança"
+    if (!albumName) return null;
+    return `musics/${langShort}/${albumName}/${filename}`;
+  }
+
+  // Unrecognised — skip
+  return null;
 }
 
 /** Format bytes matching the OS file manager convention.
@@ -478,7 +485,8 @@ export default function NewPackPage() {
       const fileEntries = pack.files
         .map((lf) => {
           const serverFile = serverFileMap.get(lf.relativePath);
-          const packPath = canonicalPackPath(lf.relativePath, lf.detectedType);
+          const packPath = canonicalPackPath(lf.relativePath, lf.detectedType, language);
+          if (!packPath) return null;
           const rawAlbum = extractAlbumName(lf.relativePath);
           const albumName = rawAlbum && !isHinario(rawAlbum) ? rawAlbum : undefined;
           return {
@@ -489,7 +497,7 @@ export default function NewPackPage() {
             ...(albumName ? { albumName } : {}),
           };
         })
-        .filter((f) => f.localPath !== "");
+        .filter((f): f is NonNullable<typeof f> => f !== null && f.localPath !== "");
 
       const isLastPack = packIndex === totalPacks - 1;
       const [publishRes, publishFetchErr] = await catcher(
