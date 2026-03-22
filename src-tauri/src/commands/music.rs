@@ -104,8 +104,23 @@ pub fn search_all_hymns(
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<Hymn, AppError> {
+pub fn get_hymn(
+    app: tauri::AppHandle,
+    id: i64,
+    state: tauri::State<'_, AppState>,
+) -> Result<Hymn, AppError> {
+    use tauri::Manager;
     let conn = state.db.get()?;
+    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+        let hymns = vec![
+            crate::db::queries::music::get_hymn_by_id_from_content_db(&content_conn, id, &lang)?
+        ];
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        return Ok(resolve_hymn_paths(hymns, &app_data).remove(0));
+    }
     crate::db::queries::music::get_hymn_by_id(&conn, id)
 }
 
@@ -113,16 +128,33 @@ pub fn get_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<Hymn, AppE
 #[specta::specta]
 pub fn get_albums(state: tauri::State<'_, AppState>) -> Result<Vec<Album>, AppError> {
     let conn = state.db.get()?;
+    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+        return crate::db::queries::music::get_albums_from_content_db(&content_conn, &lang);
+    }
     crate::db::queries::music::get_albums(&conn)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn get_hymns_by_album(
+    app: tauri::AppHandle,
     album: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
+    use tauri::Manager;
     let conn = state.db.get()?;
+    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+        let hymns = crate::db::queries::music::get_hymns_by_album_from_content_db(
+            &content_conn,
+            &album,
+            &lang,
+        )?;
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        return Ok(resolve_hymn_paths(hymns, &app_data));
+    }
     crate::db::queries::music::get_hymns_by_album(&conn, &album)
 }
 
