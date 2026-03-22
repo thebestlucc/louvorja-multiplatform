@@ -39,20 +39,12 @@ import type {
   TimerStateData,
   VideoMetadata,
   UpdateInfo,
-  LegacyFetchOptions,
-  LegacyFetchProgress,
-  LegacyFetchReport,
-  ApiParams,
   MediaLibraryCategory,
   MediaLibraryCategoryInput,
   MediaLibraryItem,
   MediaLibraryItemInput,
 } from "./bindings";
 import type {
-  ContentSyncPlan,
-  ContentSyncProgress,
-  ContentSyncReport,
-  ContentSyncSummary,
   PackSyncPlan,
   PackSyncPlanItem,
 } from "../types/content-sync";
@@ -634,58 +626,15 @@ export async function clearDatabase(): Promise<{ success: boolean }> {
   return tauriInvoke<{ success: boolean }>("clear_database");
 }
 
-// Legacy Fetch (From LouvorJA Server)
-export async function startLegacyFetch(options: LegacyFetchOptions): Promise<string> {
-  return tauriInvoke<string>("start_legacy_fetch", { options });
-}
-
-export async function getLegacyFetchProgress(runId: string): Promise<LegacyFetchProgress> {
-  return tauriInvoke<LegacyFetchProgress>("get_legacy_fetch_progress", { runId });
-}
-
-export async function cancelLegacyFetch(runId: string): Promise<void> {
-  return tauriInvoke<void>("cancel_legacy_fetch", { runId });
-}
-
-export async function getLegacyFetchReport(runId: string): Promise<LegacyFetchReport | null> {
-  return tauriInvoke<LegacyFetchReport | null>("get_legacy_fetch_report", { runId });
-}
-
-export async function fetchLegacyParams(): Promise<ApiParams> {
-  return tauriInvoke<ApiParams>("fetch_legacy_params");
-}
-
-export async function checkDbVersion(): Promise<{ hasNewVersion: boolean; newVersion: number | null }> {
-  return tauriInvoke<{ hasNewVersion: boolean; newVersion: number | null }>("check_db_version");
-}
-
-export async function getContentSyncSummary(): Promise<ContentSyncSummary> {
-  return tauriInvoke<ContentSyncSummary>("get_content_sync_summary");
-}
-
-export async function planContentSync(): Promise<ContentSyncPlan> {
-  return tauriInvoke<ContentSyncPlan>("plan_content_sync");
-}
-
-export async function startContentSync(): Promise<string> {
-  return tauriInvoke<string>("start_content_sync");
-}
-
-export async function getContentSyncProgress(runId: string): Promise<ContentSyncProgress> {
-  return tauriInvoke<ContentSyncProgress>("get_content_sync_progress", { runId });
-}
-
-export async function cancelContentSync(runId: string): Promise<void> {
-  return tauriInvoke<void>("cancel_content_sync", { runId });
-}
-
-export async function getContentSyncReport(runId: string): Promise<ContentSyncReport | null> {
-  return tauriInvoke<ContentSyncReport | null>("get_content_sync_report", { runId });
-}
-
 // Pack Sync
-export async function planPackSync(forceRefresh?: boolean): Promise<PackSyncPlan> {
-  return tauriInvoke<PackSyncPlan>("plan_pack_sync", { forceRefresh: forceRefresh ?? false });
+export async function planPackSync(
+  forceRefresh?: boolean,
+  previewLanguages?: string[] | null,
+): Promise<PackSyncPlan> {
+  return tauriInvoke<PackSyncPlan>("plan_pack_sync", {
+    forceRefresh: forceRefresh ?? false,
+    previewLanguages: previewLanguages ?? null,
+  });
 }
 
 export async function clearManifestCache(): Promise<void> {
@@ -704,38 +653,6 @@ export async function startPackSync(
 
 export async function cancelPackSync(runId: string): Promise<void> {
   return tauriInvoke<void>("cancel_pack_sync", { runId });
-}
-
-// FTP File Browser
-export interface FtpFileEntry {
-  remotePath: string;
-  localPath: string | null;
-  existsLocally: boolean;
-  fileSize: number | null;
-}
-
-export interface FtpDownloadProgress {
-  remotePath: string;
-  done: number;
-  total: number;
-  success: boolean;
-  error: string | null;
-}
-
-export async function listFtpFiles(): Promise<void> {
-  return tauriInvoke<void>("list_ftp_files");
-}
-
-export async function downloadFtpFiles(remotePaths: string[]): Promise<void> {
-  return tauriInvoke<void>("download_ftp_files", { remotePaths });
-}
-
-export async function restoreHymnFromApi(hymnId: number, language: string): Promise<void> {
-  return tauriInvoke<void>("restore_hymn_from_api", { hymnId, language });
-}
-
-export async function restoreAlbumFromApi(collectionId: number, language: string): Promise<void> {
-  return tauriInvoke<void>("restore_album_from_api", { collectionId, language });
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {

@@ -85,7 +85,7 @@ src/                          # Frontend (React)
 │   ├── presentations/        # route.tsx, index.tsx, $presentationId.tsx
 │   ├── services/             # route.tsx, index.tsx, $serviceId.tsx
 │   └── playing-now/          # Playing now screen (slide preview + controls)
-├── stores/                   # Zustand stores (presentation-store, display-store, audio-store, ui-store, queue-store, theme-store)
+├── stores/                   # Zustand stores (presentation-store, display-store, audio-store, ui-store, queue-store, theme-store, content-sync-store)
 └── types/                    # TypeScript type definitions
 
 src-tauri/src/                # Backend (Rust)
@@ -102,6 +102,8 @@ src-tauri/src/                # Backend (Rust)
 ├── archive/                  # .slja read/write + .pptx import
 │   ├── mod.rs, manifest.rs, pptx.rs
 ├── audio/                    # rodio player, sync timeline
+├── content_sync/             # CDN manifest model (manifest.rs)
+├── pack_sync/                # CDN pack download/extract (planner.rs, executor.rs)
 ├── display/, streaming/      # Multi-monitor display + SSE streaming server
 └── video/                    # Video path + metadata parsing helpers
 ```
@@ -260,6 +262,15 @@ src-tauri/src/                # Backend (Rust)
 - **Global shortcuts:** Registered in `lib.rs` `setup()` via `GlobalShortcutExt::on_shortcut()`, emitted as `"global-shortcut"` Tauri events with string payload. Listened in `use-keyboard.ts` second `useEffect`. Use `Alt+` modifier for global shortcuts to avoid interfering with typing.
 - **Plugin capabilities split:** `pnpm tauri add` may add permissions to `default.json` OR `desktop.json` depending on when each file was created. Always verify `desktop.json` after adding plugins — missing permissions cause silent plugin failures (e.g., clipboard `NotAllowedError`).
 - **Playing Queue pattern:** `useQueueStore` manages the ordered list of hymns for continuous playback. `use-playback-coordinator.ts` hook syncs queue index changes → auto-starts audio + slides. `useAudioStore` exposes an `onFinished` callback to trigger `queueStore.next()` on song completion. `PlayingQueue` component lives on the `/playing-now` route.
+- **Cancellable async run pattern:** For long-running background operations (e.g. pack sync), store `active_run_id: Option<String>` + `cancel_flags: HashMap<String, Arc<AtomicBool>>` in a `Mutex<FooRuntimeState>` on `AppState`. The executor checks the flag between items; cancel command sets the flag. Progress events carry `run_id` so the frontend can ignore stale events.
+- **Multi-language content DB:** `AppState.content_dbs: Arc<Mutex<HashMap<String, Pool<SqliteConnectionManager>>>>` keyed by BCP 47 tag (e.g. `"pt-BR"`). Populated at startup by scanning for `content-*.db` files and after each pack sync. Access: `content_dbs.lock()?.get("pt-BR")`.
+- **Manifest cache pattern:** CDN manifest is cached to `manifest_cache.json` in `app_data_dir`. `plan_pack_sync` loads the cache, skips the network fetch when `manifest.manifest_version == stored_version`. Pass `force_refresh: Some(true)` to bypass.
+- **Preview-without-commit pattern:** Pass `preview_languages: Option<Vec<String>>` to `build_plan()` to compute what would be downloaded for a language selection without writing to DB. Used by the sync dialog to show pack list when the user checks a language before confirming.
+- **Thumbnail layout guardrails:** In constrained flex layouts, apply `min-w-0` on every wrapper level (sortable item → thumbnail root → inner text). For long untrusted strings (filenames, hash-like IDs), prefer `break-all` with a clipped container over `whitespace-nowrap + truncate` in tiny cards. Validate at 100%/125%/150% zoom with scrollbar visible.
+- **Realtime sync anti-pattern:** Never implement polling loops for live synchronization (audio/timer/clock/projection/streaming). Use event-driven pub/sub from Rust emitters to frontend listeners. If polling is temporarily unavoidable, document the rationale and removal plan.
+- **Playback/editor separation:** Presentation editor flows must not mutate the active playback queue or projection synchronization lifecycle. Keep queue control in playback routes/hooks only.
+- **CI/CD pipeline:** GitHub Actions with 5-platform matrix (macOS ARM/Intel, Linux x64/ARM, Windows). Uses `tauri-apps/tauri-action@v0` with Rust cache, Ed25519 signing, and draft releases. Signing env vars: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+- **Admin panel:** Separate Next.js 14 App Router project at `admin-panel/`. Manages CDN pack publishing: file upload, `canonicalPackPath()` path normalization, `manifest.ts` types (`ContentManifest`, `ManifestPack` with `language` BCP 47 + `databases` per-language DB entries), R2 upload. Run with `pnpm build` inside `admin-panel/`.
 
 ## Phase Status
 
@@ -279,6 +290,7 @@ src-tauri/src/                # Backend (Rust)
 | 11 | Projection Overhaul | COMPLETE |
 | 12 | Monitor Screen Assignment | COMPLETE |
 | — | Playing Queue | COMPLETE |
+| — | Pack Sync (CDN) | IN PROGRESS |
 
 ## Self-Improvement Protocol
 

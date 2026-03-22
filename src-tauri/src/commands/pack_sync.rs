@@ -36,6 +36,7 @@ pub async fn plan_pack_sync(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
     force_refresh: Option<bool>,
+    preview_languages: Option<Vec<String>>,
 ) -> Result<PackSyncPlan, AppError> {
     if !pack_sync::is_pack_sync_enabled() {
         return Ok(PackSyncPlan {
@@ -55,24 +56,22 @@ pub async fn plan_pack_sync(
         .and_then(|s| s.value.parse::<i64>().ok())
         .unwrap_or(0);
 
-    // Use cached manifest if available and not forcing a refresh.
-    // The cache is only useful when the stored manifest version already matches
-    // what was fetched last time — meaning the user dismissed the dialog but we
-    // still know which packs are pending without hitting the CDN again.
-    let use_cache = force_refresh != Some(true);
-    if use_cache {
+    let preview = preview_languages.as_deref();
+    let force = force_refresh == Some(true);
+
+    // Check whether the CDN has already been fetched this session.
+    let already_fetched = state
+        .pack_sync
+        .lock()
+        .map(|r| r.manifest_fetched)
+        .unwrap_or(false);
+
+    // If already fetched this session (and not forced), reuse the file cache.
+    if !force && already_fetched {
         if let Some(cached) = load_cached_manifest(&app) {
-            let plan = pack_sync::planner::build_plan(&conn, &cached, stored_version)?;
-            if !plan.items.is_empty() {
-                return Ok(plan);
-            }
-            // Cache says up-to-date — trust it if the manifest version hasn't changed
-            if cached.manifest_version == stored_version || stored_version == 0 {
-                // Still fetch to detect a newer manifest version
-            } else {
-                return Ok(plan);
-            }
+            return pack_sync::planner::build_plan(&conn, &cached, stored_version, preview);
         }
+        // Cache file missing — fall through to a fresh fetch below.
     }
 
     let client = reqwest::Client::builder()
@@ -80,14 +79,36 @@ pub async fn plan_pack_sync(
         .build()
         .map_err(|e| AppError::Internal(format!("HTTP client error: {}", e)))?;
 
-    let manifest = crate::content_sync::manifest::fetch_manifest(
+    // First call this session (or force refresh): clear the old file cache so
+    // we never serve stale data from a previous launch, then fetch fresh from CDN.
+    if let Ok(path) = manifest_cache_path(&app) {
+        let _ = std::fs::remove_file(&path);
+    }
+
+    let manifest = match crate::content_sync::manifest::fetch_manifest(
         &client, pack_sync::CDN_MANIFEST_URL,
-    ).await?;
+    ).await {
+        Ok(m) => {
+            save_manifest_cache(&app, &m);
+            // Mark as fetched so subsequent calls within this session use the cache.
+            if let Ok(mut runtime) = state.pack_sync.lock() {
+                runtime.manifest_fetched = true;
+            }
+            m
+        }
+        Err(_) => {
+            // CDN unreachable — fall back to the (now-cleared) cache only if it
+            // survived the delete above (e.g., read-only FS).  Otherwise error.
+            match load_cached_manifest(&app) {
+                Some(cached) => cached,
+                None => return Err(AppError::Internal(
+                    "CDN unreachable and no manifest cache available.".into(),
+                )),
+            }
+        }
+    };
 
-    // Persist manifest to local cache so subsequent launches avoid this CDN call
-    save_manifest_cache(&app, &manifest);
-
-    pack_sync::planner::build_plan(&conn, &manifest, stored_version)
+    pack_sync::planner::build_plan(&conn, &manifest, stored_version, preview)
 }
 
 #[tauri::command]

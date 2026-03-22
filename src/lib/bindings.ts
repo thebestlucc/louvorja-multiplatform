@@ -190,77 +190,6 @@ async removeHymnFromCollection(collectionId: number, hymnId: number) : Promise<R
     else return { status: "error", error: e  as any };
 }
 },
-async getContentSyncSummary() : Promise<Result<ContentSyncSummary, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_content_sync_summary") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async planContentSync() : Promise<Result<ContentSyncPlan, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("plan_content_sync") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async startContentSync() : Promise<Result<string, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("start_content_sync") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async getContentSyncProgress(runId: string) : Promise<Result<ContentSyncProgress, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_content_sync_progress", { runId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async cancelContentSync(runId: string) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("cancel_content_sync", { runId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async getContentSyncReport(runId: string) : Promise<Result<ContentSyncReport | null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_content_sync_report", { runId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async listFtpFiles() : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("list_ftp_files") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Download a list of remote FTP paths to their corresponding local locations.
- * 
- * Runs in a background thread and returns immediately.
- * Progress is emitted as `"ftp-file-download-progress"` events with
- * `FtpDownloadProgress` payload.
- */
-async downloadFtpFiles(remotePaths: string[]) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("download_ftp_files", { remotePaths }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async getBibleVersions() : Promise<Result<BibleVersion[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_bible_versions") };
@@ -1179,115 +1108,6 @@ async getMigrationReport(runId: string) : Promise<Result<MigrationReport, AppErr
     else return { status: "error", error: e  as any };
 }
 },
-/**
- * Start a legacy fetch operation
- * 
- * # Errors
- * Returns an error if it fails to acquire a lock on `AppState` to store the run status.
- */
-async startLegacyFetch(options: LegacyFetchOptions) : Promise<Result<string, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("start_legacy_fetch", { options }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Get current progress
- * 
- * # Errors
- * Returns an error if the `run_id` is not found or if the state lock fails.
- */
-async getLegacyFetchProgress(runId: string) : Promise<Result<LegacyFetchProgress, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_legacy_fetch_progress", { runId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Cancel a running operation
- * 
- * # Errors
- * Returns an error if the `run_id` is not found or if the state lock fails.
- */
-async cancelLegacyFetch(runId: string) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("cancel_legacy_fetch", { runId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Get the final report
- * 
- * # Errors
- * Returns an error if the state lock fails.
- */
-async getLegacyFetchReport(runId: string) : Promise<Result<LegacyFetchReport | null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_legacy_fetch_report", { runId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Fetch params from the API
- */
-async fetchLegacyParams() : Promise<Result<ApiParams, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_legacy_params") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async checkDbVersion() : Promise<Result<DbVersionCheckResult, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("check_db_version") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Restore a single hymn from the LouvorJA API.
- * 
- * # Errors
- * Returns an error if:
- * - The requested hymn cannot be found in the database.
- * - Fetching the music details from the API fails.
- * - Database connection or insertion fails.
- */
-async restoreHymnFromApi(hymnId: number, language: ApiLanguage) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("restore_hymn_from_api", { hymnId, language }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Restore an entire album/collection from the LouvorJA API.
- * 
- * # Errors
- * Returns an error if:
- * - The requested collection cannot be found in the database.
- * - Fetching the album details or songs from the API fails.
- * - Database connection or insertion fails.
- */
-async restoreAlbumFromApi(collectionId: number, language: ApiLanguage) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("restore_album_from_api", { collectionId, language }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async checkForUpdates() : Promise<Result<UpdateInfo | null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("check_for_updates") };
@@ -1428,17 +1248,17 @@ async spotlightHide() : Promise<Result<null, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
-async planPackSync(forceRefresh: boolean | null) : Promise<Result<PackSyncPlan, AppErrorResponse>> {
+async planPackSync(forceRefresh: boolean | null, previewLanguages: string[] | null) : Promise<Result<PackSyncPlan, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("plan_pack_sync", { forceRefresh }) };
+    return { status: "ok", data: await TAURI_INVOKE("plan_pack_sync", { forceRefresh, previewLanguages }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async startPackSync(items: PackSyncPlanItem[] | null, legacyDb: LegacyDbSyncItem | null) : Promise<Result<string, AppErrorResponse>> {
+async startPackSync(items: PackSyncPlanItem[] | null, selectedLanguages: string[] | null) : Promise<Result<string, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("start_pack_sync", { items, legacyDb }) };
+    return { status: "ok", data: await TAURI_INVOKE("start_pack_sync", { items, selectedLanguages }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1474,14 +1294,6 @@ async clearManifestCache() : Promise<Result<null, AppErrorResponse>> {
 
 export type Album = { name: string; hymnCount: number }
 export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
-/**
- * Supported languages for the API
- */
-export type ApiLanguage = "pt" | "en" | "es"
-/**
- * Params response from /params endpoint
- */
-export type ApiParams = { conn_ftp?: string | null; database_snapshot_path?: string | null; db_version?: number; download_win?: string | null; download_mac?: string | null; download_linux?: string | null; version_win?: string | null; version_mac?: string | null; version_linux?: string | null; help_pt?: string | null; help_en?: string | null; help_es?: string | null }
 export type AppErrorResponse = { code: string; message: string; details: string | null }
 export type AudioStatusPayload = { positionMs: number; durationMs: number; isPlaying: boolean; isPaused: boolean; volume: number; currentFile: string | null }
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string; versionAbbreviation: string }
@@ -1493,67 +1305,9 @@ export type CollectionSearchResult = { kind: string; collectionId: number; songI
 export type CollectionSong = { id: number; collectionId: number; sourcePath: string; sourceFormat: string; sourceHash: string | null; sourceMtimeMs: number; cachePresentationId: number; syncStatus: CollectionSongSyncStatus; lastSyncAt: string | null; itemOrder: number; createdAt: string; updatedAt: string; cachePresentationTitle: string | null }
 export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "error"
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
-export type ContentSyncFallbackAction = "start_full_sync"
-export type ContentSyncMetadataSource = "db_snapshot" | "api_fallback"
-export type ContentSyncPlan = { mode: ContentSyncRunMode; summary: ContentSyncSummary; items: ContentSyncPlanItem[] }
-export type ContentSyncPlanItem = { id: string; entityType: string; remoteId: number; localId: number; action: ContentSyncPlanItemAction; status: ContentSyncPlanItemStatus; reason: string | null; remotePath: string | null; label: string | null }
-export type ContentSyncPlanItemAction = "create_hymn" | "update_hymn" | "create_album" | "update_album" | "relink_collection_hymn" | "repair_media" | "delete_remote_managed_hymn" | "delete_remote_managed_album" | "full_sync_fallback"
-export type ContentSyncPlanItemStatus = "pending" | "running" | "completed" | "skipped" | "failed"
-export type ContentSyncProgress = { runId: string; step: string; status: ContentSyncRunStatus; percent: number; message: string | null; itemsTotal: number; itemsProcessed: number }
-export type ContentSyncReport = { runId: string; mode: ContentSyncRunMode; status: ContentSyncRunStatus; requestedVersion: number | null; completedVersion: number | null; appliedCount: number; skippedCount: number; failedCount: number; fallbackUsed: boolean; metadataSource: ContentSyncMetadataSource | null; resultJson: string | null; errorJson: string | null; createdAt: string; finishedAt: string | null; message: string | null }
-export type ContentSyncRunMode = "check" | "selective" | "full" | "repair"
-export type ContentSyncRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled"
-export type ContentSyncSummary = { mode: ContentSyncSummaryMode; currentVersion: number | null; remoteVersion: number | null; hasUpdates: boolean; changedHymnCount: number; changedAlbumCount: number; missingAssetCount: number; fallbackAction: ContentSyncFallbackAction | null; metadataSource: ContentSyncMetadataSource | null; lastCheckedAt: string | null; lastSyncedAt: string | null; lastSyncStatus: ContentSyncRunStatus | null; lastError: string | null }
-export type ContentSyncSummaryMode = "smart" | "degraded"
-/**
- * Check if the API has a newer db_version than what we have stored locally.
- * Returns `{ has_new_version: bool, new_version: Option<i64> }`.
- */
-export type DbVersionCheckResult = { hasNewVersion: boolean; newVersion: number | null }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
-export type LegacyDbSyncItem = { url: string; version: number }
-/**
- * Error during legacy fetch
- */
-export type LegacyFetchError = { itemType: string; itemId: string | null; message: string }
-/**
- * Options for starting a legacy fetch operation
- */
-export type LegacyFetchOptions = { 
-/**
- * Language to fetch (pt, en, es)
- */
-language: ApiLanguage; 
-/**
- * Whether to replace existing hymns with the same title
- */
-replace_existing: boolean; 
-/**
- * Whether to download audio files (vs just metadata)
- */
-download_audio: boolean; 
-/**
- * Whether to download cover images
- */
-download_images: boolean }
-/**
- * Progress information for a legacy fetch operation
- */
-export type LegacyFetchProgress = { runId: string; step: string; status: LegacyFetchStatus; percent: number; message: string | null; itemsTotal: number; itemsProcessed: number; subTasks: LegacyFetchSubTask[] }
-/**
- * Final report after a legacy fetch operation
- */
-export type LegacyFetchReport = { runId: string; hymnsFetched: number; hymnsImported: number; hymnsSkipped: number; albumsFetched: number; albumsCreated: number; collectionHymnsLinked: number; audioDownloaded: number; imagesDownloaded: number; errors: LegacyFetchError[]; durationMs: number }
-/**
- * Status of a legacy fetch operation
- */
-export type LegacyFetchStatus = "pending" | "fetching" | "importing" | "downloading" | "completed" | "failed" | "cancelled"
-/**
- * Sub-task progress information
- */
-export type LegacyFetchSubTask = { id: string; title: string; percent: number; status: string }
 export type MediaIntegrityReport = { missingFiles: MissingFile[]; excessFiles: string[] }
 export type MediaLibraryCategory = { id: number; name: string; sortOrder: number; idLanguage: string }
 export type MediaLibraryCategoryInput = { id: number | null; name: string; sortOrder: number; idLanguage: string }
@@ -1570,13 +1324,8 @@ export type MonitorConfig = { id: number; monitorId: string; role: string; enabl
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
 export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
-export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; 
-/**
- * Present when the manifest advertises a legacy DB that is newer than the
- * locally stored `pack_sync.legacy_db_version`.
- */
-legacyDb?: LegacyDbSyncItem | null }
-export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[] }
+export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; availableLanguages: string[]; selectedLanguages: string[] }
+export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[]; language: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
 export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }

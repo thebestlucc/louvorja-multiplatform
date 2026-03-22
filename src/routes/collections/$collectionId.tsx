@@ -16,7 +16,6 @@ import {
   Trash2,
   TriangleAlert,
   Upload,
-  Loader2,
 } from "lucide-react";
 import { notify } from "../../lib/notifications";
 import { catcher, catcherSync } from "../../lib/catcher";
@@ -30,7 +29,6 @@ import {
   useResyncCollectionSong,
   useSetting,
   useUpdateCollection,
-  useRestoreAlbumFromApi,
 } from "../../lib/queries";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -94,7 +92,6 @@ function CollectionDetail() {
   const resyncSong = resyncMutation.mutateAsync;
   const removeSong = removeMutation.mutateAsync;
   const reorderSongs = reorderMutation.mutateAsync;
-  const restoreAlbumFromApi = useRestoreAlbumFromApi();
   const { goToSlide } = useSlidesControl();
   const { play, setPlaybackMode } = useAudio();
   const { handleStartCantado, handleStartSlidesOnly } = useHymnPlayback();
@@ -366,24 +363,6 @@ function CollectionDetail() {
               <Button variant="outline" onClick={handleImport} disabled={importMutation.isPending}>
                 <Upload className="mr-2 h-4 w-4" />
                 {t("collections.importSong")}
-              </Button>
-            )}
-            {isApiCollection && (
-              <Button 
-                variant="outline" 
-                onClick={async () => {
-                  const [_, error] = await catcher(
-                    restoreAlbumFromApi.mutateAsync({ collectionId: id, language: "pt" }),
-                    { notify: true, fallbackMessage: t("collections.syncFailed") }
-                  );
-                  if (!error) {
-                    notify.success(t("collections.syncSuccess"));
-                  }
-                }}
-                disabled={restoreAlbumFromApi.isPending}
-              >
-                {restoreAlbumFromApi.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                Sync/Update Collection
               </Button>
             )}
           </div>

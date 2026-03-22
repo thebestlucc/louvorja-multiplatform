@@ -168,14 +168,33 @@
     "utilities": "Utilidades"
   },
   "dashboard": {
-    "quickAccess": {
-      "bible": "Lea y proyecte versículos bíblicos",
-      "collections": "Gestione colecciones de canciones fuera del himnario",
-      "hymnal": "Busque y explore himnos",
-      "presentations": "Cree y edite diapositivas",
-      "services": "Planifique el flujo del culto"
-    },
+    "greetingDawn": "Madrugada bendecida",
+    "greetingMorning": "Buenos días",
+    "greetingAfternoon": "Buenas tardes",
+    "greetingEvening": "Buenas noches",
+    "whatToDo": "¿Qué vamos a preparar hoy?",
+    "activeService": "Culto en curso",
     "subtitle": "Seleccione una opción del menú lateral para comenzar",
+    "hints": {
+      "services": "Planifica y dirige el culto",
+      "hymnal": "Encuentra himnos y canciones",
+      "bible": "Versículos y pasajes",
+      "presentations": "Diapositivas y presentaciones",
+      "collections": "Colecciones independientes"
+    },
+    "quickAccess": {
+      "bible": "Lee y proyecta versículos bíblicos",
+      "collections": "Gestiona colecciones de canciones fuera del himnario",
+      "hymnal": "Busca y navega por los himnos",
+      "presentations": "Crea y edita diapositivas",
+      "services": "Planifica el orden del culto"
+    },
+    "shortcuts": {
+      "title": "Atajos rápidos",
+      "search": "Buscar",
+      "projector": "Proyector",
+      "help": "Atajos"
+    },
     "welcome": "Bienvenido a LouvorJA"
   },
   "display": {

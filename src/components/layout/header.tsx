@@ -17,7 +17,7 @@ import {
   type Theme,
   THEMES,
 } from "../../lib/constants";
-import { useSetSetting, useSetting, useStartPackSync, useClearManifestCache } from "../../lib/queries";
+import { useSetSetting, useSetting, useStartPackSync } from "../../lib/queries";
 import { comboToDisplayKeys, normalizeShortcutCombo } from "../../lib/shortcut-definitions";
 import { openKeyboardShortcutsPanel } from "../utilities/keyboard-shortcuts-panel";
 import { spotlightOpen } from "../../lib/tauri";
@@ -44,8 +44,9 @@ export function Header() {
   const packSyncPlan = useContentSyncStore((s) => s.packSyncPlan);
   const setPackSyncPendingCount = useContentSyncStore((s) => s.setPackSyncPendingCount);
   const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
+  const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
+  const [bellOpen, setBellOpen] = useState(false);
   const startPackSync = useStartPackSync();
-  const clearCacheMutation = useClearManifestCache();
   const setSettingMutation = useSetSetting();
   const { data: spotlightShortcutSetting } = useSetting("shortcut.app-command-palette.local");
   const { data: shortcutsHelpSetting } = useSetting("shortcut.app-shortcuts-help.local");
@@ -125,7 +126,7 @@ export function Header() {
         </span>
 
         {packSyncPendingCount > 0 && (
-          <DropdownMenu>
+          <DropdownMenu open={bellOpen} onOpenChange={setBellOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -156,13 +157,22 @@ export function Header() {
                 <Button
                   size="sm"
                   className="flex-1"
-                  disabled={startPackSync.isPending || clearCacheMutation.isPending}
+                  disabled={startPackSync.isPending}
                   onClick={async () => {
-                    const [runId, err] = await catcher(startPackSync.mutateAsync({}));
+                    const plan = useContentSyncStore.getState().packSyncPlan;
+                    const [runId, err] = await catcher(
+                      startPackSync.mutateAsync({
+                        items: plan?.items,
+                        selectedLanguages: plan?.selectedLanguages?.length ? plan.selectedLanguages : null,
+                      }),
+                    );
                     if (err) { toast.error(String(err)); return; }
                     if (runId) useContentSyncStore.getState().setPackSyncRunId(runId);
+                    // Hide bell after sync starts — it will reappear on next app launch if needed
                     setPackSyncPendingCount(0);
                     setPackSyncPlan(null);
+                    setBellOpen(false);
+                    openPackSyncProgress();
                   }}
                 >
                   {startPackSync.isPending ? t("settings.packSync.starting") : t("settings.packSync.downloadNow")}
@@ -170,12 +180,8 @@ export function Header() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={startPackSync.isPending || clearCacheMutation.isPending}
-                  onClick={async () => {
-                    await catcher(clearCacheMutation.mutateAsync());
-                    setPackSyncPendingCount(0);
-                    setPackSyncPlan(null);
-                  }}
+                  disabled={startPackSync.isPending}
+                  onClick={() => setBellOpen(false)}
                 >
                   {t("settings.packSync.later")}
                 </Button>

@@ -44,14 +44,21 @@ pub struct PackSyncPlan {
 }
 
 /// Build a plan by comparing the remote manifest against local pack state.
+///
+/// `preview_languages` — if `Some`, use those languages instead of reading from DB.
+/// This lets the dialog show the pack list for a language the user has checked
+/// without committing the selection to DB yet.
 pub fn build_plan(
     conn: &Connection,
     manifest: &ContentManifest,
     stored_manifest_version: i64,
+    preview_languages: Option<&[String]>,
 ) -> Result<PackSyncPlan, AppError> {
     use crate::db::queries::content_sync::get_selected_languages;
 
-    let selected_languages = get_selected_languages(conn);
+    let selected_languages = preview_languages
+        .map(|l| l.to_vec())
+        .unwrap_or_else(|| get_selected_languages(conn));
     let available_languages: Vec<String> = {
         let mut langs: Vec<String> = manifest
             .packs

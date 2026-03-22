@@ -112,7 +112,7 @@ pub fn execute_pack_sync(
             .and_then(|s| s.value.parse::<i64>().ok())
             .unwrap_or(0);
 
-        let (plan, err) = catcher(super::planner::build_plan(&conn, &manifest, stored_version));
+        let (plan, err) = catcher(super::planner::build_plan(&conn, &manifest, stored_version, None));
         if let Some(e) = err {
             emit("failed", 100.0, &e.to_string(), 0, 0, HashMap::new());
             return;

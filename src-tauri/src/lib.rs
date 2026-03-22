@@ -5,9 +5,7 @@ mod content_sync;
 mod db;
 mod display;
 mod error;
-mod ftp_sync;
 mod http_sync;
-mod legacy_fetch;
 mod pack_sync;
 mod migration;
 mod projection;
@@ -78,15 +76,6 @@ pub fn run() {
             commands::collections::get_collection_hymns,
             commands::collections::add_hymn_to_collection,
             commands::collections::remove_hymn_from_collection,
-            // Content Sync
-            commands::content_sync::get_content_sync_summary,
-            commands::content_sync::plan_content_sync,
-            commands::content_sync::start_content_sync,
-            commands::content_sync::get_content_sync_progress,
-            commands::content_sync::cancel_content_sync,
-            commands::content_sync::get_content_sync_report,
-            commands::content_sync::list_ftp_files,
-            commands::content_sync::download_ftp_files,
             // Bible
             commands::bible::get_bible_versions,
             commands::bible::get_books,
@@ -213,15 +202,6 @@ pub fn run() {
             commands::migration::get_migration_progress,
             commands::migration::cancel_migration,
             commands::migration::get_migration_report,
-            // Legacy Fetch
-            commands::legacy_fetch::start_legacy_fetch,
-            commands::legacy_fetch::get_legacy_fetch_progress,
-            commands::legacy_fetch::cancel_legacy_fetch,
-            commands::legacy_fetch::get_legacy_fetch_report,
-            commands::legacy_fetch::fetch_legacy_params,
-            commands::legacy_fetch::check_db_version,
-            commands::legacy_fetch::restore_hymn_from_api,
-            commands::legacy_fetch::restore_album_from_api,
             // Updater
             commands::updater::check_for_updates,
             commands::updater::install_update,
@@ -319,8 +299,6 @@ pub fn run() {
                 )),
                 timer: RwLock::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
-                legacy_fetch: Mutex::new(crate::legacy_fetch::LegacyFetchRuntimeState::default()),
-                content_sync: Mutex::new(crate::content_sync::ContentSyncRuntimeState::default()),
                 pack_sync: Mutex::new(crate::state::PackSyncRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 timer_update_stop: Mutex::new(None),

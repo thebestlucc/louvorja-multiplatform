@@ -1,8 +1,6 @@
 use crate::audio::AudioPlayer;
-use crate::content_sync::ContentSyncRuntimeState;
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
-use crate::legacy_fetch::LegacyFetchRuntimeState;
 use crate::migration::MigrationRuntimeState;
 use crate::streaming::StreamingServer;
 use r2d2::Pool;
@@ -191,6 +189,9 @@ pub struct OverlayRuntimeState {
 pub struct PackSyncRuntimeState {
     pub active_run_id: Option<String>,
     pub cancel_flags: std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// True once the CDN manifest has been successfully fetched this session.
+    /// Subsequent non-forced calls within the same launch reuse the file cache.
+    pub manifest_fetched: bool,
 }
 
 pub struct AppState {
@@ -201,8 +202,6 @@ pub struct AppState {
     pub content_dbs: Arc<Mutex<HashMap<String, Pool<SqliteConnectionManager>>>>,
     pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
-    pub legacy_fetch: Mutex<LegacyFetchRuntimeState>,
-    pub content_sync: Mutex<ContentSyncRuntimeState>,
     pub pack_sync: Mutex<PackSyncRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub timer_update_stop: Mutex<Option<Sender<()>>>,
