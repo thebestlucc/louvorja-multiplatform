@@ -8,6 +8,7 @@ import {
   ListChecks,
   MonitorPlay,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useService } from "../lib/queries";
@@ -25,27 +26,41 @@ function getGreetingKey(): string {
   return "dashboard.greetingEvening";
 }
 
+const NAV_ITEMS = [
+  { to: "/services", icon: ListChecks, labelKey: "nav.services", hintKey: "dashboard.hints.services" },
+  { to: "/hymnal", icon: Music, labelKey: "nav.hymnal", hintKey: "dashboard.hints.hymnal" },
+  { to: "/bible", icon: BookOpen, labelKey: "nav.bible", hintKey: "dashboard.hints.bible" },
+  { to: "/presentations", icon: Presentation, labelKey: "nav.presentations", hintKey: "dashboard.hints.presentations" },
+  { to: "/collections", icon: FolderOpen, labelKey: "nav.collections", hintKey: "dashboard.hints.collections" },
+] as const;
+
 function Dashboard() {
   const { t } = useTranslation();
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
   const { data: activeServiceData } = useService(activeServiceId ?? 0);
 
+  const shortcuts = [
+    { keys: "Ctrl+K", label: t("dashboard.shortcuts.search") },
+    { keys: "F5", label: t("dashboard.shortcuts.projector") },
+    { keys: "Ctrl+/", label: t("dashboard.shortcuts.help") },
+  ];
+
   return (
     <div className="mx-auto max-w-3xl dashboard-fade-in">
-      {/* Greeting — warm, not corporate */}
-      <div className="pb-8 pt-4">
+      {/* Greeting */}
+      <div className="pb-6 pt-4">
         <p className="text-lg text-muted-foreground">{t(getGreetingKey())}</p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {t("dashboard.whatToDo")}
         </h1>
       </div>
 
-      {/* Active service — the most time-sensitive thing */}
+      {/* Active service */}
       {activeServiceId && activeServiceData && (
         <Link
           to="/services/$serviceId"
           params={{ serviceId: String(activeServiceId) }}
-          className="group mb-6 block"
+          className="group mb-5 block"
         >
           <div className="flex items-center gap-4 rounded-lg bg-primary px-5 py-4 text-primary-foreground transition-opacity hover:opacity-90">
             <MonitorPlay className="h-5 w-5 shrink-0 opacity-80" />
@@ -62,73 +77,49 @@ function Dashboard() {
         </Link>
       )}
 
-      {/* Main navigation — Services & Hymnal get prominence */}
-      <div className="space-y-2">
-        <NavRow
-          to="/services"
-          icon={ListChecks}
-          label={t("nav.services")}
-          hint={t("dashboard.hints.services")}
-        />
-        <NavRow
-          to="/hymnal"
-          icon={Music}
-          label={t("nav.hymnal")}
-          hint={t("dashboard.hints.hymnal")}
-        />
+      {/* Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        {NAV_ITEMS.map((item, i) => {
+          const isLast = i === NAV_ITEMS.length - 1 && NAV_ITEMS.length % 2 !== 0;
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={cn(isLast && "col-span-2 sm:col-span-1")}
+            >
+              <div
+                className={cn(
+                  "group flex h-full flex-col justify-between rounded-lg border border-border bg-surface p-4",
+                  "transition-all duration-150",
+                  "hover:shadow-sm hover:border-muted-foreground/25",
+                )}
+              >
+                <item.icon className="mb-4 h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t(item.labelKey)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t(item.hintKey)}</p>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
 
-        <div className="h-px bg-border/60 my-1" />
-
-        <NavRow
-          to="/bible"
-          icon={BookOpen}
-          label={t("nav.bible")}
-          hint={t("dashboard.hints.bible")}
-        />
-        <NavRow
-          to="/presentations"
-          icon={Presentation}
-          label={t("nav.presentations")}
-          hint={t("dashboard.hints.presentations")}
-        />
-        <NavRow
-          to="/collections"
-          icon={FolderOpen}
-          label={t("nav.collections")}
-          hint={t("dashboard.hints.collections")}
-        />
+      {/* Shortcuts */}
+      <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+          <Zap className="h-3 w-3" />
+          {t("dashboard.shortcuts.title")}
+        </span>
+        {shortcuts.map((s) => (
+          <span key={s.keys} className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {s.keys}
+            </kbd>
+            {s.label}
+          </span>
+        ))}
       </div>
     </div>
-  );
-}
-
-function NavRow({
-  to,
-  icon: Icon,
-  label,
-  hint,
-}: {
-  to: string;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  hint: string;
-}) {
-  return (
-    <Link to={to}>
-      <div
-        className={cn(
-          "group flex items-center gap-4 rounded-lg px-4 py-3.5",
-          "transition-colors duration-150",
-          "hover:bg-surface-hover",
-        )}
-      >
-        <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
-        <div className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-foreground">{label}</span>
-          <span className="ml-3 text-xs text-muted-foreground hidden sm:inline">{hint}</span>
-        </div>
-        <ArrowRight className="h-3.5 w-3.5 text-border transition-all group-hover:text-muted-foreground group-hover:translate-x-0.5" />
-      </div>
-    </Link>
   );
 }
