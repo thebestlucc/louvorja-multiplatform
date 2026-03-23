@@ -354,9 +354,11 @@
   "nav": {
     "bible": "Biblia",
     "collections": "Colecciones",
+    "collectionsItems": "Colecciones",
     "help": "Ayuda",
     "home": "Inicio",
     "hymnal": "Himnario",
+    "onlineVideos": "Videos en Línea",
     "playingNow": "Reproduciendo ahora",
     "presentations": "Presentaciones",
     "services": "Cultos",
