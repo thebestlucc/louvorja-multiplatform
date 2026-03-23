@@ -35,11 +35,13 @@ pub fn download_video(
     let output_path = output_dir.join(format!("{}.mp4", video_id));
     let output_template = output_dir.join(format!("{}.%(ext)s", video_id));
 
-    // Build quality format string
+    // Build quality format string.
+    // Prefer pre-muxed formats (no ffmpeg required) before falling back to
+    // separate streams that need ffmpeg to merge.
     let format_str = match quality {
-        "720" | "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
-        "1080" | "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-        _ => "bestvideo+bestaudio/best",
+        "720" | "720p" => "best[height<=720][ext=mp4]/best[height<=720]/bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "1080" | "1080p" => "best[height<=1080][ext=mp4]/best[height<=1080]/bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        _ => "best[ext=mp4]/best/bestvideo+bestaudio/best",
     };
 
     let url = format!("https://www.youtube.com/watch?v={}", video_id);
@@ -150,6 +152,20 @@ fn cleanup_partial_files(output_dir: &Path, video_id: &str) {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if name_str.starts_with(video_id) && (name_str.contains(".part") || name_str.contains(".ytdl")) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
+/// Deletes ALL files in `output_dir` whose name starts with `video_id`
+/// (covers .mp4, .webm, separate audio tracks, etc.).
+pub fn delete_video_files(output_dir: &Path, video_id: &str) {
+    if let Ok(entries) = std::fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with(video_id) {
                 let _ = std::fs::remove_file(entry.path());
             }
         }

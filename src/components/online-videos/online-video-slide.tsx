@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 
@@ -19,9 +20,19 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   const { t } = useTranslation();
 
   if (renderMode === "projector") {
+    const isLocalFile = slide.videoUrl?.startsWith("media/");
+
     return (
       <div className={cn("h-full w-full bg-black", className)}>
-        {slide.videoId ? (
+        {isLocalFile && slide.videoUrl ? (
+          <video
+            src={convertFileSrc(slide.videoUrl)}
+            autoPlay
+            controls
+            className="h-full w-full"
+            title={slide.videoTitle ?? ""}
+          />
+        ) : slide.videoId ? (
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${slide.videoId}?autoplay=1&controls=0&rel=0`}
             allow="autoplay; encrypted-media"

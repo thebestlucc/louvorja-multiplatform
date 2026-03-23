@@ -10,11 +10,10 @@ pub fn upsert_channel(
 ) -> Result<i64, AppError> {
     conn.execute(
         "INSERT INTO online_videos_channels (channel_id, title, images, status)
-         VALUES (?1, ?2, ?3, 'active')
+         VALUES (?1, ?2, ?3, 'validated')
          ON CONFLICT(channel_id) DO UPDATE SET title = ?2, images = ?3, updated_at = CURRENT_TIMESTAMP",
-        params![channel_id, title, images],
-    )?;
-    let id = conn.query_row(
+         params![channel_id, title, images],
+    )?;    let id = conn.query_row(
         "SELECT id FROM online_videos_channels WHERE channel_id = ?1",
         params![channel_id],
         |row| row.get(0),
@@ -32,11 +31,10 @@ pub fn insert_playlist(
 ) -> Result<i64, AppError> {
     conn.execute(
         "INSERT INTO online_videos_playlists (id_channel, playlist_id, title, cover_path, status)
-         VALUES (?1, ?2, ?3, ?4, 'active')
+         VALUES (?1, ?2, ?3, ?4, 'validated')
          ON CONFLICT(playlist_id) DO UPDATE SET title = ?3, cover_path = ?4, updated_at = CURRENT_TIMESTAMP",
-        params![id_channel, playlist_id, title, cover_path],
-    )?;
-    let id = conn.query_row(
+         params![id_channel, playlist_id, title, cover_path],
+    )?;    let id = conn.query_row(
         "SELECT id FROM online_videos_playlists WHERE playlist_id = ?1",
         params![playlist_id],
         |row| row.get(0),
@@ -177,7 +175,7 @@ pub fn update_video_local_path(
     local_path: &str,
 ) -> Result<(), AppError> {
     conn.execute(
-        "UPDATE online_videos SET local_path = ?1, status = 'downloaded', updated_at = CURRENT_TIMESTAMP WHERE video_id = ?2",
+        "UPDATE online_videos SET local_path = ?1, status = 'validated', updated_at = CURRENT_TIMESTAMP WHERE video_id = ?2",
         params![local_path, video_id],
     )?;
     Ok(())
@@ -210,4 +208,15 @@ pub fn get_videos_with_local_path(
         result.push(path?);
     }
     Ok(result)
+}
+
+pub fn clear_video_local_path(
+    conn: &Connection,
+    video_id: &str,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE online_videos SET local_path = NULL, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE video_id = ?1",
+        params![video_id],
+    )?;
+    Ok(())
 }

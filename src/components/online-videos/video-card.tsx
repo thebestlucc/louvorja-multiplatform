@@ -1,21 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
 import { Download, X, CheckCircle, AlertCircle, Trash2, Play } from "lucide-react";
 import type { OnlineVideo } from "../../lib/bindings";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { catcher } from "../../lib/catcher";
-import { downloadOnlineVideo, cancelDownload } from "../../lib/tauri";
+import { downloadOnlineVideo, cancelDownload, setCurrentSlide } from "../../lib/tauri";
 import { getPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
-
-interface YtdlpProgressPayload {
-  runId: string;
-  videoId: string;
-  percent: number;
-  status: string;
-}
+import { useDownloadStore } from "../../stores/download-store";
 
 interface VideoCardProps {
   video: OnlineVideo;
@@ -33,29 +26,22 @@ function formatDuration(seconds: number | null): string {
 function parseThumbnail(images: string | null): string | null {
   if (!images) return null;
   try {
-    const parsed = JSON.parse(images) as Record<string, string>;
-    return parsed.thumbnail ?? null;
+    const parsed = JSON.parse(images) as unknown;
+    if (typeof parsed === "object" && parsed !== null) {
+      return (parsed as Record<string, string>).thumbnail ?? null;
+    }
+    return typeof parsed === "string" ? parsed : null;
   } catch {
-    return null;
+    return images; // plain URL string
   }
 }
 
 export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
   const { t } = useTranslation();
-  const [downloading, setDownloading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const download = useDownloadStore((s) => s.downloads[video.videoId]);
+  const downloading = !!download;
+  const progress = download?.progress ?? 0;
   const runIdRef = useRef<string | undefined>(undefined);
-  const unlistenRef = useRef<(() => void) | undefined>(undefined);
-
-  // Clean up event listener on unmount
-  useEffect(() => {
-    return () => {
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = undefined;
-      }
-    };
-  }, []);
 
   const handleDownload = async () => {
     const [quality] = await catcher(
@@ -63,65 +49,58 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
     );
     const effectiveQuality = quality ?? "720";
 
-    setDownloading(true);
-    setProgress(0);
-
-    // Subscribe to progress events before starting download
-    const [unlisten] = await catcher(
-      listen<YtdlpProgressPayload>("ytdlp-progress", (event) => {
-        if (event.payload.videoId !== video.videoId) return;
-        setProgress(event.payload.percent);
-        if (
-          event.payload.status === "done" ||
-          event.payload.status === "error"
-        ) {
-          setDownloading(false);
-          runIdRef.current = undefined;
-          if (unlistenRef.current) {
-            unlistenRef.current();
-            unlistenRef.current = undefined;
-          }
-        }
-      }),
-    );
-
-    if (unlisten) {
-      unlistenRef.current = unlisten;
-    }
-
     const [runId, err] = await catcher(
       downloadOnlineVideo(video.videoId, playlistId, effectiveQuality),
       { notify: true },
     );
 
     if (err) {
-      setDownloading(false);
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = undefined;
-      }
       return;
     }
 
-    runIdRef.current = runId ?? undefined;
+    const effectiveRunId = runId ?? "";
+    runIdRef.current = effectiveRunId || undefined;
+    useDownloadStore.getState().startDownload(video.videoId, playlistId, effectiveRunId);
   };
 
   const handleCancel = async () => {
     const runId = runIdRef.current;
     if (!runId) return;
     await catcher(cancelDownload(runId), { notify: true });
-    setDownloading(false);
-    setProgress(0);
+    useDownloadStore.getState().completeDownload(video.videoId);
     runIdRef.current = undefined;
-    if (unlistenRef.current) {
-      unlistenRef.current();
-      unlistenRef.current = undefined;
-    }
   };
 
   const handleDeleteLocal = () => {
     // Signal parent to remove from list or refresh
     if (onDeleted) onDeleted(video.videoId);
+  };
+
+  const handleProject = async () => {
+    await catcher(
+      setCurrentSlide({
+        slideType: "online_video",
+        videoId: video.videoId,
+        videoTitle: video.title ?? "",
+        videoUrl: null,
+        videoSource: "youtube",
+        text: null,
+        title: null,
+        subtitle: null,
+        label: null,
+        videoPath: null,
+        backgroundImage: null,
+        backgroundColor: null,
+        audioPath: null,
+        autoPlay: null,
+        loop: null,
+        muted: null,
+        mode: null,
+        textColor: null,
+        textSize: null,
+      }),
+      { notify: true },
+    );
   };
 
   const thumbnailUrl = parseThumbnail(video.images);
@@ -206,6 +185,16 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 mt-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleProject}
+            title={t("onlineVideos.detail.project")}
+            className="h-7 px-2 text-xs"
+          >
+            <Play className="h-3 w-3 mr-1" />
+            {t("onlineVideos.detail.project")}
+          </Button>
           {downloading ? (
             <Button
               variant="outline"
@@ -223,7 +212,7 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
               onClick={handleDeleteLocal}
               title={t("onlineVideos.detail.deleteLocal")}
               className={cn(
-                "inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground",
+                "inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground cursor-pointer",
                 "hover:bg-destructive/10 hover:text-destructive transition-colors",
               )}
             >

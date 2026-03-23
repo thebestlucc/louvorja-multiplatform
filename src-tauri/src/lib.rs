@@ -234,6 +234,7 @@ pub fn run() {
             commands::youtube::get_youtube_playlist_videos,
             commands::youtube::refresh_youtube_playlist,
             commands::youtube::delete_youtube_playlist,
+            commands::youtube::delete_video_local_file,
             // yt-dlp
             commands::youtube::ensure_ytdlp,
             commands::youtube::update_ytdlp,

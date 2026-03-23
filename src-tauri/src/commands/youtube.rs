@@ -227,12 +227,58 @@ pub fn delete_youtube_playlist(
         .path()
         .app_data_dir()
         .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
+    let output_dir = app_data_dir.join("media").join("videos").join("youtube");
     for path in &local_paths {
+        // Extract video_id from stored relative path (e.g. "media/videos/youtube/VIDEO_ID.mp4")
+        if let Some(stem) = std::path::Path::new(path)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+        {
+            // Delete all files for this video_id (covers separate audio tracks too)
+            crate::ytdlp::downloader::delete_video_files(&output_dir, &stem);
+        }
+        // Fallback: remove the exact stored path
         let full_path = app_data_dir.join(path);
-        let _ = std::fs::remove_file(&full_path); // Best-effort cleanup
+        let _ = std::fs::remove_file(&full_path);
     }
 
     crate::db::queries::online_videos::delete_playlist(&conn, &playlist_id)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn delete_video_local_file(
+    video_id: String,
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let local_path: Option<String> = conn
+        .query_row(
+            "SELECT local_path FROM online_videos WHERE video_id = ?1",
+            rusqlite::params![&video_id],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
+
+    // Delete all files matching this video_id (video + any separate audio tracks)
+    let output_dir = app_data_dir.join("media").join("videos").join("youtube");
+    crate::ytdlp::downloader::delete_video_files(&output_dir, &video_id);
+
+    // Also remove the stored path explicitly in case the naming differs
+    if let Some(path) = local_path {
+        let full_path = app_data_dir.join(&path);
+        let _ = std::fs::remove_file(&full_path); // best-effort, already covered above
+    }
+
+    crate::db::queries::online_videos::clear_video_local_path(&conn, &video_id)?;
     Ok(())
 }
 

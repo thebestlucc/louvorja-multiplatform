@@ -1336,6 +1336,14 @@ async deleteYoutubePlaylist(playlistId: string) : Promise<Result<null, AppErrorR
     else return { status: "error", error: e  as any };
 }
 },
+async deleteVideoLocalFile(videoId: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_video_local_file", { videoId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async ensureYtdlp() : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("ensure_ytdlp") };
