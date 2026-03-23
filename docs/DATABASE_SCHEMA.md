@@ -420,67 +420,61 @@ CREATE UNIQUE INDEX bible_verse_id_bible_version_id_bible_book_chapter_verse_uni
 #### `online_videos_channels`
 ```sql
 CREATE TABLE online_videos_channels (
-  id_online_video_channel INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-  channel_id VARCHAR NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_language VARCHAR NOT NULL DEFAULT 'und',
+  channel_id VARCHAR NOT NULL UNIQUE,
   title VARCHAR,
   description TEXT,
-  custom_url VARCHAR,
-  default_image VARCHAR,
-  medium_image VARCHAR,
-  high_image VARCHAR,
-  default_image_base64 TEXT,
-  error VARCHAR,
-  status VARCHAR CHECK (status IN ('pending', 'validated', 'error')) DEFAULT 'pending' NOT NULL,
-  playlists TEXT NOT NULL,
-  id_language VARCHAR NOT NULL,
-  created_at DATETIME,
-  updated_at DATETIME,
+  images TEXT,
+  status VARCHAR NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'validated', 'error')),
+  playlists TEXT,
+  error TEXT,
+  base64 TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (id_language) REFERENCES languages(id_language)
 );
-
-CREATE UNIQUE INDEX online_videos_channels_channel_id_unique ON online_videos_channels (channel_id);
 ```
 **Purpose:** YouTube channel metadata and validation status.
 **Fields:**
-- `channel_id`: YouTube channel ID
+- `channel_id`: YouTube channel ID (unique)
+- `id_language`: Language code (defaults to 'und')
+- `images`: JSON object with image URLs (default, medium, high)
 - `status`: pending (not validated), validated (working), error (fetch failed)
 - `playlists`: JSON array of playlist IDs
 - `error`: Last error message if status='error'
-- `default_image_base64`: Cached base64-encoded image
+- `base64`: Cached base64-encoded thumbnail image
 
 ---
 
 #### `online_videos_playlists`
 ```sql
 CREATE TABLE online_videos_playlists (
-  id_online_video_playlist INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-  id_online_video_channel INTEGER NOT NULL,
-  playlist_id VARCHAR NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_language VARCHAR NOT NULL DEFAULT 'und',
+  id_channel INTEGER,
+  playlist_id VARCHAR NOT NULL UNIQUE,
   title VARCHAR,
   description TEXT,
-  default_image VARCHAR,
-  medium_image VARCHAR,
-  high_image VARCHAR,
-  standard_image VARCHAR,
-  maxres_image VARCHAR,
-  default_image_base64 TEXT,
-  error VARCHAR,
-  status VARCHAR CHECK (status IN ('pending', 'validated', 'error')) DEFAULT 'pending' NOT NULL,
-  id_language VARCHAR NOT NULL,
-  created_at DATETIME,
-  updated_at DATETIME,
-  FOREIGN KEY (id_online_video_channel) REFERENCES online_videos_channels(id_online_video_channel) 
-    ON DELETE CASCADE ON UPDATE CASCADE,
-  FOREIGN KEY (id_language) REFERENCES languages(id_language)
+  images TEXT,
+  status VARCHAR NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'validated', 'error')),
+  error TEXT,
+  base64 TEXT,
+  cover_path TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (id_language) REFERENCES languages(id_language),
+  FOREIGN KEY (id_channel) REFERENCES online_videos_channels(id) ON DELETE CASCADE
 );
-
-CREATE UNIQUE INDEX online_videos_playlists_playlist_id_unique ON online_videos_playlists (playlist_id);
 ```
 **Purpose:** YouTube playlist metadata and validation.
 **Fields:**
-- `playlist_id`: YouTube playlist ID
+- `playlist_id`: YouTube playlist ID (unique)
+- `id_channel`: FK to parent channel (nullable for standalone playlists)
+- `images`: JSON object with image URLs
 - `status`: pending, validated, or error
-- `default_image_base64`: Cached thumbnail
+- `base64`: Cached base64-encoded thumbnail
+- `cover_path`: Local path to downloaded cover image
 
 **Cascade:** Deleting channel cascades to playlists
 
@@ -489,37 +483,34 @@ CREATE UNIQUE INDEX online_videos_playlists_playlist_id_unique ON online_videos_
 #### `online_videos`
 ```sql
 CREATE TABLE online_videos (
-  id_online_video INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-  id_online_video_playlist INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_language VARCHAR NOT NULL DEFAULT 'und',
+  id_playlist INTEGER NOT NULL,
   video_id VARCHAR NOT NULL,
+  sequence INTEGER DEFAULT 0,
   title VARCHAR,
   description TEXT,
-  sequence INTEGER,
-  default_image VARCHAR,
-  medium_image VARCHAR,
-  high_image VARCHAR,
-  standard_image VARCHAR,
-  maxres_image VARCHAR,
-  default_image_base64 TEXT,
-  error VARCHAR,
-  status VARCHAR CHECK (status IN ('pending', 'validated', 'error')) DEFAULT 'pending' NOT NULL,
-  id_language VARCHAR NOT NULL,
-  created_at DATETIME,
-  updated_at DATETIME,
-  FOREIGN KEY (id_online_video_playlist) REFERENCES online_videos_playlists(id_online_video_playlist) 
-    ON DELETE CASCADE ON UPDATE CASCADE,
-  FOREIGN KEY (id_language) REFERENCES languages(id_language)
+  images TEXT,
+  status VARCHAR NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'validated', 'error')),
+  error TEXT,
+  local_path TEXT,
+  duration_seconds INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(id_playlist, video_id),
+  FOREIGN KEY (id_language) REFERENCES languages(id_language),
+  FOREIGN KEY (id_playlist) REFERENCES online_videos_playlists(id) ON DELETE CASCADE
 );
-
-CREATE UNIQUE INDEX online_videos_id_online_video_playlist_video_id_unique 
-  ON online_videos (id_online_video_playlist, video_id);
 ```
 **Purpose:** Individual YouTube videos from playlists.
 **Fields:**
 - `video_id`: YouTube video ID
-- `sequence`: Order in playlist
+- `id_playlist`: FK to parent playlist
+- `sequence`: Order in playlist (0-based)
+- `images`: JSON object with image URLs
 - `status`: pending, validated, or error
-- `default_image_base64`: Cached video thumbnail
+- `local_path`: Path to locally downloaded video file (via yt-dlp)
+- `duration_seconds`: Video duration in seconds
 
 **Cascade:** Deleting playlist cascades to videos
 
@@ -618,10 +609,10 @@ bible_book
 └── bible_verse.id_bible_book
 
 online_videos_channels
-└── online_videos_playlists.id_online_video_channel
+└── online_videos_playlists.id_channel
 
 online_videos_playlists
-└── online_videos.id_online_video_playlist
+└── online_videos.id_playlist
 ```
 
 ---
