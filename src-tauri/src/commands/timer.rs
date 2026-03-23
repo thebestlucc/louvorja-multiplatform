@@ -149,6 +149,10 @@ fn project_utility_cover(
         mode: None,
         text_color: None,
         text_size: None,
+        video_url: None,
+        video_id: None,
+        video_source: None,
+        video_title: None,
     };
 
     let context = SlideContext {

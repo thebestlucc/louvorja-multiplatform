@@ -194,6 +194,14 @@ pub struct PackSyncRuntimeState {
     pub manifest_fetched: bool,
 }
 
+/// Planned for Online Videos feature (Tasks 5+)
+#[derive(Default)]
+#[allow(dead_code)]
+pub struct YtdlpRuntimeState {
+    pub active_run_id: Option<String>,
+    pub cancel_flags: std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+}
+
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
     pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
@@ -203,6 +211,9 @@ pub struct AppState {
     pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub pack_sync: Mutex<PackSyncRuntimeState>,
+    /// Planned for Online Videos feature (Tasks 5+)
+    #[allow(dead_code)]
+    pub ytdlp: Mutex<YtdlpRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub timer_update_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: RwLock<Option<SlideContent>>,

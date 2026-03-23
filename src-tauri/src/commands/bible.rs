@@ -162,6 +162,10 @@ pub fn project_bible_verse(
         mode: None,
         text_color: None,
         text_size: None,
+        video_url: None,
+        video_id: None,
+        video_source: None,
+        video_title: None,
     };
 
     drop(conn);
@@ -356,6 +360,10 @@ pub fn navigate_bible_verse(
         mode: None,
         text_color: None,
         text_size: None,
+        video_url: None,
+        video_id: None,
+        video_source: None,
+        video_title: None,
     };
 
     drop(conn);

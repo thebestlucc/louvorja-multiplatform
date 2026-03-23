@@ -304,6 +304,7 @@ pub fn run() {
                 timer: RwLock::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 pack_sync: Mutex::new(crate::state::PackSyncRuntimeState::default()),
+                ytdlp: Mutex::new(crate::state::YtdlpRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 timer_update_stop: Mutex::new(None),
                 current_slide: RwLock::new(None),
