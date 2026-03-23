@@ -1330,6 +1330,19 @@
       "singleVideoHint": "Los videos individuales pueden agregarse directamente a un servicio o presentación.",
       "addToService": "Ir al Servicio Activo",
       "noPlaylists": "Este canal no tiene listas públicas."
+    },
+    "detail": {
+      "backToPlaylists": "Volver a playlists",
+      "videoCount": "{{count}} videos",
+      "refreshing": "Actualizando...",
+      "emptyVideos": "No hay videos en esta playlist todavía.",
+      "download": "Descargar",
+      "downloading": "Descargando...",
+      "downloaded": "Descargado",
+      "cancelDownload": "Cancelar descarga",
+      "deleteLocal": "Eliminar archivo local",
+      "duration": "Duración",
+      "statusError": "Error"
     }
   }
 }
