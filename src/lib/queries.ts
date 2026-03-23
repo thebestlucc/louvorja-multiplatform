@@ -34,6 +34,8 @@ import {
   checkForUpdates, installUpdate,
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
   updateGlobalShortcut,
+  getYoutubePlaylists, getYoutubePlaylistVideos, deleteYoutubePlaylist,
+  addYoutubePlaylist, refreshYoutubePlaylist,
 } from "./tauri";
 import type { PackSyncPlanItem } from "../types/content-sync";
 import type {
@@ -49,6 +51,9 @@ import type {
   MediaLibraryCategoryInput,
   MediaLibraryItemInput,
   TimerStateData,
+  AddPlaylistInput,
+  OnlineVideoPlaylist,
+  OnlineVideo,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
 import { useEffect } from "react";
@@ -132,6 +137,10 @@ export const queryKeys = {
   video: {
     metadata: (path: string) => ["video", "metadata", path] as const,
     resolvedPath: (path: string) => ["video", "resolvedPath", path] as const,
+  },
+  youtubeVideos: {
+    playlists: ["youtube", "playlists"] as const,
+    videos: (playlistId: string) => ["youtube", "videos", playlistId] as const,
   },
 } as const;
 
@@ -1352,6 +1361,48 @@ export function useDeleteExcessMedia() {
     mutationFn: (paths: string[]) => deleteExcessMedia(paths),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mediaIntegrity });
+    },
+  });
+}
+
+// YouTube / Online Videos
+export function useYoutubePlaylists() {
+  return useQuery({
+    queryKey: queryKeys.youtubeVideos.playlists,
+    queryFn: () => getYoutubePlaylists(),
+  });
+}
+
+export function useYoutubePlaylistVideos(playlistId: string) {
+  return useQuery({
+    queryKey: queryKeys.youtubeVideos.videos(playlistId),
+    queryFn: () => getYoutubePlaylistVideos(playlistId),
+    enabled: !!playlistId,
+  });
+}
+
+export function useAddYoutubePlaylist() {
+  return useMutation({
+    mutationFn: (vars: { input: AddPlaylistInput; apiKey: string }) =>
+      addYoutubePlaylist(vars.input, vars.apiKey),
+    // No onSuccess invalidation — event-driven via useYoutubeEvents()
+  });
+}
+
+export function useRefreshYoutubePlaylist() {
+  return useMutation({
+    mutationFn: (vars: { playlistId: string; apiKey: string }) =>
+      refreshYoutubePlaylist(vars.playlistId, vars.apiKey),
+    // No onSuccess invalidation — event-driven via useYoutubeEvents()
+  });
+}
+
+export function useDeleteYoutubePlaylist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (playlistId: string) => deleteYoutubePlaylist(playlistId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtubeVideos.playlists });
     },
   });
 }

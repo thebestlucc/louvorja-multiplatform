@@ -1292,8 +1292,10 @@ async clearManifestCache() : Promise<Result<null, AppErrorResponse>> {
 
 /** user-defined types **/
 
+export type AddPlaylistInput = { playlistId: string; channelId: string; channelTitle: string; playlistTitle: string; thumbnailUrl: string }
 export type Album = { name: string; hymnCount: number }
 export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
+export type ApiKeyValidationResult = { valid: boolean; error: string | null }
 export type AppErrorResponse = { code: string; message: string; details: string | null }
 export type AudioStatusPayload = { positionMs: number; durationMs: number; isPlaying: boolean; isPaused: boolean; volume: number; currentFile: string | null }
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string; versionAbbreviation: string }
@@ -1322,6 +1324,9 @@ export type MigrationRunInfo = { runId: string; startedAt: string; sourcePath: s
 export type MissingFile = { path: string; sourceType: string; sourceId: number; sourceName: string }
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
+export type OnlineVideo = { id: number; idPlaylist: number; videoId: string; sequence: number; title: string | null; description: string | null; images: string | null; status: string; error: string | null; localPath: string | null; durationSeconds: number | null }
+export type OnlineVideoChannel = { id: number; channelId: string; title: string | null; description: string | null; images: string | null; status: string; playlists: string | null; error: string | null }
+export type OnlineVideoPlaylist = { id: number; idChannel: number | null; playlistId: string; title: string | null; description: string | null; images: string | null; status: string; error: string | null; coverPath: string | null; channelTitle: string | null; videoCount: number | null }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
 export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
 export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; availableLanguages: string[]; selectedLanguages: string[] }
@@ -1353,6 +1358,9 @@ export type TimerStateData = { mode: TimerMode; isRunning: boolean; currentTimeM
 export type UpdateInfo = { version: string; currentVersion: string; notes: string | null }
 export type Verse = { id: number; versionId: number; book: string; chapter: number; verse: number; text: string }
 export type VideoMetadata = { durationMs: number; width: number; height: number; fileSize: number; format: string }
+export type YoutubeChannelResult = { channelId: string; title: string; thumbnailUrl: string; playlists: YoutubePlaylistInfo[] }
+export type YoutubePlaylistInfo = { playlistId: string; title: string; thumbnailUrl: string; videoCount: number }
+export type YtdlpProgress = { runId: string; videoId: string; percent: number; status: string }
 
 /** tauri-specta globals **/
 
