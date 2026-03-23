@@ -1305,5 +1305,31 @@
       "title": "Timer"
     },
     "title": "Utilities"
+  },
+  "onlineVideos": {
+    "setup": {
+      "title": "YouTube API Key Required",
+      "description": "To browse and add YouTube playlists, you need to configure a YouTube Data API key in Settings.",
+      "goToSettings": "Go to Settings"
+    },
+    "addPlaylist": "Add Playlist",
+    "empty": "No playlists added yet. Add your first YouTube playlist!",
+    "videos": "videos",
+    "playlists": "playlists",
+    "refresh": "Refresh",
+    "delete": "Delete",
+    "adding": "Adding...",
+    "addModal": {
+      "title": "Add YouTube Playlist",
+      "placeholder": "Paste a YouTube channel or playlist URL...",
+      "fetchChannel": "Fetch Channel",
+      "addPlaylist": "Add Playlist",
+      "selectPlaylists": "Select the playlists you want to add:",
+      "addSelected": "Add {{count}} selected",
+      "singleVideo": "This is a single video",
+      "singleVideoHint": "Single videos can be added directly to a service or presentation.",
+      "addToService": "Go to Active Service",
+      "noPlaylists": "This channel has no public playlists."
+    }
   }
 }

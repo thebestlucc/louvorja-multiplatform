@@ -1305,5 +1305,31 @@
       "title": "Temporizador"
     },
     "title": "Utilidades"
+  },
+  "onlineVideos": {
+    "setup": {
+      "title": "Clave de API de YouTube Requerida",
+      "description": "Para explorar y agregar listas de reproducción de YouTube, configure una clave de API de YouTube Data en Configuración.",
+      "goToSettings": "Ir a Configuración"
+    },
+    "addPlaylist": "Agregar Lista",
+    "empty": "No hay listas agregadas. ¡Agrega tu primera lista de YouTube!",
+    "videos": "videos",
+    "playlists": "listas",
+    "refresh": "Actualizar",
+    "delete": "Eliminar",
+    "adding": "Agregando...",
+    "addModal": {
+      "title": "Agregar Lista de YouTube",
+      "placeholder": "Pega una URL de canal o lista de YouTube...",
+      "fetchChannel": "Buscar Canal",
+      "addPlaylist": "Agregar Lista",
+      "selectPlaylists": "Selecciona las listas que deseas agregar:",
+      "addSelected": "Agregar {{count}} seleccionadas",
+      "singleVideo": "Este es un video individual",
+      "singleVideoHint": "Los videos individuales pueden agregarse directamente a un servicio o presentación.",
+      "addToService": "Ir al Servicio Activo",
+      "noPlaylists": "Este canal no tiene listas públicas."
+    }
   }
 }

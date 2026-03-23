@@ -1305,5 +1305,31 @@
       "title": "Timer"
     },
     "title": "Utilidades"
+  },
+  "onlineVideos": {
+    "setup": {
+      "title": "Chave da API do YouTube Necessária",
+      "description": "Para navegar e adicionar playlists do YouTube, configure uma chave da API YouTube Data nas Configurações.",
+      "goToSettings": "Ir para Configurações"
+    },
+    "addPlaylist": "Adicionar Playlist",
+    "empty": "Nenhuma playlist adicionada. Adicione sua primeira playlist do YouTube!",
+    "videos": "vídeos",
+    "playlists": "playlists",
+    "refresh": "Atualizar",
+    "delete": "Excluir",
+    "adding": "Adicionando...",
+    "addModal": {
+      "title": "Adicionar Playlist do YouTube",
+      "placeholder": "Cole uma URL de canal ou playlist do YouTube...",
+      "fetchChannel": "Buscar Canal",
+      "addPlaylist": "Adicionar Playlist",
+      "selectPlaylists": "Selecione as playlists que deseja adicionar:",
+      "addSelected": "Adicionar {{count}} selecionadas",
+      "singleVideo": "Este é um vídeo individual",
+      "singleVideoHint": "Vídeos individuais podem ser adicionados diretamente a um culto ou apresentação.",
+      "addToService": "Ir para Culto Ativo",
+      "noPlaylists": "Este canal não tem playlists públicas."
+    }
   }
 }
