@@ -1,11 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Plus, MoreVertical, Trash2, Copy, ListChecks, Calendar, Search } from "lucide-react";
-import { useState } from "react";
+import { CalendarPlus, MoreVertical, Trash2, Copy, ListChecks, Search } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useServices, useCreateService, useDeleteService, useDuplicateService } from "../../lib/queries";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { Badge } from "../../components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
+import { CategoryBadge } from "../../components/services/category-picker";
 import { cn } from "../../lib/utils";
 import type { Service } from "../../types/service";
 
@@ -13,19 +15,18 @@ export const Route = createFileRoute("/services/")({
   component: ServicesIndex,
 });
 
-function formatServiceDate(dateStr: string | null | undefined, locale: string): string | null {
+function formatShortDate(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
   const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString(locale, {
-    weekday: "long",
+  return new Intl.DateTimeFormat("default", {
+    day: "2-digit",
+    month: "short",
     year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  }).format(date);
 }
 
 function ServicesIndex() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: services, isLoading } = useServices();
   const createMutation = useCreateService();
@@ -33,7 +34,18 @@ function ServicesIndex() {
   const duplicateMutation = useDuplicateService();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filtered = (services ?? []).filter((s) =>
+  // Sort by date descending (most recent first), then filter
+  const sorted = useMemo(() => {
+    const all = services ?? [];
+    return [...all].sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return b.date.localeCompare(a.date);
+    });
+  }, [services]);
+
+  const filtered = sorted.filter((s) =>
     s.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -57,15 +69,24 @@ function ServicesIndex() {
   return (
     <div className="flex flex-col gap-6 p-1">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">{t("nav.services")}</h1>
-        <p className="text-sm text-muted-foreground">{t("dashboard.descriptions.services")}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex flex-1 flex-col gap-1">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight">{t("nav.services")}</h1>
+            {(services ?? []).length > 0 && (
+              <Badge variant="secondary" className="tabular-nums">
+                {(services ?? []).length}
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">{t("dashboard.descriptions.services")}</p>
+        </div>
       </div>
 
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <Button onClick={handleCreate} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" />
+          <CalendarPlus className="mr-2 h-4 w-4" />
           {t("services.new")}
         </Button>
         <div className="relative ml-auto w-64">
@@ -81,11 +102,11 @@ function ServicesIndex() {
 
       {/* List */}
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-[140px] animate-pulse rounded-xl border border-border bg-surface"
+              className="h-[120px] animate-pulse rounded-xl border border-border bg-surface"
             />
           ))}
         </div>
@@ -102,18 +123,17 @@ function ServicesIndex() {
           </div>
           {!searchQuery && (
             <Button onClick={handleCreate} className="mt-2 shadow-sm">
-              <Plus className="mr-2 h-4 w-4" />
+              <CalendarPlus className="mr-2 h-4 w-4" />
               {t("services.new")}
             </Button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((service) => (
             <ServiceCard
               key={service.id}
               service={service}
-              locale={i18n.language}
               onDuplicate={() => handleDuplicate(service.id)}
               onDelete={() => handleDelete(service.id)}
             />
@@ -126,61 +146,64 @@ function ServicesIndex() {
 
 function ServiceCard({
   service,
-  locale,
   onDuplicate,
   onDelete,
 }: {
   service: Service;
-  locale: string;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const formattedDate = formatServiceDate(service.date, locale);
+  const shortDate = formatShortDate(service.date);
+  const itemCount = (service as Service & { itemCount?: number }).itemCount ?? 0;
 
   return (
     <Link
       to="/services/$serviceId"
       params={{ serviceId: String(service.id) }}
       className={cn(
-        "group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-all duration-150",
-        "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
+        "group relative flex cursor-pointer overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-all duration-150",
+        "hover:border-primary/50 hover:shadow-md",
       )}
     >
-      {/* Top accent bar */}
-      <div className="h-1 bg-gradient-to-r from-primary/60 to-primary/20" />
+      {/* Left accent stripe */}
+      <div className="w-1 shrink-0 bg-primary/50 group-hover:bg-primary/70" />
 
-      <div className="flex flex-1 flex-col p-5">
-        {/* Date row */}
-        {formattedDate && (
-          <div className="mb-3 flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5 text-primary/60" />
-            <span className="text-xs font-medium capitalize text-primary/80">
-              {formattedDate}
+      <div className="flex flex-1 flex-col p-4">
+        {/* Top row: date + category */}
+        <div className="mb-2 flex items-center gap-2">
+          {shortDate && (
+            <span className="font-mono text-[11px] tracking-tight text-muted-foreground">
+              {shortDate}
             </span>
-          </div>
-        )}
+          )}
+          <CategoryBadge serviceId={service.id} />
+        </div>
 
         {/* Title */}
-        <h3 className="text-base font-semibold leading-snug tracking-tight text-foreground">
+        <h3 className="text-sm font-semibold leading-snug tracking-tight text-foreground">
           {service.title}
         </h3>
 
-        {/* Notes preview */}
+        {/* Notes preview (1 line) */}
         {service.notes && (
-          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1.5 line-clamp-1 text-xs leading-relaxed text-muted-foreground/70 italic">
             {service.notes}
           </p>
         )}
 
         {/* Footer */}
-        <div className="mt-auto flex items-center justify-between pt-4">
-          <div className="flex items-center gap-1.5">
-            <ListChecks className="h-3.5 w-3.5 text-muted-foreground/60" />
-            <span className="text-xs text-muted-foreground">
-              {t("services.items")}
-            </span>
-          </div>
+        <div className="mt-auto flex items-center justify-between pt-3">
+          {itemCount > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <ListChecks className="h-3 w-3 text-muted-foreground/50" />
+              <span className="text-[11px] tabular-nums text-muted-foreground/60">
+                {t("services.itemCount", { count: itemCount })}
+              </span>
+            </div>
+          ) : (
+            <span />
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

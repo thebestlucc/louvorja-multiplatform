@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -359,13 +359,13 @@ struct ConnectionContext<'a> {
 }
 
 fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
-    // Read HTTP request
-    let path = match parse_request_path(&stream) {
-        Some(p) => p,
+    // Read HTTP request (path + headers)
+    let request = match parse_http_request(&stream) {
+        Some(r) => r,
         None => return,
     };
 
-    match path.as_str() {
+    match request.path.as_str() {
         "/" => serve_html(&mut stream, STATUS_HTML),
         "/music" => serve_html(&mut stream, include_str!("templates/music.html")),
         "/bible" => serve_html(&mut stream, include_str!("templates/bible.html")),
@@ -436,23 +436,46 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         "/sse/alert" => serve_sse(stream, context.alert_bc, context.is_running),
         "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running),
         "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running),
-        _ if path.starts_with("/media/") => serve_media(stream, &path, context.media_root),
+        _ if request.path.starts_with("/media/") => {
+            serve_media(stream, &request.path, &request.headers, context.media_root)
+        }
         _ => serve_not_found(&mut stream),
     }
 }
 
-fn parse_request_path(stream: &TcpStream) -> Option<String> {
+struct HttpRequest {
+    path: String,
+    headers: HashMap<String, String>,
+}
+
+fn parse_http_request(stream: &TcpStream) -> Option<HttpRequest> {
     let mut reader = BufReader::new(stream);
     let mut request_line = String::new();
     reader.read_line(&mut request_line).ok()?;
 
     // Parse: "GET /path HTTP/1.1\r\n"
     let parts: Vec<&str> = request_line.split_whitespace().collect();
-    if parts.len() >= 2 {
-        Some(parts[1].to_string())
-    } else {
-        None
+    let path = parts.get(1)?.to_string();
+
+    let mut headers = HashMap::new();
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).ok()? == 0 {
+            break;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            headers.insert(
+                key.trim().to_ascii_lowercase(),
+                value.trim().to_string(),
+            );
+        }
     }
+
+    Some(HttpRequest { path, headers })
 }
 
 fn serve_html(stream: &mut TcpStream, html: &str) {
@@ -581,6 +604,7 @@ fn serve_sse(
 fn serve_media(
     mut stream: TcpStream,
     request_path: &str,
+    headers: &HashMap<String, String>,
     media_root: &Arc<Mutex<Option<PathBuf>>>,
 ) {
     let root = media_root.lock().ok().and_then(|value| value.clone());
@@ -637,7 +661,7 @@ fn serve_media(
 
     // Stream in 64 KB chunks — loading the entire file into RAM would allocate
     // hundreds of MB per concurrent request for large video files.
-    let file = match std::fs::File::open(&candidate) {
+    let mut file = match std::fs::File::open(&candidate) {
         Ok(f) => f,
         Err(_) => {
             serve_not_found(&mut stream);
@@ -647,30 +671,85 @@ fn serve_media(
     let file_len = file.metadata().map(|m| m.len()).unwrap_or(0);
     let content_type = media_content_type(&candidate);
 
-    let header = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        content_type,
-        file_len
-    );
-    if stream.write_all(header.as_bytes()).is_err() {
-        return;
-    }
+    // Parse Range header for partial content (enables video seeking on external browsers).
+    let range = headers
+        .get("range")
+        .and_then(|v| parse_range_header(v, file_len));
 
-    let mut reader = std::io::BufReader::new(file);
+    if let Some((start, end)) = range {
+        let content_length = end - start + 1;
+        if file.seek(SeekFrom::Start(start)).is_err() {
+            serve_not_found(&mut stream);
+            return;
+        }
+        let header = format!(
+            "HTTP/1.1 206 Partial Content\r\n\
+             Content-Type: {}\r\n\
+             Content-Range: bytes {}-{}/{}\r\n\
+             Accept-Ranges: bytes\r\n\
+             Content-Length: {}\r\n\
+             Access-Control-Allow-Origin: *\r\n\
+             Connection: close\r\n\r\n",
+            content_type, start, end, file_len, content_length
+        );
+        if stream.write_all(header.as_bytes()).is_err() {
+            return;
+        }
+        stream_bytes(&mut file, &mut stream, content_length);
+    } else {
+        let header = format!(
+            "HTTP/1.1 200 OK\r\n\
+             Content-Type: {}\r\n\
+             Accept-Ranges: bytes\r\n\
+             Cache-Control: no-cache\r\n\
+             Access-Control-Allow-Origin: *\r\n\
+             Content-Length: {}\r\n\
+             Connection: close\r\n\r\n",
+            content_type, file_len
+        );
+        if stream.write_all(header.as_bytes()).is_err() {
+            return;
+        }
+        stream_bytes(&mut file, &mut stream, file_len);
+    }
+    let _ = stream.flush();
+}
+
+/// Parse an HTTP Range header value like "bytes=0-1023" or "bytes=500-".
+fn parse_range_header(header: &str, file_len: u64) -> Option<(u64, u64)> {
+    let range_str = header.strip_prefix("bytes=")?;
+    let (start_str, end_str) = range_str.split_once('-')?;
+    let start: u64 = start_str.parse().ok()?;
+    let end: u64 = if end_str.is_empty() {
+        file_len.saturating_sub(1)
+    } else {
+        end_str.parse().ok()?
+    };
+    if start <= end && end < file_len {
+        Some((start, end))
+    } else {
+        None
+    }
+}
+
+/// Stream exactly `limit` bytes from reader to writer in 64 KB chunks.
+fn stream_bytes(reader: &mut std::fs::File, writer: &mut TcpStream, limit: u64) {
+    let mut remaining = limit;
     let mut buf = [0u8; 65_536];
-    loop {
-        let n = match std::io::Read::read(&mut reader, &mut buf) {
+    while remaining > 0 {
+        let to_read = (remaining as usize).min(buf.len());
+        let n = match std::io::Read::read(reader, &mut buf[..to_read]) {
             Ok(n) => n,
             Err(_) => break,
         };
         if n == 0 {
             break;
         }
-        if stream.write_all(&buf[..n]).is_err() {
+        if writer.write_all(&buf[..n]).is_err() {
             break;
         }
+        remaining -= n as u64;
     }
-    let _ = stream.flush();
 }
 
 fn media_content_type(path: &Path) -> &'static str {
@@ -686,10 +765,15 @@ fn media_content_type(path: &Path) -> &'static str {
         Some("gif") => "image/gif",
         Some("bmp") => "image/bmp",
         Some("svg") => "image/svg+xml",
+        Some("avif") => "image/avif",
+        Some("tif") | Some("tiff") => "image/tiff",
+        Some("ico") => "image/x-icon",
         Some("mp4") => "video/mp4",
         Some("webm") => "video/webm",
         Some("mov") => "video/quicktime",
         Some("m4v") => "video/x-m4v",
+        Some("ogv") => "video/ogg",
+        Some("3gp") => "video/3gpp",
         Some("avi") => "video/x-msvideo",
         Some("mkv") => "video/x-matroska",
         Some("mp3") => "audio/mpeg",

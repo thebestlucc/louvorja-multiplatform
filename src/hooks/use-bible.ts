@@ -9,7 +9,10 @@ import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 
-import type { BibleProjectionSettings } from "../components/bible/projection-settings";
+import {
+  type BibleProjectionSettings,
+  buildBibleSlideContent,
+} from "../components/bible/projection-settings";
 
 const EMPTY_SLIDE_PROPS = {
   text: null,
@@ -107,21 +110,21 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     const versesToProject = verses.filter((v) => verseSet.has(v.verse));
 
     const ps = projectionSettings;
-    const modeValue = ps
-      ? `${ps.textAlign}${ps.referencePosition === "bottom" ? "|ref-bottom" : ""}`
-      : null;
 
-    const slides: SlideContent[] = versesToProject.map((v) => ({
-      ...EMPTY_SLIDE_PROPS,
-      slideType: "bible",
-      text: v.text,
-      label: ps?.showReference !== false ? `${currentBook} ${currentChapter}:${v.verse}` : null,
-      backgroundColor: ps?.backgroundColor ?? null,
-      backgroundImage: ps?.backgroundImage ?? null,
-      textColor: ps?.textColor ?? null,
-      textSize: ps?.textSize ?? null,
-      mode: modeValue,
-    }));
+    const slides: SlideContent[] = ps
+      ? versesToProject.map((v) =>
+          buildBibleSlideContent(
+            v.text,
+            `${currentBook} ${currentChapter}:${v.verse}`,
+            ps,
+          ),
+        )
+      : versesToProject.map((v) => ({
+          ...EMPTY_SLIDE_PROPS,
+          slideType: "bible" as const,
+          text: v.text,
+          label: `${currentBook} ${currentChapter}:${v.verse}`,
+        }));
 
     setCurrentPresentation(null);
     setPresentationSlides(slides);

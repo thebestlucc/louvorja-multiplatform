@@ -396,7 +396,7 @@ function AppearanceSection() {
   const handlePickProjectorDefaultImage = async () => {
     const selected = await openFileDialog({
       multiple: false,
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "avif", "tif", "tiff", "ico"] }],
     });
     if (!selected || Array.isArray(selected)) return;
     const [managedPath] = await catcher(copyImageMutation.mutateAsync(selected), { notify: true });
@@ -409,7 +409,7 @@ function AppearanceSection() {
   const handlePickProjectorDefaultVideo = async () => {
     const selected = await openFileDialog({
       multiple: false,
-      filters: [{ name: "Video", extensions: ["mp4", "webm"] }],
+      filters: [{ name: "Video", extensions: ["mp4", "webm", "mov", "m4v", "ogv", "3gp"] }],
     });
     if (!selected || Array.isArray(selected)) return;
     persistProjectorDefaultMediaPath(selected);
@@ -432,7 +432,7 @@ function AppearanceSection() {
   const handlePickProjectorLogoImage = async () => {
     const selected = await openFileDialog({
       multiple: false,
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "avif", "tif", "tiff", "ico"] }],
     });
     if (!selected || Array.isArray(selected)) return;
     const [managedPath] = await catcher(copyImageMutation.mutateAsync(selected), { notify: true });

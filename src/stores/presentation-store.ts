@@ -28,7 +28,8 @@ export const usePresentationStore = create<PresentationState>((set) => ({
   activeServiceItemIndex: -1,
   setCurrentPresentation: (id) => set({ currentPresentationId: id }),
   setActiveService: (id) => set({ activeServiceId: id }),
-  setPlayingService: (playing) => set({ isPlayingService: playing, activeServiceItemIndex: playing ? 0 : -1 }),
+  setPlayingService: (playing) =>
+    set({ isPlayingService: playing, activeServiceItemIndex: playing ? 0 : -1 }),
   setActiveServiceItemIndex: (index) => set({ activeServiceItemIndex: index }),
   setActiveSlideIndex: (index) => set({ activeSlideIndex: index }),
   setProjectorOpen: (open) => set({ isProjectorOpen: open }),

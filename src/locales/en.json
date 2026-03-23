@@ -79,7 +79,8 @@
     "projectionBottom": "Bottom",
     "projectionOn": "On",
     "projectionOff": "Off",
-    "previewText": "For God so loved the world that he gave his one and only Son."
+    "previewText": "For God so loved the world that he gave his one and only Son.",
+    "manageInSettings": "Manage in Settings"
   },
   "collections": {
     "autoCheckDisabledHint": "Auto-check is disabled. Enable it in Settings to validate source sync automatically.",
@@ -212,6 +213,13 @@
       "search": "Search",
       "projector": "Projector",
       "help": "Shortcuts"
+    },
+    "descriptions": {
+      "services": "Plan and lead worship with scheduled items, notes, and integrated projection.",
+      "hymnal": "Find hymns by number, title, or lyrics, and project directly from the hymnal.",
+      "bible": "Access Bible verses for quick reading and projection.",
+      "presentations": "Create custom slides for moments of worship, reading, or announcements.",
+      "collections": "Build standalone collections of songs for special projects."
     },
     "welcome": "Welcome to LouvorJA"
   },
@@ -491,7 +499,7 @@
     "videoMuted": "Muted",
     "videoNoSource": "No video selected",
     "videoOverlayPlaceholder": "Overlay text over video background...",
-    "videoPathPlaceholder": "Select a .mp4 or .webm file",
+    "videoPathPlaceholder": "Select a video file (mp4, webm, mov, m4v, ogv, 3gp)",
     "videoPreparing": "Preparing video...",
     "videoResolution": "Resolution",
     "videoTextColor": "Text color",
@@ -535,7 +543,37 @@
     "timeline": "Timeline",
     "title": "Title",
     "untitled": "Untitled Service",
-    "urlTitlePlaceholder": "Link title..."
+    "urlTitlePlaceholder": "Link title...",
+    "itemCount": "{{count}} items",
+    "liveIndicator": "LIVE",
+    "progressOf": "{{current}} / {{total}} items",
+    "category": "Category",
+    "categoryPlaceholder": "Set category...",
+    "categorySuggestions": "Suggestions",
+    "categoryRecent": "Recent",
+    "activeServiceIndicator": "Active service",
+    "calendar": {
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "weekdays": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      }
+    },
+    "defaultCategories": {
+      "sundayService": "Sunday Service",
+      "praiseReunion": "Praise Reunion",
+      "thursdayService": "Thursday Service",
+      "retreat": "Retreat",
+      "conference": "Conference",
+      "youthService": "Youth Service",
+      "childrenService": "Children's Service"
+    }
   },
   "settings": {
     "appearance": "Appearance",

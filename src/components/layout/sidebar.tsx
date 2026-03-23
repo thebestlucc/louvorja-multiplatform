@@ -16,10 +16,15 @@ import {
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui-store";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useDisplayStore } from "../../stores/display-store";
 import { useService } from "../../lib/queries";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+
+// The projection indicator always points to the Playing Now screen —
+// that's where the user goes to control/monitor what's being projected.
+const PLAYING_NOW_ROUTE = "/playing-now";
 
 const navItems = [
   { to: "/", icon: Home, labelKey: "nav.home" },
@@ -38,6 +43,8 @@ export function Sidebar() {
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
   const { data: activeServiceData } = useService(activeServiceId ?? 0);
+  const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
+  const isProjectingAnything = currentProjectionType !== null;
   const { t } = useTranslation();
   const matchRoute = useMatchRoute();
 
@@ -71,6 +78,7 @@ export function Sidebar() {
       <nav className="flex flex-1 flex-col gap-1 p-2">
         {navItems.map((item) => {
           const isActive = matchRoute({ to: item.to, fuzzy: item.to !== "/" });
+          const isProjecting = item.to === PLAYING_NOW_ROUTE && isProjectingAnything;
           const link = (
             <Link
               key={item.to}
@@ -84,8 +92,24 @@ export function Sidebar() {
                 !sidebarOpen && "justify-center px-0",
               )}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
+              {/* Icon with ripple dot on top-right (collapsed only) */}
+              <div className="relative shrink-0">
+                <item.icon className="h-4 w-4" />
+                {!sidebarOpen && isProjecting && (
+                  <span className="absolute -right-1 -top-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                  </span>
+                )}
+              </div>
               {sidebarOpen && <span>{t(item.labelKey)}</span>}
+              {/* Right-side ripple dot (expanded only) */}
+              {sidebarOpen && isProjecting && (
+                <span className="relative ml-auto flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                </span>
+              )}
             </Link>
           );
 

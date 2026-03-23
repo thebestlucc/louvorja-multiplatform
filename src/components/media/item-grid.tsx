@@ -45,7 +45,7 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
       multiple: false,
       filters: [{
         name: "Media",
-        extensions: ["mp4", "mkv", "avi", "pdf", "jpg", "png", "webp", "gif"]
+        extensions: ["mp4", "webm", "mov", "m4v", "ogv", "3gp", "pdf", "jpg", "jpeg", "png", "webp", "gif", "svg", "bmp", "avif", "tif", "tiff", "ico"]
       }]
     });
     if (selected && typeof selected === "string") {

@@ -8,9 +8,12 @@ import { usePresentationStore } from "../../stores/presentation-store";
 import { setSlideContext } from "../../lib/tauri";
 import { projectSlideWithType } from "../../lib/projection-playback";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
+import { getPreference, setPreference, deletePreference } from "../../lib/store";
 import { ServiceItemList } from "../../components/services/service-item-list";
 import { ServiceTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
+import { DatePicker } from "../../components/services/date-picker";
+import { CategoryPicker } from "../../components/services/category-picker";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { cn } from "../../lib/utils";
@@ -36,6 +39,14 @@ const EMPTY_SLIDE_PROPS = {
   textColor: null,
   textSize: null,
 };
+
+const PLAY_STATE_KEY = "activePlayState";
+
+interface PersistedPlayState {
+  isPlayingService: boolean;
+  activeServiceId: number;
+  activeServiceItemIndex: number;
+}
 
 function ServiceEditor() {
   const { serviceId } = Route.useParams();
@@ -68,6 +79,27 @@ function ServiceEditor() {
       setPlayingService(false);
     };
   }, [id, setActiveService, setPlayingService]);
+
+  // Restore persisted play state on mount
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [saved] = await catcher(
+        getPreference<PersistedPlayState | null>(PLAY_STATE_KEY, null),
+      );
+      if (cancelled || !saved) return;
+      const state = usePresentationStore.getState();
+      if (
+        saved.activeServiceId === id &&
+        saved.isPlayingService &&
+        !state.isPlayingService
+      ) {
+        state.setPlayingService(true);
+        state.setActiveServiceItemIndex(saved.activeServiceItemIndex);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   // Local title state for responsive typing
   const [localTitle, setLocalTitle] = useState("");
@@ -187,6 +219,19 @@ function ServiceEditor() {
     }
   }, [isPlayingService, activeServiceItemIndex, items, projectItem]);
 
+  // Persist play state changes
+  useEffect(() => {
+    if (isPlayingService) {
+      void catcher(
+        setPreference<PersistedPlayState>(PLAY_STATE_KEY, {
+          isPlayingService: true,
+          activeServiceId: id,
+          activeServiceItemIndex,
+        }),
+      );
+    }
+  }, [isPlayingService, activeServiceItemIndex, id]);
+
   const handlePlayService = () => {
     if (items.length === 0) return;
     setPlayingService(true);
@@ -195,6 +240,7 @@ function ServiceEditor() {
 
   const handleStopService = () => {
     setPlayingService(false);
+    void catcher(deletePreference(PLAY_STATE_KEY));
   };
 
   const handleNextItem = () => {
@@ -205,6 +251,7 @@ function ServiceEditor() {
 
     // End of service timeline: stop playback and clear projection.
     setPlayingService(false);
+    void catcher(deletePreference(PLAY_STATE_KEY));
     void catcher(stopProjectionAndSongAudio(), { notify: true });
   };
 
@@ -235,22 +282,31 @@ function ServiceEditor() {
     <div className="flex h-full flex-col">
       {/* Play Service Banner */}
       {isPlayingService && (
-        <div className="flex items-center gap-3 border-b border-primary/20 bg-primary/10 px-4 py-2.5">
-          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20">
-            <Play className="h-3 w-3 fill-primary text-primary" />
+        <div className="flex items-center gap-3 bg-primary px-4 py-2.5 text-primary-foreground">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {t("services.liveIndicator")}
+            </span>
           </div>
-          <span className="text-sm font-semibold text-primary">
+          <span className="text-sm font-semibold">
             {t("services.playService")}
           </span>
-          <span className="text-sm text-primary/70">
-            — {activeServiceItemIndex + 1} / {items.length}
+          <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium tabular-nums">
+            {t("services.progressOf", {
+              current: activeServiceItemIndex + 1,
+              total: items.length,
+            })}
           </span>
 
           <div className="ml-auto flex items-center gap-1.5">
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 w-7 p-0 text-primary hover:bg-primary/15"
+              className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
               onClick={handlePrevItem}
               disabled={activeServiceItemIndex <= 0}
             >
@@ -259,7 +315,7 @@ function ServiceEditor() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 w-7 p-0 text-primary hover:bg-primary/15"
+              className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
               onClick={handleNextItem}
               disabled={items.length === 0}
             >
@@ -292,12 +348,8 @@ function ServiceEditor() {
             value={localTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
           />
-          <Input
-            type="date"
-            className="w-40 border-transparent bg-transparent text-sm text-muted-foreground shadow-none focus:border-border focus:bg-surface"
-            value={localDate}
-            onChange={(e) => handleDateChange(e.target.value)}
-          />
+          <CategoryPicker serviceId={id} />
+          <DatePicker value={localDate} onChange={handleDateChange} />
         </div>
 
         {!isPlayingService && (
@@ -367,7 +419,15 @@ function ServiceEditor() {
           {rightTab === "notes" ? (
             <div className="flex flex-1 flex-col overflow-auto p-3">
               <textarea
-                className="flex-1 resize-none rounded-lg border border-border bg-transparent p-3 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+                className={cn(
+                  "flex-1 resize-none rounded-lg border border-border bg-transparent p-3 text-sm leading-[1.8rem] text-foreground",
+                  "placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all",
+                )}
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(transparent, transparent 1.775rem, var(--color-border) 1.775rem, var(--color-border) 1.8rem)",
+                  backgroundPosition: "0 0.8rem",
+                }}
                 placeholder={t("services.notes")}
                 value={localNotes}
                 onChange={(e) => handleNotesChange(e.target.value)}

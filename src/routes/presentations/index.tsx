@@ -15,6 +15,13 @@ export const Route = createFileRoute("/presentations/")({
   component: PresentationsIndex,
 });
 
+/** Deterministic gradient from presentation id for visual variety */
+function idGradient(id: number): string {
+  const hues = [220, 260, 310, 180, 340, 30, 150, 200];
+  const hue = hues[id % hues.length];
+  return `linear-gradient(135deg, hsl(${hue} 40% 18%) 0%, hsl(${(hue + 40) % 360} 30% 12%) 100%)`;
+}
+
 function PresentationsIndex() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -97,11 +104,11 @@ function PresentationsIndex() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
-            <PresentationIcon className="h-10 w-10 text-muted-foreground/40" />
+          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-muted">
+            <PresentationIcon className="h-12 w-12 text-muted-foreground/30" />
           </div>
           <div className="text-center">
-            <p className="text-base font-medium text-foreground">
+            <p className="text-base font-semibold text-foreground">
               {searchQuery ? t("presentations.noResults") : t("presentations.empty")}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -111,14 +118,14 @@ function PresentationsIndex() {
             </p>
           </div>
           {!searchQuery && (
-            <Button size="sm" onClick={handleCreate} className="mt-2">
+            <Button onClick={handleCreate} className="mt-2">
               <Plus className="mr-2 h-4 w-4" />
               {t("presentations.new")}
             </Button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map((presentation) => (
             <PresentationCard
               key={presentation.id}
@@ -144,65 +151,79 @@ function PresentationCard({
 }) {
   const { t } = useTranslation();
   const updatedDate = new Date(presentation.updatedAt).toLocaleDateString();
+  const isWide = presentation.aspectRatio === "16:9";
 
   return (
     <Link
       to="/presentations/$presentationId"
       params={{ presentationId: String(presentation.id) }}
       className={cn(
-        "group flex flex-col rounded-xl border border-border bg-surface transition-all duration-150",
+        "group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-all duration-150",
         "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5",
       )}
     >
-      {/* Slide preview area */}
-      <div className="relative aspect-video overflow-hidden rounded-t-xl bg-gradient-to-br from-black/90 via-black/80 to-black/70">
-        <div className="flex h-full items-center justify-center">
-          <PresentationIcon className="h-10 w-10 text-white/15" />
+      {/* Slide preview area - 80% of the card visually */}
+      <div
+        className={cn(
+          "relative overflow-hidden",
+          isWide ? "aspect-video" : "aspect-[4/3]",
+        )}
+        style={{ background: idGradient(presentation.id) }}
+      >
+        {/* Decorative slide lines to suggest content */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6">
+          <div className="h-2.5 w-3/5 rounded-sm bg-white/8" />
+          <div className="h-1.5 w-2/5 rounded-sm bg-white/5" />
+          <div className="mt-2 h-1 w-4/5 rounded-sm bg-white/4" />
+          <div className="h-1 w-3/5 rounded-sm bg-white/4" />
+          <div className="h-1 w-2/5 rounded-sm bg-white/3" />
         </div>
+
         {/* Aspect ratio badge */}
         <Badge
           variant="secondary"
-          className="absolute top-2.5 right-2.5 bg-black/50 text-[10px] text-white/80 backdrop-blur-sm"
+          className="absolute top-2 right-2 bg-black/50 text-[9px] text-white/70 backdrop-blur-sm border-0 h-4 px-1"
         >
           {presentation.aspectRatio}
         </Badge>
+
+        {/* Three-dot menu on hover */}
+        <div className="absolute top-1.5 left-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="rounded-md bg-black/50 p-1 text-white/70 backdrop-blur-sm transition-colors duration-100 hover:bg-black/70 hover:text-white"
+                onClick={(e) => e.preventDefault()}
+                aria-label={t("actions.more")}
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onExport(); }}>
+                <Download className="mr-2 h-4 w-4" />
+                {t("presentations.export")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t("actions.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* Card footer */}
-      <div className="flex items-start justify-between gap-2 p-3.5">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-            {presentation.title}
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {updatedDate}
-          </p>
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all duration-150 hover:bg-surface-hover hover:text-foreground group-hover:opacity-100"
-              onClick={(e) => e.preventDefault()}
-              aria-label={t("actions.more")}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onExport(); }}>
-              <Download className="mr-2 h-4 w-4" />
-              {t("presentations.export")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {t("actions.delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* Card footer - compact */}
+      <div className="px-3 py-2.5">
+        <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+          {presentation.title}
+        </h3>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {updatedDate}
+        </p>
       </div>
     </Link>
   );

@@ -22,7 +22,7 @@ import {
 export interface BibleProjectionSettings {
   backgroundColor: string;
   backgroundImage: string | null;
-  backgroundGradient: { from: string; to: string } | null;
+  backgroundGradient: { from: string; to: string; angle: number } | null;
   textColor: string;
   textSize: number;
   textShadow: boolean;
@@ -49,6 +49,19 @@ const PRESET_COLORS = [
   "#000000", "#0a0a0a", "#1a1a2e", "#16213e",
   "#0f3460", "#1b1b2f", "#162447", "#1f4068",
   "#1b262c", "#2c3e50", "#34495e", "#2d3436",
+];
+
+const GRADIENT_PRESETS = [
+  { name: "Night Sky", from: "#0a0a0a", to: "#1a1a2e", angle: 135 },
+  { name: "Deep Ocean", from: "#0d1b2a", to: "#1b4965", angle: 180 },
+  { name: "Dusk", from: "#2d1b69", to: "#11998e", angle: 150 },
+  { name: "Ember", from: "#1a0a00", to: "#8b2500", angle: 160 },
+  { name: "Midnight", from: "#000000", to: "#434343", angle: 180 },
+  { name: "Royal", from: "#0f0c29", to: "#302b63", angle: 135 },
+  { name: "Forest", from: "#0a2e0a", to: "#134e2a", angle: 160 },
+  { name: "Slate", from: "#1c1c2e", to: "#2d3561", angle: 180 },
+  { name: "Crimson", from: "#1a0010", to: "#6b0026", angle: 150 },
+  { name: "Gold Fade", from: "#1a1200", to: "#3d2b00", angle: 145 },
 ];
 
 interface ProjectionSettingsProps {
@@ -95,6 +108,17 @@ export function buildBibleSlideContent(
     bgColor = settings.backgroundGradient.from;
   }
 
+  const modeTokens: string[] = [];
+  if (settings.textAlign !== "center") modeTokens.push(`align-${settings.textAlign}`);
+  if (settings.referencePosition === "bottom") modeTokens.push("ref-bottom");
+  if (!settings.showReference) modeTokens.push("no-ref");
+  if (settings.textShadow) modeTokens.push("text-shadow");
+  if (settings.backgroundGradient) {
+    modeTokens.push(
+      `gradient-${settings.backgroundGradient.angle}-${settings.backgroundGradient.from.replace("#", "")}-${settings.backgroundGradient.to.replace("#", "")}`,
+    );
+  }
+
   return {
     slideType: "bible",
     text,
@@ -108,7 +132,7 @@ export function buildBibleSlideContent(
     autoPlay: null,
     loop: null,
     muted: null,
-    mode: null,
+    mode: modeTokens.length > 0 ? modeTokens.join(" ") : null,
     textColor: settings.textColor,
     textSize: settings.textSize,
   };
@@ -138,8 +162,9 @@ export function ProjectionSettings({
       onChange({
         ...settings,
         backgroundGradient: settings.backgroundGradient ?? {
-          from: "#0a0a0a",
-          to: "#1a1a2e",
+          from: GRADIENT_PRESETS[0].from,
+          to: GRADIENT_PRESETS[0].to,
+          angle: GRADIENT_PRESETS[0].angle,
         },
         backgroundImage: null,
       });
@@ -147,6 +172,7 @@ export function ProjectionSettings({
       onChange({
         ...settings,
         backgroundGradient: null,
+        backgroundImage: settings.backgroundImage || "",
       });
     }
   };
@@ -159,7 +185,7 @@ export function ProjectionSettings({
 
   const previewStyle: React.CSSProperties = {};
   if (settings.backgroundGradient) {
-    previewStyle.background = `linear-gradient(to bottom, ${settings.backgroundGradient.from}, ${settings.backgroundGradient.to})`;
+    previewStyle.background = `linear-gradient(${settings.backgroundGradient.angle}deg, ${settings.backgroundGradient.from}, ${settings.backgroundGradient.to})`;
   }
 
   return (
@@ -252,53 +278,39 @@ export function ProjectionSettings({
           </TabsContent>
 
           <TabsContent value="gradient">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {t("presentations.gradientStart")}
-                </span>
-                <input
-                  type="color"
-                  value={settings.backgroundGradient?.from ?? "#0a0a0a"}
-                  onChange={(e) =>
-                    onChange({
-                      ...settings,
-                      backgroundGradient: {
-                        from: e.target.value,
-                        to: settings.backgroundGradient?.to ?? "#1a1a2e",
-                      },
-                    })
-                  }
-                  className="h-7 w-7 cursor-pointer rounded border border-border"
-                  aria-label={t("presentations.gradientStart")}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {t("presentations.gradientEnd")}
-                </span>
-                <input
-                  type="color"
-                  value={settings.backgroundGradient?.to ?? "#1a1a2e"}
-                  onChange={(e) =>
-                    onChange({
-                      ...settings,
-                      backgroundGradient: {
-                        from: settings.backgroundGradient?.from ?? "#0a0a0a",
-                        to: e.target.value,
-                      },
-                    })
-                  }
-                  className="h-7 w-7 cursor-pointer rounded border border-border"
-                  aria-label={t("presentations.gradientEnd")}
-                />
-              </div>
-              <div
-                className="h-8 rounded border border-border"
-                style={{
-                  background: `linear-gradient(to bottom, ${settings.backgroundGradient?.from ?? "#0a0a0a"}, ${settings.backgroundGradient?.to ?? "#1a1a2e"})`,
-                }}
-              />
+            <div className="grid grid-cols-3 gap-1.5">
+              {GRADIENT_PRESETS.map((preset, idx) => {
+                const isSelected =
+                  settings.backgroundGradient?.from === preset.from &&
+                  settings.backgroundGradient?.to === preset.to;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={cn(
+                      "aspect-video w-full rounded border-2 transition-colors",
+                      isSelected
+                        ? "border-primary ring-1 ring-primary"
+                        : "border-transparent hover:border-muted-foreground/40",
+                    )}
+                    style={{
+                      background: `linear-gradient(${preset.angle}deg, ${preset.from}, ${preset.to})`,
+                    }}
+                    onClick={() =>
+                      onChange({
+                        ...settings,
+                        backgroundGradient: {
+                          from: preset.from,
+                          to: preset.to,
+                          angle: preset.angle,
+                        },
+                      })
+                    }
+                    aria-label={preset.name}
+                    aria-pressed={isSelected}
+                  />
+                );
+              })}
             </div>
           </TabsContent>
 

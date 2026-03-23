@@ -79,7 +79,8 @@
     "projectionBottom": "Baixo",
     "projectionOn": "Sim",
     "projectionOff": "Não",
-    "previewText": "Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito."
+    "previewText": "Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito.",
+    "manageInSettings": "Gerenciar em Configurações"
   },
   "collections": {
     "autoCheckDisabledHint": "A verificação automática está desativada. Ative em Configurações para validar sincronização da fonte automaticamente.",
@@ -212,6 +213,13 @@
       "search": "Pesquisar",
       "projector": "Projetor",
       "help": "Atalhos"
+    },
+    "descriptions": {
+      "services": "Planeje e conduza o culto com itens agendados, notas e projeção integrada.",
+      "hymnal": "Encontre hinos por número, título ou letra, e projete diretamente do hinário.",
+      "bible": "Acesse versículos bíblicos para leitura e projeção rápida.",
+      "presentations": "Crie slides personalizados para momentos de louvor, leitura ou anúncios.",
+      "collections": "Monte coletâneas de músicas avulsas para projetos especiais."
     },
     "welcome": "Bem-vindo ao LouvorJA"
   },
@@ -486,7 +494,7 @@
     "videoMuted": "Mudo",
     "videoNoSource": "Nenhum vídeo selecionado",
     "videoOverlayPlaceholder": "Texto sobre o vídeo de fundo...",
-    "videoPathPlaceholder": "Selecione um arquivo .mp4 ou .webm",
+    "videoPathPlaceholder": "Selecione um arquivo de vídeo (mp4, webm, mov, m4v, ogv, 3gp)",
     "videoPreparing": "Preparando vídeo...",
     "videoResolution": "Resolução",
     "videoTextColor": "Cor do texto",
@@ -535,7 +543,37 @@
     "timeline": "Linha do Tempo",
     "title": "Título",
     "untitled": "Culto sem título",
-    "urlTitlePlaceholder": "Título do link..."
+    "urlTitlePlaceholder": "Título do link...",
+    "itemCount": "{{count}} itens",
+    "liveIndicator": "AO VIVO",
+    "progressOf": "{{current}} / {{total}} itens",
+    "category": "Categoria",
+    "categoryPlaceholder": "Definir categoria...",
+    "categorySuggestions": "Sugestões",
+    "categoryRecent": "Recentes",
+    "activeServiceIndicator": "Culto ativo",
+    "calendar": {
+      "prevMonth": "Mês anterior",
+      "nextMonth": "Próximo mês",
+      "weekdays": {
+        "mon": "Seg",
+        "tue": "Ter",
+        "wed": "Qua",
+        "thu": "Qui",
+        "fri": "Sex",
+        "sat": "Sáb",
+        "sun": "Dom"
+      }
+    },
+    "defaultCategories": {
+      "sundayService": "Culto de Domingo",
+      "praiseReunion": "Reunião de Louvor",
+      "thursdayService": "Culto de Quinta",
+      "retreat": "Retiro",
+      "conference": "Conferência",
+      "youthService": "Culto Jovem",
+      "childrenService": "Culto Infantil"
+    }
   },
   "settings": {
     "appearance": "Aparência",

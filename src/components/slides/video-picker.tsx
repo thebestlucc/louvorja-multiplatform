@@ -26,7 +26,7 @@ export function VideoPicker({ presentationId, value, onChange }: VideoPickerProp
   const handleBrowse = async () => {
     const selected = await openFileDialog({
       multiple: false,
-      filters: [{ name: "Video", extensions: ["mp4", "webm"] }],
+      filters: [{ name: "Video", extensions: ["mp4", "webm", "mov", "m4v", "ogv", "3gp"] }],
     });
 
     if (!selected || typeof selected !== "string") {
