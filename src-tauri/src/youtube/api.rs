@@ -115,6 +115,27 @@ impl Thumbnails {
     }
 }
 
+/// Checks the YouTube API response status and returns a descriptive error for non-2xx codes.
+/// Planned for use in individual video fetch flow (see docs/superpowers/specs/2026-03-23-online-videos-design.md).
+#[allow(dead_code)]
+fn check_response(resp: reqwest::blocking::Response) -> Result<reqwest::blocking::Response, AppError> {
+    let status = resp.status();
+    if status.is_success() {
+        return Ok(resp);
+    }
+    // Try to extract the API error message from the response body
+    let body = resp.text().unwrap_or_default();
+    let api_message = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| v["error"]["message"].as_str().map(|s| s.to_string()));
+    let detail = api_message.unwrap_or_else(|| body.chars().take(200).collect());
+    Err(AppError::Internal(format!(
+        "YouTube API error ({}): {}",
+        status.as_u16(),
+        detail
+    )))
+}
+
 /// Validates a YouTube API key by making a test call.
 /// MUST be called from a spawned thread.
 pub fn validate_api_key(api_key: &str) -> Result<bool, AppError> {
@@ -267,6 +288,8 @@ fn fetch_channel_playlists(
 /// Fetches a single playlist's info + channel references.
 /// Returns (playlist_info, channel_id, channel_title).
 /// MUST be called from a spawned thread.
+/// Planned for direct playlist URL flow (see docs/superpowers/specs/2026-03-23-online-videos-design.md).
+#[allow(dead_code)]
 pub fn fetch_playlist_info(
     api_key: &str,
     playlist_id: &str,
