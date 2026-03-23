@@ -135,6 +135,10 @@ export function buildBibleSlideContent(
     mode: modeTokens.length > 0 ? modeTokens.join(" ") : null,
     textColor: settings.textColor,
     textSize: settings.textSize,
+    videoUrl: null,
+    videoId: null,
+    videoSource: null,
+    videoTitle: null,
   };
 }
 

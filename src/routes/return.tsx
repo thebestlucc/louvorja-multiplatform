@@ -201,6 +201,10 @@ function ReturnPage() {
       mode: null,
       textColor: null,
       textSize: null,
+      videoUrl: null,
+      videoId: null,
+      videoSource: null,
+      videoTitle: null,
     } satisfies SlideContent;
   }, [currentSlide, defaultSlide, i18n.language, t, utilityProjection]);
 

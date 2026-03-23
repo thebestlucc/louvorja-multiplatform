@@ -186,6 +186,10 @@ export function ProjectorView() {
       mode: null,
       textColor: null,
       textSize: null,
+      videoUrl: null,
+      videoId: null,
+      videoSource: null,
+      videoTitle: null,
     } satisfies SlideContent;
   }, [defaultSlide, i18n.language, slide, t, utilityProjection]);
 

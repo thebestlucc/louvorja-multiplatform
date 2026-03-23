@@ -29,6 +29,10 @@ const EMPTY_SLIDE_PROPS = {
   mode: null,
   textColor: null,
   textSize: null,
+  videoUrl: null,
+  videoId: null,
+  videoSource: null,
+  videoTitle: null,
 };
 
 export function useBible(projectionSettings?: BibleProjectionSettings) {
