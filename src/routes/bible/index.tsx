@@ -14,6 +14,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Link } from "@tanstack/react-router";
 import { Monitor, Square, Settings2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -580,10 +581,18 @@ function BibleIndex() {
             )}
           >
             {showSettings && (
-              <ProjectionSettings
-                settings={projectionSettings}
-                onChange={updateProjectionSettings}
-              />
+              <>
+                <ProjectionSettings
+                  settings={projectionSettings}
+                  onChange={updateProjectionSettings}
+                />
+                <Link
+                  to="/settings"
+                  className="mt-3 block text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t("bible.manageInSettings")} &rarr;
+                </Link>
+              </>
             )}
           </div>
         </div>

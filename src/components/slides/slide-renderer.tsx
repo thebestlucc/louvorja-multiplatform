@@ -222,6 +222,35 @@ function renderSlide(
   return null;
 }
 
+function parseBibleModeTokens(mode: string | null | undefined) {
+  const tokens = mode?.split(" ") ?? [];
+  let textAlign: "left" | "center" | "right" = "center";
+  let refPosition: "top" | "bottom" = "top";
+  let hideRef = false;
+  let hasTextShadow = false;
+  let gradient: { angle: number; from: string; to: string } | null = null;
+
+  for (const token of tokens) {
+    if (token === "align-left") textAlign = "left";
+    else if (token === "align-right") textAlign = "right";
+    else if (token === "ref-bottom") refPosition = "bottom";
+    else if (token === "no-ref") hideRef = true;
+    else if (token === "text-shadow") hasTextShadow = true;
+    else if (token.startsWith("gradient-")) {
+      const parts = token.slice("gradient-".length).split("-");
+      if (parts.length >= 3) {
+        gradient = {
+          angle: Number(parts[0]) || 180,
+          from: `#${parts[1]}`,
+          to: `#${parts.slice(2).join("")}`,
+        };
+      }
+    }
+  }
+
+  return { textAlign, refPosition, hideRef, hasTextShadow, gradient };
+}
+
 function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
   const isProjector = renderMode === "projector";
   const isReturn = renderMode === "return-current" || renderMode === "return-next";
@@ -229,6 +258,10 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
 
   const bgColor = slide.backgroundColor ?? "#0a0a0a";
   const txtColor = slide.textColor ?? "#ffffff";
+
+  // Parse mode tokens
+  const { textAlign, refPosition, hideRef, hasTextShadow, gradient } =
+    parseBibleModeTokens(slide.mode);
 
   // Font sizes scale by render mode
   let verseFontSize: number;
@@ -271,21 +304,16 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
     }
   }
 
-  const textShadow = (isProjector || isReturn)
-    ? "0 2px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.6)"
-    : isThumbnail
-      ? "0 1px 3px rgba(0,0,0,0.6)"
-      : "0 2px 6px rgba(0,0,0,0.7)";
-
-  const textAlign = (slide.mode === "left" ? "left" : slide.mode === "right" ? "right" : "center") as "left" | "center" | "right";
+  const textShadowValue = hasTextShadow
+    ? (isProjector || isReturn)
+      ? "0 2px 12px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.7)"
+      : isThumbnail
+        ? "0 1px 4px rgba(0,0,0,0.7)"
+        : "0 2px 8px rgba(0,0,0,0.8)"
+    : "none";
 
   // Reference label (from slide.label)
-  const reference = slide.label ?? slide.title ?? null;
-
-  // Detect reference position from title field convention:
-  // If title is set and label is set, reference goes to top (default).
-  // We use "mode" field to encode ref position: if it contains "ref-bottom", position is bottom.
-  const refPosition = slide.mode?.includes("ref-bottom") ? "bottom" : "top";
+  const reference = hideRef ? null : (slide.label ?? slide.title ?? null);
 
   const referenceEl = reference ? (
     <p
@@ -297,7 +325,7 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
         fontSize: `${refFontSize}px`,
         color: txtColor,
         opacity: 0.6,
-        textShadow,
+        textShadow: textShadowValue,
         textAlign,
       }}
     >
@@ -305,11 +333,16 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
     </p>
   ) : null;
 
+  // Background style: gradient overrides solid color
+  const containerBg: Record<string, string> = gradient
+    ? { background: `linear-gradient(${gradient.angle}deg, ${gradient.from}, ${gradient.to})` }
+    : { backgroundColor: bgColor };
+
   return (
     <div
-      className="flex h-full w-full flex-col items-center justify-center"
+      className="absolute inset-0 flex flex-col items-center justify-center"
       style={{
-        backgroundColor: bgColor,
+        ...containerBg,
         padding: isThumbnail ? "4px 8px" : isProjector ? "48px 80px" : "24px 40px",
       }}
     >
@@ -329,7 +362,7 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
             style={{
               fontSize: `${verseFontSize}px`,
               color: txtColor,
-              textShadow,
+              textShadow: textShadowValue,
               lineHeight: isProjector ? 1.5 : 1.4,
             }}
           >

@@ -12,7 +12,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 
-const MAX_COVER_SIZE_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_COVER_SIZE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[tauri::command]
 #[specta::specta]
@@ -329,7 +329,7 @@ pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<S
     }
     let app_data_dir = app_data_dir.unwrap();
 
-    // Offload hash + copy to a blocking thread — image files can be up to 8 MB
+    // Offload hash + copy to a blocking thread — image files can be up to 16 MB
     // and blocking the IPC thread hangs all invoke() calls on Windows.
     tokio::task::spawn_blocking(move || {
         let mut hasher = blake3::Hasher::new();
@@ -376,7 +376,12 @@ pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppErr
     let safe_path = SafePath::new(&app_data_dir);
     let resolved = safe_path.resolve(&path)?;
 
-    video::ensure_supported_video(&resolved)?;
+    // Only enforce video format validation for paths under media/videos/.
+    // Other media (images, covers) should resolve without video-specific checks.
+    let resolved_str = resolved.to_string_lossy();
+    if resolved_str.contains("/media/videos/") || resolved_str.contains("\\media\\videos\\") {
+        video::ensure_supported_video(&resolved)?;
+    }
 
     Ok(resolved.to_string_lossy().to_string())
 }
@@ -564,8 +569,14 @@ fn ensure_supported_cover_image(path: &Path) -> Result<&'static str, AppError> {
         "jpg" => Ok("jpg"),
         "jpeg" => Ok("jpeg"),
         "webp" => Ok("webp"),
+        "gif" => Ok("gif"),
+        "svg" => Ok("svg"),
+        "bmp" => Ok("bmp"),
+        "avif" => Ok("avif"),
+        "tif" | "tiff" => Ok("tiff"),
+        "ico" => Ok("ico"),
         _ => Err(AppError::Internal(
-            "Unsupported image format. Allowed formats: png, jpg, jpeg, webp.".into(),
+            "Unsupported image format. Supported: png, jpg, jpeg, webp, gif, svg, bmp, avif, tiff, ico.".into(),
         )),
     }
 }

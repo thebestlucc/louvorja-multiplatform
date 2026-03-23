@@ -38,9 +38,24 @@ pub fn parse_video_metadata(path: &Path) -> Result<ParsedVideoMetadata, AppError
     let read = file.read(&mut magic)?;
 
     match format.as_str() {
-        "mp4" => {
-            if read < 8 || &magic[4..8] != b"ftyp" {
-                return Err(AppError::Internal("Invalid MP4 file header".into()));
+        // MP4, MOV, M4V, and 3GP all use ISO BMFF (ISO base media file format).
+        // MP4 files start with an `ftyp` box at offset 4. MOV files may start
+        // with `ftyp`, `moov`, `wide`, `free`, or `mdat` atoms instead.
+        "mp4" | "mov" | "m4v" | "3gp" => {
+            if read < 8 {
+                return Err(AppError::Internal("File too small for ISO BMFF container".into()));
+            }
+            let sig = &magic[4..8];
+            let valid_iso_bmff = sig == b"ftyp"
+                || sig == b"moov"
+                || sig == b"wide"
+                || sig == b"free"
+                || sig == b"mdat";
+            if !valid_iso_bmff {
+                return Err(AppError::Internal(format!(
+                    "Invalid {} file header",
+                    format.to_uppercase()
+                )));
             }
             parse_mp4(path)
         }
@@ -50,7 +65,11 @@ pub fn parse_video_metadata(path: &Path) -> Result<ParsedVideoMetadata, AppError
             }
             parse_webm(path)
         }
-        _ => Err(AppError::Internal("Unsupported video format".into())),
+        // OGV (Ogg Theora): no native parser — falls through to ffprobe fallback
+        _ => Err(AppError::Internal(format!(
+            "No native parser for .{} — use ffprobe fallback",
+            format
+        ))),
     }
 }
 

@@ -10,6 +10,10 @@ interface SlideEditorProps {
   slide: SlideContent;
   presentationId: number;
   onChange: (content: SlideContent) => void;
+  /** Hide the inline preview (when preview is rendered separately, e.g. on the stage) */
+  hidePreview?: boolean;
+  /** Hide the slide type dropdown (when type switching is handled externally) */
+  hideTypeSelector?: boolean;
 }
 
 const SLIDE_TYPES: SlideType[] = ["cover", "lyrics", "pause", "text", "image", "video"];
@@ -31,7 +35,7 @@ const EMPTY_SLIDE_PROPS = {
   textSize: null,
 };
 
-export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProps) {
+export function SlideEditor({ slide, presentationId, onChange, hidePreview, hideTypeSelector }: SlideEditorProps) {
   const { t } = useTranslation();
 
   const handleTypeChange = (newType: string) => {
@@ -60,16 +64,19 @@ export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProp
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      {/* Preview */}
-      <div className="mx-auto w-full max-w-2xl">
-        <div className="aspect-video overflow-hidden rounded-lg border border-border">
-          <SlideRenderer slide={slide} renderMode="editor" className="h-full w-full" />
+      {/* Preview (hidden when rendered externally on the stage) */}
+      {!hidePreview && (
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="aspect-video overflow-hidden rounded-lg border border-border">
+            <SlideRenderer slide={slide} renderMode="editor" className="h-full w-full" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Controls */}
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-        {/* Slide type selector */}
+      <div className={cn("flex flex-col gap-3", !hidePreview && "rounded-lg border border-border bg-surface p-4")}>
+        {/* Slide type selector (hidden when managed externally) */}
+        {!hideTypeSelector && (
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-muted-foreground w-24 shrink-0">
             {t("presentations.slideType")}
@@ -87,6 +94,7 @@ export function SlideEditor({ slide, presentationId, onChange }: SlideEditorProp
             </SelectContent>
           </Select>
         </div>
+        )}
 
         {/* Type-specific fields */}
         {slide.slideType === "cover" && (

@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use std::path::{Component, Path, PathBuf};
 
-pub const SUPPORTED_VIDEO_EXTENSIONS: [&str; 2] = ["mp4", "webm"];
+pub const SUPPORTED_VIDEO_EXTENSIONS: [&str; 6] = ["mp4", "webm", "mov", "m4v", "ogv", "3gp"];
 
 pub fn format_from_path(path: &Path) -> Option<String> {
     path.extension()
@@ -12,7 +12,7 @@ pub fn format_from_path(path: &Path) -> Option<String> {
 
 pub fn ensure_supported_video(path: &Path) -> Result<String, AppError> {
     format_from_path(path).ok_or_else(|| {
-        AppError::Internal("Unsupported video format. Only .mp4 and .webm are supported.".into())
+        AppError::Internal("Unsupported video format. Supported: mp4, webm, mov, m4v, ogv, 3gp.".into())
     })
 }
 

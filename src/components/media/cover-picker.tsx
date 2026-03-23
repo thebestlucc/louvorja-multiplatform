@@ -20,7 +20,7 @@ export function CoverPicker({ value, onChange, title }: CoverPickerProps) {
   const handlePick = async () => {
     const selected = await openDialog({
       multiple: false,
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "avif", "tif", "tiff", "ico"] }],
     });
     if (!selected || Array.isArray(selected)) {
       return;

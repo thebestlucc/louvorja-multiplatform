@@ -53,16 +53,6 @@ const itemTypeBorders: Record<ServiceItemType, string> = {
   scheduled_category: "border-l-rose-500",
 };
 
-const itemTypeBgColors: Record<ServiceItemType, string> = {
-  hymn: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  bible: "bg-amber-500/10 text-amber-700 border-amber-500/20",
-  presentation: "bg-purple-500/10 text-purple-600 border-purple-500/20",
-  annotation: "bg-green-500/10 text-green-600 border-green-500/20",
-  url: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
-  file: "bg-gray-500/10 text-gray-600 border-gray-500/20",
-  scheduled_category: "bg-rose-500/10 text-rose-600 border-rose-500/20",
-};
-
 interface ServiceItemListProps {
   items: ServiceItem[];
   serviceDate?: string | null;
@@ -114,7 +104,7 @@ export function ServiceItemList({ items, serviceDate, activeItemIndex = -1, onRe
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-1 p-3">
+          <div className="flex flex-col gap-1.5 p-3">
             {items.map((item, index) => (
               <SortableServiceItem
                 key={item.id}
@@ -195,7 +185,6 @@ function SortableServiceItem({
   const Icon = (itemTypeIcons as Record<string, typeof Music>)[item.itemType] ?? CalendarClock;
   const colorClass = (itemTypeColors as Record<string, string>)[item.itemType] ?? "text-gray-500";
   const borderClass = (itemTypeBorders as Record<string, string>)[item.itemType] ?? "border-l-gray-500";
-  const badgeClass = (itemTypeBgColors as Record<string, string>)[item.itemType] ?? "bg-gray-500/10 text-gray-600 border-gray-500/20";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
   const isScheduledCategory = item.itemType === "scheduled_category";
 
@@ -204,7 +193,7 @@ function SortableServiceItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex cursor-pointer items-center gap-3 rounded-lg border-l-4 bg-surface px-3 py-3.5 transition-all duration-150",
+        "group relative flex min-h-[60px] cursor-pointer items-center gap-3 rounded-lg border-l-4 bg-surface px-3 py-3 transition-all duration-150",
         borderClass,
         isActive
           ? "bg-primary/8 shadow-sm ring-1 ring-primary/20"
@@ -220,23 +209,15 @@ function SortableServiceItem({
         <GripVertical className="h-4 w-4" />
       </button>
 
-      {/* Index number */}
+      {/* Track number */}
       <span className={cn(
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums",
+        "flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] font-mono font-bold tabular-nums",
         isActive
           ? "bg-primary text-primary-foreground"
-          : "bg-muted/50 text-muted-foreground",
+          : "text-muted-foreground/50",
       )}>
         {index + 1}
       </span>
-
-      {/* Type icon */}
-      <div className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-        isActive ? "bg-primary/15" : "bg-muted/30",
-      )}>
-        <Icon className={cn("h-4 w-4", colorClass)} />
-      </div>
 
       {isEditing ? (
         <div className="min-w-0 flex-1 space-y-1.5">
@@ -278,24 +259,22 @@ function SortableServiceItem({
       ) : (
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
+            {/* Type icon pill */}
+            <span className={cn("flex items-center gap-1 text-xs", colorClass)}>
+              <Icon className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-medium">{typeLabel}</span>
+            </span>
             <p className={cn(
               "truncate text-sm font-semibold",
               isActive ? "text-primary" : "text-foreground",
             )}>
               {item.title}
             </p>
-            <span className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none",
-              badgeClass,
-            )}>
-              <Icon className="h-2.5 w-2.5" />
-              {typeLabel}
-            </span>
           </div>
           {isScheduledCategory ? (
             <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? null} />
           ) : item.notes ? (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.notes}</p>
+            <p className="mt-1 truncate text-xs italic text-muted-foreground/60">{item.notes}</p>
           ) : null}
         </div>
       )}
