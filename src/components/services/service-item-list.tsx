@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useRef, useEffect } from "react";
-import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock, Plus } from "lucide-react";
+import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock, Plus, Video } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
@@ -31,6 +31,7 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   url: Link2,
   file: FileIcon,
   scheduled_category: CalendarClock,
+  online_video: Video,
 };
 
 const itemTypeColors: Record<ServiceItemType, string> = {
@@ -41,6 +42,7 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   url: "text-cyan-500",
   file: "text-gray-500",
   scheduled_category: "text-rose-500",
+  online_video: "text-red-500",
 };
 
 const itemTypeBorders: Record<ServiceItemType, string> = {
@@ -51,6 +53,7 @@ const itemTypeBorders: Record<ServiceItemType, string> = {
   url: "border-l-cyan-500",
   file: "border-l-gray-500",
   scheduled_category: "border-l-rose-500",
+  online_video: "border-l-red-500",
 };
 
 interface ServiceItemListProps {

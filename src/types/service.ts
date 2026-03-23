@@ -9,4 +9,5 @@ export type ServiceItemType =
   | "annotation"
   | "url"
   | "file"
-  | "scheduled_category";
+  | "scheduled_category"
+  | "online_video";

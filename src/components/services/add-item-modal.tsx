@@ -8,6 +8,7 @@ import {
   Link2,
   FileIcon,
   ChevronLeft,
+  Video,
 } from "lucide-react";
 import { useHymns, usePresentations, useBibleVersions, useBooks, useVerses, useMediaLibraryCategories } from "../../lib/queries";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
@@ -37,6 +38,7 @@ const ITEM_TYPES: { type: ServiceItemType; icon: typeof Music; color: string }[]
   { type: "annotation", icon: StickyNote, color: "bg-green-500/10 text-green-600 hover:bg-green-500/20" },
   { type: "url", icon: Link2, color: "bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20" },
   { type: "file", icon: FileIcon, color: "bg-gray-500/10 text-gray-600 hover:bg-gray-500/20" },
+  { type: "online_video", icon: Video, color: "bg-red-500/10 text-red-600 hover:bg-red-500/20" },
 ];
 
 export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
@@ -104,6 +106,7 @@ export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
               {selectedType === "url" && <UrlForm onAdd={handleAdd} />}
               {selectedType === "file" && <FileForm onAdd={handleAdd} />}
               {selectedType === "scheduled_category" && <ScheduledCategoryForm onAdd={handleAdd} />}
+              {selectedType === "online_video" && <OnlineVideoForm onAdd={handleAdd} />}
             </div>
           )}
         </div>
@@ -459,6 +462,65 @@ function ScheduledCategoryForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] })
         </div>
       </ScrollArea>
       <Button size="sm" disabled={!selectedId} onClick={handleAdd}>
+        {t("actions.add")}
+      </Button>
+    </div>
+  );
+}
+
+function OnlineVideoForm({ onAdd }: { onAdd: AddItemModalProps["onAdd"] }) {
+  const { t } = useTranslation();
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+
+  const extractVideoId = (input: string): string | null => {
+    const [urlObj, urlErr] = (() => {
+      try { return [new URL(input), null]; } catch { return [null, true]; }
+    })();
+    if (!urlErr && urlObj) {
+      if (urlObj.hostname.includes("youtube.com")) {
+        return urlObj.searchParams.get("v");
+      }
+      if (urlObj.hostname === "youtu.be") {
+        return urlObj.pathname.slice(1) || null;
+      }
+    }
+    // might be a raw video ID
+    if (/^[\w-]{11}$/.test(input)) return input;
+    return null;
+  };
+
+  const videoId = extractVideoId(url);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Input
+        placeholder={t("onlineVideos.addModal.placeholder", "https://youtube.com/watch?v=...")}
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        autoFocus
+      />
+      <Input
+        placeholder={t("presentations.onlineVideoTitlePlaceholder")}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      {url.length > 0 && !videoId && (
+        <p className="text-xs text-destructive">{t("services.invalidUrl")}</p>
+      )}
+      <Button
+        size="sm"
+        disabled={!videoId || title.trim().length === 0}
+        onClick={() => {
+          const notes = JSON.stringify({
+            videoId,
+            videoUrl: url,
+            videoSource: "youtube",
+            videoTitle: title.trim(),
+          });
+          onAdd("online_video", title.trim(), null, notes);
+        }}
+      >
         {t("actions.add")}
       </Button>
     </div>
