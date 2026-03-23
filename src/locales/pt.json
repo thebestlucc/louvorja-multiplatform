@@ -1368,7 +1368,9 @@
       "singleVideo": "Este é um vídeo individual",
       "singleVideoHint": "Vídeos individuais podem ser adicionados diretamente a um culto ou apresentação.",
       "addToService": "Ir para Culto Ativo",
-      "noPlaylists": "Este canal não tem playlists públicas."
+      "noPlaylists": "Este canal não tem playlists públicas.",
+      "alreadyAdded": "Já adicionada",
+      "couldNotExtractId": "Não foi possível extrair o ID da playlist da URL"
     },
     "detail": {
       "backToPlaylists": "Voltar para playlists",

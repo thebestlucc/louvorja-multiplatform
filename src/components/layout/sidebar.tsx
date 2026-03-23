@@ -111,7 +111,7 @@ export function Sidebar() {
 
   const handleMouseLeave = () => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-    setHoverOpen(null);
+    hoverTimeout.current = setTimeout(() => setHoverOpen(null), 150);
   };
 
   // Auto-expand parent when current route matches any child
