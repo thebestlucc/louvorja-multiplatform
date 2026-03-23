@@ -17,3 +17,4 @@ pub mod timer;
 pub mod updater;
 pub mod utility;
 pub mod pack_sync;
+pub mod youtube;

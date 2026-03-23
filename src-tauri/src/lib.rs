@@ -225,6 +225,14 @@ pub fn run() {
             commands::pack_sync::start_pack_sync,
             commands::pack_sync::cancel_pack_sync,
             commands::pack_sync::clear_manifest_cache,
+            // YouTube
+            commands::youtube::validate_youtube_api_key,
+            commands::youtube::fetch_youtube_channel,
+            commands::youtube::add_youtube_playlist,
+            commands::youtube::get_youtube_playlists,
+            commands::youtube::get_youtube_playlist_videos,
+            commands::youtube::refresh_youtube_playlist,
+            commands::youtube::delete_youtube_playlist,
         ]);
 
     #[cfg(debug_assertions)]
