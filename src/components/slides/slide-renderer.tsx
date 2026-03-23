@@ -170,20 +170,7 @@ function renderSlide(
   }
 
   if (slide.slideType === "bible") {
-    return (
-      <div className="flex flex-col items-center gap-6 px-12 text-center">
-        <p className="text-sm uppercase tracking-[0.25em] text-white/50 font-serif">
-          {slide.label}
-        </p>
-        <div className="flex flex-col gap-3">
-          {(slide.text ?? "").split("\n").map((line, i) => (
-            <p key={i} className="text-2xl font-serif leading-relaxed">
-              {line}
-            </p>
-          ))}
-        </div>
-      </div>
-    );
+    return renderBibleSlide(slide, renderMode);
   }
 
   if (slide.slideType === "video") {
@@ -233,6 +220,131 @@ function renderSlide(
   }
 
   return null;
+}
+
+function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
+  const isProjector = renderMode === "projector";
+  const isReturn = renderMode === "return-current" || renderMode === "return-next";
+  const isThumbnail = renderMode === "thumbnail";
+
+  const bgColor = slide.backgroundColor ?? "#0a0a0a";
+  const txtColor = slide.textColor ?? "#ffffff";
+
+  // Font sizes scale by render mode
+  let verseFontSize: number;
+  let refFontSize: number;
+
+  if (slide.textSize && Number.isFinite(slide.textSize)) {
+    const base = Math.max(12, Math.min(120, slide.textSize));
+    if (isProjector) {
+      verseFontSize = Math.max(32, Math.round(base * 1.6));
+      refFontSize = Math.max(14, Math.round(base * 0.5));
+    } else if (renderMode === "return-current") {
+      verseFontSize = Math.max(24, Math.round(base * 1.1));
+      refFontSize = Math.max(12, Math.round(base * 0.38));
+    } else if (renderMode === "return-next") {
+      verseFontSize = Math.max(16, Math.round(base * 0.7));
+      refFontSize = Math.max(10, Math.round(base * 0.28));
+    } else if (isThumbnail) {
+      verseFontSize = Math.max(9, Math.round(base * 0.28));
+      refFontSize = Math.max(7, Math.round(base * 0.14));
+    } else {
+      verseFontSize = Math.max(20, Math.round(base * 0.9));
+      refFontSize = Math.max(11, Math.round(base * 0.35));
+    }
+  } else {
+    if (isProjector) {
+      verseFontSize = 48;
+      refFontSize = 18;
+    } else if (renderMode === "return-current") {
+      verseFontSize = 32;
+      refFontSize = 14;
+    } else if (renderMode === "return-next") {
+      verseFontSize = 20;
+      refFontSize = 11;
+    } else if (isThumbnail) {
+      verseFontSize = 12;
+      refFontSize = 8;
+    } else {
+      verseFontSize = 28;
+      refFontSize = 13;
+    }
+  }
+
+  const textShadow = (isProjector || isReturn)
+    ? "0 2px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.6)"
+    : isThumbnail
+      ? "0 1px 3px rgba(0,0,0,0.6)"
+      : "0 2px 6px rgba(0,0,0,0.7)";
+
+  const textAlign = (slide.mode === "left" ? "left" : slide.mode === "right" ? "right" : "center") as "left" | "center" | "right";
+
+  // Reference label (from slide.label)
+  const reference = slide.label ?? slide.title ?? null;
+
+  // Detect reference position from title field convention:
+  // If title is set and label is set, reference goes to top (default).
+  // We use "mode" field to encode ref position: if it contains "ref-bottom", position is bottom.
+  const refPosition = slide.mode?.includes("ref-bottom") ? "bottom" : "top";
+
+  const referenceEl = reference ? (
+    <p
+      className={cn(
+        "uppercase tracking-[0.2em] font-medium",
+        isThumbnail ? "tracking-[0.15em]" : "",
+      )}
+      style={{
+        fontSize: `${refFontSize}px`,
+        color: txtColor,
+        opacity: 0.6,
+        textShadow,
+        textAlign,
+      }}
+    >
+      {reference}
+    </p>
+  ) : null;
+
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center"
+      style={{
+        backgroundColor: bgColor,
+        padding: isThumbnail ? "4px 8px" : isProjector ? "48px 80px" : "24px 40px",
+      }}
+    >
+      {refPosition === "top" && referenceEl}
+
+      <div
+        className={cn(
+          "flex flex-col",
+          isThumbnail ? "gap-0.5" : isProjector ? "gap-4" : "gap-2",
+        )}
+        style={{ textAlign }}
+      >
+        {(slide.text ?? "").split("\n").map((line, i) => (
+          <p
+            key={i}
+            className="whitespace-pre-line font-serif leading-relaxed"
+            style={{
+              fontSize: `${verseFontSize}px`,
+              color: txtColor,
+              textShadow,
+              lineHeight: isProjector ? 1.5 : 1.4,
+            }}
+          >
+            {line}
+          </p>
+        ))}
+      </div>
+
+      {refPosition === "bottom" && (
+        <div className={isThumbnail ? "mt-1" : isProjector ? "mt-6" : "mt-3"}>
+          {referenceEl}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function mapRenderMode(renderMode: SlideRenderMode): VideoRenderMode {

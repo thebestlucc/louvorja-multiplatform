@@ -54,64 +54,72 @@ export function StatusBar() {
   const showContentSyncIndicator = Boolean(contentSyncRunning && !isOnSettings);
 
   return (
-    <footer className="flex h-8 items-center justify-between border-t border-border bg-surface px-3 text-[11px] text-muted-foreground">
+    <footer className="flex h-10 items-center justify-between border-t border-border bg-surface px-4 text-xs text-muted-foreground">
       <span>
         {t("status.ready")}
         {version ? <span className="ml-2 opacity-60">v{version}</span> : null}
       </span>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1">
         {packSyncRunning && (
-          <button
-            onClick={openPackSyncProgress}
-            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-sky-400 hover:bg-white/10"
-          >
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span>
-              {t("settings.packSync.statusBar", {
-                current: packSyncProgress!.packsProcessed,
-                total: packSyncProgress!.packsTotal,
-              })}
-            </span>
-          </button>
+          <>
+            <button
+              onClick={openPackSyncProgress}
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-white/10"
+            >
+              <Loader2 className="h-[15px] w-[15px] animate-spin" />
+              <span>
+                {t("settings.packSync.statusBar", {
+                  current: packSyncProgress!.packsProcessed,
+                  total: packSyncProgress!.packsTotal,
+                })}
+              </span>
+            </button>
+            <div className="mx-1 h-4 w-px bg-border" />
+          </>
         )}
         {showContentSyncIndicator && (
-          <button
-            onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
-            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-emerald-400 hover:bg-white/10"
-            title={t("settings.contentSync.title")}
-          >
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span>
-              {t("settings.contentSync.statusBar", {
-                current: contentSyncProgress?.itemsProcessed ?? 0,
-                total: contentSyncProgress?.itemsTotal ?? 0,
-              })}
-            </span>
-          </button>
+          <>
+            <button
+              onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-white/10"
+              title={t("settings.contentSync.title")}
+            >
+              <Loader2 className="h-[15px] w-[15px] animate-spin" />
+              <span>
+                {t("settings.contentSync.statusBar", {
+                  current: contentSyncProgress?.itemsProcessed ?? 0,
+                  total: contentSyncProgress?.itemsTotal ?? 0,
+                })}
+              </span>
+            </button>
+            <div className="mx-1 h-4 w-px bg-border" />
+          </>
         )}
         <button
           onClick={() => navigate({ to: "/utilities/timer" })}
           className={cn(
-            "flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10",
+            "flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10",
             hasTimerProgress && "text-foreground",
           )}
           title={t("status.timerOpen")}
         >
-          <Timer className={cn("h-3 w-3", timerState?.isRunning && "text-green-500")} />
+          <Timer className={cn("h-[15px] w-[15px]", timerState?.isRunning && "text-green-500")} />
           <span>
             {timerLabel
               ? t("status.timerCompact", { value: timerLabel })
               : t("status.timerIdle")}
           </span>
         </button>
+        <div className="mx-1 h-4 w-px bg-border" />
         <ProjectorControls />
+        <div className="mx-1 h-4 w-px bg-border" />
         <StatusBarUpdateIndicator />
         <button
           onClick={() => setStreamingOpen(true)}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10"
+          className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10"
         >
-          <Wifi className={cn("h-3 w-3", isRunning && "text-green-500")} />
+          <Wifi className={cn("h-[15px] w-[15px]", isRunning && "text-green-500")} />
           {isRunning
             ? t("status.streamingOn", {
               port: status?.port ?? 7070,

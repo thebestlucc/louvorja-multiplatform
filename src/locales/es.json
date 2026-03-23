@@ -14,7 +14,9 @@
     "remove": "Quitar",
     "save": "Guardar",
     "search": "Buscar",
-    "today": "Hoy"
+    "today": "Hoy",
+    "back": "Volver",
+    "more": "Más opciones"
   },
   "app": {
     "name": "LouvorJA"
@@ -61,7 +63,23 @@
     "stopProjection": "Detener proyección",
     "verseCopied": "Versiculo copiado al portapapeles",
     "verses": "Versículos",
-    "versions": "Versiones"
+    "versions": "Versiones",
+    "projectionSettings": "Configuración de proyección",
+    "projectionPreview": "Vista previa",
+    "projectionBackground": "Fondo",
+    "projectionTypography": "Tipografía",
+    "projectionFontSize": "Tamaño",
+    "projectionTextColor": "Color",
+    "projectionTextShadow": "Sombra de texto",
+    "projectionAlignment": "Alineación",
+    "projectionReference": "Referencia",
+    "projectionShowReference": "Mostrar referencia",
+    "projectionPosition": "Posición",
+    "projectionTop": "Arriba",
+    "projectionBottom": "Abajo",
+    "projectionOn": "Sí",
+    "projectionOff": "No",
+    "previewText": "Porque de tal manera amó Dios al mundo, que ha dado a su Hijo unigénito."
   },
   "collections": {
     "autoCheckDisabledHint": "La verificación automática está desactivada. Actívela en Configuración para validar la sincronización de origen automáticamente.",
@@ -473,7 +491,12 @@
     "videoResolution": "Resolución",
     "videoTextColor": "Color del texto",
     "videoTextSize": "Tamaño del texto",
-    "videoUnsupported": "Formato no compatible. Convierta a {{recommendation}} antes de importar."
+    "videoUnsupported": "Formato no compatible. Convierta a {{recommendation}} antes de importar.",
+    "design": "Diseño",
+    "emptyDescription": "Cree su primera presentación para comenzar.",
+    "noResults": "No se encontraron presentaciones",
+    "slide": "Diapositiva",
+    "tryDifferentSearch": "Intente con un término de búsqueda diferente."
   },
   "services": {
     "activeService": "Culto Activo",

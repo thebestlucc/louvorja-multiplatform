@@ -20,6 +20,7 @@ import type { SlideContent } from "../../lib/bindings";
 import { SlideThumbnail } from "./slide-thumbnail";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 interface SlideListProps {
   slides: SlideContent[];
@@ -100,7 +101,7 @@ export function SlideList({
   const ids = itemIds ?? slides.map((_, i) => i);
 
   const content = (
-    <div ref={containerRef} className="flex flex-col gap-1.5 py-0 pr-3">
+    <div ref={containerRef} className="flex flex-col gap-2 p-1 pr-3">
       {slides.map((slide, i) => (
         sortableEnabled ? (
           <SortableSlideItem
@@ -127,10 +128,10 @@ export function SlideList({
         <Button
           variant="outline"
           size="sm"
-          className="mt-1 w-full"
+          className="mt-2 w-full border-dashed border-border hover:border-primary hover:text-primary"
           onClick={onAdd}
         >
-          <Plus className="mr-1 h-3 w-3" />
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
           Add Slide
         </Button>
       )}
@@ -184,40 +185,53 @@ function SortableSlideItem({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: transition ?? "transform 150ms cubic-bezier(0.25, 1, 0.5, 1)",
     opacity: isDragging ? 0.5 : 1,
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="group relative w-full min-w-0">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group relative w-full min-w-0",
+        isDragging && "z-50",
+      )}
+    >
       <SlideThumbnail
         slide={slide}
         index={index}
         isActive={isActive}
         onClick={onClick}
       />
+
+      {/* Drag handle — visible on hover, left margin */}
       <button
-        className="pointer-events-none absolute left-1 top-1 z-10 cursor-grab rounded bg-black/45 p-1 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:pointer-events-auto group-hover:opacity-100"
+        className="pointer-events-none absolute left-0 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-md bg-surface p-1 text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition-all duration-150 hover:bg-surface-hover hover:text-foreground group-hover:pointer-events-auto group-hover:opacity-100"
+        aria-label={`Drag slide ${index + 1}`}
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-3 w-3" />
       </button>
 
+      {/* Action buttons — visible on hover, right side */}
       {(onDuplicate || onDelete) && (
-        <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-all duration-150 group-hover:opacity-100">
           {onDuplicate && (
             <button
-              className="rounded bg-black/60 p-1 text-white hover:bg-black/80"
+              className="rounded-md bg-black/60 p-1 text-white backdrop-blur-sm transition-colors duration-150 hover:bg-black/80"
               onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+              aria-label={`Duplicate slide ${index + 1}`}
             >
               <Copy className="h-3 w-3" />
             </button>
           )}
           {onDelete && (
             <button
-              className="rounded bg-black/60 p-1 text-white hover:bg-destructive"
+              className="rounded-md bg-black/60 p-1 text-white backdrop-blur-sm transition-colors duration-150 hover:bg-destructive"
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              aria-label={`Delete slide ${index + 1}`}
             >
               <Trash2 className="h-3 w-3" />
             </button>
