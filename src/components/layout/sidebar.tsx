@@ -48,7 +48,7 @@ export function Sidebar() {
         sidebarOpen ? "w-60" : "w-14",
       )}
     >
-      <div className="flex h-12 items-center justify-between border-b border-border px-3">
+      <div className="flex h-14 items-center justify-between border-b border-border px-3">
         {sidebarOpen && (
           <span className="text-sm font-semibold text-primary">
             {t("app.name")}

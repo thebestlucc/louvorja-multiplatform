@@ -9,6 +9,8 @@ import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 
+import type { BibleProjectionSettings } from "../components/bible/projection-settings";
+
 const EMPTY_SLIDE_PROPS = {
   text: null,
   title: null,
@@ -26,7 +28,7 @@ const EMPTY_SLIDE_PROPS = {
   textSize: null,
 };
 
-export function useBible() {
+export function useBible(projectionSettings?: BibleProjectionSettings) {
   const [currentVersionId, setCurrentVersionId] = useState(0);
   const [currentBook, setCurrentBook] = useState("");
   const [currentChapter, setCurrentChapter] = useState(0);
@@ -104,11 +106,21 @@ export function useBible() {
     const verseSet = new Set(sorted);
     const versesToProject = verses.filter((v) => verseSet.has(v.verse));
 
+    const ps = projectionSettings;
+    const modeValue = ps
+      ? `${ps.textAlign}${ps.referencePosition === "bottom" ? "|ref-bottom" : ""}`
+      : null;
+
     const slides: SlideContent[] = versesToProject.map((v) => ({
       ...EMPTY_SLIDE_PROPS,
       slideType: "bible",
       text: v.text,
-      label: `${currentBook} ${currentChapter}:${v.verse}`,
+      label: ps?.showReference !== false ? `${currentBook} ${currentChapter}:${v.verse}` : null,
+      backgroundColor: ps?.backgroundColor ?? null,
+      backgroundImage: ps?.backgroundImage ?? null,
+      textColor: ps?.textColor ?? null,
+      textSize: ps?.textSize ?? null,
+      mode: modeValue,
     }));
 
     setCurrentPresentation(null);
@@ -133,7 +145,7 @@ export function useBible() {
         audioDurationMs: null,
       });
     }, { notify: true });
-  }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides]);
+  }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides, projectionSettings]);
 
   const startBibleProjection = useCallback(async () => {
     setCurrentProjectionType("bible");

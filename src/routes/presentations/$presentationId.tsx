@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Play, ChevronRight, Layers } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { notify } from "../../lib/notifications";
@@ -8,6 +8,7 @@ import { catcher } from "../../lib/catcher";
 import { usePresentation2 } from "../../hooks/use-presentation";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { Badge } from "../../components/ui/badge";
 import { SlideList } from "../../components/slides/slide-list";
 import { SlideEditor } from "../../components/slides/slide-editor";
 import { AspectRatioSelector } from "../../components/slides/aspect-ratio-selector";
@@ -15,6 +16,7 @@ import { TransitionSelector } from "../../components/slides/transition-selector"
 import type { SlideContent } from "../../lib/bindings";
 import { projectSlideIndex } from "../../lib/projection-playback";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { cn } from "../../lib/utils";
 
 import { useQueueStore } from "../../stores/queue-store";
 
@@ -27,7 +29,7 @@ function PresentationDetail() {
   const id = Number(presentationId);
   const { t } = useTranslation();
   const router = useRouter();
-  
+
   const {
     presentation,
     slides,
@@ -49,6 +51,7 @@ function PresentationDetail() {
   const setPresentationActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
 
   const [transition, setTransition] = useState("fade");
+  const [settingsTab, setSettingsTab] = useState<"design" | "transition">("design");
 
   useEffect(() => {
     if (presentation) {
@@ -113,46 +116,82 @@ function PresentationDetail() {
   };
 
   if (!presentation) {
-    return <div className="p-4">{t("hymnal.loading")}</div>;
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">{t("hymnal.loading")}</p>
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link to="/presentations">
-          <Button variant="ghost" size="icon">
+    <div className="flex h-full flex-col">
+      {/* Top toolbar */}
+      <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
+        {/* Breadcrumb */}
+        <Link to="/presentations" className="shrink-0">
+          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("actions.back")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div className="flex flex-1 items-center gap-3">
+
+        <nav className="flex min-w-0 items-center gap-1.5 text-sm" aria-label="Breadcrumb">
+          <Link
+            to="/presentations"
+            className="shrink-0 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          >
+            {t("nav.presentations")}
+          </Link>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
           <Input
             value={localTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
-            className="max-w-md border-none bg-transparent text-xl font-semibold focus-visible:ring-0 px-0"
+            className="h-8 max-w-xs border-none bg-transparent text-sm font-semibold text-foreground shadow-none focus-visible:ring-1 focus-visible:ring-primary px-1.5"
+            aria-label={t("presentations.title")}
           />
+        </nav>
+
+        {/* Center info */}
+        <div className="flex items-center gap-2 ml-auto mr-4">
+          <Badge variant="outline" className="text-[11px] font-normal">
+            {presentation.aspectRatio}
+          </Badge>
+          <Badge variant="secondary" className="text-[11px] font-normal">
+            <Layers className="mr-1 h-3 w-3" aria-hidden="true" />
+            {slideContents.length} {t("presentations.slides").toLowerCase()}
+          </Badge>
         </div>
+
+        {/* Actions */}
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="mr-2 h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={handleExport} className="h-8">
+            <Download className="mr-1.5 h-3.5 w-3.5" />
             {t("presentations.export")}
           </Button>
-          <Button size="sm" onClick={handleLoadSlides}>
+          <Button size="sm" onClick={handleLoadSlides} className="h-8">
+            <Play className="mr-1.5 h-3.5 w-3.5" />
             {t("presentations.project")}
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-1 gap-4 overflow-hidden">
-        {/* Slide List */}
-        <div className="w-64 shrink-0 overflow-hidden rounded-lg border border-border bg-surface flex flex-col">
-          <div className="p-3 border-b border-border flex items-center justify-between">
-            <h2 className="text-sm font-medium">{t("presentations.slides")}</h2>
-            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={addSlide}>
+      {/* Main content area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Slide list panel — wider */}
+        <div className="flex w-72 shrink-0 flex-col border-r border-border bg-surface">
+          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("presentations.slides")}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs hover:text-primary"
+              onClick={addSlide}
+            >
               {t("actions.add")}
             </Button>
           </div>
-          <div className="flex-1 overflow-auto p-2">
+          <div className="flex-1 overflow-auto p-3">
             <SlideList
               slides={slideContents}
               activeIndex={activeSlideIndex}
@@ -164,32 +203,95 @@ function PresentationDetail() {
           </div>
         </div>
 
-        {/* Editor Area */}
-        <div className="flex flex-1 flex-col gap-4 overflow-auto rounded-lg border border-border bg-surface p-4">
+        {/* Editor area — center */}
+        <div className="flex flex-1 flex-col overflow-auto bg-background p-6">
           {slides[activeSlideIndex] ? (
-            <SlideEditor
-              slide={slides[activeSlideIndex].content}
-              presentationId={id}
-              onChange={(content: SlideContent) => updateSlideContent(activeSlideIndex, content)}
-            />
+            <div className="flex flex-1 flex-col items-center justify-center">
+              {/* Slide canvas with aspect-ratio */}
+              <div className="w-full max-w-3xl">
+                <div className="overflow-hidden rounded-lg shadow-xl ring-1 ring-border">
+                  <SlideEditor
+                    slide={slides[activeSlideIndex].content}
+                    presentationId={id}
+                    onChange={(content: SlideContent) => updateSlideContent(activeSlideIndex, content)}
+                  />
+                </div>
+                {/* Slide info bar */}
+                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {t("presentations.slide")} {activeSlideIndex + 1} / {slideContents.length}
+                  </span>
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              {t("presentations.noSlideSelected")}
+            <div className="flex h-full flex-col items-center justify-center gap-3">
+              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
+                <Layers className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {t("presentations.noSlideSelected")}
+              </p>
             </div>
           )}
         </div>
 
-        {/* Settings Sidebar */}
-        <div className="w-64 shrink-0 space-y-4 overflow-auto rounded-lg border border-border bg-surface p-4">
-          <h2 className="text-sm font-medium">{t("presentations.settings")}</h2>
-          <AspectRatioSelector
-            value={presentation.aspectRatio}
-            onChange={handleAspectRatioChange}
-          />
-          <TransitionSelector
-            value={transition}
-            onChange={setTransition}
-          />
+        {/* Settings sidebar — right */}
+        <div className="flex w-72 shrink-0 flex-col border-l border-border bg-surface">
+          {/* Tabs */}
+          <div className="flex border-b border-border">
+            <button
+              className={cn(
+                "flex-1 px-4 py-2.5 text-xs font-medium transition-colors duration-150",
+                settingsTab === "design"
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setSettingsTab("design")}
+            >
+              {t("presentations.design")}
+            </button>
+            <button
+              className={cn(
+                "flex-1 px-4 py-2.5 text-xs font-medium transition-colors duration-150",
+                settingsTab === "transition"
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setSettingsTab("transition")}
+            >
+              {t("presentations.transition")}
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-auto p-4">
+            {settingsTab === "design" ? (
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                    {t("presentations.aspectRatio")}
+                  </label>
+                  <AspectRatioSelector
+                    value={presentation.aspectRatio}
+                    onChange={handleAspectRatioChange}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                    {t("presentations.transition")}
+                  </label>
+                  <TransitionSelector
+                    value={transition}
+                    onChange={setTransition}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

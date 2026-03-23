@@ -7,10 +7,15 @@ import { VerseDisplay } from "../../components/bible/verse-display";
 import { BibleSearch } from "../../components/bible/bible-search";
 import { VersionComparison } from "../../components/bible/version-comparison";
 import { resolveBookIndex } from "../../components/bible/book-catalog";
+import {
+  ProjectionSettings,
+  useProjectionSettings,
+} from "../../components/bible/projection-settings";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
-import { Monitor, Square } from "lucide-react";
+import { Monitor, Square, Settings2 } from "lucide-react";
+import { cn } from "../../lib/utils";
 
 const PERIODIC_FALLBACK_ORDER_OFFSET = 1000;
 
@@ -31,10 +36,13 @@ function BibleIndex() {
   };
 
   const { t } = useTranslation();
-  const bible = useBible();
+  const { settings: projectionSettings, updateSettings: updateProjectionSettings } =
+    useProjectionSettings();
+  const bible = useBible(projectionSettings);
   const { book, chapter, verse } = Route.useSearch();
   const [searchQuery, setSearchQuery] = useState("");
   const [showComparison, setShowComparison] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const deepLinkApplied = useRef(false);
   const pendingVerseNavigationRef = useRef<PendingVerseNavigation | null>(null);
   const shiftAnchorRef = useRef<number | null>(null);
@@ -118,6 +126,14 @@ function BibleIndex() {
     [bible],
   );
 
+  const handleProjectFromVerseDisplay = useCallback(() => {
+    if (bible.isProjecting) {
+      void bible.updateBibleProjection();
+    } else {
+      void bible.startBibleProjection();
+    }
+  }, [bible]);
+
   useEffect(() => {
     const pending = pendingVerseNavigationRef.current;
     if (!pending) return;
@@ -183,7 +199,7 @@ function BibleIndex() {
         first?.focus();
       };
 
-      // ── Tab / Shift+Tab: cycle sections ────────────────────────────────────
+      // Tab / Shift+Tab: cycle sections
       if (e.key === "Tab" && focusedGrid) {
         e.preventDefault();
         if (e.shiftKey) {
@@ -214,7 +230,7 @@ function BibleIndex() {
         bible.setChapter(targetChapter);
       };
 
-      // ── Book grid ──────────────────────────────────────────────────────────
+      // Book grid
       if (focusedGrid === "book") {
         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
           e.preventDefault();
@@ -262,7 +278,7 @@ function BibleIndex() {
         return;
       }
 
-      // ── Chapter grid ────────────────────────────────────────────────────────
+      // Chapter grid
       if (focusedGrid === "chapter") {
         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
           e.preventDefault();
@@ -318,7 +334,7 @@ function BibleIndex() {
         }
       }
 
-      // ── Verse grid ──────────────────────────────────────────────────────────
+      // Verse grid
       if (!currentBook || currentChapter <= 0 || verses.length === 0) return;
 
       const verseCount = verses.length;
@@ -422,51 +438,69 @@ function BibleIndex() {
   }, [handleKeyDown]);
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("nav.bible")}</h1>
-        <div className="flex items-center gap-2">
+    <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
+      {/* Header row: title + version selector + projection controls */}
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold tracking-tight shrink-0">
+          {t("nav.bible")}
+        </h1>
+
+        <div className="flex items-center gap-2 flex-1 justify-end">
+          {/* Version Selector */}
           {bible.versions.length > 0 && (
-            <>
-              <span className="text-sm text-muted-foreground">{t("bible.selectVersion")}</span>
-              <Select
-                value={String(bible.currentVersionId)}
-                onValueChange={(val) => bible.setVersion(Number(val))}
-              >
-                <SelectTrigger className="w-52 sm:w-72">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {bible.versions.map((v) => (
-                    <SelectItem key={v.id} value={String(v.id)}>
-                      {v.abbreviation} — {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
+            <Select
+              value={String(bible.currentVersionId)}
+              onValueChange={(val) => bible.setVersion(Number(val))}
+            >
+              <SelectTrigger className="w-48 sm:w-60 h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {bible.versions.map((v) => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.abbreviation} -- {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
+
+          {/* Projection settings toggle */}
+          <Button
+            variant={showSettings ? "outline" : "ghost"}
+            size="sm"
+            onClick={() => setShowSettings((s) => !s)}
+            className="h-8 w-8 p-0"
+            title={t("bible.projectionSettings")}
+            aria-pressed={showSettings}
+          >
+            <Settings2 className="h-4 w-4" />
+          </Button>
+
+          {/* Project / Stop button */}
           {bible.isProjecting ? (
             <Button
               variant="destructive"
               size="sm"
+              className="h-8 gap-1.5"
               onClick={async () => {
                 await bible.stopBibleProjection();
               }}
             >
-              <Square className="mr-2 h-4 w-4" />
+              <Square className="h-3.5 w-3.5" />
               {t("bible.stopProjection")}
             </Button>
           ) : (
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
+              className="h-8 gap-1.5"
               onClick={async () => {
                 await bible.startBibleProjection();
               }}
+              disabled={bible.selectedVerses.length === 0}
             >
-              <Monitor className="mr-2 h-4 w-4" />
+              <Monitor className="h-3.5 w-3.5" />
               {t("bible.project")}
             </Button>
           )}
@@ -477,33 +511,37 @@ function BibleIndex() {
         <p className="text-sm text-muted-foreground">{t("bible.loading")}</p>
       )}
 
-      {/* Main two-panel layout */}
+      {/* Main content area */}
       {bible.currentVersionId > 0 && (
-        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-          {/* Left panel: Verse display */}
-          <div className="order-2 min-h-0 flex-1 overflow-y-auto rounded-lg border bg-surface p-4 lg:order-1 lg:w-[25%] lg:flex-none">
+        <div className="flex min-h-0 flex-1 gap-3">
+          {/* Left panel: Verse reading area */}
+          <div className="min-h-0 w-[28%] shrink-0 overflow-y-auto rounded-lg border border-border bg-surface p-3">
             {bible.currentBook && bible.currentChapter > 0 ? (
               <VerseDisplay
-                  verses={bible.verses}
-                  selectedVerses={bible.selectedVerses}
-                  scrollToVerse={bible.lastSelectedVerse}
-                  book={bible.currentBook}
-                  chapter={bible.currentChapter}
-                  versionAbbr={currentVersion?.abbreviation}
-                  onSelectVerse={handleSelectVerse}
-                  onDoubleClickVerse={handleDoubleClickVerse}
-                  isLoading={bible.isLoadingVerses}
-                  onOpenCompare={bible.versions.length > 1 ? () => setShowComparison(true) : undefined}
-                />
+                verses={bible.verses}
+                selectedVerses={bible.selectedVerses}
+                scrollToVerse={bible.lastSelectedVerse}
+                book={bible.currentBook}
+                chapter={bible.currentChapter}
+                versionAbbr={currentVersion?.abbreviation}
+                onSelectVerse={handleSelectVerse}
+                onDoubleClickVerse={handleDoubleClickVerse}
+                isLoading={bible.isLoadingVerses}
+                onOpenCompare={bible.versions.length > 1 ? () => setShowComparison(true) : undefined}
+                isProjecting={bible.isProjecting}
+                onProject={handleProjectFromVerseDisplay}
+              />
             ) : (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-muted-foreground">{t("bible.selectBook")}</p>
+                <p className="text-sm text-muted-foreground text-center">
+                  {t("bible.selectBook")}
+                </p>
               </div>
             )}
           </div>
-
-          {/* Right panel: Search + Book/Chapter/Verse selector */}
-          <div className="order-1 flex min-h-0 flex-col gap-3 lg:order-2 lg:flex-1">
+          
+          {/* Center panel: Book/Chapter/Verse grid selector + search */}
+          <div className="flex min-h-0 flex-col gap-2 lg:flex-1">
             <BibleSearch
               query={searchQuery}
               onQueryChange={setSearchQuery}
@@ -529,6 +567,23 @@ function BibleIndex() {
                   onDoubleClickVerse={handleDoubleClickVerse}
                 />
               </div>
+            )}
+          </div>
+
+          {/* Right panel: Projection settings (collapsible) */}
+          <div
+            className={cn(
+              "min-h-0 overflow-y-auto rounded-lg border border-border bg-surface transition-all duration-200",
+              showSettings
+                ? "w-[260px] shrink-0 p-3 opacity-100"
+                : "w-0 overflow-hidden border-0 p-0 opacity-0",
+            )}
+          >
+            {showSettings && (
+              <ProjectionSettings
+                settings={projectionSettings}
+                onChange={updateProjectionSettings}
+              />
             )}
           </div>
         </div>

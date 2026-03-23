@@ -16,9 +16,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useRef, useEffect } from "react";
-import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock } from "lucide-react";
+import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock, Plus } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
+import { cn } from "../../lib/utils";
 import { useScheduledMediaItem } from "../../lib/queries";
 import type { ServiceItem, ServiceItemType } from "../../types/service";
 
@@ -50,6 +51,16 @@ const itemTypeBorders: Record<ServiceItemType, string> = {
   url: "border-l-cyan-500",
   file: "border-l-gray-500",
   scheduled_category: "border-l-rose-500",
+};
+
+const itemTypeBgColors: Record<ServiceItemType, string> = {
+  hymn: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  bible: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  presentation: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+  annotation: "bg-green-500/10 text-green-600 border-green-500/20",
+  url: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
+  file: "bg-gray-500/10 text-gray-600 border-gray-500/20",
+  scheduled_category: "bg-rose-500/10 text-rose-600 border-rose-500/20",
 };
 
 interface ServiceItemListProps {
@@ -84,8 +95,13 @@ export function ServiceItemList({ items, serviceDate, activeItemIndex = -1, onRe
 
   if (items.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t("services.noItems")}</p>
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-12">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
+          <Plus className="h-6 w-6 text-primary/30" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-foreground">{t("services.noItems")}</p>
+        </div>
       </div>
     );
   }
@@ -98,7 +114,7 @@ export function ServiceItemList({ items, serviceDate, activeItemIndex = -1, onRe
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-0.5 p-2">
+          <div className="flex flex-col gap-1 p-3">
             {items.map((item, index) => (
               <SortableServiceItem
                 key={item.id}
@@ -179,6 +195,7 @@ function SortableServiceItem({
   const Icon = (itemTypeIcons as Record<string, typeof Music>)[item.itemType] ?? CalendarClock;
   const colorClass = (itemTypeColors as Record<string, string>)[item.itemType] ?? "text-gray-500";
   const borderClass = (itemTypeBorders as Record<string, string>)[item.itemType] ?? "border-l-gray-500";
+  const badgeClass = (itemTypeBgColors as Record<string, string>)[item.itemType] ?? "bg-gray-500/10 text-gray-600 border-gray-500/20";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
   const isScheduledCategory = item.itemType === "scheduled_category";
 
@@ -186,31 +203,46 @@ function SortableServiceItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex cursor-pointer items-center gap-2 rounded-md border border-l-[3px] ${borderClass} p-2 transition-all hover:shadow-sm ${
+      className={cn(
+        "group flex cursor-pointer items-center gap-3 rounded-lg border-l-4 bg-surface px-3 py-3.5 transition-all duration-150",
+        borderClass,
         isActive
-          ? "border-primary/50 bg-primary/10"
-          : "border-border bg-surface hover:bg-surface-hover"
-      }`}
+          ? "bg-primary/8 shadow-sm ring-1 ring-primary/20"
+          : "hover:bg-surface-hover hover:shadow-sm",
+      )}
     >
+      {/* Drag handle */}
       <button
-        className="cursor-grab p-0.5 text-muted-foreground hover:text-foreground"
+        className="cursor-grab rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground group-hover:text-muted-foreground"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-4 w-4" />
       </button>
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center text-xs text-muted-foreground">
+      {/* Index number */}
+      <span className={cn(
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums",
+        isActive
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted/50 text-muted-foreground",
+      )}>
         {index + 1}
       </span>
 
-      <Icon className={`h-4 w-4 shrink-0 ${colorClass}`} />
+      {/* Type icon */}
+      <div className={cn(
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+        isActive ? "bg-primary/15" : "bg-muted/30",
+      )}>
+        <Icon className={cn("h-4 w-4", colorClass)} />
+      </div>
 
       {isEditing ? (
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 flex-1 space-y-1.5">
           <input
             ref={inputRef}
-            className="w-full rounded border border-border bg-transparent px-1.5 py-0.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
             onKeyDown={(e) => {
@@ -219,7 +251,7 @@ function SortableServiceItem({
             }}
           />
           <input
-            className="w-full rounded border border-border bg-transparent px-1.5 py-0.5 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder={t("services.notes")}
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
@@ -229,50 +261,71 @@ function SortableServiceItem({
             }}
           />
           <div className="flex gap-1">
-            <button className="rounded p-0.5 text-primary hover:bg-primary/10" onClick={handleSaveEdit}>
+            <button
+              className="rounded-md p-1 text-primary hover:bg-primary/10 transition-colors"
+              onClick={handleSaveEdit}
+            >
               <Check className="h-3.5 w-3.5" />
             </button>
-            <button className="rounded p-0.5 text-muted-foreground hover:bg-muted" onClick={handleCancelEdit}>
+            <button
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+              onClick={handleCancelEdit}
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       ) : (
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{item.title}</p>
+          <div className="flex items-center gap-2">
+            <p className={cn(
+              "truncate text-sm font-semibold",
+              isActive ? "text-primary" : "text-foreground",
+            )}>
+              {item.title}
+            </p>
+            <span className={cn(
+              "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none",
+              badgeClass,
+            )}>
+              <Icon className="h-2.5 w-2.5" />
+              {typeLabel}
+            </span>
+          </div>
           {isScheduledCategory ? (
             <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? null} />
-          ) : (
-            <p className="text-xs text-muted-foreground">{typeLabel}</p>
-          )}
+          ) : item.notes ? (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.notes}</p>
+          ) : null}
         </div>
       )}
 
+      {/* Action buttons - revealed on hover */}
       {!isEditing && (
-        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex items-center gap-0.5 opacity-0 transition-all duration-150 group-hover:opacity-100">
           {onProject && (
             <button
-              className="rounded p-1 text-muted-foreground hover:text-primary"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
               onClick={onProject}
               title={t("services.projectItem")}
             >
-              <Monitor className="h-3.5 w-3.5" />
+              <Monitor className="h-4 w-4" />
             </button>
           )}
           {onEditItem && (
             <button
-              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
               onClick={() => setIsEditing(true)}
               title={t("services.editItem")}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="h-4 w-4" />
             </button>
           )}
           <button
-            className="rounded p-1 text-muted-foreground hover:text-destructive"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             onClick={onRemove}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       )}
@@ -288,18 +341,18 @@ function ScheduledItemBadge({ categoryId, date }: { categoryId: number; date: st
 
   if (!mediaItem) {
     return (
-      <Badge variant="outline" className="h-4 px-1 text-[10px] border-destructive text-destructive bg-destructive/5 mt-0.5">
+      <Badge variant="outline" className="mt-1 h-5 px-1.5 text-[10px] border-destructive/30 text-destructive bg-destructive/5">
         {t("mediaLibrary.noItemOnDate", "No item for this date")}
       </Badge>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5 mt-0.5">
-      <Badge variant="outline" className="h-4 px-1 text-[10px] border-primary/30 text-primary bg-primary/5">
+    <div className="flex items-center gap-1.5 mt-1">
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px] border-primary/30 text-primary bg-primary/5">
         {mediaItem.name}
       </Badge>
-      <span className="text-[10px] text-muted-foreground uppercase">{mediaItem.fileType}</span>
+      <span className="text-[10px] font-medium uppercase text-muted-foreground/60">{mediaItem.fileType}</span>
     </div>
   );
 }

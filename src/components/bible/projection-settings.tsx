@@ -1,0 +1,486 @@
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { catcher } from "../../lib/catcher";
+import { getPreference, setPreference } from "../../lib/store";
+import { cn } from "../../lib/utils";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Slider } from "../ui/slider";
+import { SlideRenderer } from "../slides/slide-renderer";
+import type { SlideContent } from "../../lib/bindings";
+import {
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
+
+export interface BibleProjectionSettings {
+  backgroundColor: string;
+  backgroundImage: string | null;
+  backgroundGradient: { from: string; to: string } | null;
+  textColor: string;
+  textSize: number;
+  textShadow: boolean;
+  textAlign: "left" | "center" | "right";
+  showReference: boolean;
+  referencePosition: "top" | "bottom";
+}
+
+const DEFAULT_SETTINGS: BibleProjectionSettings = {
+  backgroundColor: "#0a0a0a",
+  backgroundImage: null,
+  backgroundGradient: null,
+  textColor: "#ffffff",
+  textSize: 48,
+  textShadow: true,
+  textAlign: "center",
+  showReference: true,
+  referencePosition: "top",
+};
+
+const STORE_KEY = "bibleProjectionSettings";
+
+const PRESET_COLORS = [
+  "#000000", "#0a0a0a", "#1a1a2e", "#16213e",
+  "#0f3460", "#1b1b2f", "#162447", "#1f4068",
+  "#1b262c", "#2c3e50", "#34495e", "#2d3436",
+];
+
+interface ProjectionSettingsProps {
+  settings: BibleProjectionSettings;
+  onChange: (settings: BibleProjectionSettings) => void;
+  preview?: SlideContent | null;
+}
+
+export function useProjectionSettings() {
+  const [settings, setSettings] = useState<BibleProjectionSettings>(DEFAULT_SETTINGS);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const [saved] = await catcher(
+        getPreference<BibleProjectionSettings>(STORE_KEY, DEFAULT_SETTINGS),
+      );
+      if (saved) {
+        setSettings({ ...DEFAULT_SETTINGS, ...saved });
+      }
+      setLoaded(true);
+    };
+    void load();
+  }, []);
+
+  const updateSettings = useCallback(
+    (next: BibleProjectionSettings) => {
+      setSettings(next);
+      void catcher(setPreference(STORE_KEY, next));
+    },
+    [],
+  );
+
+  return { settings, updateSettings, loaded };
+}
+
+export function buildBibleSlideContent(
+  text: string,
+  reference: string,
+  settings: BibleProjectionSettings,
+): SlideContent {
+  let bgColor = settings.backgroundColor;
+  if (settings.backgroundGradient) {
+    bgColor = settings.backgroundGradient.from;
+  }
+
+  return {
+    slideType: "bible",
+    text,
+    title: settings.showReference ? reference : null,
+    subtitle: null,
+    label: settings.showReference ? reference : null,
+    videoPath: null,
+    backgroundImage: settings.backgroundImage,
+    backgroundColor: bgColor,
+    audioPath: null,
+    autoPlay: null,
+    loop: null,
+    muted: null,
+    mode: null,
+    textColor: settings.textColor,
+    textSize: settings.textSize,
+  };
+}
+
+export function ProjectionSettings({
+  settings,
+  onChange,
+  preview,
+}: ProjectionSettingsProps) {
+  const { t } = useTranslation();
+
+  const bgType: "solid" | "gradient" | "image" = settings.backgroundGradient
+    ? "gradient"
+    : settings.backgroundImage
+      ? "image"
+      : "solid";
+
+  const handleBgTypeChange = (type: string) => {
+    if (type === "solid") {
+      onChange({
+        ...settings,
+        backgroundGradient: null,
+        backgroundImage: null,
+      });
+    } else if (type === "gradient") {
+      onChange({
+        ...settings,
+        backgroundGradient: settings.backgroundGradient ?? {
+          from: "#0a0a0a",
+          to: "#1a1a2e",
+        },
+        backgroundImage: null,
+      });
+    } else if (type === "image") {
+      onChange({
+        ...settings,
+        backgroundGradient: null,
+      });
+    }
+  };
+
+  const previewSlide: SlideContent = preview ?? buildBibleSlideContent(
+    t("bible.previewText"),
+    "John 3:16",
+    settings,
+  );
+
+  const previewStyle: React.CSSProperties = {};
+  if (settings.backgroundGradient) {
+    previewStyle.background = `linear-gradient(to bottom, ${settings.backgroundGradient.from}, ${settings.backgroundGradient.to})`;
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* WYSIWYG Preview */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {t("bible.projectionPreview")}
+        </span>
+        <div
+          className="relative aspect-video w-full overflow-hidden rounded-lg border border-border"
+          style={previewStyle}
+        >
+          <SlideRenderer
+            slide={previewSlide}
+            renderMode="thumbnail"
+            className="h-full w-full"
+          />
+          {/* Overlay text-shadow simulation for thumbnail */}
+          {settings.textShadow && (
+            <div className="pointer-events-none absolute inset-0 rounded-lg" />
+          )}
+        </div>
+      </div>
+
+      {/* Background Section */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {t("bible.projectionBackground")}
+        </span>
+        <Tabs value={bgType} onValueChange={handleBgTypeChange}>
+          <TabsList className="w-full">
+            <TabsTrigger value="solid" className="flex-1 text-xs">
+              {t("presentations.bgSolid")}
+            </TabsTrigger>
+            <TabsTrigger value="gradient" className="flex-1 text-xs">
+              {t("presentations.bgGradient")}
+            </TabsTrigger>
+            <TabsTrigger value="image" className="flex-1 text-xs">
+              {t("presentations.bgImage")}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="solid">
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-6 gap-1.5">
+                {PRESET_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={cn(
+                      "h-6 w-full rounded border-2 transition-colors",
+                      settings.backgroundColor === color
+                        ? "border-primary"
+                        : "border-transparent hover:border-muted-foreground/40",
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() =>
+                      onChange({ ...settings, backgroundColor: color })
+                    }
+                    aria-label={`${t("bible.projectionBackground")}: ${color}`}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={settings.backgroundColor}
+                  onChange={(e) =>
+                    onChange({
+                      ...settings,
+                      backgroundColor: e.target.value,
+                    })
+                  }
+                  className="h-7 w-7 cursor-pointer rounded border border-border"
+                  aria-label={t("bible.projectionBackground")}
+                />
+                <Input
+                  value={settings.backgroundColor}
+                  onChange={(e) =>
+                    onChange({
+                      ...settings,
+                      backgroundColor: e.target.value,
+                    })
+                  }
+                  className="h-7 flex-1 text-xs"
+                />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="gradient">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {t("presentations.gradientStart")}
+                </span>
+                <input
+                  type="color"
+                  value={settings.backgroundGradient?.from ?? "#0a0a0a"}
+                  onChange={(e) =>
+                    onChange({
+                      ...settings,
+                      backgroundGradient: {
+                        from: e.target.value,
+                        to: settings.backgroundGradient?.to ?? "#1a1a2e",
+                      },
+                    })
+                  }
+                  className="h-7 w-7 cursor-pointer rounded border border-border"
+                  aria-label={t("presentations.gradientStart")}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {t("presentations.gradientEnd")}
+                </span>
+                <input
+                  type="color"
+                  value={settings.backgroundGradient?.to ?? "#1a1a2e"}
+                  onChange={(e) =>
+                    onChange({
+                      ...settings,
+                      backgroundGradient: {
+                        from: settings.backgroundGradient?.from ?? "#0a0a0a",
+                        to: e.target.value,
+                      },
+                    })
+                  }
+                  className="h-7 w-7 cursor-pointer rounded border border-border"
+                  aria-label={t("presentations.gradientEnd")}
+                />
+              </div>
+              <div
+                className="h-8 rounded border border-border"
+                style={{
+                  background: `linear-gradient(to bottom, ${settings.backgroundGradient?.from ?? "#0a0a0a"}, ${settings.backgroundGradient?.to ?? "#1a1a2e"})`,
+                }}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="image">
+            <Input
+              value={settings.backgroundImage ?? ""}
+              onChange={(e) =>
+                onChange({
+                  ...settings,
+                  backgroundImage: e.target.value || null,
+                })
+              }
+              placeholder={t("presentations.imagePathPlaceholder")}
+              className="h-7 text-xs"
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Typography Section */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {t("bible.projectionTypography")}
+        </span>
+
+        {/* Font Size */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0 w-14">
+            {t("bible.projectionFontSize")}
+          </span>
+          <Slider
+            value={[settings.textSize]}
+            onValueChange={([val]) =>
+              onChange({ ...settings, textSize: val })
+            }
+            min={24}
+            max={96}
+            step={2}
+            className="flex-1"
+            aria-label={t("bible.projectionFontSize")}
+          />
+          <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">
+            {settings.textSize}px
+          </span>
+        </div>
+
+        {/* Text Color */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0 w-14">
+            {t("bible.projectionTextColor")}
+          </span>
+          <input
+            type="color"
+            value={settings.textColor}
+            onChange={(e) =>
+              onChange({ ...settings, textColor: e.target.value })
+            }
+            className="h-7 w-7 cursor-pointer rounded border border-border"
+            aria-label={t("bible.projectionTextColor")}
+          />
+          <Input
+            value={settings.textColor}
+            onChange={(e) =>
+              onChange({ ...settings, textColor: e.target.value })
+            }
+            className="h-7 flex-1 text-xs"
+          />
+        </div>
+
+        {/* Text Shadow Toggle */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            {t("bible.projectionTextShadow")}
+          </span>
+          <Button
+            variant={settings.textShadow ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() =>
+              onChange({ ...settings, textShadow: !settings.textShadow })
+            }
+            aria-pressed={settings.textShadow}
+          >
+            {settings.textShadow ? t("bible.projectionOn") : t("bible.projectionOff")}
+          </Button>
+        </div>
+
+        {/* Text Alignment */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            {t("bible.projectionAlignment")}
+          </span>
+          <div className="flex gap-0.5">
+            {([
+              { value: "left" as const, icon: AlignLeft },
+              { value: "center" as const, icon: AlignCenter },
+              { value: "right" as const, icon: AlignRight },
+            ]).map(({ value, icon: Icon }) => (
+              <Button
+                key={value}
+                variant={settings.textAlign === value ? "default" : "ghost"}
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => onChange({ ...settings, textAlign: value })}
+                aria-label={value}
+                aria-pressed={settings.textAlign === value}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Reference Section */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {t("bible.projectionReference")}
+        </span>
+
+        {/* Show/Hide Toggle */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            {t("bible.projectionShowReference")}
+          </span>
+          <Button
+            variant={settings.showReference ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-xs gap-1"
+            onClick={() =>
+              onChange({ ...settings, showReference: !settings.showReference })
+            }
+            aria-pressed={settings.showReference}
+          >
+            {settings.showReference ? (
+              <Eye className="h-3 w-3" />
+            ) : (
+              <EyeOff className="h-3 w-3" />
+            )}
+            {settings.showReference ? t("bible.projectionOn") : t("bible.projectionOff")}
+          </Button>
+        </div>
+
+        {/* Position Toggle */}
+        {settings.showReference && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {t("bible.projectionPosition")}
+            </span>
+            <div className="flex gap-0.5">
+              <Button
+                variant={
+                  settings.referencePosition === "top" ? "default" : "ghost"
+                }
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() =>
+                  onChange({ ...settings, referencePosition: "top" })
+                }
+                aria-pressed={settings.referencePosition === "top"}
+              >
+                <ArrowUp className="h-3 w-3" />
+                {t("bible.projectionTop")}
+              </Button>
+              <Button
+                variant={
+                  settings.referencePosition === "bottom" ? "default" : "ghost"
+                }
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() =>
+                  onChange({ ...settings, referencePosition: "bottom" })
+                }
+                aria-pressed={settings.referencePosition === "bottom"}
+              >
+                <ArrowDown className="h-3 w-3" />
+                {t("bible.projectionBottom")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

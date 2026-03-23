@@ -14,7 +14,9 @@
     "remove": "Remover",
     "save": "Salvar",
     "search": "Pesquisar",
-    "today": "Hoje"
+    "today": "Hoje",
+    "back": "Voltar",
+    "more": "Mais opções"
   },
   "app": {
     "name": "LouvorJA"
@@ -61,7 +63,23 @@
     "stopProjection": "Parar projeção",
     "verseCopied": "Versiculo copiado",
     "verses": "Versículos",
-    "versions": "Versões"
+    "versions": "Versões",
+    "projectionSettings": "Configurações de projeção",
+    "projectionPreview": "Pré-visualização",
+    "projectionBackground": "Fundo",
+    "projectionTypography": "Tipografia",
+    "projectionFontSize": "Tamanho",
+    "projectionTextColor": "Cor",
+    "projectionTextShadow": "Sombra do texto",
+    "projectionAlignment": "Alinhamento",
+    "projectionReference": "Referência",
+    "projectionShowReference": "Mostrar referência",
+    "projectionPosition": "Posição",
+    "projectionTop": "Topo",
+    "projectionBottom": "Baixo",
+    "projectionOn": "Sim",
+    "projectionOff": "Não",
+    "previewText": "Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito."
   },
   "collections": {
     "autoCheckDisabledHint": "A verificação automática está desativada. Ative em Configurações para validar sincronização da fonte automaticamente.",
@@ -473,7 +491,12 @@
     "videoResolution": "Resolução",
     "videoTextColor": "Cor do texto",
     "videoTextSize": "Tamanho do texto",
-    "videoUnsupported": "Formato não suportado. Converta para {{recommendation}} antes de importar."
+    "videoUnsupported": "Formato não suportado. Converta para {{recommendation}} antes de importar.",
+    "design": "Design",
+    "emptyDescription": "Crie sua primeira apresentação para começar.",
+    "noResults": "Nenhuma apresentação encontrada",
+    "slide": "Slide",
+    "tryDifferentSearch": "Tente um termo de pesquisa diferente."
   },
   "services": {
     "activeService": "Culto Ativo",

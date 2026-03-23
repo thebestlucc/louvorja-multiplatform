@@ -104,16 +104,16 @@ export function Header() {
   ).join(" + ");
 
   return (
-    <header className="flex h-12 items-center justify-between border-b border-border bg-surface px-4">
+    <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-5">
       <button
         type="button"
         onClick={openCommandPalette}
         className={cn(
-          "flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 text-sm text-muted-foreground",
-          "hover:bg-surface-hover transition-colors w-64",
+          "flex h-9 items-center gap-2 rounded-lg border border-border bg-muted px-3.5 text-sm text-muted-foreground",
+          "hover:bg-surface-hover transition-colors w-72",
         )}
       >
-        <Search className="h-3.5 w-3.5" />
+        <Search className="h-4 w-4" />
         <span>{t("actions.search")}...</span>
         <kbd className="ml-auto rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {spotlightShortcutLabel}
@@ -131,11 +131,11 @@ export function Header() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative h-8 w-8"
+                className="relative h-9 w-9"
                 aria-label={t("settings.packSync.newPacksAvailable")}
               >
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
+                <Bell className="h-[18px] w-[18px]" />
+                <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-surface" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72 p-0" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -193,12 +193,12 @@ export function Header() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9"
           aria-label={shortcutsHelpLabel}
           title={`${shortcutsHelpLabel} (${shortcutsHelpComboLabel})`}
           onClick={openKeyboardShortcutsPanel}
         >
-          <Keyboard className="h-4 w-4" />
+          <Keyboard className="h-[18px] w-[18px]" />
         </Button>
 
         <DropdownMenu>
@@ -206,11 +206,11 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9"
               aria-label={t("settings.language")}
               title={t("settings.language")}
             >
-              <Languages className="h-4 w-4" />
+              <Languages className="h-[18px] w-[18px]" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -237,11 +237,11 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9"
               aria-label={t("settings.theme")}
               title={t("settings.theme")}
             >
-              <Palette className="h-4 w-4" />
+              <Palette className="h-[18px] w-[18px]" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
