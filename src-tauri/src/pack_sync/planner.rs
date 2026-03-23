@@ -86,9 +86,23 @@ pub fn build_plan(
     let effective_languages = selected_languages.clone();
 
     // Early return if manifest version hasn't changed AND no content DB needs updating
+    // AND all selected packs are already extracted at the manifest's version.
+    // Without the pack check, a previous sync with download failures (e.g. Windows
+    // network/path issues) could leave extracted versions at 0 while the stored
+    // manifest version was already saved — causing subsequent plan calls to
+    // incorrectly report "up to date".
     if manifest.manifest_version == stored_manifest_version && stored_manifest_version > 0 {
         let db_items = build_db_items(conn, manifest, &effective_languages)?;
-        if db_items.is_empty() {
+        let all_packs_current = manifest
+            .packs
+            .iter()
+            .filter(|p| effective_languages.contains(&p.language))
+            .all(|p| {
+                crate::db::queries::content_sync::get_pack_extracted_version(conn, &p.id)
+                    .unwrap_or(0)
+                    >= p.version
+            });
+        if db_items.is_empty() && all_packs_current {
             return Ok(PackSyncPlan {
                 manifest_version: manifest.manifest_version,
                 items: vec![],
