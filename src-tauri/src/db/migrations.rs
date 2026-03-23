@@ -206,6 +206,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (35)", [])?;
     }
 
+    if current_version < 36 {
+        migrate_v36(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (36)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1340,6 +1345,87 @@ fn migrate_v34(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v36(conn: &Connection) -> Result<(), AppError> {
+    // 1. Create languages table (may not exist on fresh installs)
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS languages (
+            id_language VARCHAR PRIMARY KEY NOT NULL,
+            language VARCHAR,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT OR IGNORE INTO languages (id_language, language) VALUES ('pt', 'Português');
+        INSERT OR IGNORE INTO languages (id_language, language) VALUES ('en', 'English');
+        INSERT OR IGNORE INTO languages (id_language, language) VALUES ('es', 'Español');
+        INSERT OR IGNORE INTO languages (id_language, language) VALUES ('und', 'Undetermined');"
+    )?;
+
+    // 2. Create online_videos_channels
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS online_videos_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_language VARCHAR NOT NULL DEFAULT 'und',
+            channel_id VARCHAR NOT NULL UNIQUE,
+            title VARCHAR,
+            description TEXT,
+            images TEXT,
+            status VARCHAR NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'validated', 'error')),
+            playlists TEXT,
+            error TEXT,
+            base64 TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_language) REFERENCES languages(id_language)
+        );"
+    )?;
+
+    // 3. Create online_videos_playlists
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS online_videos_playlists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_language VARCHAR NOT NULL DEFAULT 'und',
+            id_channel INTEGER,
+            playlist_id VARCHAR NOT NULL UNIQUE,
+            title VARCHAR,
+            description TEXT,
+            images TEXT,
+            status VARCHAR NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'validated', 'error')),
+            error TEXT,
+            base64 TEXT,
+            cover_path TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_language) REFERENCES languages(id_language),
+            FOREIGN KEY (id_channel) REFERENCES online_videos_channels(id) ON DELETE CASCADE
+        );"
+    )?;
+
+    // 4. Create online_videos
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS online_videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_language VARCHAR NOT NULL DEFAULT 'und',
+            id_playlist INTEGER NOT NULL,
+            video_id VARCHAR NOT NULL,
+            sequence INTEGER DEFAULT 0,
+            title VARCHAR,
+            description TEXT,
+            images TEXT,
+            status VARCHAR NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'validated', 'error')),
+            error TEXT,
+            local_path TEXT,
+            duration_seconds INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(id_playlist, video_id),
+            FOREIGN KEY (id_language) REFERENCES languages(id_language),
+            FOREIGN KEY (id_playlist) REFERENCES online_videos_playlists(id) ON DELETE CASCADE
+        );"
+    )?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1372,7 +1458,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 35);
+        assert_eq!(schema_version, 36);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1515,6 +1601,7 @@ mod tests {
             (33, migrate_v33),
             (34, migrate_v34),
             (35, migrate_v35),
+            (36, migrate_v36),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
