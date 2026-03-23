@@ -14,6 +14,7 @@ mod streaming;
 mod utils;
 mod video;
 mod youtube;
+mod ytdlp;
 
 use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -233,6 +234,11 @@ pub fn run() {
             commands::youtube::get_youtube_playlist_videos,
             commands::youtube::refresh_youtube_playlist,
             commands::youtube::delete_youtube_playlist,
+            // yt-dlp
+            commands::youtube::ensure_ytdlp,
+            commands::youtube::update_ytdlp,
+            commands::youtube::download_online_video,
+            commands::youtube::cancel_download,
         ]);
 
     #[cfg(debug_assertions)]

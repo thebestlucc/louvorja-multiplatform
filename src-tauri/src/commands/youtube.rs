@@ -4,6 +4,7 @@ use crate::state::AppState;
 use crate::youtube::{api, parser, thumbnails};
 use serde::Serialize;
 use specta::Type;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone, Serialize, Type)]
@@ -232,5 +233,124 @@ pub fn delete_youtube_playlist(
     }
 
     crate::db::queries::online_videos::delete_playlist(&conn, &playlist_id)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn ensure_ytdlp(app: AppHandle) -> Result<(), AppError> {
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<String, AppError> {
+            let app_data_dir = app_clone.path().app_data_dir()
+                .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
+            let path = crate::ytdlp::binary::ensure_binary(&app_data_dir)?;
+            Ok(path.to_string_lossy().to_string())
+        })();
+        match result {
+            Ok(path) => { let _ = app_clone.emit("ytdlp-binary-ready", &path); }
+            Err(e) => { let _ = app_clone.emit("ytdlp-binary-error", &e.to_string()); }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_ytdlp(app: AppHandle) -> Result<(), AppError> {
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<String, AppError> {
+            let app_data_dir = app_clone.path().app_data_dir()
+                .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
+            let path = crate::ytdlp::binary::update_binary(&app_data_dir)?;
+            Ok(path.to_string_lossy().to_string())
+        })();
+        match result {
+            Ok(path) => { let _ = app_clone.emit("ytdlp-binary-ready", &path); }
+            Err(e) => { let _ = app_clone.emit("ytdlp-binary-error", &e.to_string()); }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn download_online_video(
+    video_id: String,
+    playlist_id: String,
+    quality: String,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, AppError> {
+    // playlist_id is part of the IPC contract and will be used for filtering in future tasks
+    let _ = &playlist_id;
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let cancel_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    {
+        let mut runtime = state.ytdlp.lock()
+            .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
+        runtime.active_run_id = Some(run_id.clone());
+        runtime.cancel_flags.insert(run_id.clone(), cancel_flag.clone());
+    }
+
+    let pool = state.db.clone();
+    let run_id_clone = run_id.clone();
+    let video_id_clone = video_id.clone();
+
+    std::thread::spawn(move || {
+        let result = (|| -> Result<(), AppError> {
+            let app_data_dir = app.path().app_data_dir()
+                .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
+
+            // 1. Ensure yt-dlp binary exists
+            let binary_path = crate::ytdlp::binary::ensure_binary(&app_data_dir)?;
+
+            // 2. Download the video
+            let output_dir = app_data_dir.join("media").join("videos").join("youtube");
+            let output_path = crate::ytdlp::downloader::download_video(
+                &binary_path, &video_id_clone, &output_dir, &quality,
+                cancel_flag, &app, &run_id_clone,
+            )?;
+
+            // 3. Update DB with local path
+            let relative_path = format!("media/videos/youtube/{}", output_path.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| format!("{}.mp4", video_id_clone)));
+
+            let conn = pool.get().map_err(|e| AppError::Internal(e.to_string()))?;
+            crate::db::queries::online_videos::update_video_local_path(&conn, &video_id_clone, &relative_path)?;
+
+            Ok(())
+        })();
+
+        if let Err(e) = result {
+            // Error already emitted by downloader for cancel/error cases
+            // but emit a generic error for unexpected failures
+            if !e.to_string().contains("cancelled") {
+                let _ = app.emit("ytdlp-download-error", &serde_json::json!({
+                    "runId": run_id_clone,
+                    "videoId": video_id_clone,
+                    "error": e.to_string(),
+                }));
+            }
+        }
+    });
+
+    Ok(run_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_download(
+    run_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let runtime = state.ytdlp.lock()
+        .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
+    if let Some(flag) = runtime.cancel_flags.get(&run_id) {
+        flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     Ok(())
 }
