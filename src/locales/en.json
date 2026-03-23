@@ -906,11 +906,32 @@
       "monitor": "Monitor",
       "shortcuts": "Shortcuts",
       "streaming": "Streaming",
-      "sync": "Content Sync"
+      "sync": "Content Sync",
+      "youtube": "YouTube"
     },
     "theme": "Theme",
     "themeDesc": "Choose the visual style of the app.",
-    "video": "Video"
+    "video": "Video",
+    "youtube": {
+      "apiKeyTitle": "YouTube API Key",
+      "apiKeyDescription": "Required to browse and add YouTube playlists. Get a key from the Google Cloud Console.",
+      "apiKeyPlaceholder": "Enter your YouTube Data API v3 key...",
+      "keySaved": "API key saved",
+      "validate": "Validate",
+      "validating": "Validating...",
+      "validationSuccess": "API key is valid!",
+      "validationFailed": "API key validation failed",
+      "show": "Show",
+      "hide": "Hide",
+      "qualityTitle": "Download Quality",
+      "qualityDescription": "Default quality for offline video downloads.",
+      "qualityBest": "Best available",
+      "ytdlpTitle": "yt-dlp (Video Downloader)",
+      "ytdlpDescription": "yt-dlp is used for offline video downloads. Update it to get the latest YouTube compatibility fixes.",
+      "ytdlpUpdate": "Update yt-dlp",
+      "ytdlpUpdating": "Updating...",
+      "ytdlpUpdated": "yt-dlp updated successfully"
+    }
   },
   "shortcuts": {
     "categories": {

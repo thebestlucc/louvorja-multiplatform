@@ -906,11 +906,32 @@
       "monitor": "Monitor",
       "shortcuts": "Atajos",
       "streaming": "Streaming",
-      "sync": "Sincronización"
+      "sync": "Sincronización",
+      "youtube": "YouTube"
     },
     "theme": "Tema",
     "themeDesc": "Elija el estilo visual de la aplicación.",
-    "video": "Vídeo"
+    "video": "Vídeo",
+    "youtube": {
+      "apiKeyTitle": "Clave de API de YouTube",
+      "apiKeyDescription": "Necesaria para explorar y agregar listas de reproducción de YouTube. Obtenga una clave en Google Cloud Console.",
+      "apiKeyPlaceholder": "Ingrese su clave de YouTube Data API v3...",
+      "keySaved": "Clave de API guardada",
+      "validate": "Validar",
+      "validating": "Validando...",
+      "validationSuccess": "¡Clave de API válida!",
+      "validationFailed": "Error al validar la clave de API",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "qualityTitle": "Calidad de Descarga",
+      "qualityDescription": "Calidad predeterminada para descargas de video sin conexión.",
+      "qualityBest": "La mejor disponible",
+      "ytdlpTitle": "yt-dlp (Descargador de Videos)",
+      "ytdlpDescription": "yt-dlp se usa para descargas de video sin conexión. Actualícelo para obtener las últimas correcciones de compatibilidad con YouTube.",
+      "ytdlpUpdate": "Actualizar yt-dlp",
+      "ytdlpUpdating": "Actualizando...",
+      "ytdlpUpdated": "yt-dlp actualizado con éxito"
+    }
   },
   "shortcuts": {
     "categories": {
