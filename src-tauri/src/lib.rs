@@ -365,6 +365,17 @@ pub fn run() {
                 eprintln!("[spotlight] Failed to pre-create spotlight window: {e}");
             }
 
+            // tauri-plugin-window-state saves the spotlight window's visibility.
+            // If the app was closed while spotlight was open, the plugin restores it
+            // as visible after DomContentLoaded. Force-hide it after a short delay
+            // to ensure it stays hidden on startup regardless of saved state.
+            if let Some(spotlight_win) = app.get_webview_window("spotlight") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    let _ = spotlight_win.hide();
+                });
+            }
+
             // Auto-start streaming server if configured
             {
                 let db_state = app.state::<AppState>();
