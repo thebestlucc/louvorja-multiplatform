@@ -1336,7 +1336,20 @@
     "setup": {
       "title": "YouTube API Key Required",
       "description": "To browse and add YouTube playlists, you need to configure a YouTube Data API key in Settings.",
-      "goToSettings": "Go to Settings"
+      "goToSettings": "Go to Settings",
+      "tutorialToggle": "How do I get a YouTube API key?",
+      "tutorialTitle": "How to create a YouTube Data API key",
+      "steps": [
+        "Go to console.cloud.google.com and sign in with your Google account.",
+        "Create a new project (or select an existing one) from the project dropdown at the top.",
+        "In the left menu, go to \"APIs & Services\" > \"Library\".",
+        "Search for \"YouTube Data API v3\" and click on it.",
+        "Click \"Enable\" to activate the API for your project.",
+        "Go to \"APIs & Services\" > \"Credentials\" in the left menu.",
+        "Click \"Create Credentials\" > \"API Key\".",
+        "Copy the generated key and paste it in the YouTube settings of this app."
+      ],
+      "tutorialNote": "The free tier allows 10,000 units/day, which is enough for most churches."
     },
     "addPlaylist": "Add Playlist",
     "empty": "No playlists added yet. Add your first YouTube playlist!",

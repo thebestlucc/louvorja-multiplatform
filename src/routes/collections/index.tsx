@@ -1,6 +1,8 @@
 import { DragEvent, FormEvent, useDeferredValue, useMemo, useState, useRef } from "react";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter, getRouteApi } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { OnlineVideosTab } from "../../components/online-videos/online-videos-tab";
+import { PlaylistDetail } from "../../components/online-videos/playlist-detail";
 import { FolderOpen, Loader2, Plus, Trash2, LayoutGrid, List as ListIcon, MoreVertical, Play, MonitorPlay, Music, Upload } from "lucide-react";
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
@@ -47,10 +49,14 @@ function getCreationYear(createdAt: string): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+const parentRoute = getRouteApi("/collections");
+
 function CollectionsIndex() {
   const { t } = useTranslation();
   const router = useRouter();
+  const routeSearch = parentRoute.useSearch();
 
+  // All hooks must be unconditional — no early returns before this block
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
@@ -258,6 +264,8 @@ function CollectionsIndex() {
     gap: 16,
   });
 
+  const isOnlineVideos = routeSearch.tab === "online-videos";
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6" ref={listRef}>
       <div className="flex items-center justify-between gap-4">
@@ -265,10 +273,12 @@ function CollectionsIndex() {
           <h1 className="text-2xl font-semibold tracking-tight">{t("nav.collections")}</h1>
           <p className="text-sm text-muted-foreground">{t("collections.subtitle")}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className={tab !== "custom" ? "invisible" : ""}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t("collections.create")}
-        </Button>
+        {!isOnlineVideos && (
+          <Button onClick={() => setCreateOpen(true)} className={tab !== "custom" ? "invisible" : ""}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("collections.create")}
+          </Button>
+        )}
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -401,54 +411,75 @@ function CollectionsIndex() {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setTab("albums")}
+            onClick={() => { void router.navigate({ to: "/collections" }); setTab("albums"); }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2",
-              tab === "albums" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              !isOnlineVideos && tab === "albums" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             {t("collections.tabAlbums")}
           </button>
           <button
             type="button"
-            onClick={() => setTab("custom")}
+            onClick={() => { void router.navigate({ to: "/collections" }); setTab("custom"); }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2",
-              tab === "custom" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              !isOnlineVideos && tab === "custom" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             {t("collections.tabCustom")}
           </button>
-        </div>
-        <div className="flex items-center gap-2 bg-muted/20 p-1 rounded-md border">
-          <Button
-            variant="ghost"
-            size="icon"
+          <button
+            type="button"
+            onClick={() => router.navigate({ to: "/collections", search: { tab: "online-videos" } })}
             className={cn(
-              "h-8 w-8 transition-all",
-              showFavoritesOnly ? "text-yellow-500 shadow-sm bg-yellow-500/5" : "text-muted-foreground hover:text-foreground"
+              "px-4 py-2 text-sm font-medium transition-colors border-b-2",
+              isOnlineVideos ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-            title={t("favorites.title")}
           >
-            <Star className={cn("h-4 w-4", showFavoritesOnly && "fill-current")} />
-          </Button>
-          <div className="w-px h-4 bg-border mx-1" />
-          <Button variant="ghost" size="icon" className={cn(
-            "h-8 w-8 transition-all",
-            view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          )} onClick={() => setView("list")} title="List view">
-            <ListIcon className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className={cn(
-            "h-8 w-8 transition-all",
-            view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          )} onClick={() => setView("grid")} title="Grid view">
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
+            {t("nav.onlineVideos")}
+          </button>
         </div>
+        {!isOnlineVideos && (
+          <div className="flex items-center gap-2 bg-muted/20 p-1 rounded-md border">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 transition-all",
+                showFavoritesOnly ? "text-yellow-500 shadow-sm bg-yellow-500/5" : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              title={t("favorites.title")}
+            >
+              <Star className={cn("h-4 w-4", showFavoritesOnly && "fill-current")} />
+            </Button>
+            <div className="w-px h-4 bg-border mx-1" />
+            <Button variant="ghost" size="icon" className={cn(
+              "h-8 w-8 transition-all",
+              view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )} onClick={() => setView("list")} title="List view">
+              <ListIcon className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className={cn(
+              "h-8 w-8 transition-all",
+              view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )} onClick={() => setView("grid")} title="Grid view">
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
+      {/* Online Videos tab content */}
+      {isOnlineVideos && (
+        routeSearch.playlist
+          ? <PlaylistDetail playlistId={routeSearch.playlist} />
+          : <OnlineVideosTab />
+      )}
+
+      {/* Collections tab content (albums / custom) */}
+      {!isOnlineVideos && <>
       <Input
         value={search}
         onChange={(event) => setSearch(event.target.value)}
@@ -684,6 +715,7 @@ function CollectionsIndex() {
         </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

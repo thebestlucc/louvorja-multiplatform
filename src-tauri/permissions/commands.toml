@@ -240,6 +240,24 @@ allow = [
 ]
 
 [[permission]]
+identifier = "allow-youtube-commands"
+description = "Allows all YouTube playlist and video download commands"
+[permission.commands]
+allow = [
+    "validate_youtube_api_key",
+    "fetch_youtube_channel",
+    "add_youtube_playlist",
+    "get_youtube_playlists",
+    "get_youtube_playlist_videos",
+    "refresh_youtube_playlist",
+    "delete_youtube_playlist",
+    "ensure_ytdlp",
+    "update_ytdlp",
+    "download_online_video",
+    "cancel_download"
+]
+
+[[permission]]
 identifier = "allow-projection-view-only"
 description = "Minimal commands needed for projector/return windows"
 [permission.commands]

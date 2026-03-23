@@ -1336,7 +1336,20 @@
     "setup": {
       "title": "Clave de API de YouTube Requerida",
       "description": "Para explorar y agregar listas de reproducción de YouTube, configure una clave de API de YouTube Data en Configuración.",
-      "goToSettings": "Ir a Configuración"
+      "goToSettings": "Ir a Configuración",
+      "tutorialToggle": "¿Cómo obtengo una clave de API de YouTube?",
+      "tutorialTitle": "Cómo crear una clave de API de YouTube Data",
+      "steps": [
+        "Ve a console.cloud.google.com e inicia sesión con tu cuenta de Google.",
+        "Crea un nuevo proyecto (o selecciona uno existente) en el menú de proyectos arriba.",
+        "En el menú lateral, ve a \"APIs y servicios\" > \"Biblioteca\".",
+        "Busca \"YouTube Data API v3\" y haz clic en el resultado.",
+        "Haz clic en \"Habilitar\" para activar la API en tu proyecto.",
+        "Ve a \"APIs y servicios\" > \"Credenciales\" en el menú lateral.",
+        "Haz clic en \"Crear credenciales\" > \"Clave de API\".",
+        "Copia la clave generada y pégala en la configuración de YouTube de esta app."
+      ],
+      "tutorialNote": "El plan gratuito permite 10.000 unidades/día, suficiente para la mayoría de las iglesias."
     },
     "addPlaylist": "Agregar Lista",
     "empty": "No hay listas agregadas. ¡Agrega tu primera lista de YouTube!",

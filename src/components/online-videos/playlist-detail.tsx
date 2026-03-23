@@ -1,28 +1,27 @@
 import { useState, useEffect } from "react";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, RefreshCw, Loader2, ListVideo } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
-import { Button } from "../../../components/ui/button";
-import { VideoCard } from "../../../components/online-videos/video-card";
+import { Button } from "../ui/button";
+import { VideoCard } from "./video-card";
 import {
   useYoutubePlaylistVideos,
   useYoutubePlaylists,
   useRefreshYoutubePlaylist,
-} from "../../../lib/queries";
-import { useYoutubeEvents } from "../../../hooks/use-youtube-events";
-import { getPreference } from "../../../lib/store";
-import { catcher } from "../../../lib/catcher";
+} from "../../lib/queries";
+import { useYoutubeEvents } from "../../hooks/use-youtube-events";
+import { getPreference } from "../../lib/store";
+import { catcher } from "../../lib/catcher";
 
-export const Route = createFileRoute("/collections/online-videos/$playlistId")({
-  component: PlaylistDetail,
-});
+interface PlaylistDetailProps {
+  playlistId: string;
+}
 
-function PlaylistDetail() {
+export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
   const { t } = useTranslation();
-  const { playlistId } = Route.useParams();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const [apiKey, setApiKey] = useState("");
   const [dataDirPath, setDataDirPath] = useState("");
@@ -53,7 +52,10 @@ function PlaylistDetail() {
       : null;
 
   const handleBack = () => {
-    router.navigate({ to: "/collections/online-videos" });
+    navigate({
+      to: "/collections",
+      search: { tab: "online-videos" },
+    });
   };
 
   const handleRefresh = () => {

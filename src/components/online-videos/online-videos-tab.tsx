@@ -1,28 +1,24 @@
 import { useState, useEffect } from "react";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Plus, Loader2 } from "lucide-react";
 import { appDataDir } from "@tauri-apps/api/path";
-import { Button } from "../../../components/ui/button";
-import { ApiKeySetup } from "../../../components/online-videos/api-key-setup";
-import { PlaylistCard } from "../../../components/online-videos/playlist-card";
-import { AddPlaylistModal } from "../../../components/online-videos/add-playlist-modal";
+import { Button } from "../ui/button";
+import { ApiKeySetup } from "./api-key-setup";
+import { PlaylistCard } from "./playlist-card";
+import { AddPlaylistModal } from "./add-playlist-modal";
 import {
   useYoutubePlaylists,
   useDeleteYoutubePlaylist,
   useRefreshYoutubePlaylist,
-} from "../../../lib/queries";
-import { useYoutubeEvents } from "../../../hooks/use-youtube-events";
-import { getPreference } from "../../../lib/store";
-import { catcher } from "../../../lib/catcher";
+} from "../../lib/queries";
+import { useYoutubeEvents } from "../../hooks/use-youtube-events";
+import { getPreference } from "../../lib/store";
+import { catcher } from "../../lib/catcher";
 
-export const Route = createFileRoute("/collections/online-videos/")({
-  component: OnlineVideosIndex,
-});
-
-function OnlineVideosIndex() {
+export function OnlineVideosTab() {
   const { t } = useTranslation();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyLoading, setApiKeyLoading] = useState(true);
   const [dataDirPath, setDataDirPath] = useState("");
@@ -56,9 +52,9 @@ function OnlineVideosIndex() {
   };
 
   const handlePlaylistClick = (playlistId: string) => {
-    router.navigate({
-      to: "/collections/online-videos/$playlistId",
-      params: { playlistId },
+    navigate({
+      to: "/collections",
+      search: { tab: "online-videos", playlist: playlistId },
     });
   };
 
