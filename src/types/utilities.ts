@@ -130,6 +130,10 @@ export function createUtilityProjectionPayload({
       mode: null,
       textColor: null,
       textSize: null,
+      videoUrl: null,
+      videoId: null,
+      videoSource: null,
+      videoTitle: null,
     },
     context: {
       next: null,

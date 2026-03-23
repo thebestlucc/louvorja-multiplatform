@@ -52,8 +52,6 @@ import type {
   MediaLibraryItemInput,
   TimerStateData,
   AddPlaylistInput,
-  OnlineVideoPlaylist,
-  OnlineVideo,
 } from "./bindings";
 import type { TextFormat } from "../types/utilities";
 import { useEffect } from "react";

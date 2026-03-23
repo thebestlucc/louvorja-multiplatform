@@ -49,6 +49,10 @@ export function parseSlideRow(row: SlideRow): SlideWithContent {
       mode: null,
       textColor: null,
       textSize: null,
+      videoUrl: null,
+      videoId: null,
+      videoSource: null,
+      videoTitle: null,
     },
   };
 }

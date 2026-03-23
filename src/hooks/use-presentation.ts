@@ -35,6 +35,10 @@ function parseSlideRow(row: Slide): SlideWithParsedContent {
       mode: null,
       textColor: null,
       textSize: null,
+      videoUrl: null,
+      videoId: null,
+      videoSource: null,
+      videoTitle: null,
     },
   };
 }
@@ -152,6 +156,10 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
       mode: null,
       textColor: null,
       textSize: null,
+      videoUrl: null,
+      videoId: null,
+      videoSource: null,
+      videoTitle: null,
     };
     createSlideMutation.mutate({
       presentationId,
