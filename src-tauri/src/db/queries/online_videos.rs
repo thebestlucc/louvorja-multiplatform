@@ -127,7 +127,7 @@ pub fn upsert_videos(
 ) -> Result<(), AppError> {
     let mut stmt = conn.prepare(
         "INSERT INTO online_videos (id_playlist, video_id, title, images, duration_seconds, sequence, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active')
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending')
          ON CONFLICT(id_playlist, video_id) DO UPDATE SET
             title = ?3, images = ?4, duration_seconds = ?5, sequence = ?6, updated_at = CURRENT_TIMESTAMP",
     )?;

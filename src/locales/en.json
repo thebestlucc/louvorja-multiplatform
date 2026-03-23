@@ -1368,7 +1368,9 @@
       "singleVideo": "This is a single video",
       "singleVideoHint": "Single videos can be added directly to a service or presentation.",
       "addToService": "Go to Active Service",
-      "noPlaylists": "This channel has no public playlists."
+      "noPlaylists": "This channel has no public playlists.",
+      "alreadyAdded": "Already added",
+      "couldNotExtractId": "Could not extract playlist ID from URL"
     },
     "detail": {
       "backToPlaylists": "Back to playlists",

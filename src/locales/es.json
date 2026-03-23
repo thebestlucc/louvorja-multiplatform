@@ -1368,7 +1368,9 @@
       "singleVideo": "Este es un video individual",
       "singleVideoHint": "Los videos individuales pueden agregarse directamente a un servicio o presentación.",
       "addToService": "Ir al Servicio Activo",
-      "noPlaylists": "Este canal no tiene listas públicas."
+      "noPlaylists": "Este canal no tiene listas públicas.",
+      "alreadyAdded": "Ya agregada",
+      "couldNotExtractId": "No se pudo extraer el ID de la lista de la URL"
     },
     "detail": {
       "backToPlaylists": "Volver a playlists",

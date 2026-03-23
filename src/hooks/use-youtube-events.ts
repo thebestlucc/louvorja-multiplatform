@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { queryKeys } from "../lib/queries";
 
 /**
@@ -25,6 +26,11 @@ export function useYoutubeEvents() {
           queryClient.invalidateQueries({ queryKey: queryKeys.youtubeVideos.playlists });
           // Also invalidate all video lists
           queryClient.invalidateQueries({ queryKey: ["youtube", "videos"] });
+        }),
+      );
+      unlisteners.push(
+        await listen<string>("youtube-playlist-add-error", (event) => {
+          toast.error(event.payload);
         }),
       );
     };

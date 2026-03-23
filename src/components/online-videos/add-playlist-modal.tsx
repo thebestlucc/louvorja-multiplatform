@@ -15,6 +15,7 @@ import { PlaylistPicker } from "./playlist-picker";
 import type { YoutubePlaylistInfo } from "./playlist-picker";
 import { catcher } from "../../lib/catcher";
 import { fetchYoutubeChannel, addYoutubePlaylist } from "../../lib/tauri";
+import { useYoutubePlaylists } from "../../lib/queries";
 import { usePresentationStore } from "../../stores/presentation-store";
 
 // Types from Rust YoutubeChannelResult (not yet in auto-generated bindings)
@@ -54,6 +55,8 @@ export function AddPlaylistModal({
     useState<YoutubeChannelResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
+  const { data: existingPlaylists } = useYoutubePlaylists();
+  const existingIds = new Set(existingPlaylists?.map((p) => p.playlistId) ?? []);
 
   const urlType = url.trim() ? detectUrlType(url) : null;
 
@@ -90,11 +93,16 @@ export function AddPlaylistModal({
       // Extract playlist ID and add directly
       const listMatch = url.match(/list=([^&#]+)/);
       if (!listMatch) {
-        setError("Could not extract playlist ID");
+        setError(t("onlineVideos.addModal.couldNotExtractId"));
         setLoading(false);
         return;
       }
       const playlistId = listMatch[1];
+      if (existingIds.has(playlistId)) {
+        setError(t("onlineVideos.addModal.alreadyAdded"));
+        setLoading(false);
+        return;
+      }
       setAdding(true);
       const [, err] = await catcher(
         addYoutubePlaylist(
@@ -234,6 +242,7 @@ export function AddPlaylistModal({
             ) : (
               <PlaylistPicker
                 playlists={channelResult.playlists}
+                existingIds={existingIds}
                 onConfirm={handleAddSelected}
                 onCancel={() => setChannelResult(null)}
                 isAdding={adding}
