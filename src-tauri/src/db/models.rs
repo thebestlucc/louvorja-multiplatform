@@ -202,6 +202,107 @@ pub struct SlideContent {
     pub mode: Option<String>,
     pub text_color: Option<String>,
     pub text_size: Option<i32>,
+    pub video_url: Option<String>,
+    pub video_id: Option<String>,
+    pub video_source: Option<String>,
+    pub video_title: Option<String>,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineVideoChannel {
+    pub id: i64,
+    pub channel_id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub images: Option<String>,
+    pub status: String,
+    pub playlists: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineVideoPlaylist {
+    pub id: i64,
+    pub id_channel: Option<i64>,
+    pub playlist_id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub images: Option<String>,
+    pub status: String,
+    pub error: Option<String>,
+    pub cover_path: Option<String>,
+    pub channel_title: Option<String>,
+    pub video_count: Option<i64>,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineVideo {
+    pub id: i64,
+    pub id_playlist: i64,
+    pub video_id: String,
+    pub sequence: i32,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub images: Option<String>,
+    pub status: String,
+    pub error: Option<String>,
+    pub local_path: Option<String>,
+    pub duration_seconds: Option<i64>,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AddPlaylistInput {
+    pub playlist_id: String,
+    pub channel_id: String,
+    pub channel_title: String,
+    pub playlist_title: String,
+    pub thumbnail_url: String,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubeChannelResult {
+    pub channel_id: String,
+    pub title: String,
+    pub thumbnail_url: String,
+    pub playlists: Vec<YoutubePlaylistInfo>,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubePlaylistInfo {
+    pub playlist_id: String,
+    pub title: String,
+    pub thumbnail_url: String,
+    pub video_count: u32,
+}
+
+/// Planned for Online Videos feature (Tasks 4+)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubeVideoInfo {
+    pub video_id: String,
+    pub title: String,
+    pub thumbnail_url: String,
+    pub duration_seconds: Option<i64>,
+    pub sequence: i32,
 }
 
 use crate::state::AlertState;
