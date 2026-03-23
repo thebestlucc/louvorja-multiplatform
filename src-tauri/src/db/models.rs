@@ -208,11 +208,12 @@ pub struct SlideContent {
     pub video_title: Option<String>,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
+/// Online Videos feature — channel metadata (subset of DB columns; queries SELECT explicitly).
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineVideoChannel {
+    #[specta(type = i32)]
     pub id: i64,
     pub channel_id: String,
     pub title: Option<String>,
@@ -223,12 +224,15 @@ pub struct OnlineVideoChannel {
     pub error: Option<String>,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
-#[allow(dead_code)]
+/// Online Videos feature — playlist view model (queries SELECT explicitly).
+/// `channel_title` comes from JOIN on `online_videos_channels`.
+/// `video_count` is a computed COUNT(*) subquery.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineVideoPlaylist {
+    #[specta(type = i32)]
     pub id: i64,
+    #[specta(type = Option<i32>)]
     pub id_channel: Option<i64>,
     pub playlist_id: String,
     pub title: Option<String>,
@@ -238,15 +242,17 @@ pub struct OnlineVideoPlaylist {
     pub error: Option<String>,
     pub cover_path: Option<String>,
     pub channel_title: Option<String>,
+    #[specta(type = Option<i32>)]
     pub video_count: Option<i64>,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
-#[allow(dead_code)]
+/// Online Videos feature — individual video record (queries SELECT explicitly).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineVideo {
+    #[specta(type = i32)]
     pub id: i64,
+    #[specta(type = i32)]
     pub id_playlist: i64,
     pub video_id: String,
     pub sequence: i32,
@@ -259,8 +265,7 @@ pub struct OnlineVideo {
     pub duration_seconds: Option<i64>,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
-#[allow(dead_code)]
+/// Online Videos feature — input for adding a playlist via Tauri command.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AddPlaylistInput {
@@ -271,8 +276,7 @@ pub struct AddPlaylistInput {
     pub thumbnail_url: String,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
-#[allow(dead_code)]
+/// Online Videos feature — result from YouTube channel fetch API.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeChannelResult {
@@ -282,8 +286,7 @@ pub struct YoutubeChannelResult {
     pub playlists: Vec<YoutubePlaylistInfo>,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
-#[allow(dead_code)]
+/// Online Videos feature — playlist info from YouTube API response.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubePlaylistInfo {
@@ -293,8 +296,7 @@ pub struct YoutubePlaylistInfo {
     pub video_count: u32,
 }
 
-/// Planned for Online Videos feature (Tasks 4+)
-#[allow(dead_code)]
+/// Online Videos feature — video info from YouTube API response.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeVideoInfo {
