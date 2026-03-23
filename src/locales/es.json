@@ -477,10 +477,13 @@
       "image": "Imagen",
       "lyrics": "Letra",
       "onlineVideo": "Video en Línea",
+      "online_video": "Video en Línea",
       "pause": "Pausa",
       "text": "Texto",
       "video": "Vídeo"
     },
+    "onlineVideoUrl": "URL de YouTube",
+    "onlineVideoTitlePlaceholder": "Título del video...",
     "untitled": "Presentación sin título",
     "videoAutoPlay": "Reproducción automática",
     "videoBrowse": "Buscar",
@@ -530,6 +533,7 @@
       "bible": "Biblia",
       "file": "Archivo",
       "hymn": "Himno",
+      "online_video": "Video en Línea",
       "presentation": "Presentación",
       "scheduled_category": "Ítem Agendado (Dinámico)",
       "url": "URL"

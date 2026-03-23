@@ -10,7 +10,8 @@ export type SlideType =
   | "text"
   | "image"
   | "bible"
-  | "video";
+  | "video"
+  | "online_video";
 
 /** Raw slide row from DB — content is a JSON string */
 export interface SlideRow {

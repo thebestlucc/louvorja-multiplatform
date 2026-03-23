@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
-import { Music, BookOpen, Presentation, StickyNote, CalendarClock, Check } from "lucide-react";
+import { Music, BookOpen, Presentation, StickyNote, CalendarClock, Check, Video } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { ServiceItem, ServiceItemType } from "../../types/service";
 import { ScrollArea } from "../ui/scroll-area";
@@ -13,6 +13,7 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   url: StickyNote,
   file: StickyNote,
   scheduled_category: CalendarClock,
+  online_video: Video,
 };
 
 const itemTypeColors: Record<ServiceItemType, string> = {
@@ -23,6 +24,7 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   url: "bg-cyan-500",
   file: "bg-gray-500",
   scheduled_category: "bg-rose-500",
+  online_video: "bg-red-500",
 };
 
 const itemTypeRingColors: Record<ServiceItemType, string> = {
@@ -33,6 +35,7 @@ const itemTypeRingColors: Record<ServiceItemType, string> = {
   url: "ring-cyan-500/30",
   file: "ring-gray-500/30",
   scheduled_category: "ring-rose-500/30",
+  online_video: "ring-red-500/30",
 };
 
 const itemTypeTextColors: Record<ServiceItemType, string> = {
@@ -43,6 +46,7 @@ const itemTypeTextColors: Record<ServiceItemType, string> = {
   url: "text-cyan-500",
   file: "text-gray-500",
   scheduled_category: "text-rose-500",
+  online_video: "text-red-500",
 };
 
 interface ServiceTimelineProps {
