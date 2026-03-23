@@ -1330,6 +1330,19 @@
       "singleVideoHint": "Single videos can be added directly to a service or presentation.",
       "addToService": "Go to Active Service",
       "noPlaylists": "This channel has no public playlists."
+    },
+    "detail": {
+      "backToPlaylists": "Back to playlists",
+      "videoCount": "{{count}} videos",
+      "refreshing": "Refreshing...",
+      "emptyVideos": "No videos in this playlist yet.",
+      "download": "Download",
+      "downloading": "Downloading...",
+      "downloaded": "Downloaded",
+      "cancelDownload": "Cancel download",
+      "deleteLocal": "Delete local file",
+      "duration": "Duration",
+      "statusError": "Error"
     }
   }
 }

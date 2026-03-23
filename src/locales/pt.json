@@ -1330,6 +1330,19 @@
       "singleVideoHint": "Vídeos individuais podem ser adicionados diretamente a um culto ou apresentação.",
       "addToService": "Ir para Culto Ativo",
       "noPlaylists": "Este canal não tem playlists públicas."
+    },
+    "detail": {
+      "backToPlaylists": "Voltar para playlists",
+      "videoCount": "{{count}} vídeos",
+      "refreshing": "Atualizando...",
+      "emptyVideos": "Nenhum vídeo nesta playlist ainda.",
+      "download": "Baixar",
+      "downloading": "Baixando...",
+      "downloaded": "Baixado",
+      "cancelDownload": "Cancelar download",
+      "deleteLocal": "Excluir arquivo local",
+      "duration": "Duração",
+      "statusError": "Erro"
     }
   }
 }
