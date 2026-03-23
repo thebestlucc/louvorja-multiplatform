@@ -10,6 +10,7 @@ import {
   useYoutubePlaylistVideos,
   useYoutubePlaylists,
   useRefreshYoutubePlaylist,
+  useDeleteVideoLocalFile,
 } from "../../lib/queries";
 import { useYoutubeEvents } from "../../hooks/use-youtube-events";
 import { getPreference } from "../../lib/store";
@@ -43,6 +44,7 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
   const { data: playlists } = useYoutubePlaylists();
   const { data: videos, isLoading } = useYoutubePlaylistVideos(playlistId);
   const refreshMutation = useRefreshYoutubePlaylist();
+  const deleteLocalMutation = useDeleteVideoLocalFile();
 
   const playlist = playlists?.find((p) => p.playlistId === playlistId);
 
@@ -146,6 +148,7 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
                 key={video.id}
                 video={video}
                 playlistId={playlistId}
+                onDeleted={(videoId) => deleteLocalMutation.mutate({ videoId, playlistId })}
               />
             ))}
           </div>

@@ -10,6 +10,7 @@ import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcu
 import { UpdateNotification } from "../components/update-notification";
 import { useKeyboard } from "../hooks/use-keyboard";
 import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
+import { useDownloadEvents } from "../hooks/use-download-events";
 import { useMonitorsControl } from "../hooks/use-monitors";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
@@ -218,6 +219,7 @@ function RootLayout() {
   }, [isBareRoute, setPackSyncProgress]);
 
   usePlaybackCoordinator();
+  useDownloadEvents();
   useKeyboard({ enabled: !isBareRoute });
 
   const router = useRouter();

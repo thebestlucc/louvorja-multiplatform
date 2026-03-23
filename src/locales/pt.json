@@ -1383,7 +1383,8 @@
       "cancelDownload": "Cancelar download",
       "deleteLocal": "Excluir arquivo local",
       "duration": "Duração",
-      "statusError": "Erro"
+      "statusError": "Erro",
+      "project": "Projetar"
     }
   }
 }

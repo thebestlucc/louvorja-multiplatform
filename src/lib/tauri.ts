@@ -899,3 +899,7 @@ export async function downloadOnlineVideo(videoId: string, playlistId: string, q
 export async function cancelDownload(runId: string): Promise<void> {
   return tauriInvoke<void>("cancel_download", { runId });
 }
+
+export async function deleteVideoLocalFile(videoId: string): Promise<void> {
+  return tauriInvoke<void>("delete_video_local_file", { videoId });
+}

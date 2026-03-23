@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   searchHymns,
   searchAllHymns,
@@ -35,7 +36,7 @@ import {
   copyVideoToMedia, copyImageToMedia, getVideoMetadata, resolveMediaPath,
   updateGlobalShortcut,
   getYoutubePlaylists, getYoutubePlaylistVideos, deleteYoutubePlaylist,
-  addYoutubePlaylist, refreshYoutubePlaylist,
+  addYoutubePlaylist, refreshYoutubePlaylist, deleteVideoLocalFile,
 } from "./tauri";
 import type { PackSyncPlanItem } from "../types/content-sync";
 import type {
@@ -1401,6 +1402,21 @@ export function useDeleteYoutubePlaylist() {
     mutationFn: (playlistId: string) => deleteYoutubePlaylist(playlistId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.youtubeVideos.playlists });
+    },
+  });
+}
+
+export function useDeleteVideoLocalFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { videoId: string; playlistId: string }) =>
+      deleteVideoLocalFile(vars.videoId),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtubeVideos.videos(vars.playlistId) });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(message);
     },
   });
 }

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useService, useStreamingStatus, useTimerState } from "../../lib/queries";
 import { formatUtilityTimer } from "../../types/utilities";
 import { useContentSyncStore } from "../../stores/content-sync-store";
+import { useDownloadStore } from "../../stores/download-store";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { cn } from "../../lib/utils";
 
@@ -30,6 +31,11 @@ export function StatusBar() {
   const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
   const packSyncRunning = packSyncProgress != null &&
     (packSyncProgress.status === "pending" || packSyncProgress.status === "running");
+
+  // Download indicator state — select the record (stable ref), derive array outside selector
+  const downloads = useDownloadStore((s) => s.downloads);
+  const downloadEntries = Object.values(downloads);
+  const firstDownload = downloadEntries[0];
 
   // Active service state
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
@@ -103,6 +109,28 @@ export function StatusBar() {
                   current: packSyncProgress!.packsProcessed,
                   total: packSyncProgress!.packsTotal,
                 })}
+              </span>
+            </button>
+            <div className="mx-1 h-4 w-px bg-border" />
+          </>
+        )}
+        {downloadEntries.length > 0 && firstDownload && (
+          <>
+            <button
+              onClick={() =>
+                navigate({
+                  to: "/collections",
+                  search: { tab: "online-videos", playlist: firstDownload.playlistId },
+                })
+              }
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-white/10"
+              title={t("onlineVideos.detail.downloading")}
+            >
+              <Loader2 className="h-[15px] w-[15px] animate-spin" />
+              <span>
+                {downloadEntries.length > 1
+                  ? `${downloadEntries.length} downloads`
+                  : `${Math.round(firstDownload.progress)}%`}
               </span>
             </button>
             <div className="mx-1 h-4 w-px bg-border" />
