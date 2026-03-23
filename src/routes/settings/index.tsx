@@ -1280,7 +1280,7 @@ function YouTubeSection() {
       <h2 className="text-lg font-semibold">{t("settings.tabs.youtube")}</h2>
 
       {/* API Key */}
-      <div className="space-y-3 rounded-lg border border-border p-4">
+      <div className="space-y-3 rounded-lg border border-border p-4 w-full">
         <h3 className="text-sm font-medium">{t("settings.youtube.apiKeyTitle")}</h3>
         <p className="text-xs text-muted-foreground">{t("settings.youtube.apiKeyDescription")}</p>
         <div className="flex items-center gap-2">
@@ -1289,7 +1289,7 @@ function YouTubeSection() {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={t("settings.youtube.apiKeyPlaceholder")}
-            className="flex-1"
+            className="flex-1 min-w-[50ch]"
           />
           <Button variant="ghost" size="sm" onClick={() => setShowKey(!showKey)}>
             {showKey ? t("settings.youtube.hide") : t("settings.youtube.show")}

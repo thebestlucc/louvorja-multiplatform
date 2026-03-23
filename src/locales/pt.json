@@ -1336,7 +1336,20 @@
     "setup": {
       "title": "Chave da API do YouTube Necessária",
       "description": "Para navegar e adicionar playlists do YouTube, configure uma chave da API YouTube Data nas Configurações.",
-      "goToSettings": "Ir para Configurações"
+      "goToSettings": "Ir para Configurações",
+      "tutorialToggle": "Como obter uma chave da API do YouTube?",
+      "tutorialTitle": "Como criar uma chave da API YouTube Data",
+      "steps": [
+        "Acesse console.cloud.google.com e faça login com sua conta Google.",
+        "Crie um novo projeto (ou selecione um existente) no menu de projetos no topo.",
+        "No menu lateral, vá em \"APIs e Serviços\" > \"Biblioteca\".",
+        "Pesquise \"YouTube Data API v3\" e clique no resultado.",
+        "Clique em \"Ativar\" para habilitar a API no seu projeto.",
+        "Vá em \"APIs e Serviços\" > \"Credenciais\" no menu lateral.",
+        "Clique em \"Criar credenciais\" > \"Chave de API\".",
+        "Copie a chave gerada e cole nas configurações do YouTube neste app."
+      ],
+      "tutorialNote": "O plano gratuito permite 10.000 unidades/dia, suficiente para a maioria das igrejas."
     },
     "addPlaylist": "Adicionar Playlist",
     "empty": "Nenhuma playlist adicionada. Adicione sua primeira playlist do YouTube!",

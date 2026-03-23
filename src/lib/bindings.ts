@@ -1279,6 +1279,94 @@ async clearManifestCache() : Promise<Result<null, AppErrorResponse>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async validateYoutubeApiKey(key: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("validate_youtube_api_key", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async fetchYoutubeChannel(url: string, apiKey: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("fetch_youtube_channel", { url, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addYoutubePlaylist(input: AddPlaylistInput, apiKey: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_youtube_playlist", { input, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getYoutubePlaylists() : Promise<Result<OnlineVideoPlaylist[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_youtube_playlists") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getYoutubePlaylistVideos(playlistId: string) : Promise<Result<OnlineVideo[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_youtube_playlist_videos", { playlistId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async refreshYoutubePlaylist(playlistId: string, apiKey: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("refresh_youtube_playlist", { playlistId, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteYoutubePlaylist(playlistId: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_youtube_playlist", { playlistId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async ensureYtdlp() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("ensure_ytdlp") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateYtdlp() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_ytdlp") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async downloadOnlineVideo(videoId: string, playlistId: string, quality: string) : Promise<Result<string, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_online_video", { videoId, playlistId, quality }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelDownload(runId: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_download", { runId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1292,10 +1380,12 @@ async clearManifestCache() : Promise<Result<null, AppErrorResponse>> {
 
 /** user-defined types **/
 
+/**
+ * Online Videos feature — input for adding a playlist via Tauri command.
+ */
 export type AddPlaylistInput = { playlistId: string; channelId: string; channelTitle: string; playlistTitle: string; thumbnailUrl: string }
 export type Album = { name: string; hymnCount: number }
 export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
-export type ApiKeyValidationResult = { valid: boolean; error: string | null }
 export type AppErrorResponse = { code: string; message: string; details: string | null }
 export type AudioStatusPayload = { positionMs: number; durationMs: number; isPlaying: boolean; isPaused: boolean; volume: number; currentFile: string | null }
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string; versionAbbreviation: string }
@@ -1324,8 +1414,15 @@ export type MigrationRunInfo = { runId: string; startedAt: string; sourcePath: s
 export type MissingFile = { path: string; sourceType: string; sourceId: number; sourceName: string }
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
+/**
+ * Online Videos feature — individual video record (queries SELECT explicitly).
+ */
 export type OnlineVideo = { id: number; idPlaylist: number; videoId: string; sequence: number; title: string | null; description: string | null; images: string | null; status: string; error: string | null; localPath: string | null; durationSeconds: number | null }
-export type OnlineVideoChannel = { id: number; channelId: string; title: string | null; description: string | null; images: string | null; status: string; playlists: string | null; error: string | null }
+/**
+ * Online Videos feature — playlist view model (queries SELECT explicitly).
+ * `channel_title` comes from JOIN on `online_videos_channels`.
+ * `video_count` is a computed COUNT(*) subquery.
+ */
 export type OnlineVideoPlaylist = { id: number; idChannel: number | null; playlistId: string; title: string | null; description: string | null; images: string | null; status: string; error: string | null; coverPath: string | null; channelTitle: string | null; videoCount: number | null }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
 export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
@@ -1358,9 +1455,6 @@ export type TimerStateData = { mode: TimerMode; isRunning: boolean; currentTimeM
 export type UpdateInfo = { version: string; currentVersion: string; notes: string | null }
 export type Verse = { id: number; versionId: number; book: string; chapter: number; verse: number; text: string }
 export type VideoMetadata = { durationMs: number; width: number; height: number; fileSize: number; format: string }
-export type YoutubeChannelResult = { channelId: string; title: string; thumbnailUrl: string; playlists: YoutubePlaylistInfo[] }
-export type YoutubePlaylistInfo = { playlistId: string; title: string; thumbnailUrl: string; videoCount: number }
-export type YtdlpProgress = { runId: string; videoId: string; percent: number; status: string }
 
 /** tauri-specta globals **/
 

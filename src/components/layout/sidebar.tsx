@@ -27,11 +27,17 @@ import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 
-// The projection indicator always points to the Playing Now screen —
-// that's where the user goes to control/monitor what's being projected.
 const PLAYING_NOW_ROUTE = "/playing-now";
 
-type NavChild = { to: string; icon: LucideIcon; labelKey: string };
+// Optional search params a child can require to be considered active.
+// If set, the child is active only when ALL search params match.
+// If not set, the child is active when the path matches and NO sibling's search params match.
+type NavChild = {
+  to: string;
+  icon: LucideIcon;
+  labelKey: string;
+  search?: Record<string, string>;
+};
 type NavItem = { to: string; icon: LucideIcon; labelKey: string; children?: NavChild[] };
 
 const navItems: NavItem[] = [
@@ -43,7 +49,7 @@ const navItems: NavItem[] = [
     labelKey: "nav.collections",
     children: [
       { to: "/collections", icon: FolderOpen, labelKey: "nav.collectionsItems" },
-      { to: "/collections/online-videos", icon: Video, labelKey: "nav.onlineVideos" },
+      { to: "/collections", icon: Video, labelKey: "nav.onlineVideos", search: { tab: "online-videos" } },
     ],
   },
   { to: "/bible", icon: BookOpen, labelKey: "nav.bible" },
@@ -55,6 +61,32 @@ const navItems: NavItem[] = [
   { to: "/help", icon: CircleHelp, labelKey: "nav.help" },
 ];
 
+/** Returns whether a child nav item is active given the current pathname + search params.
+ *  - Children WITH search: active when path matches AND all search params match.
+ *  - Children WITHOUT search: active when path matches AND no sibling's search params match. */
+function isChildActive(
+  pathname: string,
+  searchParams: Record<string, string | undefined>,
+  child: NavChild,
+  siblings: NavChild[],
+): boolean {
+  const pathMatch = pathname === child.to || pathname.startsWith(child.to + "/");
+  if (!pathMatch) return false;
+
+  if (child.search) {
+    return Object.entries(child.search).every(([k, v]) => searchParams[k] === v);
+  }
+
+  // No search requirement — active only when no sibling with search params matches
+  return !siblings.some(
+    (s) =>
+      s !== child &&
+      s.search &&
+      (pathname === s.to || pathname.startsWith(s.to + "/")) &&
+      Object.entries(s.search).every(([k, v]) => searchParams[k] === v),
+  );
+}
+
 export function Sidebar() {
   const { sidebarOpen, toggleSidebar, expandedNavItems, toggleNavItem, setNavItemExpanded } =
     useUIStore();
@@ -64,15 +96,17 @@ export function Sidebar() {
   const isProjectingAnything = currentProjectionType !== null;
   const { t } = useTranslation();
   const matchRoute = useMatchRoute();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const location = useRouterState({ select: (s) => s.location });
+  const pathname = location.pathname;
+  const searchParams = location.search as Record<string, string | undefined>;
 
   // Hover popover state for collapsed sidebar
   const [hoverOpen, setHoverOpen] = useState<string | null>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleMouseEnter = (to: string) => {
+  const handleMouseEnter = (key: string) => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-    hoverTimeout.current = setTimeout(() => setHoverOpen(to), 150);
+    hoverTimeout.current = setTimeout(() => setHoverOpen(key), 150);
   };
 
   const handleMouseLeave = () => {
@@ -85,15 +119,14 @@ export function Sidebar() {
     for (const item of navItems) {
       if (!item.children) continue;
       const anyChildActive = item.children.some((child) =>
-        pathname === child.to || pathname.startsWith(child.to + "/"),
+        isChildActive(pathname, searchParams, child, item.children!),
       );
       if (anyChildActive && !expandedNavItems[item.to]) {
         setNavItemExpanded(item.to, true);
       }
     }
-    // Only run when pathname changes; intentionally omitting expandedNavItems to avoid loop
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, setNavItemExpanded]);
+  }, [pathname, JSON.stringify(searchParams), setNavItemExpanded]);
 
   return (
     <aside
@@ -131,11 +164,11 @@ export function Sidebar() {
 
           // --- Items WITH children ---
           if (hasChildren) {
-            const anyChildActive = item.children!.some((child) =>
-              pathname === child.to || pathname.startsWith(child.to + "/"),
+            const anyChildIsActive = item.children!.some((child) =>
+              isChildActive(pathname, searchParams, child, item.children!),
             );
 
-            // Collapsed sidebar: show icon with hover popover
+            // Collapsed sidebar: icon with hover popover
             if (!sidebarOpen) {
               return (
                 <div
@@ -149,9 +182,7 @@ export function Sidebar() {
                     className={cn(
                       "flex items-center justify-center rounded-md px-0 py-2 text-sm font-medium transition-colors",
                       "hover:bg-surface-hover",
-                      anyChildActive
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground",
+                      anyChildIsActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
                     )}
                   >
                     <div className="relative shrink-0">
@@ -166,20 +197,17 @@ export function Sidebar() {
                     >
                       <div className="flex flex-col gap-0.5 p-1">
                         {item.children!.map((child) => {
-                          const isChildActive =
-                            pathname === child.to ||
-                            pathname.startsWith(child.to + "/");
+                          const childActive = isChildActive(pathname, searchParams, child, item.children!);
                           return (
                             <Link
-                              key={child.to}
+                              key={child.labelKey}
                               to={child.to}
+                              search={child.search ?? {}}
                               onClick={() => setHoverOpen(null)}
                               className={cn(
                                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                                 "hover:bg-surface-hover",
-                                isChildActive
-                                  ? "bg-accent text-accent-foreground"
-                                  : "text-muted-foreground",
+                                childActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
                               )}
                             >
                               <child.icon className="h-4 w-4 shrink-0" />
@@ -197,17 +225,13 @@ export function Sidebar() {
             // Expanded sidebar: parent row + collapsible children
             return (
               <div key={item.to}>
-                {/* Parent row */}
                 <div
                   className={cn(
                     "flex items-center rounded-md text-sm font-medium transition-colors",
                     "hover:bg-surface-hover",
-                    anyChildActive
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground",
+                    anyChildIsActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
                   )}
                 >
-                  {/* Clicking icon/label navigates to parent route */}
                   <Link
                     to={item.to}
                     className="flex flex-1 items-center gap-3 px-3 py-2"
@@ -217,7 +241,6 @@ export function Sidebar() {
                     </div>
                     <span>{t(item.labelKey)}</span>
                   </Link>
-                  {/* Clicking chevron toggles expand/collapse */}
                   <button
                     type="button"
                     onClick={() => toggleNavItem(item.to)}
@@ -233,23 +256,19 @@ export function Sidebar() {
                   </button>
                 </div>
 
-                {/* Children (indented) */}
                 {isExpanded && (
                   <div className="mt-0.5 flex flex-col gap-0.5 pl-4">
                     {item.children!.map((child) => {
-                      const isChildActive =
-                        pathname === child.to ||
-                        pathname.startsWith(child.to + "/");
+                      const childActive = isChildActive(pathname, searchParams, child, item.children!);
                       return (
                         <Link
-                          key={child.to}
+                          key={child.labelKey}
                           to={child.to}
+                          search={child.search ?? {}}
                           className={cn(
                             "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                             "hover:bg-surface-hover",
-                            isChildActive
-                              ? "bg-accent text-accent-foreground"
-                              : "text-muted-foreground",
+                            childActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
                           )}
                         >
                           <child.icon className="h-3.5 w-3.5 shrink-0" />
@@ -263,7 +282,7 @@ export function Sidebar() {
             );
           }
 
-          // --- Items WITHOUT children (original behavior) ---
+          // --- Items WITHOUT children ---
           const link = (
             <Link
               key={item.to}
@@ -271,13 +290,10 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 "hover:bg-surface-hover",
-                isActive
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground",
+                isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
                 !sidebarOpen && "justify-center px-0",
               )}
             >
-              {/* Icon with ripple dot on top-right (collapsed only) */}
               <div className="relative shrink-0">
                 <item.icon className="h-4 w-4" />
                 {!sidebarOpen && isProjecting && (
@@ -288,7 +304,6 @@ export function Sidebar() {
                 )}
               </div>
               {sidebarOpen && <span>{t(item.labelKey)}</span>}
-              {/* Right-side ripple dot (expanded only) */}
               {sidebarOpen && isProjecting && (
                 <span className="relative ml-auto flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
