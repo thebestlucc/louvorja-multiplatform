@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { VideoSlide, type VideoRenderMode } from "./video-slide";
+import { OnlineVideoSlide } from "../online-videos/online-video-slide";
 
 export type SlideRenderMode = "projector" | "return-current" | "return-next" | "editor" | "thumbnail";
 
@@ -217,6 +218,10 @@ function renderSlide(
         className="h-full w-full"
       />
     );
+  }
+
+  if (slide.slideType === "online_video") {
+    return <OnlineVideoSlide slide={slide} renderMode={renderMode} className="h-full w-full" />;
   }
 
   return null;
