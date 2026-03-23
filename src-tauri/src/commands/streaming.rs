@@ -44,6 +44,10 @@ pub(crate) fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value
     let text_color = slide.text_color.as_deref().unwrap_or("");
     let audio_path = slide.audio_path.as_deref().unwrap_or("");
     let text_size = slide.text_size.unwrap_or(0);
+    let video_url = slide.video_url.as_deref().unwrap_or("");
+    let video_id = slide.video_id.as_deref().unwrap_or("");
+    let video_source = slide.video_source.as_deref().unwrap_or("");
+    let video_title = slide.video_title.as_deref().unwrap_or("");
 
     serde_json::json!({
         "slideType": slide.slide_type,
@@ -67,6 +71,14 @@ pub(crate) fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value
         "audioPath": audio_path,
         "audio_path": audio_path,
         "src": if is_image { text_value } else { "" },
+        "videoUrl": video_url,
+        "video_url": video_url,
+        "videoId": video_id,
+        "video_id": video_id,
+        "videoSource": video_source,
+        "video_source": video_source,
+        "videoTitle": video_title,
+        "video_title": video_title,
     })
 }
 

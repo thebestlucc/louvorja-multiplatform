@@ -433,6 +433,10 @@ function normalizeSlidePayload(raw) {
   const backgroundColor = firstDefined([raw.backgroundColor, raw.background_color]);
   const textColor = firstDefined([raw.textColor, raw.text_color]);
   const audioPath = firstDefined([raw.audioPath, raw.audio_path]);
+  const videoUrl = firstDefined([raw.videoUrl, raw.video_url]);
+  const videoId = firstDefined([raw.videoId, raw.video_id]);
+  const videoSource = firstDefined([raw.videoSource, raw.video_source]);
+  const videoTitle = firstDefined([raw.videoTitle, raw.video_title]);
 
   return {
     slideType: slideType || "text",
@@ -446,7 +450,11 @@ function normalizeSlidePayload(raw) {
     backgroundColor: typeof backgroundColor === "string" ? backgroundColor : "",
     textColor: typeof textColor === "string" ? textColor : "",
     textSize: safeNumber(textSize) ?? 0,
-    audioPath: typeof audioPath === "string" ? audioPath : ""
+    audioPath: typeof audioPath === "string" ? audioPath : "",
+    videoUrl: typeof videoUrl === "string" ? videoUrl : "",
+    videoId: typeof videoId === "string" ? videoId : "",
+    videoSource: typeof videoSource === "string" ? videoSource : "",
+    videoTitle: typeof videoTitle === "string" ? videoTitle : ""
   };
 }
 
@@ -735,6 +743,25 @@ function applyPanel(prefix, payload, mode) {
     if (text) {
       panelText.textContent = text;
       panelWrap.classList.add("with-panel");
+    }
+    return;
+  }
+
+  if (slideType === "online_video") {
+    var videoTitleText = safeText(slide.videoTitle) || safeText(slide.videoId) || "Online Video";
+    panelText.textContent = videoTitleText;
+    if (mode === "next") {
+      panelLabel.style.display = "block";
+      panelLabel.textContent = "Online Video";
+      return;
+    }
+    // For current panel, show title prominently and a thumbnail if available
+    panelLabel.style.display = "block";
+    panelLabel.textContent = "Online Video";
+    if (slide.videoId) {
+      var thumbUrl = "https://i.ytimg.com/vi/" + encodeURIComponent(slide.videoId) + "/hqdefault.jpg";
+      panelImage.src = thumbUrl;
+      panelImage.style.display = "block";
     }
     return;
   }
