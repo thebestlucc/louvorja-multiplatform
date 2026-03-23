@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self' tauri: asset:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data: blob:; connect-src ipc: http://ipc.localhost; media-src asset: blob:",
+      "csp": "default-src 'self' tauri: asset:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data: blob: https://i.ytimg.com; connect-src ipc: http://ipc.localhost; media-src asset: blob:; frame-src https://www.youtube.com https://www.youtube-nocookie.com",
       "freezePrototype": true,
       "assetProtocol": {
         "enable": true,
