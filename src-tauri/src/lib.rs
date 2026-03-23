@@ -13,6 +13,7 @@ mod state;
 mod streaming;
 mod utils;
 mod video;
+mod youtube;
 
 use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
 use std::sync::atomic::{AtomicBool, Ordering};
