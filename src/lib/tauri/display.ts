@@ -1,0 +1,88 @@
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  MonitorInfo,
+  SlideContent,
+  SlideContext,
+  OverlayState,
+  MonitorConfig,
+} from "../bindings";
+
+async function tauriInvoke<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  return invoke<T>(command, args);
+}
+
+// Display
+export async function getAvailableMonitors(): Promise<MonitorInfo[]> {
+  return tauriInvoke<MonitorInfo[]>("get_available_monitors");
+}
+
+export async function openProjectorWindow(monitorId: string): Promise<void> {
+  return tauriInvoke<void>("open_projector_window", { monitorId });
+}
+
+export async function closeProjectorWindow(): Promise<void> {
+  return tauriInvoke<void>("close_projector_window");
+}
+
+export async function setCurrentSlide(slideData: SlideContent): Promise<void> {
+  return tauriInvoke<void>("set_current_slide", { slideData });
+}
+
+export async function getCurrentSlide(): Promise<SlideContent | null> {
+  return tauriInvoke<SlideContent | null>("get_current_slide");
+}
+
+export async function clearCurrentSlide(): Promise<void> {
+  return tauriInvoke<void>("clear_current_slide");
+}
+
+export async function openReturnWindow(monitorId: string): Promise<void> {
+  return tauriInvoke<void>("open_return_window", { monitorId });
+}
+
+export async function closeReturnWindow(): Promise<void> {
+  return tauriInvoke<void>("close_return_window");
+}
+
+export async function toggleBlackScreen(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("toggle_black_screen");
+}
+
+export async function toggleLogoScreen(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("toggle_logo_screen");
+}
+
+export async function getOverlayState(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("get_overlay_state");
+}
+
+export async function setAlert(text: string, isTicker: boolean): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("set_alert", { text, isTicker });
+}
+
+export async function clearAlert(): Promise<OverlayState> {
+  return tauriInvoke<OverlayState>("clear_alert");
+}
+
+export async function identifyMonitors(): Promise<void> {
+  return tauriInvoke<void>("identify_monitors");
+}
+
+export async function setSlideContext(contextData: SlideContext): Promise<void> {
+  return tauriInvoke<void>("set_slide_context", { contextData });
+}
+
+export async function getSlideContext(): Promise<SlideContext | null> {
+  return tauriInvoke<SlideContext | null>("get_slide_context");
+}
+
+export async function setMonitorConfig(monitorId: string, role: string): Promise<void> {
+  return tauriInvoke<void>("set_monitor_config", { monitorId, role });
+}
+
+export async function getMonitorConfigs(): Promise<MonitorConfig[]> {
+  return tauriInvoke<MonitorConfig[]>("get_monitor_configs");
+}
