@@ -906,11 +906,32 @@
       "monitor": "Monitor",
       "shortcuts": "Atalhos",
       "streaming": "Streaming",
-      "sync": "Sincronização"
+      "sync": "Sincronização",
+      "youtube": "YouTube"
     },
     "theme": "Tema",
     "themeDesc": "Escolha o estilo visual do aplicativo.",
-    "video": "Vídeo"
+    "video": "Vídeo",
+    "youtube": {
+      "apiKeyTitle": "Chave de API do YouTube",
+      "apiKeyDescription": "Necessária para navegar e adicionar playlists do YouTube. Obtenha uma chave no Google Cloud Console.",
+      "apiKeyPlaceholder": "Insira sua chave da YouTube Data API v3...",
+      "keySaved": "Chave de API salva",
+      "validate": "Validar",
+      "validating": "Validando...",
+      "validationSuccess": "Chave de API válida!",
+      "validationFailed": "Falha na validação da chave de API",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "qualityTitle": "Qualidade de Download",
+      "qualityDescription": "Qualidade padrão para downloads de vídeo offline.",
+      "qualityBest": "Melhor disponível",
+      "ytdlpTitle": "yt-dlp (Baixador de Vídeos)",
+      "ytdlpDescription": "O yt-dlp é usado para downloads de vídeo offline. Atualize-o para obter as correções de compatibilidade mais recentes com o YouTube.",
+      "ytdlpUpdate": "Atualizar yt-dlp",
+      "ytdlpUpdating": "Atualizando...",
+      "ytdlpUpdated": "yt-dlp atualizado com sucesso"
+    }
   },
   "shortcuts": {
     "categories": {
