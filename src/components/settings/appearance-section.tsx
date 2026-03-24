@@ -20,6 +20,7 @@ import {
 } from "../../lib/projector-screen-defaults";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { isTheme } from "./toggle-button";
+import { ProjectionSection } from "./projection-section";
 
 export function AppearanceSection() {
   const { t } = useTranslation();
@@ -180,6 +181,9 @@ export function AppearanceSection() {
           </Select>
         </div>
       </section>
+
+      {/* Projection display (font size + family) */}
+      <ProjectionSection />
 
       {/* Projector Screens Defaults */}
       <section className="rounded-lg border border-border bg-card p-4">

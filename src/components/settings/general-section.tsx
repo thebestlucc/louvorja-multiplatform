@@ -7,15 +7,12 @@ import { useSetting, useSetSetting } from "../../lib/queries";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
-import { Slider } from "../ui/slider";
 import { useThemeStore } from "../../stores/theme-store";
 import { ToggleButton, isLanguage } from "./toggle-button";
-import { usePresentationFontSizeSetting } from "../../lib/use-presentation-font-size";
 
 export function GeneralSection() {
   const { t } = useTranslation();
   const { language, setLanguage } = useThemeStore();
-  const { fontSize, updateFontSize } = usePresentationFontSizeSetting();
 
   const { data: languageSetting } = useSetting("app.language");
   const { data: ffprobeEnabledSetting } = useSetting("video.ffprobeEnabled");
@@ -190,30 +187,6 @@ export function GeneralSection() {
         </div>
       </section>
 
-      {/* Projection */}
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-medium">{t("settings.presentationTitle")}</h3>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground shrink-0 w-32">
-            {t("settings.presentationFontSize")}
-          </span>
-          <Slider
-            value={[fontSize]}
-            onValueChange={([val]) => updateFontSize(val)}
-            min={24}
-            max={72}
-            step={2}
-            className="flex-1"
-            aria-label={t("settings.presentationFontSize")}
-          />
-          <span className="text-sm tabular-nums text-muted-foreground w-10 text-right">
-            {fontSize}px
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t("settings.presentationFontSizeHint")}
-        </p>
-      </section>
     </div>
   );
 }

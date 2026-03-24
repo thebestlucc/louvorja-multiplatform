@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { VideoSlide, type VideoRenderMode } from "./video-slide";
 import { OnlineVideoSlide } from "../online-videos/online-video-slide";
-import { usePresentationFontSize } from "../../lib/use-presentation-font-size";
+import { useProjectionDisplay } from "../../lib/use-presentation-font-size";
 
 export type SlideRenderMode = "projector" | "return-current" | "return-next" | "editor" | "thumbnail";
 
@@ -17,7 +17,7 @@ interface SlideRendererProps {
 
 export function SlideRenderer({ slide, className, renderMode = "projector" }: SlideRendererProps) {
   const { t } = useTranslation();
-  const globalFontSize = usePresentationFontSize();
+  const { fontSize: globalFontSize, fontFamily: globalFontFamily } = useProjectionDisplay();
   const backgroundPath = useMemo(() => {
     if (!slide || (slide.slideType !== "cover" && slide.slideType !== "lyrics" && slide.slideType !== "text")) {
       return null;
@@ -42,6 +42,7 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
         "relative flex items-center justify-center overflow-hidden bg-black text-white p-4",
         className,
       )}
+      style={globalFontFamily ? { fontFamily: globalFontFamily } : undefined}
     >
       {renderSlide(slide, renderMode, t, resolvedBackgroundPath, resolvedImagePath, globalFontSize)}
     </div>
