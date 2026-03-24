@@ -77,13 +77,23 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
   };
 
   const handleProject = async () => {
+    let videoUrl: string | null = null;
+    let videoId: string | null = video.videoId;
+    let videoSource = "youtube";
+
+    if (video.localPath) {
+      videoUrl = video.localPath;  // store relative path directly
+      videoId = null;
+      videoSource = "local";
+    }
+
     await catcher(
       setCurrentSlide({
         slideType: "online_video",
-        videoId: video.videoId,
+        videoId,
         videoTitle: video.title ?? "",
-        videoUrl: null,
-        videoSource: "youtube",
+        videoUrl,
+        videoSource,
         text: null,
         title: null,
         subtitle: null,
