@@ -1,4 +1,4 @@
-use crate::db::models::{OnlineVideo, OnlineVideoPlaylist};
+use crate::db::models::{OnlinePlaylistSearchResult, OnlineVideo, OnlineVideoPlaylist};
 use crate::error::AppError;
 use rusqlite::{params, Connection};
 
@@ -219,4 +219,67 @@ pub fn clear_video_local_path(
         params![video_id],
     )?;
     Ok(())
+}
+
+fn sanitize_fts_query(query: &str) -> Vec<String> {
+    query
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .map(|term| term.trim().to_lowercase())
+        .filter(|term| !term.is_empty())
+        .collect()
+}
+
+fn build_fts_prefix_query(query: &str) -> Option<String> {
+    let terms = sanitize_fts_query(query);
+    if terms.is_empty() {
+        return None;
+    }
+    Some(
+        terms
+            .into_iter()
+            .map(|term| format!("{term}*"))
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
+pub fn search_online_playlists(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<OnlinePlaylistSearchResult>, AppError> {
+    let Some(fts_query) = build_fts_prefix_query(query) else {
+        return Ok(vec![]);
+    };
+    let safe_limit = limit.max(1) as i64;
+
+    let mut stmt = conn.prepare(
+        "SELECT p.id as db_id, p.playlist_id, COALESCE(p.title, '') as title, p.cover_path,
+                COALESCE(c.title, '') as channel_title,
+                COALESCE(snippet(online_video_playlists_fts, 0, '<mark>', '</mark>', '...', 24), '') as snippet
+         FROM online_videos_playlists p
+         JOIN online_video_playlists_fts ON online_video_playlists_fts.rowid = p.id
+         LEFT JOIN online_videos_channels c ON c.id = p.id_channel
+         WHERE online_video_playlists_fts MATCH ?1
+         ORDER BY rank
+         LIMIT ?2",
+    )?;
+
+    let results = stmt
+        .query_map(params![fts_query, safe_limit], |row| {
+            Ok(OnlinePlaylistSearchResult {
+                db_id: row.get("db_id")?,
+                playlist_id: row.get("playlist_id")?,
+                title: row.get("title")?,
+                channel_title: row.get("channel_title")?,
+                snippet: row.get("snippet").unwrap_or_default(),
+                cover_path: row.get("cover_path")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(results)
 }

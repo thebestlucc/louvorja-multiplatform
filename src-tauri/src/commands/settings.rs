@@ -193,17 +193,21 @@ pub fn clear_database(
         .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
     let _ = std::fs::remove_file(data_dir.join("manifest_cache.json"));
 
-    // Delete all files inside the media folder
-    let media_dir = data_dir.join("media");
-    if media_dir.exists() {
-        std::fs::remove_dir_all(&media_dir).map_err(AppError::Io)?;
-    }
+    // NOTE: The media/ folder (user-downloaded videos, custom slide backgrounds) is
+    // intentionally NOT deleted — it contains user-managed content, not CDN data.
+    // CDN-extracted packs live in covers/, images/, and musics/ at the data_dir root
+    // and are removed in the loop below.
 
     // --- Content DB / pack-sync cleanup ---
 
-    // 1. Drain all content DB pools so file handles are released
+    // 1. Drain all content DB pools so file handles are released before deleting the files.
+    // Use unwrap_or_else to recover gracefully from a poisoned mutex (can happen if a
+    // background pack-sync thread panicked while holding the lock).
     {
-        let mut map = state.content_dbs.lock().unwrap();
+        let mut map = state
+            .content_dbs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         map.clear();
     }
 

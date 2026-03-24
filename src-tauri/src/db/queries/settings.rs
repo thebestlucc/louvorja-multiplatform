@@ -83,8 +83,10 @@ pub fn set_monitor_config(conn: &Connection, config: &MonitorConfig) -> Result<(
     Ok(())
 }
 
-/// Resets the app to default state by clearing user data (hymns, presentations, services, collections)
-/// while preserving Bible data, settings, and schema version.
+/// Removes CDN-synced content (hymns, collections, related junction/sync tables) from the main DB
+/// while preserving all user-created data: presentations, slides, services, service items,
+/// monitor configs, schedule data, and settings. Bible data lives in a separate DB and is
+/// never touched. FTS indexes and triggers are rebuilt atomically within the transaction.
 pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
     // Delete from tables that reference other tables first (foreign keys), then parent tables
     // Order matters due to foreign key constraints
@@ -101,10 +103,10 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
         DROP TRIGGER IF EXISTS hymns_ad;
         DROP TRIGGER IF EXISTS hymns_au;
 
-        -- Clear child tables
+        -- Clear child tables that reference CDN data (must precede parent deletes)
+        -- NOTE: slides, service_items, services, presentations, monitor_configs and all
+        -- schedule_* tables are user-created data and are intentionally preserved.
         DELETE FROM audio_sync_points;
-        DELETE FROM slides;
-        DELETE FROM service_items;
         DELETE FROM favorites;
         DELETE FROM collection_songs;
         DELETE FROM collection_hymns;
@@ -113,22 +115,9 @@ pub fn clear_database(conn: &Connection) -> Result<(), AppError> {
         DELETE FROM content_sync_state;
         DELETE FROM content_sync_packs;
 
-        -- Clear schedule tables (child to parent)
-        DELETE FROM schedule_assignments;
-        DELETE FROM schedule_day_departments;
-        DELETE FROM schedule_days;
-        DELETE FROM schedule_department_members;
-        DELETE FROM schedule_months;
-        DELETE FROM schedule_departments WHERE is_system = 0;
-
-        -- Clear parent tables (but NOT bible tables)
+        -- Clear CDN parent tables (Bible data is in a separate DB and is never touched)
         DELETE FROM hymns;
-        DELETE FROM presentations;
-        DELETE FROM services;
         DELETE FROM collections;
-
-        -- Reset monitor configs but keep settings
-        DELETE FROM monitor_configs;
 
         -- Reset pack sync manifest version so the planner re-checks all packs
         DELETE FROM settings WHERE key = 'pack_sync.manifest_version';

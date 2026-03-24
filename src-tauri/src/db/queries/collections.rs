@@ -437,7 +437,7 @@ pub fn search_collections(
                 cover_path,
                 collection_name,
                 title,
-                COALESCE(snippet(collections_fts, 7, '', '', ' ... ', 24), '') AS snippet
+                COALESCE(snippet(collections_fts, 7, '<mark>', '</mark>', ' ... ', 24), '') AS snippet
          FROM collections_fts
          WHERE collections_fts MATCH ?1
          ORDER BY bm25(collections_fts) ASC

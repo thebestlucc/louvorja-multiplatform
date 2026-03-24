@@ -240,6 +240,8 @@ pub fn run() {
             commands::youtube::update_ytdlp,
             commands::youtube::download_online_video,
             commands::youtube::cancel_download,
+            // Online Playlists search
+            commands::youtube::search_online_playlists,
         ]);
 
     #[cfg(debug_assertions)]

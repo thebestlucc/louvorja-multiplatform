@@ -89,6 +89,19 @@ pub struct YoutubePlaylistInfo {
     pub video_count: u32,
 }
 
+/// Online Videos feature — search result for command palette FTS5 search.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlinePlaylistSearchResult {
+    #[specta(type = i32)]
+    pub db_id: i64,
+    pub playlist_id: String,
+    pub title: String,
+    pub channel_title: String,
+    pub snippet: String,
+    pub cover_path: Option<String>,
+}
+
 /// Online Videos feature — video info from YouTube API response.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

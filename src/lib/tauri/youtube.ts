@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AddPlaylistInput, OnlineVideoPlaylist, OnlineVideo } from "../bindings";
+import type { AddPlaylistInput, OnlinePlaylistSearchResult, OnlineVideoPlaylist, OnlineVideo } from "../bindings";
 
 async function tauriInvoke<T>(
   command: string,
@@ -56,4 +56,8 @@ export async function cancelDownload(runId: string): Promise<void> {
 
 export async function deleteVideoLocalFile(videoId: string): Promise<void> {
   return tauriInvoke<void>("delete_video_local_file", { videoId });
+}
+
+export async function searchOnlinePlaylists(query: string): Promise<OnlinePlaylistSearchResult[]> {
+  return tauriInvoke<OnlinePlaylistSearchResult[]>("search_online_playlists", { query });
 }

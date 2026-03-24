@@ -24,6 +24,7 @@ import {
   Eraser,
   Keyboard,
   CircleHelp,
+  ListVideo,
 } from "lucide-react";
 import { catcher } from "../../lib/catcher";
 import { cn } from "../../lib/utils";
@@ -34,8 +35,9 @@ import {
   searchAllHymns,
   searchBibleGlobal,
   searchCollections,
+  searchOnlinePlaylists,
 } from "../../lib/tauri";
-import type { Hymn, BibleSearchResult, CollectionSearchResult } from "../../lib/bindings";
+import type { Hymn, BibleSearchResult, CollectionSearchResult, OnlinePlaylistSearchResult } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 
 type PaletteRouteCommand = {
@@ -55,12 +57,25 @@ type PaletteActionCommand = {
   onSelect: () => void | Promise<void>;
 };
 
+function renderSnippet(snippet: string) {
+  return snippet.split(/(<mark>.*?<\/mark>)/g).map((part, i) =>
+    part.startsWith("<mark>") ? (
+      <mark key={i} className="rounded-sm bg-yellow-300/80 px-0.5 font-semibold text-yellow-900 dark:bg-yellow-600/60 dark:text-yellow-100">
+        {part.slice(6, -7)}
+      </mark>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [bibleResults, setBibleResults] = useState<BibleSearchResult[]>([]);
   const [collectionResults, setCollectionResults] = useState<CollectionSearchResult[]>([]);
+  const [playlistResults, setPlaylistResults] = useState<OnlinePlaylistSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -89,6 +104,7 @@ export function CommandPalette() {
       setHymns([]);
       setBibleResults([]);
       setCollectionResults([]);
+      setPlaylistResults([]);
       setSearching(false);
       return;
     }
@@ -103,14 +119,18 @@ export function CommandPalette() {
           query.trim().length >= 2
             ? searchCollections(query)
             : Promise.resolve([]),
+          query.trim().length >= 2
+            ? searchOnlinePlaylists(query)
+            : Promise.resolve([]),
         ]),
         { notify: false },
       );
       if (results) {
-        const [h, b, c] = results;
+        const [h, b, c, p] = results;
         setHymns(h.slice(0, 5));
         setBibleResults(b.slice(0, 5));
         setCollectionResults(c.slice(0, 5));
+        setPlaylistResults(p.slice(0, 5));
       }
       setSearching(false);
     }, 300);
@@ -124,6 +144,7 @@ export function CommandPalette() {
       setHymns([]);
       setBibleResults([]);
       setCollectionResults([]);
+      setPlaylistResults([]);
       setSearching(false);
     }
   }, [open]);
@@ -485,7 +506,7 @@ export function CommandPalette() {
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{result.title}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {result.snippet || result.collectionName}
+                    {result.snippet ? renderSnippet(result.snippet) : result.collectionName}
                   </span>
                 </span>
               </Command.Item>
@@ -531,7 +552,38 @@ export function CommandPalette() {
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{result.title}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {result.collectionName} · {result.snippet || t("collections.songs")}
+                    {result.collectionName} · {result.snippet ? renderSnippet(result.snippet) : t("collections.songs")}
+                  </span>
+                </span>
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+
+        {/* Online Playlists group */}
+        {playlistResults.length > 0 && (
+          <Command.Group
+            heading={t("commandPalette.onlinePlaylists")}
+            className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+          >
+            {playlistResults.map((result) => (
+              <Command.Item
+                key={`playlist-${result.dbId}`}
+                value={`playlist-${result.dbId}-${result.title}`}
+                onSelect={() => {
+                  navigate({
+                    to: "/collections",
+                    search: { tab: "online-videos", playlist: result.playlistId },
+                  });
+                  setOpen(false);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent"
+              >
+                <ListVideo className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{result.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {result.channelTitle}{result.snippet ? <> · {renderSnippet(result.snippet)}</> : null}
                   </span>
                 </span>
               </Command.Item>
@@ -566,18 +618,11 @@ export function CommandPalette() {
                 <span className="truncate">
                   <span className="font-medium">
                     {result.bookName} {result.verse.chapter}:{result.verse.verse}
+                    {result.versionAbbreviation ? <span className="ml-1 font-normal text-muted-foreground">· {result.versionAbbreviation}</span> : null}
                   </span>
                   {" - "}
                   <span className="text-muted-foreground">
-                    {result.snippet.split(/(<mark>.*?<\/mark>)/g).map((part, i) =>
-                      part.startsWith("<mark>") ? (
-                        <mark key={i} className="rounded-sm bg-yellow-300/80 px-0.5 font-semibold text-yellow-900 dark:bg-yellow-600/60 dark:text-yellow-100">
-                          {part.slice(6, -7)}
-                        </mark>
-                      ) : (
-                        <span key={i}>{part}</span>
-                      )
-                    )}
+                    {renderSnippet(result.snippet)}
                   </span>
                 </span>
               </Command.Item>
