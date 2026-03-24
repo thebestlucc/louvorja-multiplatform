@@ -1375,6 +1375,14 @@ async cancelDownload(runId: string) : Promise<Result<null, AppErrorResponse>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async searchOnlinePlaylists(query: string) : Promise<Result<OnlinePlaylistSearchResult[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_online_playlists", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1422,6 +1430,10 @@ export type MigrationRunInfo = { runId: string; startedAt: string; sourcePath: s
 export type MissingFile = { path: string; sourceType: string; sourceId: number; sourceName: string }
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
+/**
+ * Online Videos feature — search result for command palette FTS5 search.
+ */
+export type OnlinePlaylistSearchResult = { dbId: number; playlistId: string; title: string; channelTitle: string; snippet: string; coverPath: string | null }
 /**
  * Online Videos feature — individual video record (queries SELECT explicitly).
  */

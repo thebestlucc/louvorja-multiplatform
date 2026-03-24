@@ -211,6 +211,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (36)", [])?;
     }
 
+    if current_version < 37 {
+        migrate_v37(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (37)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1345,6 +1350,51 @@ fn migrate_v34(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v37(conn: &Connection) -> Result<(), AppError> {
+    // Create FTS5 virtual table for online video playlists
+    conn.execute_batch(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS online_video_playlists_fts USING fts5(
+            title,
+            description,
+            channel_title,
+            tokenize='unicode61 remove_diacritics 1'
+        );",
+    )?;
+
+    // Populate from existing data
+    conn.execute_batch(
+        "INSERT OR REPLACE INTO online_video_playlists_fts(rowid, title, description, channel_title)
+         SELECT p.id, COALESCE(p.title, ''), COALESCE(p.description, ''), COALESCE(c.title, '')
+         FROM online_videos_playlists p
+         LEFT JOIN online_videos_channels c ON c.id = p.id_channel;",
+    )?;
+
+    // Triggers for auto-maintenance
+    conn.execute_batch(
+        "CREATE TRIGGER IF NOT EXISTS online_video_playlists_ai
+         AFTER INSERT ON online_videos_playlists BEGIN
+             INSERT INTO online_video_playlists_fts(rowid, title, description, channel_title)
+             VALUES (NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''),
+                     COALESCE((SELECT title FROM online_videos_channels WHERE id = NEW.id_channel), ''));
+         END;
+
+         CREATE TRIGGER IF NOT EXISTS online_video_playlists_ad
+         AFTER DELETE ON online_videos_playlists BEGIN
+             DELETE FROM online_video_playlists_fts WHERE rowid = OLD.id;
+         END;
+
+         CREATE TRIGGER IF NOT EXISTS online_video_playlists_au
+         AFTER UPDATE ON online_videos_playlists BEGIN
+             DELETE FROM online_video_playlists_fts WHERE rowid = OLD.id;
+             INSERT INTO online_video_playlists_fts(rowid, title, description, channel_title)
+             VALUES (NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''),
+                     COALESCE((SELECT title FROM online_videos_channels WHERE id = NEW.id_channel), ''));
+         END;",
+    )?;
+
+    Ok(())
+}
+
 fn migrate_v36(conn: &Connection) -> Result<(), AppError> {
     // 1. Create languages table (may not exist on fresh installs)
     conn.execute_batch(
@@ -1602,6 +1652,7 @@ mod tests {
             (34, migrate_v34),
             (35, migrate_v35),
             (36, migrate_v36),
+            (37, migrate_v37),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));

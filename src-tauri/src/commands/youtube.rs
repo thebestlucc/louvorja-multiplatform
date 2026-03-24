@@ -1,4 +1,4 @@
-use crate::db::models::{AddPlaylistInput, OnlineVideo, OnlineVideoPlaylist};
+use crate::db::models::{AddPlaylistInput, OnlinePlaylistSearchResult, OnlineVideo, OnlineVideoPlaylist};
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::youtube::{api, parser, thumbnails};
@@ -399,4 +399,14 @@ pub fn cancel_download(
         flag.store(true, std::sync::atomic::Ordering::Relaxed);
     }
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn search_online_playlists(
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<OnlinePlaylistSearchResult>, AppError> {
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::online_videos::search_online_playlists(&conn, &query, 8)
 }

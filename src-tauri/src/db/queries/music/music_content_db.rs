@@ -1,6 +1,33 @@
 use crate::error::AppError;
 use rusqlite::params;
 
+/// Returns true if the `lyrics` table exists in the given content DB.
+/// Used to build SQL dynamically so that `prepare()` never references a missing table.
+fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lyrics'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|c| c > 0)
+    .unwrap_or(false)
+}
+
+/// Returns the SQL fragment for the lyrics column.
+/// When the `lyrics` table exists it returns the correlated GROUP_CONCAT subquery
+/// using the given parameter placeholder (e.g. `?1` or `?2`).
+/// When the table is absent it returns `NULL`, keeping the rest of the query unchanged.
+fn lyrics_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
+    if lyrics_table_exists(conn) {
+        format!(
+            "(SELECT GROUP_CONCAT(lyric, char(10) || char(10)) \
+             FROM (SELECT lyric FROM lyrics WHERE id_music = m.id_music AND id_language = {lang_param} ORDER BY \"order\"))"
+        )
+    } else {
+        "NULL".to_string()
+    }
+}
+
 /// Query hymnal from the content DB (downloaded legacy DB).
 /// Returns Hymn structs with file paths ready for app_data_dir resolution.
 pub fn get_hymns_from_content_db(
@@ -9,36 +36,37 @@ pub fn get_hymns_from_content_db(
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let lyrics_col = lyrics_subquery(content_db, "?1");
 
-    let mut stmt = content_db
-        .prepare(
-            "SELECT
-                m.id_music                    AS id,
-                am.track                      AS number,
-                m.name                        AS title,
-                NULL                          AS author,
-                a.name                        AS album,
-                NULL                          AS lyrics,
-                NULL                          AS chords,
-                fa.dir || '/' || fa.name      AS audio_path,
-                fp.dir || '/' || fp.name      AS playback_path,
-                'hymnal'                      AS category,
-                NULL                          AS notes,
-                fi.dir || '/' || fi.name      AS cover_path,
-                NULL                          AS lyrics_sync,
-                m.id_music                    AS api_music_id,
-                m.created_at                  AS created_at,
-                m.updated_at                  AS updated_at
-             FROM musics m
-             LEFT JOIN albums_musics am ON am.id_music = m.id_music
-             LEFT JOIN albums        a  ON a.id_album  = am.id_album
-             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
-             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
-             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
-             WHERE m.id_language = ?1
-             ORDER BY a.name, am.track",
-        )
-        .map_err(AppError::Database)?;
+    let sql = format!(
+        "SELECT
+            m.id_music                    AS id,
+            am.track                      AS number,
+            m.name                        AS title,
+            NULL                          AS author,
+            a.name                        AS album,
+            {lyrics_col}                  AS lyrics,
+            NULL                          AS chords,
+            fa.dir || '/' || fa.name      AS audio_path,
+            fp.dir || '/' || fp.name      AS playback_path,
+            'hymnal'                      AS category,
+            NULL                          AS notes,
+            fi.dir || '/' || fi.name      AS cover_path,
+            NULL                          AS lyrics_sync,
+            m.id_music                    AS api_music_id,
+            m.created_at                  AS created_at,
+            m.updated_at                  AS updated_at
+         FROM musics m
+         LEFT JOIN albums_musics am ON am.id_music = m.id_music
+         LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+         WHERE m.id_language = ?1
+         ORDER BY a.name, am.track"
+    );
+
+    let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
 
     let hymns = stmt
         .query_map([lang_short], |row| {
@@ -115,30 +143,34 @@ pub fn search_hymns_content_db(
         return get_hymns_from_content_db(content_db, lang_bcp47);
     }
 
-    let mut stmt = content_db
-        .prepare(
-            "SELECT
-                m.id_music AS id, am.track AS number, m.name AS title,
-                NULL AS author, a.name AS album, NULL AS lyrics, NULL AS chords,
-                fa.dir || '/' || fa.name AS audio_path,
-                fp.dir || '/' || fp.name AS playback_path,
-                'hymnal' AS category, NULL AS notes,
-                fi.dir || '/' || fi.name AS cover_path,
-                NULL AS lyrics_sync, m.id_music AS api_music_id,
-                m.created_at, m.updated_at
-             FROM musics_fts
-             JOIN musics m ON musics_fts.rowid = m.id_music
-             LEFT JOIN albums_musics am ON am.id_music = m.id_music
-             LEFT JOIN albums        a  ON a.id_album  = am.id_album
-             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
-             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
-             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
-             WHERE musics_fts MATCH ?1
-               AND m.id_language = ?2
-             ORDER BY rank
-             LIMIT 50",
-        )
-        .map_err(AppError::Database)?;
+    let lyrics_col = lyrics_subquery(content_db, "?2");
+
+    let sql = format!(
+        "SELECT
+            m.id_music AS id, am.track AS number, m.name AS title,
+            NULL AS author, a.name AS album,
+            {lyrics_col} AS lyrics,
+            NULL AS chords,
+            fa.dir || '/' || fa.name AS audio_path,
+            fp.dir || '/' || fp.name AS playback_path,
+            'hymnal' AS category, NULL AS notes,
+            fi.dir || '/' || fi.name AS cover_path,
+            NULL AS lyrics_sync, m.id_music AS api_music_id,
+            m.created_at, m.updated_at
+         FROM musics_fts
+         JOIN musics m ON musics_fts.rowid = m.id_music
+         LEFT JOIN albums_musics am ON am.id_music = m.id_music
+         LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+         WHERE musics_fts MATCH ?1
+           AND m.id_language = ?2
+         ORDER BY rank
+         LIMIT 50"
+    );
+
+    let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
 
     let hymns = stmt
         .query_map(params![fts_query, lang_short], |row| {
@@ -241,29 +273,32 @@ pub fn get_collection_hymns_from_content_db(
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let lyrics_col = lyrics_subquery(content_db, "?2");
 
-    let mut stmt = content_db
-        .prepare(
-            "SELECT
-                m.id_music AS id, am.track AS number, m.name AS title,
-                NULL AS author, a.name AS album, NULL AS lyrics, NULL AS chords,
-                fa.dir || '/' || fa.name AS audio_path,
-                fp.dir || '/' || fp.name AS playback_path,
-                'hymnal' AS category, NULL AS notes,
-                fi.dir || '/' || fi.name AS cover_path,
-                NULL AS lyrics_sync, m.id_music AS api_music_id,
-                m.created_at, m.updated_at
-             FROM musics m
-             JOIN albums_musics am ON am.id_music = m.id_music
-             LEFT JOIN albums    a  ON a.id_album  = am.id_album
-             LEFT JOIN files     fa ON fa.id_file  = m.id_file_music
-             LEFT JOIN files     fp ON fp.id_file  = m.id_file_instrumental_music
-             LEFT JOIN files     fi ON fi.id_file  = m.id_file_image
-             WHERE am.id_album = ?1
-               AND m.id_language = ?2
-             ORDER BY am.track",
-        )
-        .map_err(AppError::Database)?;
+    let sql = format!(
+        "SELECT
+            m.id_music AS id, am.track AS number, m.name AS title,
+            NULL AS author, a.name AS album,
+            {lyrics_col} AS lyrics,
+            NULL AS chords,
+            fa.dir || '/' || fa.name AS audio_path,
+            fp.dir || '/' || fp.name AS playback_path,
+            'hymnal' AS category, NULL AS notes,
+            fi.dir || '/' || fi.name AS cover_path,
+            NULL AS lyrics_sync, m.id_music AS api_music_id,
+            m.created_at, m.updated_at
+         FROM musics m
+         JOIN albums_musics am ON am.id_music = m.id_music
+         LEFT JOIN albums    a  ON a.id_album  = am.id_album
+         LEFT JOIN files     fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files     fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files     fi ON fi.id_file  = m.id_file_image
+         WHERE am.id_album = ?1
+           AND m.id_language = ?2
+         ORDER BY am.track"
+    );
+
+    let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
 
     let hymns = stmt
         .query_map(params![album_id, lang_short], |row| {
@@ -305,32 +340,38 @@ pub fn get_hymn_by_id_from_content_db(
 ) -> Result<crate::db::models::Hymn, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let lyrics_col = lyrics_subquery(content_db, "?2");
+
+    let sql = format!(
+        "SELECT
+            m.id_music                    AS id,
+            am.track                      AS number,
+            m.name                        AS title,
+            NULL                          AS author,
+            a.name                        AS album,
+            {lyrics_col}                  AS lyrics,
+            NULL                          AS chords,
+            fa.dir || '/' || fa.name      AS audio_path,
+            fp.dir || '/' || fp.name      AS playback_path,
+            'hymnal'                      AS category,
+            NULL                          AS notes,
+            fi.dir || '/' || fi.name      AS cover_path,
+            NULL                          AS lyrics_sync,
+            m.id_music                    AS api_music_id,
+            COALESCE(m.created_at, '')    AS created_at,
+            COALESCE(m.updated_at, '')    AS updated_at
+         FROM musics m
+         LEFT JOIN albums_musics am ON am.id_music = m.id_music
+         LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+         WHERE m.id_music = ?1 AND m.id_language = ?2"
+    );
+
     content_db
         .query_row(
-            "SELECT
-                m.id_music                    AS id,
-                am.track                      AS number,
-                m.name                        AS title,
-                NULL                          AS author,
-                a.name                        AS album,
-                NULL                          AS lyrics,
-                NULL                          AS chords,
-                fa.dir || '/' || fa.name      AS audio_path,
-                fp.dir || '/' || fp.name      AS playback_path,
-                'hymnal'                      AS category,
-                NULL                          AS notes,
-                fi.dir || '/' || fi.name      AS cover_path,
-                NULL                          AS lyrics_sync,
-                m.id_music                    AS api_music_id,
-                COALESCE(m.created_at, '')    AS created_at,
-                COALESCE(m.updated_at, '')    AS updated_at
-             FROM musics m
-             LEFT JOIN albums_musics am ON am.id_music = m.id_music
-             LEFT JOIN albums        a  ON a.id_album  = am.id_album
-             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
-             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
-             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
-             WHERE m.id_music = ?1 AND m.id_language = ?2",
+            &sql,
             rusqlite::params![id, lang_short],
             super::music_app::map_hymn_row,
         )
@@ -376,14 +417,16 @@ pub fn get_hymns_by_album_from_content_db(
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let mut stmt = content_db.prepare(
+    let lyrics_col = lyrics_subquery(content_db, "?2");
+
+    let sql = format!(
         "SELECT
             m.id_music                    AS id,
             am.track                      AS number,
             m.name                        AS title,
             NULL                          AS author,
             a.name                        AS album,
-            NULL                          AS lyrics,
+            {lyrics_col}                  AS lyrics,
             NULL                          AS chords,
             fa.dir || '/' || fa.name      AS audio_path,
             fp.dir || '/' || fp.name      AS playback_path,
@@ -401,8 +444,10 @@ pub fn get_hymns_by_album_from_content_db(
          LEFT JOIN files    fp ON fp.id_file  = m.id_file_instrumental_music
          LEFT JOIN files    fi ON fi.id_file  = m.id_file_image
          WHERE a.name = ?1 AND m.id_language = ?2
-         ORDER BY am.track, m.name",
-    )?;
+         ORDER BY am.track, m.name"
+    );
+
+    let mut stmt = content_db.prepare(&sql)?;
     let hymns = stmt
         .query_map(rusqlite::params![album, lang_short], super::music_app::map_hymn_row)?
         .collect::<Result<Vec<_>, _>>()?;
@@ -443,6 +488,14 @@ mod content_db_tests {
                 id_file INTEGER PRIMARY KEY,
                 dir TEXT,
                 name TEXT
+            );
+            CREATE TABLE lyrics (
+                id_lyric INTEGER PRIMARY KEY,
+                id_music INTEGER,
+                lyric TEXT,
+                \"order\" INTEGER,
+                show_slide INTEGER,
+                id_language TEXT
             );",
         ).unwrap();
         conn
@@ -455,7 +508,9 @@ mod content_db_tests {
              INSERT INTO files VALUES (12, '/covers', 'brj.jpg');
              INSERT INTO albums VALUES (1, '1992 - Brilha Jesus', 'pt', 12, '', '');
              INSERT INTO musics VALUES (1, 'Santo', 'pt', 10, 11, 12, '', '');
-             INSERT INTO albums_musics VALUES (1, 1, 1);",
+             INSERT INTO albums_musics VALUES (1, 1, 1);
+             INSERT INTO lyrics VALUES (1, 1, 'Santo, Santo, Santo', 1, 1, 'pt');
+             INSERT INTO lyrics VALUES (2, 1, 'Senhor Deus Todo-Poderoso', 2, 1, 'pt');",
         ).unwrap();
     }
 
@@ -538,5 +593,69 @@ mod content_db_tests {
         seed_basic(&conn);
         let hymns = get_collection_hymns_from_content_db(&conn, 999, "pt-BR").unwrap();
         assert!(hymns.is_empty());
+    }
+
+    #[test]
+    fn get_hymn_by_id_returns_lyrics_from_lyrics_table() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymn = get_hymn_by_id_from_content_db(&conn, 1, "pt-BR").unwrap();
+        let lyrics = hymn.lyrics.expect("lyrics should be Some");
+        assert!(
+            lyrics.contains("Santo, Santo, Santo"),
+            "lyrics should contain first stanza"
+        );
+        assert!(
+            lyrics.contains("Senhor Deus Todo-Poderoso"),
+            "lyrics should contain second stanza"
+        );
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_returns_lyrics() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        let lyrics = hymns[0].lyrics.as_deref().expect("lyrics should be Some");
+        assert!(
+            lyrics.contains("Santo, Santo, Santo"),
+            "lyrics should contain first stanza"
+        );
+        assert!(
+            lyrics.contains("Senhor Deus Todo-Poderoso"),
+            "lyrics should contain second stanza"
+        );
+    }
+
+    #[test]
+    fn get_hymn_with_no_lyrics_returns_none() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        // Insert a second hymn with no lyrics
+        conn.execute_batch(
+            "INSERT INTO musics VALUES (2, 'Aleluia', 'pt', NULL, NULL, NULL, '', '');
+             INSERT INTO albums_musics VALUES (1, 2, 2);"
+        ).unwrap();
+        let hymn = get_hymn_by_id_from_content_db(&conn, 2, "pt-BR").unwrap();
+        assert_eq!(hymn.lyrics, None, "hymn with no lyrics rows should return None");
+    }
+
+    #[test]
+    fn get_hymn_with_no_lyrics_table_returns_none() {
+        // Content DB without a lyrics table - should not crash, should return None
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE musics (id_music INTEGER PRIMARY KEY, name TEXT NOT NULL, id_language TEXT, id_file_music INTEGER, id_file_instrumental_music INTEGER, id_file_image INTEGER, created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '');
+             CREATE TABLE albums (id_album INTEGER PRIMARY KEY, name TEXT NOT NULL, id_language TEXT, id_file_image INTEGER, created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '');
+             CREATE TABLE albums_musics (id_album INTEGER, id_music INTEGER, track INTEGER);
+             CREATE TABLE files (id_file INTEGER PRIMARY KEY, dir TEXT, name TEXT);
+             INSERT INTO musics VALUES (1, 'Hino', 'pt', NULL, NULL, NULL, '', '');
+             INSERT INTO albums VALUES (1, 'Album', 'pt', NULL, '', '');
+             INSERT INTO albums_musics VALUES (1, 1, 1);"
+        ).unwrap();
+        // No lyrics table!
+        let hymn = get_hymn_by_id_from_content_db(&conn, 1, "pt-BR").unwrap();
+        assert_eq!(hymn.lyrics, None, "when lyrics table absent, should return None not error");
     }
 }
