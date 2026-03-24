@@ -1,7 +1,12 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { listen, emitTo } from "@tauri-apps/api/event";
+import { useMediaSource } from "../../hooks/use-media-source";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
+
+type VideoControlEvent = { action: "play" | "pause" | "seek" | "volume"; value?: number };
+export type VideoStateEvent = { paused: boolean; currentTime: number; duration: number; volume: number };
 
 export type OnlineVideoRenderMode =
   | "projector"
@@ -16,29 +21,99 @@ interface OnlineVideoSlideProps {
   className?: string;
 }
 
+function LocalVideoPlayer({ src, title, className }: { src: string; title: string; className?: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Autoplay with canplay guard (avoids NotSupportedError in Tauri webview)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const tryPlay = () => {
+      void video.play().catch(() => {
+        // Already failed — leave it paused; Playing Now controls can resume
+      });
+    };
+    if (video.readyState >= 3) {
+      tryPlay();
+    } else {
+      video.addEventListener("canplay", tryPlay, { once: true });
+      return () => video.removeEventListener("canplay", tryPlay);
+    }
+  }, [src]);
+
+  // Listen for video-control events from main window
+  useEffect(() => {
+    const unsub = listen<VideoControlEvent>("video-control", (e) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const { action, value } = e.payload;
+      if (action === "play") void video.play().catch(() => {});
+      else if (action === "pause") video.pause();
+      else if (action === "seek" && value !== undefined) video.currentTime = value;
+      else if (action === "volume" && value !== undefined) video.volume = value;
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, []);
+
+  // Emit video-state to main window on playback events
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const emit = () => {
+      void emitTo("main", "video-state", {
+        paused: video.paused,
+        currentTime: video.currentTime,
+        duration: isFinite(video.duration) ? video.duration : 0,
+        volume: video.volume,
+      } satisfies VideoStateEvent).catch(() => {});
+    };
+    video.addEventListener("timeupdate", emit);
+    video.addEventListener("play", emit);
+    video.addEventListener("pause", emit);
+    video.addEventListener("volumechange", emit);
+    return () => {
+      video.removeEventListener("timeupdate", emit);
+      video.removeEventListener("play", emit);
+      video.removeEventListener("pause", emit);
+      video.removeEventListener("volumechange", emit);
+    };
+  }, [src]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      className={className}
+      title={title}
+      playsInline
+    />
+  );
+}
+
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
+  const localVideoSrc = useMediaSource(
+    slide.videoSource === "local" ? (slide.videoUrl ?? null) : null
+  );
 
   if (renderMode === "projector") {
-    const isLocalFile = slide.videoUrl?.startsWith("media/");
+    const isLocalFile = slide.videoSource === "local" && !!slide.videoUrl;
 
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile && slide.videoUrl ? (
-          <video
-            src={convertFileSrc(slide.videoUrl)}
-            autoPlay
-            controls
-            className="h-full w-full"
+          <LocalVideoPlayer
+            src={localVideoSrc ?? ""}
             title={slide.videoTitle ?? ""}
+            className="h-full w-full"
           />
         ) : slide.videoId ? (
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${slide.videoId}?autoplay=1&controls=0&rel=0`}
+            src={`https://www.youtube-nocookie.com/embed/${slide.videoId}?autoplay=1&controls=0&rel=0&modestbranding=1&showinfo=0&disablekb=1&iv_load_policy=3`}
             allow="autoplay; encrypted-media"
             allowFullScreen
             className="h-full w-full"
-            style={{ border: "none" }}
+            style={{ border: "none", pointerEvents: "none" }}
             title={slide.videoTitle ?? slide.videoId}
           />
         ) : (
