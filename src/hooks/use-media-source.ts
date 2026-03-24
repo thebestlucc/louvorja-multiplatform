@@ -17,5 +17,5 @@ export function useMediaSource(path: string | null | undefined): string | null {
     gcTime: Infinity,
   });
 
-  return buildMediaUrl(path, streamingInfo?.port);
+  return buildMediaUrl(path, streamingInfo?.isRunning ? streamingInfo.port : null);
 }
