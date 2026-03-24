@@ -7,7 +7,7 @@ import { VideoSlide, type VideoRenderMode } from "./video-slide";
 import { OnlineVideoSlide } from "../online-videos/online-video-slide";
 import { useProjectionDisplay } from "../../lib/use-presentation-font-size";
 
-export type SlideRenderMode = "projector" | "return-current" | "return-next" | "editor" | "thumbnail";
+export type SlideRenderMode = "projector" | "return-current" | "return-next" | "playing-now-preview" | "editor" | "thumbnail";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff"]);
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v", "ts"]);
@@ -450,7 +450,7 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode, back
 }
 
 function mapRenderMode(renderMode: SlideRenderMode): VideoRenderMode {
-  if (renderMode === "return-current") {
+  if (renderMode === "return-current" || renderMode === "playing-now-preview") {
     return "return-current";
   }
   if (renderMode === "editor") {
