@@ -55,8 +55,7 @@ export function useProjectionDisplay(): ProjectionDisplaySettings {
   });
 
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    let mounted = true;
+    let cancelled = false;
 
     const load = async () => {
       const [fontSize] = await catcher(
@@ -65,7 +64,7 @@ export function useProjectionDisplay(): ProjectionDisplaySettings {
       const [fontFamily] = await catcher(
         getPreference<string>(PROJECTION_FONT_FAMILY_KEY, DEFAULT_PROJECTION_FONT_FAMILY),
       );
-      if (mounted) {
+      if (!cancelled) {
         setSettings({
           fontSize: fontSize ?? DEFAULT_PRESENTATION_FONT_SIZE,
           fontFamily: normalizeFontFamily(fontFamily),
@@ -74,19 +73,15 @@ export function useProjectionDisplay(): ProjectionDisplaySettings {
     };
     void load();
 
-    listen<ProjectionDisplaySettings>(PROJECTION_DISPLAY_EVENT, (event) => {
-      setSettings(event.payload);
-    }).then((fn) => {
-      if (mounted) {
-        unlisten = fn;
-      } else {
-        fn(); // immediately unlisten — component already unmounted
-      }
-    });
+    // Safe promise pattern: .catch(() => () => {}) prevents unhandled rejections;
+    // cleanup always eventually calls the unlisten function.
+    const unsub = listen<ProjectionDisplaySettings>(PROJECTION_DISPLAY_EVENT, (event) => {
+      if (!cancelled) setSettings(event.payload); // guard against post-unmount state update
+    }).catch(() => () => {});
 
     return () => {
-      mounted = false;
-      unlisten?.();
+      cancelled = true;
+      void unsub.then((fn) => fn()).catch(() => {});
     };
   }, []);
 
