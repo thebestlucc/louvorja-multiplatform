@@ -1,6 +1,12 @@
+import { useState } from "react";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
+import { notify } from "../../lib/notifications";
+import { catcher } from "../../lib/catcher";
+import { useCopyImageToMedia } from "../../lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 
 export interface BackgroundConfig {
@@ -34,6 +40,30 @@ const POSITIONS = [
 
 export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
   const { t } = useTranslation();
+  const copyMutation = useCopyImageToMedia();
+  const [loadingImage, setLoadingImage] = useState(false);
+
+  const handleBrowseImage = async () => {
+    const selected = await openFileDialog({
+      multiple: false,
+      filters: [{ name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "gif", "svg", "bmp", "avif", "tiff"] }],
+    });
+
+    if (!selected || typeof selected !== "string") return;
+
+    setLoadingImage(true);
+    const [managedPath, copyError] = await catcher(
+      copyMutation.mutateAsync(selected),
+      { notify: true, fallbackMessage: t("presentations.imageImportFailed") },
+    );
+    setLoadingImage(false);
+
+    if (copyError) return;
+    if (managedPath) {
+      onChange({ ...value, imagePath: managedPath });
+      notify.success(t("presentations.imageImported"));
+    }
+  };
 
   return (
     <Tabs value={value.type} onValueChange={(type) => onChange({ ...value, type: type as BackgroundConfig["type"] })}>
@@ -76,11 +106,25 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
 
       <TabsContent value="image">
         <div className="flex flex-col gap-3">
-          <Input
-            value={value.imagePath ?? ""}
-            onChange={(e) => onChange({ ...value, imagePath: e.target.value })}
-            placeholder={t("presentations.imagePathPlaceholder")}
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={value.imagePath
+                ? (value.imagePath.replace(/\\/g, "/").split("/").pop() ?? value.imagePath)
+                : ""}
+              placeholder={t("presentations.imagePathPlaceholder")}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loadingImage}
+              onClick={() => void handleBrowseImage()}
+            >
+              {loadingImage ? t("presentations.videoLoading") : t("presentations.videoBrowse")}
+            </Button>
+          </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">
               {t("presentations.position")}

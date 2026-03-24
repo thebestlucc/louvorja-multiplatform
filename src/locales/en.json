@@ -498,6 +498,8 @@
     "videoFormat": "Format",
     "videoImportFailed": "Could not import video: {{error}}",
     "videoImported": "Video imported successfully",
+    "imageImportFailed": "Could not import image",
+    "imageImported": "Image imported successfully",
     "videoLoading": "Loading...",
     "videoLoop": "Loop",
     "videoMode": "Mode",

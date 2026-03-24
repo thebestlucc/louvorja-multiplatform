@@ -493,6 +493,8 @@
     "videoFormat": "Formato",
     "videoImportFailed": "No se pudo importar el vídeo: {{error}}",
     "videoImported": "Vídeo importado correctamente",
+    "imageImportFailed": "No se pudo importar la imagen",
+    "imageImported": "Imagen importada correctamente",
     "videoLoading": "Cargando...",
     "videoLoop": "Bucle",
     "videoMode": "Modo",
