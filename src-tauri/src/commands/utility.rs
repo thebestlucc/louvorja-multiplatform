@@ -5,28 +5,6 @@ use crate::utils::paths::SafePath;
 use crate::video;
 use tauri::{AppHandle, Manager};
 
-#[tauri::command]
-#[specta::specta]
-pub fn resolve_media_path(path: String, app: AppHandle) -> Result<String, AppError> {
-    let (app_data_dir, err) = catcher(app.path().app_data_dir());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let app_data_dir = app_data_dir.unwrap();
-
-    let safe_path = SafePath::new(&app_data_dir);
-    let resolved = safe_path.resolve(&path)?;
-
-    // Only enforce video format validation for paths under media/videos/.
-    // Other media (images, covers) should resolve without video-specific checks.
-    let resolved_str = resolved.to_string_lossy();
-    if resolved_str.contains("/media/videos/") || resolved_str.contains("\\media\\videos\\") {
-        video::ensure_supported_video(&resolved)?;
-    }
-
-    Ok(resolved.to_string_lossy().to_string())
-}
-
 /// Get metadata for a video file.
 ///
 /// The native parser runs synchronously (fast). If it fails and ffprobe is
