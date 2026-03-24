@@ -1,6 +1,7 @@
 pub mod manifest;
 mod pptx;
 
+use crate::db::models::slides::SlideContent;
 use crate::error::AppError;
 use manifest::Manifest;
 use std::collections::{BTreeMap, HashMap};
@@ -527,6 +528,117 @@ fn decode_legacy_text(bytes: &[u8]) -> String {
     match String::from_utf8(bytes.to_vec()) {
         Ok(text) => text,
         Err(_) => bytes.iter().map(|byte| char::from(*byte)).collect(),
+    }
+}
+
+/// Collect absolute-path media fields from a SlideContent for archive bundling.
+/// Relative paths (yt-dlp downloads, managed covers) are excluded.
+pub(crate) fn extract_media_paths(content: &SlideContent) -> Vec<String> {
+    [
+        content.background_image.as_deref(),
+        content.video_path.as_deref(),
+        content.video_url.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|p| std::path::Path::new(p).is_absolute())
+    .map(String::from)
+    .collect()
+}
+
+/// Return a filename unique within `seen`, appending _2, _3, ... on collision.
+pub(crate) fn unique_archive_name(
+    filename: &str,
+    seen: &mut std::collections::HashSet<String>,
+) -> String {
+    if seen.insert(filename.to_string()) {
+        return filename.to_string();
+    }
+    let (stem, ext) = match filename.rsplit_once('.') {
+        Some((s, e)) => (s.to_string(), format!(".{e}")),
+        None => (filename.to_string(), String::new()),
+    };
+    let mut counter = 2usize;
+    loop {
+        let candidate = format!("{stem}_{counter}{ext}");
+        if seen.insert(candidate.clone()) {
+            return candidate;
+        }
+        counter += 1;
+    }
+}
+
+#[cfg(test)]
+mod archive_media_tests {
+    use super::{extract_media_paths, unique_archive_name};
+    use crate::db::models::slides::SlideContent;
+
+    fn bg_content(path: &str) -> SlideContent {
+        SlideContent {
+            slide_type: "cover".into(),
+            background_image: Some(path.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_extract_absolute_bg_included() {
+        let paths = extract_media_paths(&bg_content("/Users/user/Downloads/bg.jpg"));
+        assert_eq!(paths, vec!["/Users/user/Downloads/bg.jpg".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_relative_excluded() {
+        let paths = extract_media_paths(&bg_content("media/images/hash.jpg"));
+        assert!(paths.is_empty(), "relative paths must not be bundled");
+    }
+
+    #[test]
+    fn test_extract_null_excluded() {
+        let paths = extract_media_paths(&SlideContent::default());
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_extract_multiple_fields() {
+        let content = SlideContent {
+            slide_type: "video".into(),
+            background_image: Some("/abs/bg.jpg".into()),
+            video_path: Some("/abs/clip.mp4".into()),
+            ..Default::default()
+        };
+        let paths = extract_media_paths(&content);
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&"/abs/bg.jpg".to_string()));
+        assert!(paths.contains(&"/abs/clip.mp4".to_string()));
+    }
+
+    #[test]
+    fn test_collision_no_collision() {
+        let mut seen = std::collections::HashSet::new();
+        assert_eq!(unique_archive_name("bg.jpg", &mut seen), "bg.jpg");
+    }
+
+    #[test]
+    fn test_collision_second_gets_suffix_2() {
+        let mut seen = std::collections::HashSet::new();
+        let _ = unique_archive_name("bg.jpg", &mut seen);
+        assert_eq!(unique_archive_name("bg.jpg", &mut seen), "bg_2.jpg");
+    }
+
+    #[test]
+    fn test_collision_third_gets_suffix_3() {
+        let mut seen = std::collections::HashSet::new();
+        let _ = unique_archive_name("bg.jpg", &mut seen);
+        let _ = unique_archive_name("bg.jpg", &mut seen);
+        assert_eq!(unique_archive_name("bg.jpg", &mut seen), "bg_3.jpg");
+    }
+
+    #[test]
+    fn test_collision_no_extension() {
+        let mut seen = std::collections::HashSet::new();
+        let _ = unique_archive_name("Makefile", &mut seen);
+        assert_eq!(unique_archive_name("Makefile", &mut seen), "Makefile_2");
     }
 }
 
