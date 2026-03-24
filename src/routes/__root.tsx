@@ -8,6 +8,7 @@ import { StatusBar } from "../components/layout/status-bar";
 import { AppToaster } from "../components/ui/app-toaster";
 import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { UpdateNotification } from "../components/update-notification";
+import { PersistentVideoPlayer } from "../components/online-videos/persistent-video-player";
 import { useKeyboard } from "../hooks/use-keyboard";
 import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
@@ -317,6 +318,7 @@ function RootLayout() {
       <PackSyncProgressDialog />
       <UpdateNotification />
       <AppToaster />
+      <PersistentVideoPlayer />
     </div>
   );
 }
