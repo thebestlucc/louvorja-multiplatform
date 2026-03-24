@@ -4,63 +4,8 @@ import { listen, emitTo } from "@tauri-apps/api/event";
 import { useMediaSource } from "../../hooks/use-media-source";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
-
-// ─── YouTube IFrame API types ──────────────────────────────────────────────
-
-type YTPlayerState = -1 | 0 | 1 | 2 | 3 | 5;
-
-interface YTPlayer {
-  playVideo(): void;
-  pauseVideo(): void;
-  seekTo(seconds: number, allowSeekAhead: boolean): void;
-  setVolume(volume: number): void;
-  getVolume(): number;
-  getCurrentTime(): number;
-  getDuration(): number;
-  getPlayerState(): YTPlayerState;
-  destroy(): void;
-}
-
-declare global {
-  interface Window {
-    YT: { Player: new (el: HTMLElement | string, cfg: YTPlayerConfig) => YTPlayer };
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
-
-interface YTPlayerConfig {
-  videoId?: string;
-  width?: string | number;
-  height?: string | number;
-  playerVars?: Record<string, string | number>;
-  events?: {
-    onReady?: (e: { target: YTPlayer }) => void;
-    onStateChange?: (e: { data: YTPlayerState; target: YTPlayer }) => void;
-  };
-}
-
-// ─── YouTube API singleton loader ─────────────────────────────────────────
-
-let ytApiLoaded = false;
-let ytApiReady = false;
-const ytReadyCbs: Array<() => void> = [];
-
-function loadYouTubeAPI(): Promise<void> {
-  return new Promise((resolve) => {
-    if (ytApiReady) { resolve(); return; }
-    ytReadyCbs.push(resolve);
-    if (!ytApiLoaded) {
-      ytApiLoaded = true;
-      window.onYouTubeIframeAPIReady = () => {
-        ytApiReady = true;
-        ytReadyCbs.splice(0).forEach((cb) => cb());
-      };
-      const tag = document.createElement("script");
-      tag.src = "https://www.youtube.com/iframe_api";
-      document.head.appendChild(tag);
-    }
-  });
-}
+import { loadYouTubeAPI } from "../../lib/youtube-api";
+import type { YTPlayer } from "../../lib/youtube-api";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
