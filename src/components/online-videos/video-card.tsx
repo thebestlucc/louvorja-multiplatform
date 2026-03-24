@@ -9,6 +9,7 @@ import { downloadOnlineVideo, cancelDownload, setCurrentSlide } from "../../lib/
 import { getPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { useDownloadStore } from "../../stores/download-store";
+import { usePresentationStore } from "../../stores/presentation-store";
 
 interface VideoCardProps {
   video: OnlineVideo;
@@ -38,6 +39,12 @@ function parseThumbnail(images: string | null): string | null {
 
 export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
   const { t } = useTranslation();
+  const currentVideoProjectionId = usePresentationStore(
+    (s) => s.currentVideoProjectionId,
+  );
+  const isProjecting =
+    currentVideoProjectionId === video.videoId ||
+    currentVideoProjectionId === video.localPath;
   const download = useDownloadStore((s) => s.downloads[video.videoId]);
   const downloading = !!download;
   const progress = download?.progress ?? 0;
@@ -87,7 +94,7 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
       videoSource = "local";
     }
 
-    await catcher(
+    const [, err] = await catcher(
       setCurrentSlide({
         slideType: "online_video",
         videoId,
@@ -111,6 +118,12 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
       }),
       { notify: true },
     );
+
+    if (!err) {
+      usePresentationStore.getState().setCurrentVideoProjectionId(
+        video.localPath ?? video.videoId,
+      );
+    }
   };
 
   const thumbnailUrl = parseThumbnail(video.images);
@@ -160,6 +173,16 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
           <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white font-mono">
             {duration}
           </span>
+        )}
+        {isProjecting && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <div className="flex flex-col items-center gap-1">
+              <div className="h-2.5 w-2.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-[9px] font-bold text-green-400 uppercase tracking-wider">
+                {t("onlineVideos.detail.nowPlaying")}
+              </span>
+            </div>
+          </div>
         )}
       </div>
 

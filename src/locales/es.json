@@ -1381,7 +1381,11 @@
       "deleteLocal": "Eliminar archivo local",
       "duration": "Duración",
       "statusError": "Error",
-      "project": "Proyectar"
+      "project": "Proyectar",
+      "nowPlaying": "En pantalla",
+      "projectAll": "Todas las pantallas",
+      "projectProjector": "Solo proyector",
+      "projectReturn": "Retorno + streaming"
     }
   }
 }

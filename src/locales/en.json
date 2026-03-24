@@ -1381,7 +1381,11 @@
       "deleteLocal": "Delete local file",
       "duration": "Duration",
       "statusError": "Error",
-      "project": "Project"
+      "project": "Project",
+      "nowPlaying": "Now playing",
+      "projectAll": "All screens",
+      "projectProjector": "Projector only",
+      "projectReturn": "Return + streaming"
     }
   }
 }
