@@ -23,6 +23,15 @@ export function useVideoFollower(
 ): RefObject<VideoStateEvent | null> {
   const lastStateRef = useRef<VideoStateEvent | null>(null);
 
+  // Reset stale position on clear so the next video doesn't seek to the old time (Bug 1 fix)
+  useEffect(() => {
+    if (!enabled) return;
+    const unsub = listen("slide-cleared", () => {
+      lastStateRef.current = null;
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, [enabled, lastStateRef]);
+
   useEffect(() => {
     if (!enabled) return;
 

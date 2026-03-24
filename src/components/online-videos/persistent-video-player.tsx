@@ -121,6 +121,13 @@ export function PersistentVideoPlayer() {
       clearPlayerNode();
       useVideoPlayerStore.getState().resetVideoState();
       setActiveSlide(null);
+      // Broadcast zero-state so followers reset lastStateRef to zeros (Bug 1 fix)
+      void emit("video-state", {
+        paused: true,
+        currentTime: 0,
+        duration: 0,
+        volume: 1,
+      } satisfies VideoStateEvent).catch(() => {});
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
   }, []);
@@ -168,7 +175,7 @@ export function PersistentVideoPlayer() {
 
     // Create container div imperatively (React must not manage this node)
     const container = document.createElement("div");
-    container.style.cssText = "width:100%;height:100%;";
+    container.style.cssText = "width:100%;height:100%;overflow:hidden;";
     hiddenHostRef.current.appendChild(container);
     const uid = `yt-master-${Math.random().toString(36).slice(2)}`;
     container.id = uid;
@@ -192,7 +199,12 @@ export function PersistentVideoPlayer() {
           onReady: ({ target }) => {
             if (destroyed) return;
             ytPlayerRef.current = target;
-            registerPlayerNode(target.getIframe());
+            // Apply CSS to hide YT controls and disable interaction on the master iframe (Bug 2 fix)
+            const iframe = target.getIframe();
+            iframe.style.cssText =
+              "width:100%;height:100%;pointer-events:none;border:none;" +
+              "transform:scale(1.06);transform-origin:center;display:block;";
+            registerPlayerNode(iframe);
 
             // Start polling every 250ms
             pollTimerRef.current = setInterval(() => {
