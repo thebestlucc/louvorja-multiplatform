@@ -31,6 +31,14 @@ export async function setCurrentSlide(slideData: SlideContent): Promise<void> {
   return tauriInvoke<void>("set_current_slide", { slideData });
 }
 
+export async function setSlideOnProjector(slideData: SlideContent): Promise<void> {
+  return tauriInvoke<void>("set_slide_on_projector", { slideData });
+}
+
+export async function setSlideOnReturn(slideData: SlideContent): Promise<void> {
+  return tauriInvoke<void>("set_slide_on_return", { slideData });
+}
+
 export async function getCurrentSlide(): Promise<SlideContent | null> {
   return tauriInvoke<SlideContent | null>("get_current_slide");
 }
