@@ -933,7 +933,9 @@
     },
     "presentationTitle": "Projection",
     "presentationFontSize": "Default font size",
-    "presentationFontSizeHint": "Applies to hymnal lyrics, collection music, and Bible projections."
+    "presentationFontSizeHint": "Applies to hymnal lyrics, collection music, and Bible projections.",
+    "presentationFontFamily": "Font family",
+    "presentationFontFamilyHint": "Font used for projected content. System Default inherits the OS font."
   },
   "shortcuts": {
     "categories": {
