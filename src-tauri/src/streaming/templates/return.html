@@ -378,10 +378,6 @@ function normalizeAudioPlaybackPayload(raw) {
   };
 }
 
-function encodePathSegment(value) {
-  return encodeURIComponent(value).replace(/%2F/g, "/");
-}
-
 function toStreamingMediaUrl(pathValue) {
   if (!pathValue) return "";
   const v = String(pathValue);
