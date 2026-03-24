@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
+import { catcher } from "../../lib/catcher";
+import { copyImageToMedia } from "../../lib/tauri";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -36,6 +39,7 @@ const POSITIONS = [
 
 export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
   const { t } = useTranslation();
+  const [loadingImage, setLoadingImage] = useState(false);
 
   const handleBrowseImage = async () => {
     const selected = await openFileDialog({
@@ -45,7 +49,13 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
 
     if (!selected || typeof selected !== "string") return;
 
-    onChange({ ...value, imagePath: selected });
+    setLoadingImage(true);
+    const [managedPath, err] = await catcher(copyImageToMedia(selected), { notify: true });
+    setLoadingImage(false);
+
+    if (err) return;
+
+    onChange({ ...value, imagePath: managedPath! });
   };
 
   return (
@@ -102,6 +112,7 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
               type="button"
               variant="outline"
               size="sm"
+              disabled={loadingImage}
               onClick={() => void handleBrowseImage()}
             >
               {t("presentations.videoBrowse")}

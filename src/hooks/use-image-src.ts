@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { catcher } from "../lib/catcher";
+import { buildMediaUrl } from "../lib/media-url";
+import { getStreamingStatus } from "../lib/tauri/streaming";
 
 function isCdnRelativePath(path: string): boolean {
   if (!path.startsWith("/")) return false;
@@ -14,9 +16,13 @@ function isAbsolutePath(path: string): boolean {
 }
 
 /**
- * Resolves a local image path to a URL the webview can load,
- * using Tauri's asset protocol (convertFileSrc). Does NOT depend
- * on the streaming server — safe to use for backgrounds and covers.
+ * Resolves a local image path to a URL the webview can load.
+ *
+ * - CDN-relative paths (/covers/, /musics/, etc.) and managed paths (media/...)
+ *   are served via the asset protocol (convertFileSrc) — these are always within
+ *   the asset scope ($APPDATA).
+ * - Absolute OS paths (e.g. legacy slides with picker paths outside $APPDATA)
+ *   fall back to the streaming server so they load without scope restrictions.
  */
 export function useImageSrc(path: string | null | undefined): string | null {
   const [src, setSrc] = useState<string | null>(null);
@@ -60,13 +66,27 @@ export function useImageSrc(path: string | null | undefined): string | null {
         return;
       }
 
-      // Absolute OS paths
+      // Absolute OS paths — if the path is within $APPDATA (managed covers, CDN files)
+      // use the asset protocol directly. Paths outside $APPDATA (legacy picker paths
+      // stored before the copy-on-import fix) fall back to the streaming server.
       if (isAbsolutePath(normalized)) {
-        if (!cancelled) setSrc(convertFileSrc(normalized));
+        const [appDir, dirErr] = await catcher(appDataDir(), { notify: false });
+        if (!dirErr && appDir && normalized.startsWith(appDir)) {
+          // Within app_data_dir — asset protocol scope covers it
+          if (!cancelled) setSrc(convertFileSrc(normalized));
+        } else {
+          // Outside app_data_dir — stream via local HTTP to avoid scope restriction
+          const [info, infoErr] = await catcher(getStreamingStatus(), { notify: false });
+          if (!infoErr && info?.isRunning && !cancelled) {
+            setSrc(buildMediaUrl(normalized, info.port));
+          } else if (!cancelled) {
+            setSrc(null);
+          }
+        }
         return;
       }
 
-      // Managed relative paths like media/images/...
+      // Managed relative paths like media/covers/...
       if (normalized.startsWith("media/")) {
         const [absolute, error] = await catcher(
           async () => {

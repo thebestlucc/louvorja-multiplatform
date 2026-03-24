@@ -1,11 +1,16 @@
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::catcher::catcher;
-use crate::utils::paths::SafePath;
 use crate::video;
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 /// Get metadata for a video file.
+///
+/// Accepts any absolute OS path (e.g. user-picked via file dialog) or a managed
+/// relative path (`media/videos/...`) resolved against `app_data_dir`.
+/// SafePath is intentionally NOT used here — this command is for user-picked files
+/// that live anywhere on disk, not for managed internal paths.
 ///
 /// The native parser runs synchronously (fast). If it fails and ffprobe is
 /// enabled, the ffprobe fallback can block up to 4 seconds — that work is
@@ -18,14 +23,18 @@ pub async fn get_video_metadata(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<crate::db::models::VideoMetadata, AppError> {
-    let (app_data_dir, err) = catcher(app.path().app_data_dir());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let app_data_dir = app_data_dir.unwrap();
-
-    let safe_path = SafePath::new(&app_data_dir);
-    let resolved_path = safe_path.resolve(&path)?;
+    let p = std::path::Path::new(&path);
+    let resolved_path: PathBuf = if p.is_absolute() {
+        p.canonicalize().map_err(|e| AppError::NotFound(format!("Video file '{}' not found: {}", path, e)))?
+    } else {
+        // Relative path — resolve against app_data_dir
+        let (app_data_dir, err) = catcher(app.path().app_data_dir());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let base = app_data_dir.unwrap();
+        base.join(&path).canonicalize().map_err(|e| AppError::NotFound(format!("Video file '{}' not found: {}", path, e)))?
+    };
 
     if !resolved_path.exists() {
         return Err(AppError::NotFound(format!(

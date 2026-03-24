@@ -770,8 +770,8 @@ function applyPanel(prefix, payload, mode) {
     return;
   }
 
-  // Extension-based fallback when slideType is not recognized as media
-  if (slideType !== "image" && slideType !== "video" && slideType !== "online_video") {
+  // Extension-based fallback when slideType is not recognized as media — skip types that already handle backgroundImage as background
+  if (slideType !== "image" && slideType !== "video" && slideType !== "online_video" && slideType !== "cover" && slideType !== "lyrics" && slideType !== "text" && slideType !== "bible") {
     var bgInferred2 = inferMediaType(slide.backgroundImage);
     var vpInferred2 = inferMediaType(slide.videoPath);
     if (bgInferred2 === "image") {

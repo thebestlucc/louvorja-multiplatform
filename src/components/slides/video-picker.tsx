@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
 import type { SlideContent, VideoMetadata } from "../../lib/bindings";
-import { getVideoMetadata } from "../../lib/tauri";
+import { getVideoMetadata, copyVideoToMedia } from "../../lib/tauri";
 import { getConversionRecommendation, isVideoFormatSupported } from "../../lib/utils";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -45,9 +45,21 @@ export function VideoPicker({ value, onChange }: VideoPickerProps) {
       fallbackMessage: t("presentations.videoImportFailed", { error: "" }),
     });
 
+    if (metaError) {
+      setLoading(false);
+      return;
+    }
+
+    // Copy the video into the managed media directory so it can be served
+    // via asset protocol/streaming server from within app_data_dir.
+    const [managedPath, copyError] = await catcher(copyVideoToMedia(selected), {
+      notify: true,
+      fallbackMessage: t("presentations.videoImportFailed", { error: "" }),
+    });
+
     setLoading(false);
 
-    if (metaError) {
+    if (copyError) {
       return;
     }
 
@@ -55,7 +67,7 @@ export function VideoPicker({ value, onChange }: VideoPickerProps) {
 
     onChange({
       ...value,
-      videoPath: selected,
+      videoPath: managedPath,
     });
 
     notify.success(t("presentations.videoImported"));

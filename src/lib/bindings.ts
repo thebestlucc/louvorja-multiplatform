@@ -1177,8 +1177,21 @@ async copyImageToMedia(imagePath: string) : Promise<Result<string, AppErrorRespo
     else return { status: "error", error: e  as any };
 }
 },
+async copyVideoToMedia(videoPath: string) : Promise<Result<string, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("copy_video_to_media", { videoPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * Get metadata for a video file.
+ * 
+ * Accepts any absolute OS path (e.g. user-picked via file dialog) or a managed
+ * relative path (`media/videos/...`) resolved against `app_data_dir`.
+ * SafePath is intentionally NOT used here — this command is for user-picked files
+ * that live anywhere on disk, not for managed internal paths.
  * 
  * The native parser runs synchronously (fast). If it fails and ffprobe is
  * enabled, the ffprobe fallback can block up to 4 seconds — that work is

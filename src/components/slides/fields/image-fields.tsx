@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
+import { catcher } from "../../../lib/catcher";
+import { copyImageToMedia } from "../../../lib/tauri";
 import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 
@@ -9,6 +12,7 @@ export function ImageFields({ src, alt, onChange }: {
   onChange: (src: string, alt?: string) => void;
 }) {
   const { t } = useTranslation();
+  const [loading, setLoading] = useState(false);
 
   const handleBrowse = async () => {
     const selected = await openFileDialog({
@@ -18,7 +22,13 @@ export function ImageFields({ src, alt, onChange }: {
 
     if (!selected || typeof selected !== "string") return;
 
-    onChange(selected, alt);
+    setLoading(true);
+    const [managedPath, err] = await catcher(copyImageToMedia(selected), { notify: true });
+    setLoading(false);
+
+    if (err) return;
+
+    onChange(managedPath!, alt);
   };
 
   const filename = src
@@ -42,6 +52,7 @@ export function ImageFields({ src, alt, onChange }: {
             type="button"
             variant="outline"
             size="sm"
+            disabled={loading}
             onClick={() => void handleBrowse()}
           >
             {t("presentations.videoBrowse")}
