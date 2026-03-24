@@ -520,6 +520,47 @@ fn source_mtime_ms(path: &Path) -> Result<i64, AppError> {
     Ok(i64::try_from(millis).unwrap_or(i64::MAX))
 }
 
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use crate::db::models::Collection;
+
+    fn make_collection(cover: Option<&str>) -> Collection {
+        Collection {
+            id: 1,
+            name: "Test Collection".to_string(),
+            description: None,
+            year: None,
+            cover_path: cover.map(str::to_string),
+            auto_cover_path: None,
+            song_count: 0,
+            source_type: "api".to_string(),
+            api_album_id: Some(1),
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
+        }
+    }
+
+    #[test]
+    fn resolve_collection_paths_strips_leading_slash() {
+        let app_dir = PathBuf::from("/app/data");
+        let collections = vec![make_collection(Some("/covers/album1.jpg"))];
+        let resolved = super::resolve_collection_paths(collections, &app_dir);
+        assert_eq!(
+            resolved[0].cover_path.as_deref(),
+            Some("/app/data/covers/album1.jpg")
+        );
+    }
+
+    #[test]
+    fn resolve_collection_paths_none_cover_remains_none() {
+        let app_dir = PathBuf::from("/app/data");
+        let collections = vec![make_collection(None)];
+        let resolved = super::resolve_collection_paths(collections, &app_dir);
+        assert_eq!(resolved[0].cover_path, None);
+    }
+}
+
 fn validate_cover_path(path: &str) -> Result<(), AppError> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
