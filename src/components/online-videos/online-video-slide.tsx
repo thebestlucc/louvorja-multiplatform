@@ -21,7 +21,7 @@ interface OnlineVideoSlideProps {
   className?: string;
 }
 
-function LocalVideoPlayer({ src, title, className }: { src: string; title: string; className?: string }) {
+function LocalVideoPlayer({ src, title, className, muted }: { src: string; title: string; className?: string; muted?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Autoplay with canplay guard (avoids NotSupportedError in Tauri webview)
@@ -86,6 +86,7 @@ function LocalVideoPlayer({ src, title, className }: { src: string; title: strin
       className={className}
       title={title}
       playsInline
+      muted={muted}
     />
   );
 }
@@ -101,9 +102,9 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
 
     return (
       <div className={cn("h-full w-full bg-black", className)}>
-        {isLocalFile && slide.videoUrl ? (
+        {isLocalFile && localVideoSrc ? (
           <LocalVideoPlayer
-            src={localVideoSrc ?? ""}
+            src={localVideoSrc}
             title={slide.videoTitle ?? ""}
             className="h-full w-full"
           />
@@ -126,27 +127,49 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   }
 
   if (renderMode === "return-current") {
+    const isLocalVideo = slide.videoSource === "local" && !!localVideoSrc;
+    const thumbUrl = slide.videoId
+      ? `https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`
+      : null;
+
     return (
-      <div className={cn("flex h-full w-full flex-col items-center justify-center gap-3 bg-black text-white", className)}>
-        <span className="rounded bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.3em] text-white/80">
-          {t("presentations.types.onlineVideo")}
-        </span>
-        <p className="text-sm text-center text-white/60 px-4 truncate max-w-full">
-          {slide.videoTitle ?? slide.videoId ?? ""}
-        </p>
+      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
+        {isLocalVideo ? (
+          <LocalVideoPlayer
+            src={localVideoSrc!}
+            title={slide.videoTitle ?? ""}
+            className="h-full w-full object-contain"
+            muted
+          />
+        ) : thumbUrl ? (
+          <img src={thumbUrl} alt="" className="h-full w-full object-cover opacity-60" />
+        ) : null}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex flex-col gap-1">
+          <span className="rounded bg-white/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.3em] text-white/70 self-start">
+            {t("presentations.types.onlineVideo")}
+          </span>
+          <p className="text-xs text-white/80 truncate">{slide.videoTitle ?? slide.videoId ?? ""}</p>
+        </div>
       </div>
     );
   }
 
   if (renderMode === "return-next") {
+    const thumbUrl = slide.videoId
+      ? `https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`
+      : null;
+
     return (
-      <div className={cn("flex h-full w-full flex-col items-center justify-center gap-3 bg-black text-white", className)}>
-        <span className="rounded bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.3em] text-white/80">
-          {t("presentations.types.onlineVideo")}
-        </span>
-        <p className="text-xs text-center text-white/60 px-4 truncate max-w-full">
-          {slide.videoTitle ?? slide.videoId ?? ""}
-        </p>
+      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
+        {thumbUrl && (
+          <img src={thumbUrl} alt="" className="h-full w-full object-cover opacity-40" />
+        )}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 flex flex-col gap-1">
+          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.25em] text-white/60 self-start">
+            {t("presentations.types.onlineVideo")}
+          </span>
+          <p className="text-[10px] text-white/70 truncate">{slide.videoTitle ?? slide.videoId ?? ""}</p>
+        </div>
       </div>
     );
   }
