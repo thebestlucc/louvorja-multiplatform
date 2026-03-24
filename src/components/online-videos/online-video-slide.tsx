@@ -6,6 +6,8 @@ import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
+import { useVideoFollower } from "../../hooks/use-video-follower";
+import { VideoPreviewSlot } from "./persistent-video-player";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -22,11 +24,20 @@ export type OnlineVideoRenderMode =
 
 // ─── LocalVideoPlayer ─────────────────────────────────────────────────────
 
-function LocalVideoPlayer({ src, title, className, muted }: { src: string; title: string; className?: string; muted?: boolean }) {
+function LocalVideoPlayer({ src, title, className, muted, isFollower = false }: {
+  src: string; title: string; className?: string; muted?: boolean; isFollower?: boolean;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const lastStateRef = useVideoFollower(
+    videoRef as React.RefObject<HTMLVideoElement | null>,
+    "local",
+    isFollower,
+  );
 
   // Autoplay with canplay guard (avoids NotSupportedError in Tauri webview)
   useEffect(() => {
+    if (isFollower) return;
     const video = videoRef.current;
     if (!video) return;
     const tryPlay = () => {
@@ -40,10 +51,11 @@ function LocalVideoPlayer({ src, title, className, muted }: { src: string; title
       video.addEventListener("canplay", tryPlay, { once: true });
       return () => video.removeEventListener("canplay", tryPlay);
     }
-  }, [src]);
+  }, [src, isFollower]);
 
   // Listen for video-control events from main window
   useEffect(() => {
+    if (isFollower) return;
     const unsub = listen<VideoControlEvent>("video-control", (e) => {
       const video = videoRef.current;
       if (!video) return;
@@ -54,10 +66,11 @@ function LocalVideoPlayer({ src, title, className, muted }: { src: string; title
       else if (action === "volume" && value !== undefined) video.volume = value;
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
-  }, []);
+  }, [isFollower]);
 
   // Emit video-state to main window on playback events
   useEffect(() => {
+    if (isFollower) return;
     const video = videoRef.current;
     if (!video) return;
     const emit = () => {
@@ -78,7 +91,29 @@ function LocalVideoPlayer({ src, title, className, muted }: { src: string; title
       video.removeEventListener("pause", emit);
       video.removeEventListener("volumechange", emit);
     };
-  }, [src]);
+  }, [src, isFollower]);
+
+  // When follower: seek to last known state on canplay
+  useEffect(() => {
+    if (!isFollower) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const onCanPlay = () => {
+      const last = lastStateRef.current;
+      if (last && last.currentTime > 2) {
+        video.currentTime = last.currentTime;
+      }
+      if (last && !last.paused) {
+        void video.play().catch(() => {});
+      }
+    };
+    if (video.readyState >= 3) {
+      onCanPlay();
+    } else {
+      video.addEventListener("canplay", onCanPlay, { once: true });
+      return () => video.removeEventListener("canplay", onCanPlay);
+    }
+  }, [src, isFollower, lastStateRef]);
 
   return (
     <video
@@ -94,15 +129,18 @@ function LocalVideoPlayer({ src, title, className, muted }: { src: string; title
 
 // ─── YouTubePlayer ────────────────────────────────────────────────────────
 
-function YouTubePlayer({ videoId, title, className, muted = false }: {
-  videoId: string;
-  title: string;
-  className?: string;
-  muted?: boolean;
+function YouTubePlayer({ videoId, title, className, muted = false, isFollower = false }: {
+  videoId: string; title: string; className?: string; muted?: boolean; isFollower?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const lastStateRef = useVideoFollower(
+    playerRef as React.RefObject<YTPlayer | null>,
+    "youtube",
+    isFollower,
+  );
 
   const emitState = useCallback((player: YTPlayer) => {
     void emitTo("main", "video-state", {
@@ -135,20 +173,31 @@ function YouTubePlayer({ videoId, title, className, muted = false }: {
           disablekb: 1,
           iv_load_policy: 3,
           cc_load_policy: 0,
-          mute: muted ? 1 : 0,
+          mute: (isFollower || muted) ? 1 : 0,
           playsinline: 1,
           origin: window.location.origin,
         },
         events: {
           onReady: ({ target }) => {
             playerRef.current = target;
-            emitState(target);
+            if (isFollower) {
+              // Seek to last known master position on init
+              const last = lastStateRef.current;
+              if (last && last.currentTime > 2) {
+                target.seekTo(last.currentTime, true);
+                if (!last.paused) target.playVideo();
+              }
+            } else {
+              emitState(target);
+            }
           },
           onStateChange: ({ data, target }) => {
-            emitState(target);
-            clearInterval(pollRef.current);
-            if (data === 1) { // PLAYING
-              pollRef.current = setInterval(() => emitState(target), 250);
+            if (!isFollower) {
+              emitState(target);
+              clearInterval(pollRef.current);
+              if (data === 1) { // PLAYING
+                pollRef.current = setInterval(() => emitState(target), 250);
+              }
             }
           },
         },
@@ -157,15 +206,17 @@ function YouTubePlayer({ videoId, title, className, muted = false }: {
     });
 
     // Listen for video-control events
-    const unsub = listen<VideoControlEvent>("video-control", (e) => {
-      const p = playerRef.current;
-      if (!p) return;
-      const { action, value } = e.payload;
-      if (action === "play") p.playVideo();
-      else if (action === "pause") p.pauseVideo();
-      else if (action === "seek" && value !== undefined) p.seekTo(value, true);
-      else if (action === "volume" && value !== undefined) p.setVolume(Math.round(value * 100));
-    }).catch(() => () => {});
+    const unsub = !isFollower
+      ? listen<VideoControlEvent>("video-control", (e) => {
+          const p = playerRef.current;
+          if (!p) return;
+          const { action, value } = e.payload;
+          if (action === "play") p.playVideo();
+          else if (action === "pause") p.pauseVideo();
+          else if (action === "seek" && value !== undefined) p.seekTo(value, true);
+          else if (action === "volume" && value !== undefined) p.setVolume(Math.round(value * 100));
+        }).catch(() => () => {})
+      : Promise.resolve(() => {});
 
     return () => {
       destroyed = true;
@@ -174,7 +225,7 @@ function YouTubePlayer({ videoId, title, className, muted = false }: {
       playerRef.current = undefined;
       void unsub.then((fn) => fn());
     };
-  }, [videoId, muted, emitState]);
+  }, [videoId, muted, isFollower, emitState, lastStateRef]);
 
   return (
     <div
@@ -216,12 +267,16 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
             src={localVideoSrc}
             title={slide.videoTitle ?? ""}
             className="h-full w-full"
+            muted
+            isFollower
           />
         ) : slide.videoId ? (
           <YouTubePlayer
             videoId={slide.videoId}
             title={slide.videoTitle ?? slide.videoId}
             className="h-full w-full"
+            muted
+            isFollower
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
@@ -234,10 +289,6 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
 
   if (renderMode === "return-current") {
     const isLocalVideo = slide.videoSource === "local" && !!localVideoSrc;
-    const thumbUrl = slide.videoId
-      ? `https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`
-      : null;
-
     return (
       <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
         {isLocalVideo ? (
@@ -246,9 +297,16 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
             title={slide.videoTitle ?? ""}
             className="h-full w-full object-contain"
             muted
+            isFollower
           />
-        ) : thumbUrl ? (
-          <img src={thumbUrl} alt="" className="h-full w-full object-cover opacity-60" />
+        ) : slide.videoId ? (
+          <YouTubePlayer
+            videoId={slide.videoId}
+            title={slide.videoTitle ?? slide.videoId}
+            className="h-full w-full"
+            muted
+            isFollower
+          />
         ) : null}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex flex-col gap-1">
           <span className="rounded bg-white/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.3em] text-white/70 self-start">
@@ -297,24 +355,11 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   }
 
   if (renderMode === "playing-now-preview") {
-    const isLocal = slide.videoSource === "local" && !!localVideoSrc;
-
+    const hasVideo = (slide.videoSource === "local" && !!slide.videoUrl) || !!slide.videoId;
     return (
       <div className={cn("h-full w-full bg-black relative overflow-hidden", className)}>
-        {isLocal ? (
-          <LocalVideoPlayer
-            src={localVideoSrc!}
-            title={slide.videoTitle ?? ""}
-            className="h-full w-full object-contain"
-            muted
-          />
-        ) : slide.videoId ? (
-          <YouTubePlayer
-            videoId={slide.videoId}
-            title={slide.videoTitle ?? slide.videoId}
-            className="h-full w-full"
-            muted
-          />
+        {hasVideo ? (
+          <VideoPreviewSlot className="h-full w-full" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
             {t("presentations.types.onlineVideo")}
