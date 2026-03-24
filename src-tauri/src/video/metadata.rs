@@ -29,21 +29,9 @@ pub fn parse_video_metadata(path: &Path) -> Result<ParsedVideoMetadata, AppError
         // MP4 files start with an `ftyp` box at offset 4. MOV files may start
         // with `ftyp`, `moov`, `wide`, `free`, or `mdat` atoms instead.
         "mp4" | "mov" | "m4v" | "3gp" => {
-            if read < 8 {
-                return Err(AppError::Internal("File too small for ISO BMFF container".into()));
-            }
-            let sig = &magic[4..8];
-            let valid_iso_bmff = sig == b"ftyp"
-                || sig == b"moov"
-                || sig == b"wide"
-                || sig == b"free"
-                || sig == b"mdat";
-            if !valid_iso_bmff {
-                return Err(AppError::Internal(format!(
-                    "Invalid {} file header",
-                    format.to_uppercase()
-                )));
-            }
+            // Skip magic-byte validation — valid ISO BMFF files can start with many
+            // different box types (ftyp, moov, mdat, wide, free, skip, uuid, pnot, …).
+            // The parser itself will fail with a meaningful error on truly invalid files.
             parse_mp4(path)
         }
         "webm" => {

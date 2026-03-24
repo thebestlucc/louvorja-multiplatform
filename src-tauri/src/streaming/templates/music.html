@@ -704,8 +704,8 @@ function renderPayload(payload, persistRealPayload) {
     return;
   }
 
-  // Extension-based fallback when slideType is not image/video but path has media extension
-  if (slideType !== "image" && slideType !== "video") {
+  // Extension-based fallback when slideType is not recognized — skip types that already handle backgroundImage as background
+  if (slideType !== "image" && slideType !== "video" && slideType !== "cover" && slideType !== "lyrics" && slideType !== "text" && slideType !== "bible") {
     var bgInferred = inferMediaType(slide.backgroundImage);
     var vpInferred = inferMediaType(slide.videoPath);
     if (bgInferred === "image" || vpInferred === "image") {

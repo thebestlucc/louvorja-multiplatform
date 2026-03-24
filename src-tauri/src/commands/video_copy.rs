@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::utils::catcher::catcher;
+use crate::video;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -73,6 +74,63 @@ pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<S
     })
     .await
     .map_err(|e| AppError::Internal(format!("Image copy task panicked: {}", e)))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn copy_video_to_media(video_path: String, app: AppHandle) -> Result<String, AppError> {
+    let source = PathBuf::from(&video_path);
+    if !source.exists() {
+        return Err(AppError::NotFound(format!(
+            "Video file '{}' does not exist",
+            source.display()
+        )));
+    }
+    let (canonical_source, err) = catcher(source.canonicalize());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let canonical_source = canonical_source.unwrap();
+    let extension = video::ensure_supported_video(&canonical_source)?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
+
+    // Offload hash + copy to a blocking thread — video files can be hundreds of MB
+    // and blocking the IPC thread hangs all invoke() calls on Windows.
+    tokio::task::spawn_blocking(move || {
+        let mut hasher = blake3::Hasher::new();
+        let mut input = File::open(&canonical_source)?;
+        let mut buf = [0u8; 65536]; // 64 KB chunks for large files
+        loop {
+            let read = input.read(&mut buf)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buf[..read]);
+        }
+        let digest = hasher.finalize().to_hex().to_string();
+        let filename = format!("{}.{}", &digest[..24], extension);
+
+        let media_dir = app_data_dir.join("media").join("videos");
+        std::fs::create_dir_all(&media_dir)?;
+
+        let destination = media_dir.join(&filename);
+        if destination != canonical_source && !destination.exists() {
+            std::fs::copy(&canonical_source, &destination).map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to copy video to managed media directory: {}",
+                    e
+                ))
+            })?;
+        }
+
+        Ok::<String, AppError>(format!("media/videos/{}.{}", &digest[..24], extension))
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Video copy task panicked: {}", e)))?
 }
 
 pub(crate) fn ensure_supported_cover_image(path: &Path) -> Result<&'static str, AppError> {
