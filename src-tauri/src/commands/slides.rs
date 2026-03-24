@@ -261,34 +261,45 @@ fn collect_video_media_files(
     slides: &[Slide],
     app_data_dir: &Path,
 ) -> Result<Vec<crate::archive::MediaFile>, AppError> {
+    use crate::archive::{extract_media_paths, unique_archive_name};
+    use crate::db::models::slides::SlideContent;
+
     let mut seen = HashSet::new();
     let mut files = Vec::new();
 
     for slide in slides {
-        let Some(video_path) = extract_video_path_from_content(&slide.content) else {
-            continue;
-        };
-
-        let archive_filename = if let Some(path) = video_path.strip_prefix("media/") {
-            path.to_string()
-        } else {
-            continue;
-        };
-
-        if !seen.insert(archive_filename.clone()) {
-            continue;
+        // Existing: relative videoPath from managed media (yt-dlp downloads)
+        if let Some(video_path) = extract_video_path_from_content(&slide.content) {
+            if let Some(rel) = video_path.strip_prefix("media/") {
+                let archive_filename = rel.to_string();
+                if seen.insert(archive_filename.clone()) {
+                    let absolute = app_data_dir.join("media").join(&archive_filename);
+                    if absolute.exists() {
+                        let data = std::fs::read(&absolute)?;
+                        files.push(crate::archive::MediaFile {
+                            filename: archive_filename,
+                            data,
+                        });
+                    }
+                }
+            }
         }
 
-        let absolute = app_data_dir.join("media").join(&archive_filename);
-        if !absolute.exists() {
-            continue;
+        // New: absolute-path media (backgroundImage, videoPath, videoUrl)
+        if let Ok(content) = serde_json::from_str::<SlideContent>(&slide.content) {
+            for abs_path in extract_media_paths(&content) {
+                let src = std::path::Path::new(&abs_path);
+                if let Some(filename) = src.file_name().and_then(|f| f.to_str()) {
+                    let archive_name = unique_archive_name(filename, &mut seen);
+                    if let Ok(data) = std::fs::read(src) {
+                        files.push(crate::archive::MediaFile {
+                            filename: archive_name,
+                            data,
+                        });
+                    }
+                }
+            }
         }
-
-        let data = std::fs::read(&absolute)?;
-        files.push(crate::archive::MediaFile {
-            filename: archive_filename,
-            data,
-        });
     }
 
     Ok(files)

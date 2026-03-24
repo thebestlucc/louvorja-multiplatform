@@ -97,7 +97,7 @@ pub struct MonitorInfo {
     pub scale_factor: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SlideContent {
     pub slide_type: String,
