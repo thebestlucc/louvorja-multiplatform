@@ -637,14 +637,6 @@ fn serve_media(
         return;
     };
 
-    let root = match root.canonicalize() {
-        Ok(path) => path,
-        Err(_) => {
-            serve_not_found(&mut stream);
-            return;
-        }
-    };
-
     let sanitized_path = request_path
         .split(['?', '#'])
         .next()
