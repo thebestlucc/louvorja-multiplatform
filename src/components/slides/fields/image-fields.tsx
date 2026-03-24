@@ -1,9 +1,5 @@
-import { useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
-import { notify } from "../../../lib/notifications";
-import { catcher } from "../../../lib/catcher";
-import { useCopySlideImageToMedia } from "../../../lib/queries";
 import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 
@@ -13,8 +9,6 @@ export function ImageFields({ src, alt, onChange }: {
   onChange: (src: string, alt?: string) => void;
 }) {
   const { t } = useTranslation();
-  const copyMutation = useCopySlideImageToMedia();
-  const [loading, setLoading] = useState(false);
 
   const handleBrowse = async () => {
     const selected = await openFileDialog({
@@ -24,21 +18,7 @@ export function ImageFields({ src, alt, onChange }: {
 
     if (!selected || typeof selected !== "string") return;
 
-    setLoading(true);
-
-    const [managedPath, copyError] = await catcher(
-      copyMutation.mutateAsync(selected),
-      { notify: true, fallbackMessage: t("presentations.imageImportFailed") },
-    );
-
-    setLoading(false);
-
-    if (copyError) return;
-
-    if (managedPath) {
-      onChange(managedPath, alt);
-      notify.success(t("presentations.imageImported"));
-    }
+    onChange(selected, alt);
   };
 
   const filename = src
@@ -62,10 +42,9 @@ export function ImageFields({ src, alt, onChange }: {
             type="button"
             variant="outline"
             size="sm"
-            disabled={loading}
             onClick={() => void handleBrowse()}
           >
-            {loading ? t("presentations.videoLoading") : t("presentations.videoBrowse")}
+            {t("presentations.videoBrowse")}
           </Button>
         </div>
       </div>

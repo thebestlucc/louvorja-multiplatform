@@ -1,9 +1,5 @@
-import { useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
-import { notify } from "../../lib/notifications";
-import { catcher } from "../../lib/catcher";
-import { useCopyImageToMedia } from "../../lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -40,8 +36,6 @@ const POSITIONS = [
 
 export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
   const { t } = useTranslation();
-  const copyMutation = useCopyImageToMedia();
-  const [loadingImage, setLoadingImage] = useState(false);
 
   const handleBrowseImage = async () => {
     const selected = await openFileDialog({
@@ -51,18 +45,7 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
 
     if (!selected || typeof selected !== "string") return;
 
-    setLoadingImage(true);
-    const [managedPath, copyError] = await catcher(
-      copyMutation.mutateAsync(selected),
-      { notify: true, fallbackMessage: t("presentations.imageImportFailed") },
-    );
-    setLoadingImage(false);
-
-    if (copyError) return;
-    if (managedPath) {
-      onChange({ ...value, imagePath: managedPath });
-      notify.success(t("presentations.imageImported"));
-    }
+    onChange({ ...value, imagePath: selected });
   };
 
   return (
@@ -119,10 +102,9 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
               type="button"
               variant="outline"
               size="sm"
-              disabled={loadingImage}
               onClick={() => void handleBrowseImage()}
             >
-              {loadingImage ? t("presentations.videoLoading") : t("presentations.videoBrowse")}
+              {t("presentations.videoBrowse")}
             </Button>
           </div>
           <div>
