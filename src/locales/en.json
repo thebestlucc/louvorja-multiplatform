@@ -80,7 +80,8 @@
     "projectionOn": "On",
     "projectionOff": "Off",
     "previewText": "For God so loved the world that he gave his one and only Son.",
-    "manageInSettings": "Manage in Settings"
+    "manageInSettings": "Manage in Settings",
+    "imageFilter": "Images"
   },
   "collections": {
     "autoCheckDisabledHint": "Auto-check is disabled. Enable it in Settings to validate source sync automatically.",

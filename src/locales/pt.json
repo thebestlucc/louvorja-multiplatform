@@ -80,7 +80,8 @@
     "projectionOn": "Sim",
     "projectionOff": "Não",
     "previewText": "Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito.",
-    "manageInSettings": "Gerenciar em Configurações"
+    "manageInSettings": "Gerenciar em Configurações",
+    "imageFilter": "Imagens"
   },
   "collections": {
     "autoCheckDisabledHint": "A verificação automática está desativada. Ative em Configurações para validar sincronização da fonte automaticamente.",
