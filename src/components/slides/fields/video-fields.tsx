@@ -8,11 +8,9 @@ import { ToggleField } from "./toggle-field";
 
 export function VideoFields({
   slide,
-  presentationId,
   onChange,
 }: {
   slide: SlideContent;
-  presentationId: number;
   onChange: (slide: SlideContent) => void;
 }) {
   const { t } = useTranslation();
@@ -20,7 +18,6 @@ export function VideoFields({
   return (
     <div className="space-y-4">
       <VideoPicker
-        presentationId={presentationId}
         value={slide}
         onChange={(next) => onChange(next)}
       />

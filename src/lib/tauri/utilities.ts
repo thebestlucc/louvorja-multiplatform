@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import type { TimerMode, TimerStateData, VideoMetadata } from "../bindings";
 import type { TextFormat } from "../../types/utilities";
 
@@ -90,65 +89,12 @@ export async function formatText(text: string, format: TextFormat): Promise<stri
 }
 
 // Video
-/**
- * Copy a video file to the managed media directory.
- *
- * The Rust command returns immediately (to avoid blocking the IPC bridge on
- * Windows for large files). This wrapper sets up event listeners before
- * invoking so the Promise resolves when the background copy finishes.
- *
- * Events emitted by Rust: `"video-copy-complete"` and `"video-copy-error"`,
- * each carrying `[presentationId, payload]`.
- */
-export async function copyVideoToMedia(videoPath: string, presentationId: number): Promise<string> {
-  return new Promise(async (resolve, reject) => {
-    let unlistenComplete: (() => void) | undefined;
-    let unlistenError: (() => void) | undefined;
-
-    function cleanup() {
-      unlistenComplete?.();
-      unlistenError?.();
-    }
-
-    // Register listeners before invoking — the background thread could theoretically
-    // emit before an after-invoke listen() call has time to register.
-    unlistenComplete = await listen<[number, string]>("video-copy-complete", (event) => {
-      const [pid, relPath] = event.payload;
-      if (pid === presentationId) {
-        cleanup();
-        resolve(relPath);
-      }
-    });
-
-    unlistenError = await listen<[number, string]>("video-copy-error", (event) => {
-      const [pid, err] = event.payload;
-      if (pid === presentationId) {
-        cleanup();
-        reject(new Error(err));
-      }
-    });
-
-    invoke<void>("copy_video_to_media", { videoPath, presentationId }).catch((e) => {
-      cleanup();
-      reject(e as Error);
-    });
-  });
-}
-
 export async function copyImageToMedia(imagePath: string): Promise<string> {
   return tauriInvoke<string>("copy_image_to_media", { imagePath });
 }
 
-export async function copySlideImageToMedia(imagePath: string): Promise<string> {
-  return tauriInvoke<string>("copy_slide_image_to_media", { imagePath });
-}
-
 export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
   return tauriInvoke<VideoMetadata>("get_video_metadata", { path });
-}
-
-export async function resolveMediaPath(path: string): Promise<string> {
-  return tauriInvoke<string>("resolve_media_path", { path });
 }
 
 export async function openMediaFolder(): Promise<void> {

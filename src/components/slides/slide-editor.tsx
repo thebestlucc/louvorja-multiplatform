@@ -46,7 +46,7 @@ const EMPTY_SLIDE_PROPS = {
   videoTitle: null,
 };
 
-export function SlideEditor({ slide, presentationId, onChange, hidePreview, hideTypeSelector }: SlideEditorProps) {
+export function SlideEditor({ slide, presentationId: _presentationId, onChange, hidePreview, hideTypeSelector }: SlideEditorProps) {
   const { t } = useTranslation();
 
   const handleTypeChange = (newType: string) => {
@@ -145,7 +145,6 @@ export function SlideEditor({ slide, presentationId, onChange, hidePreview, hide
         {slide.slideType === "video" && (
           <VideoFields
             slide={slide}
-            presentationId={presentationId}
             onChange={(next) => onChange(next)}
           />
         )}
