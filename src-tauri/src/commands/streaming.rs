@@ -28,8 +28,17 @@ fn to_streaming_path(path: &str, app_data_dir: Option<&Path>) -> String {
         return path.to_string();
     }
     if let Some(root) = app_data_dir {
-        if let Ok(rel) = Path::new(path).strip_prefix(root) {
-            return rel.to_string_lossy().into_owned();
+        // Canonicalize both sides so symlinks on macOS don't prevent matching.
+        // If canonicalization fails (file not yet on disk), fall back to the
+        // original forms — strip_prefix may still succeed for non-symlink paths.
+        let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+        let canonical_path = Path::new(path)
+            .canonicalize()
+            .unwrap_or_else(|_| Path::new(path).to_path_buf());
+        if let Ok(rel) = canonical_path.strip_prefix(&canonical_root) {
+            // Normalize OS-native separators so the relative path is always
+            // forward-slash on all platforms (required by the streaming URL).
+            return rel.to_string_lossy().replace('\\', "/");
         }
     }
     path.to_string()

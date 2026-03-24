@@ -16,7 +16,9 @@
     "back": "Back",
     "more": "More options",
     "search": "Search",
-    "today": "Today"
+    "today": "Today",
+    "browse": "Browse",
+    "clear": "Clear"
   },
   "app": {
     "name": "LouvorJA"
@@ -935,7 +937,8 @@
     "presentationFontSize": "Default font size",
     "presentationFontSizeHint": "Applies to hymnal lyrics, collection music, and Bible projections.",
     "presentationFontFamily": "Font family",
-    "presentationFontFamilyHint": "Font used for projected content. System Default inherits the OS font."
+    "presentationFontFamilyHint": "Font used for projected content. System Default inherits the OS font.",
+    "presentationFontFamilyDefault": "System Default"
   },
   "shortcuts": {
     "categories": {

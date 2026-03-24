@@ -330,7 +330,7 @@ export function ProjectionSettings({
                   size="sm"
                   className="h-7 gap-1.5 px-2 text-xs shrink-0"
                   onClick={async () => {
-                    const selected = await openFileDialog({
+                    const [selected] = await catcher(openFileDialog({
                       multiple: false,
                       filters: [
                         {
@@ -338,7 +338,7 @@ export function ProjectionSettings({
                           extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg", "avif"],
                         },
                       ],
-                    });
+                    }));
                     if (typeof selected === "string") {
                       onChange({ ...settings, backgroundImage: selected });
                     }

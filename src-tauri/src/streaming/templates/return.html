@@ -393,14 +393,12 @@ function toStreamingMediaUrl(pathValue) {
   ) {
     return value;
   }
-  if (value.startsWith("/media/")) {
-    return "/media/" + encodePathSegment(value.slice("/media/".length));
-  }
-  if (value.startsWith("media/")) {
-    return "/media/" + encodePathSegment(value.slice("media/".length));
-  }
-  // Any other relative path (covers/, musics/, images/, etc.) — strip leading
-  // slash if present and serve via the streaming server's /media/ route.
+  // All non-URL paths (media/videos/foo.mp4, covers/brj.jpg, /media/..., etc.)
+  // are served via the streaming server's /media/ route. The server strips
+  // the leading /media/ prefix and joins the remainder with media_root
+  // (= app_data_dir). So to serve app_data_dir/media/videos/foo.mp4 the URL
+  // must be /media/media/videos/foo.mp4 — do NOT strip any leading path
+  // segment before building the URL.
   const relative = value.startsWith("/") ? value.slice(1) : value;
   return relative ? "/media/" + encodePathSegment(relative) : "";
 }

@@ -133,7 +133,11 @@ export function usePresentationFontSize(): number {
   return useProjectionDisplay().fontSize;
 }
 
-/** @deprecated Use `useProjectionDisplaySetting()` instead. */
+/**
+ * @deprecated Use `useProjectionDisplaySetting()` instead.
+ * Note: `updateFontSize` closes over `settings` at render time — avoid
+ * memoizing the returned function with a stale deps array.
+ */
 export function usePresentationFontSizeSetting() {
   const { settings, update, loaded } = useProjectionDisplaySetting();
   const updateFontSize = (val: number) => update({ ...settings, fontSize: val });

@@ -19,15 +19,17 @@ export function PlaylistCard({
   onClick,
 }: PlaylistCardProps) {
   const { t } = useTranslation();
-  const coverUrl = playlist.coverPath
+  const coverUrl = appDataDir && playlist.coverPath
     ? convertFileSrc(`${appDataDir}/${playlist.coverPath}`)
     : null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onClick(playlist.playlistId)}
-      className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:bg-surface-hover text-left"
+      onKeyDown={(e) => e.key === "Enter" && onClick(playlist.playlistId)}
+      className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:bg-surface-hover text-left cursor-pointer"
     >
       {/* Cover */}
       <div className="relative aspect-video w-full bg-muted">
@@ -78,6 +80,6 @@ export function PlaylistCard({
           {playlist.videoCount ?? 0} {t("onlineVideos.videos")}
         </span>
       </div>
-    </button>
+    </div>
   );
 }

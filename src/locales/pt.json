@@ -16,7 +16,9 @@
     "search": "Pesquisar",
     "today": "Hoje",
     "back": "Voltar",
-    "more": "Mais opções"
+    "more": "Mais opções",
+    "browse": "Procurar",
+    "clear": "Limpar"
   },
   "app": {
     "name": "LouvorJA"
@@ -935,7 +937,8 @@
     "presentationFontSize": "Tamanho de fonte padrão",
     "presentationFontSizeHint": "Aplicado a letras de hinos, músicas de coleção e projeções bíblicas.",
     "presentationFontFamily": "Família de fonte",
-    "presentationFontFamilyHint": "Fonte usada no conteúdo projetado. Padrão do sistema usa a fonte do OS."
+    "presentationFontFamilyHint": "Fonte usada no conteúdo projetado. Padrão do sistema usa a fonte do OS.",
+    "presentationFontFamilyDefault": "Padrão do sistema"
   },
   "shortcuts": {
     "categories": {
