@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { catcher } from "../../lib/catcher";
-import { useCopyImageToMedia } from "../../lib/queries";
 import { getPreference, setPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
@@ -152,7 +151,6 @@ export function ProjectionSettings({
   preview,
 }: ProjectionSettingsProps) {
   const { t } = useTranslation();
-  const copyImageMutation = useCopyImageToMedia();
 
   const bgType: "solid" | "gradient" | "image" = settings.backgroundGradient
     ? "gradient"
@@ -342,13 +340,7 @@ export function ProjectionSettings({
                       ],
                     }));
                     if (typeof selected === "string") {
-                      const [managedPath] = await catcher(
-                        copyImageMutation.mutateAsync(selected),
-                        { notify: true },
-                      );
-                      if (managedPath) {
-                        onChange({ ...settings, backgroundImage: managedPath });
-                      }
+                      onChange({ ...settings, backgroundImage: selected });
                     }
                   }}
                 >
