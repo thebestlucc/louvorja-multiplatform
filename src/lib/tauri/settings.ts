@@ -24,3 +24,8 @@ export async function getAllSettings(): Promise<Setting[]> {
 export async function clearDatabase(): Promise<{ success: boolean }> {
   return tauriInvoke<{ success: boolean }>("clear_database");
 }
+
+/** Broadcasts projection display settings to all windows via Rust's global app.emit(). */
+export async function broadcastProjectionDisplay(fontSize: number, fontFamily: string): Promise<void> {
+  return tauriInvoke<void>("broadcast_projection_display", { fontSize, fontFamily });
+}

@@ -32,7 +32,7 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
   const { t } = useTranslation();
   const { fontSize: globalFontSize, fontFamily: globalFontFamily } = useProjectionDisplay();
   const backgroundPath = useMemo(() => {
-    if (!slide || (slide.slideType !== "cover" && slide.slideType !== "lyrics" && slide.slideType !== "text")) {
+    if (!slide || (slide.slideType !== "cover" && slide.slideType !== "lyrics" && slide.slideType !== "text" && slide.slideType !== "bible")) {
       return null;
     }
     return slide.backgroundImage ?? null;
@@ -189,7 +189,7 @@ function renderSlide(
   }
 
   if (slide.slideType === "bible") {
-    return renderBibleSlide(slide, renderMode);
+    return renderBibleSlide(slide, renderMode, resolvedBackgroundPath);
   }
 
   if (slide.slideType === "video") {
@@ -311,7 +311,7 @@ function parseBibleModeTokens(mode: string | null | undefined) {
   return { textAlign, refPosition, hideRef, hasTextShadow, gradient };
 }
 
-function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
+function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode, backgroundImage: string | null) {
   const isProjector = renderMode === "projector";
   const isReturn = renderMode === "return-current" || renderMode === "return-next";
   const isThumbnail = renderMode === "thumbnail";
@@ -400,17 +400,26 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
 
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center justify-center"
+      className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden"
       style={{
-        ...containerBg,
+        ...(backgroundImage ? {} : containerBg),
         padding: isThumbnail ? "4px 8px" : isProjector ? "48px 80px" : "24px 40px",
       }}
     >
-      {refPosition === "top" && referenceEl}
+      {backgroundImage && (
+        <>
+          <img src={backgroundImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-black/40" />
+        </>
+      )}
+
+      {refPosition === "top" && (
+        <div className="relative z-10">{referenceEl}</div>
+      )}
 
       <div
         className={cn(
-          "flex flex-col",
+          "relative z-10 flex flex-col",
           isThumbnail ? "gap-0.5" : isProjector ? "gap-4" : "gap-2",
         )}
         style={{ textAlign }}
@@ -432,7 +441,7 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode) {
       </div>
 
       {refPosition === "bottom" && (
-        <div className={isThumbnail ? "mt-1" : isProjector ? "mt-6" : "mt-3"}>
+        <div className={cn("relative z-10", isThumbnail ? "mt-1" : isProjector ? "mt-6" : "mt-3")}>
           {referenceEl}
         </div>
       )}
