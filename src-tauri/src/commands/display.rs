@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use crate::commands::streaming::{
+    build_return_stream_payload,
     empty_return_stream_payload,
     empty_streaming_music_payload,
 };
@@ -325,6 +326,66 @@ pub fn set_current_slide(
         stop_live_utility_projection(&state)?;
     }
     update_current_slide(&app, &state, &streaming_state, slide_data)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_slide_on_projector(
+    slide_data: SlideContent,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    if !is_live_utility_slide(&slide_data) {
+        stop_live_utility_projection(&state)?;
+    }
+    {
+        let mut current = state
+            .current_slide
+            .write()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *current = Some(slide_data.clone());
+    }
+    // Emit only to the projector window — not to all windows, not to SSE
+    if let Some(projector_win) = app.get_webview_window("projector") {
+        projector_win
+            .emit("slide-changed", &slide_data)
+            .map_err(|e| AppError::Tauri(e.to_string()))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_slide_on_return(
+    slide_data: SlideContent,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
+) -> Result<(), AppError> {
+    if !is_live_utility_slide(&slide_data) {
+        stop_live_utility_projection(&state)?;
+    }
+    {
+        let mut current = state
+            .current_slide
+            .write()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        *current = Some(slide_data.clone());
+    }
+    // Emit only to the return window — not to projector, not to main
+    if let Some(return_win) = app.get_webview_window("return") {
+        return_win
+            .emit("slide-changed", &slide_data)
+            .map_err(|e| AppError::Tauri(e.to_string()))?;
+    }
+    // Broadcast to SSE streaming viewers
+    let app_data_dir = app.path().app_data_dir().ok();
+    let adr = app_data_dir.as_deref();
+    if let Ok(server) = streaming_state.server.lock() {
+        let return_payload = build_return_stream_payload(&slide_data, None, adr);
+        server.broadcast_return(&return_payload.to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]

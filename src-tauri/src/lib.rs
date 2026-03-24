@@ -164,6 +164,8 @@ pub fn run() {
             commands::display::open_return_window,
             commands::display::close_return_window,
             commands::display::set_current_slide,
+            commands::display::set_slide_on_projector,
+            commands::display::set_slide_on_return,
             commands::display::get_current_slide,
             commands::display::clear_current_slide,
             commands::display::set_slide_context,

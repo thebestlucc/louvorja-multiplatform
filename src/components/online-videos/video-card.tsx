@@ -1,11 +1,11 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, X, CheckCircle, AlertCircle, Trash2, Play } from "lucide-react";
-import type { OnlineVideo } from "../../lib/bindings";
+import { Download, X, CheckCircle, AlertCircle, Trash2, Play, Monitor, MonitorPlay, Tv } from "lucide-react";
+import type { OnlineVideo, SlideContent } from "../../lib/bindings";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { catcher } from "../../lib/catcher";
-import { downloadOnlineVideo, cancelDownload, setCurrentSlide } from "../../lib/tauri";
+import { downloadOnlineVideo, cancelDownload, setCurrentSlide, setSlideOnProjector, setSlideOnReturn } from "../../lib/tauri";
 import { getPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { useDownloadStore } from "../../stores/download-store";
@@ -35,6 +35,21 @@ function parseThumbnail(images: string | null): string | null {
   } catch {
     return images; // plain URL string
   }
+}
+
+function buildVideoSlidePayload(video: OnlineVideo): SlideContent {
+  const isLocal = !!video.localPath;
+  return {
+    slideType: "online_video",
+    videoId: isLocal ? null : video.videoId,
+    videoTitle: video.title ?? "",
+    videoUrl: isLocal ? video.localPath : null,
+    videoSource: isLocal ? "local" : "youtube",
+    text: null, title: null, subtitle: null, label: null,
+    videoPath: null, backgroundImage: null, backgroundColor: null,
+    audioPath: null, autoPlay: null, loop: null, muted: null,
+    mode: null, textColor: null, textSize: null,
+  };
 }
 
 export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
@@ -83,42 +98,15 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
     if (onDeleted) onDeleted(video.videoId);
   };
 
-  const handleProject = async () => {
-    let videoUrl: string | null = null;
-    let videoId: string | null = video.videoId;
-    let videoSource = "youtube";
-
-    if (video.localPath) {
-      videoUrl = video.localPath;  // store relative path directly
-      videoId = null;
-      videoSource = "local";
-    }
-
-    const [, err] = await catcher(
-      setCurrentSlide({
-        slideType: "online_video",
-        videoId,
-        videoTitle: video.title ?? "",
-        videoUrl,
-        videoSource,
-        text: null,
-        title: null,
-        subtitle: null,
-        label: null,
-        videoPath: null,
-        backgroundImage: null,
-        backgroundColor: null,
-        audioPath: null,
-        autoPlay: null,
-        loop: null,
-        muted: null,
-        mode: null,
-        textColor: null,
-        textSize: null,
-      }),
-      { notify: true },
-    );
-
+  const handleProject = async (target: "all" | "projector" | "return") => {
+    const payload = buildVideoSlidePayload(video);
+    const fn =
+      target === "projector"
+        ? setSlideOnProjector
+        : target === "return"
+          ? setSlideOnReturn
+          : setCurrentSlide;
+    const [, err] = await catcher(fn(payload), { notify: true });
     if (!err) {
       usePresentationStore.getState().setCurrentVideoProjectionId(
         video.localPath ?? video.videoId,
@@ -217,16 +205,36 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
         )}
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 mt-auto">
+        <div className="flex items-center gap-2 mt-auto flex-wrap">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => void handleProject("all")}
+            title={t("onlineVideos.detail.projectAll")}
+            className="h-7 px-2 text-xs"
+          >
+            <MonitorPlay className="h-3 w-3 mr-1" />
+            {t("onlineVideos.detail.projectAll")}
+          </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={handleProject}
-            title={t("onlineVideos.detail.project")}
+            onClick={() => void handleProject("projector")}
+            title={t("onlineVideos.detail.projectProjector")}
             className="h-7 px-2 text-xs"
           >
-            <Play className="h-3 w-3 mr-1" />
-            {t("onlineVideos.detail.project")}
+            <Monitor className="h-3 w-3 mr-1" />
+            {t("onlineVideos.detail.projectProjector")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleProject("return")}
+            title={t("onlineVideos.detail.projectReturn")}
+            className="h-7 px-2 text-xs"
+          >
+            <Tv className="h-3 w-3 mr-1" />
+            {t("onlineVideos.detail.projectReturn")}
           </Button>
           {downloading ? (
             <Button
