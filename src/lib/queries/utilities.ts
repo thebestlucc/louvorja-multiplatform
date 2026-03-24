@@ -12,6 +12,7 @@ import {
   formatText,
   copyVideoToMedia,
   copyImageToMedia,
+  copySlideImageToMedia,
   getVideoMetadata,
   resolveMediaPath,
 } from "../tauri";
@@ -164,5 +165,11 @@ export function useCopyVideoToMedia() {
 export function useCopyImageToMedia() {
   return useMutation({
     mutationFn: (imagePath: string) => copyImageToMedia(imagePath),
+  });
+}
+
+export function useCopySlideImageToMedia() {
+  return useMutation({
+    mutationFn: (imagePath: string) => copySlideImageToMedia(imagePath),
   });
 }
