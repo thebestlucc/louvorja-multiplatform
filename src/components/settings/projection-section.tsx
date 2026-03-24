@@ -56,7 +56,7 @@ export function ProjectionSection() {
             onValueChange={(val) => update({ ...settings, fontFamily: val })}
           >
             <SelectTrigger className="w-52">
-              <SelectValue />
+              <SelectValue placeholder={t("settings.presentationFontFamilyDefault")} />
             </SelectTrigger>
             <SelectContent>
               {FONT_FAMILY_OPTIONS.map((opt) => (

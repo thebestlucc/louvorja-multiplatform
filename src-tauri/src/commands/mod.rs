@@ -15,7 +15,6 @@ pub mod spotlight;
 pub mod streaming;
 pub mod timer;
 pub mod updater;
-pub mod media_integrity;
 pub mod text_tools;
 pub mod utility;
 pub mod video_copy;

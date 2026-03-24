@@ -16,7 +16,9 @@
     "search": "Buscar",
     "today": "Hoy",
     "back": "Volver",
-    "more": "Más opciones"
+    "more": "Más opciones",
+    "browse": "Buscar archivo",
+    "clear": "Limpiar"
   },
   "app": {
     "name": "LouvorJA"
@@ -935,7 +937,8 @@
     "presentationFontSize": "Tamaño de fuente predeterminado",
     "presentationFontSizeHint": "Aplicado a letras de himnos, músicas de colección y proyecciones bíblicas.",
     "presentationFontFamily": "Familia de fuente",
-    "presentationFontFamilyHint": "Fuente utilizada en el contenido proyectado. El predeterminado del sistema hereda la fuente del OS."
+    "presentationFontFamilyHint": "Fuente utilizada en el contenido proyectado. El predeterminado del sistema hereda la fuente del OS.",
+    "presentationFontFamilyDefault": "Predeterminado del sistema"
   },
   "shortcuts": {
     "categories": {

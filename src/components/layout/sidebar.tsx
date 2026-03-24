@@ -140,7 +140,7 @@ export function Sidebar() {
         sidebarOpen ? "w-60" : "w-14",
       )}
     >
-      <div className="flex h-12 items-center justify-between border-b border-border px-3">
+      <div className="flex h-14 items-center justify-between border-b border-border px-3">
         {sidebarOpen && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold tracking-tight text-foreground">
