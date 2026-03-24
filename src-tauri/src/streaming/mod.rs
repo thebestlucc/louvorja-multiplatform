@@ -601,6 +601,30 @@ fn serve_sse(
     broadcaster.unsubscribe(subscription_id);
 }
 
+/// Resolve a percent-decoded media path to a file to serve.
+/// Absolute paths are read directly (user-selected files, full OS access).
+/// Relative paths are resolved against `media_root` and validated to stay inside it.
+/// Returns `None` if the path is invalid, suspicious, or does not exist as a file.
+pub(crate) fn resolve_serve_path(decoded: &str, media_root: &std::path::Path) -> Option<std::path::PathBuf> {
+    if decoded.is_empty() || decoded.contains("..") || decoded.contains('\0') {
+        return None;
+    }
+    let path = std::path::Path::new(decoded);
+    if path.is_absolute() {
+        let canonical = path.canonicalize().ok()?;
+        if canonical.is_file() { Some(canonical) } else { None }
+    } else {
+        let canonical_root = media_root.canonicalize().ok()?;
+        let joined = canonical_root.join(path);
+        let canonical = joined.canonicalize().ok()?;
+        if canonical.starts_with(&canonical_root) && canonical.is_file() {
+            Some(canonical)
+        } else {
+            None
+        }
+    }
+}
+
 fn serve_media(
     mut stream: TcpStream,
     request_path: &str,
@@ -631,33 +655,13 @@ fn serve_media(
         return;
     };
 
-    let normalized_relative = decoded_relative.replace('\\', "/");
-    if normalized_relative.is_empty()
-        || normalized_relative.starts_with('/')
-        || normalized_relative.contains("..")
-        || normalized_relative.contains('\0')
-    {
+    // Normalize Windows backslashes; resolve via helper (handles absolute/relative branching)
+    let decoded = decoded_relative.replace('\\', "/");
+    let Some(candidate) = resolve_serve_path(&decoded, &root) else {
         serve_not_found(&mut stream);
         return;
-    }
-
-    let candidate = root.join(Path::new(&normalized_relative));
-    let candidate = match candidate.canonicalize() {
-        Ok(path) => path,
-        Err(_) => {
-            serve_not_found(&mut stream);
-            return;
-        }
     };
-
-    if !candidate.starts_with(&root) {
-        serve_not_found(&mut stream);
-        return;
-    }
-    if !candidate.is_file() {
-        serve_not_found(&mut stream);
-        return;
-    }
+    // candidate is already canonical — proceed to serve
 
     // Stream in 64 KB chunks — loading the entire file into RAM would allocate
     // hundreds of MB per concurrent request for large video files.
@@ -853,5 +857,62 @@ fn normalize_language(value: &str) -> &'static str {
         "en" => "en",
         "es" => "es",
         _ => "pt",
+    }
+}
+
+#[cfg(test)]
+mod serve_path_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn setup() -> TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    #[test]
+    fn test_relative_path_resolves_inside_root() {
+        let dir = setup();
+        let file = dir.path().join("media/videos/test.mp4");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, b"fake").unwrap();
+        let result = resolve_serve_path("media/videos/test.mp4", dir.path());
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_absolute_path_resolves_outside_root() {
+        let dir = setup();
+        let outside = tempfile::tempdir().unwrap();
+        let file = outside.path().join("bg.jpg");
+        fs::write(&file, b"fake").unwrap();
+        let abs = file.to_str().unwrap();
+        let result = resolve_serve_path(abs, dir.path());
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_traversal_rejected() {
+        let dir = setup();
+        assert!(resolve_serve_path("../etc/passwd", dir.path()).is_none());
+        assert!(resolve_serve_path("media/../../etc/passwd", dir.path()).is_none());
+    }
+
+    #[test]
+    fn test_null_byte_rejected() {
+        let dir = setup();
+        assert!(resolve_serve_path("media/file\0.jpg", dir.path()).is_none());
+    }
+
+    #[test]
+    fn test_empty_path_rejected() {
+        let dir = setup();
+        assert!(resolve_serve_path("", dir.path()).is_none());
+    }
+
+    #[test]
+    fn test_nonexistent_absolute_returns_none() {
+        let dir = setup();
+        assert!(resolve_serve_path("/tmp/nonexistent_louvorja_test_file_xyz123.jpg", dir.path()).is_none());
     }
 }
