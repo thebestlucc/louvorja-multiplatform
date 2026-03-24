@@ -250,8 +250,17 @@ export function PersistentVideoPlayer() {
 
   // ── Local video player lifecycle ──────────────────────────────────────────
 
+  // Keep a ref to the latest resolved URL so Effect B can read it imperatively
+  // without adding it as a dependency to Effect A (which owns the video element).
+  const localVideoSrcRef = useRef<string | null>(null);
+  localVideoSrcRef.current = localVideoSrc;
+
+  // Effect A: create/destroy the <video> element only when slide identity changes.
+  // Never re-runs due to transient localVideoSrc null values during re-renders.
   useEffect(() => {
-    if (!localVideoSrc || !hiddenHostRef.current) return;
+    const isLocal = activeSlide?.videoSource === "local";
+    const videoSrc = activeSlide?.videoUrl ?? null;
+    if (!isLocal || !videoSrc || !hiddenHostRef.current) return;
 
     // Clean up previous local player
     clearInterval(pollTimerRef.current ?? undefined);
@@ -264,15 +273,19 @@ export function PersistentVideoPlayer() {
     }
     clearPlayerNode();
 
-    // Create <video> imperatively
+    // Create <video> imperatively (src will be set by Effect B once resolved)
     const video = document.createElement("video");
     video.style.cssText = "width:100%;height:100%;object-fit:contain;";
-    video.src = localVideoSrc;
     video.playsInline = true;
     hiddenHostRef.current.appendChild(video);
     videoRef.current = video;
 
-    const startPoll = () => {
+    // If the URL is already resolved (Effect B already ran), apply it immediately
+    if (localVideoSrcRef.current) {
+      video.src = localVideoSrcRef.current;
+    }
+
+    const startPoll = (resolvedSrc: string) => {
       clearInterval(pollTimerRef.current ?? undefined);
       pollTimerRef.current = setInterval(() => {
         const snap: VideoStateEvent = {
@@ -281,14 +294,14 @@ export function PersistentVideoPlayer() {
           duration: isFinite(video.duration) ? video.duration : 0,
           volume: video.volume,
         };
-        broadcastState(snap, { videoId: null, videoSrc: localVideoSrc, videoSource: "local" });
+        broadcastState(snap, { videoId: null, videoSrc: resolvedSrc, videoSource: "local" });
       }, 250);
     };
 
     const onCanPlay = () => {
       registerPlayerNode(video);
       void video.play().catch(() => {});
-      startPoll();
+      startPoll(localVideoSrcRef.current ?? videoSrc);
     };
 
     const onPause = () => {
@@ -296,7 +309,7 @@ export function PersistentVideoPlayer() {
       pollTimerRef.current = null;
       broadcastState(
         { paused: true, currentTime: video.currentTime, duration: isFinite(video.duration) ? video.duration : 0, volume: video.volume },
-        { videoId: null, videoSrc: localVideoSrc, videoSource: "local" },
+        { videoId: null, videoSrc: localVideoSrcRef.current ?? videoSrc, videoSource: "local" },
       );
     };
 
@@ -317,7 +330,16 @@ export function PersistentVideoPlayer() {
       videoRef.current = null;
       clearPlayerNode();
     };
-  }, [localVideoSrc, broadcastState]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSlide?.videoSource, activeSlide?.videoUrl, broadcastState]);
+
+  // Effect B: imperatively update video.src when the resolved URL arrives or changes.
+  // Does NOT create or destroy the video element — safe to run on every localVideoSrc change.
+  useEffect(() => {
+    if (!localVideoSrc || !videoRef.current) return;
+    if (videoRef.current.src === localVideoSrc) return;
+    videoRef.current.src = localVideoSrc;
+  }, [localVideoSrc]);
 
   return (
     <div
