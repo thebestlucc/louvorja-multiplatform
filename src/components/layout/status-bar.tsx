@@ -72,7 +72,7 @@ export function StatusBar() {
     : null;
 
   return (
-    <footer className="flex h-10 items-center justify-between border-t border-border bg-surface px-4 text-xs text-muted-foreground">
+    <footer className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-surface px-3 text-xs text-muted-foreground">
       <span>
         {t("status.ready")}
         {version ? <span className="ml-2 opacity-60">v{version}</span> : null}
@@ -88,7 +88,7 @@ export function StatusBar() {
                   params: { serviceId: String(activeServiceId) },
                 })
               }
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-white/10"
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-surface-hover"
               title={t("services.activeServiceIndicator")}
             >
               <ListChecks className="h-[15px] w-[15px]" />
@@ -101,7 +101,7 @@ export function StatusBar() {
           <>
             <button
               onClick={openPackSyncProgress}
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-white/10"
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
             >
               <Loader2 className="h-[15px] w-[15px] animate-spin" />
               <span>
@@ -123,7 +123,7 @@ export function StatusBar() {
                   search: { tab: "online-videos", playlist: firstDownload.playlistId },
                 })
               }
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-white/10"
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
               title={t("onlineVideos.detail.downloading")}
             >
               <Loader2 className="h-[15px] w-[15px] animate-spin" />
@@ -140,7 +140,7 @@ export function StatusBar() {
           <>
             <button
               onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-white/10"
+              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-surface-hover"
               title={t("settings.contentSync.title")}
             >
               <Loader2 className="h-[15px] w-[15px] animate-spin" />
@@ -157,7 +157,7 @@ export function StatusBar() {
         <button
           onClick={() => navigate({ to: "/utilities/timer" })}
           className={cn(
-            "flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10",
+            "flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover",
             hasTimerProgress && "text-foreground",
           )}
           title={t("status.timerOpen")}
@@ -175,7 +175,7 @@ export function StatusBar() {
         <StatusBarUpdateIndicator />
         <button
           onClick={() => setStreamingOpen(true)}
-          className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10"
+          className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover"
         >
           <Wifi className={cn("h-[15px] w-[15px]", isRunning && "text-green-500")} />
           {isRunning
