@@ -78,7 +78,7 @@ function renderSlide(
   if (slide.slideType === "cover") {
     const titleStyle = textStyle(slide, 48, renderMode, "cover-title");
     const subtitleStyle = secondaryTextStyle(slide, 28, renderMode);
-    const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
+    const backgroundImage = resolvedBackgroundPath;
     const showCoverTextPanel = shouldRenderCoverTextPanel(renderMode, backgroundImage);
     return (
       <div
@@ -116,7 +116,7 @@ function renderSlide(
   if (slide.slideType === "lyrics") {
     const textLineStyle = textStyle(slide, globalFontSize, renderMode, "lyrics");
     const labelStyle = secondaryTextStyle(slide, 13, renderMode);
-    const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
+    const backgroundImage = resolvedBackgroundPath;
     const showLyricTextPanel = shouldRenderLyricTextPanel(renderMode, backgroundImage);
     return (
       <div
@@ -157,7 +157,7 @@ function renderSlide(
 
   if (slide.slideType === "text") {
     const textLineStyle = textStyle(slide, 28, renderMode, "text");
-    const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
+    const backgroundImage = resolvedBackgroundPath;
     return (
       <div
         className="relative flex h-full w-full items-center justify-center px-8 text-center"
@@ -181,7 +181,7 @@ function renderSlide(
   if (slide.slideType === "image") {
     return (
       <img
-        src={resolvedImagePath ?? slide.backgroundImage ?? ""}
+        src={resolvedImagePath ?? ""}
         alt={slide.label ?? ""}
         className="h-full w-full object-contain"
       />
@@ -249,7 +249,7 @@ function renderSlide(
     if (inferred === "image") {
       return (
         <img
-          src={resolvedImagePath ?? slide.backgroundImage ?? ""}
+          src={resolvedImagePath ?? ""}
           alt={slide.label ?? ""}
           className="h-full w-full object-contain"
         />
@@ -409,7 +409,7 @@ function renderBibleSlide(slide: SlideContent, renderMode: SlideRenderMode, back
       {backgroundImage && (
         <>
           <img src={backgroundImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-black/85" />
         </>
       )}
 
