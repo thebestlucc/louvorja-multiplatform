@@ -189,6 +189,7 @@ function YouTubePlayer({ videoId, title, className, muted = false }: {
           showinfo: 0,
           disablekb: 1,
           iv_load_policy: 3,
+          cc_load_policy: 0,
           mute: muted ? 1 : 0,
           playsinline: 1,
         },
@@ -233,7 +234,14 @@ function YouTubePlayer({ videoId, title, className, muted = false }: {
     <div
       ref={containerRef}
       title={title}
-      className={cn("h-full w-full [&>iframe]:pointer-events-none [&>iframe]:border-none", className)}
+      // overflow-hidden + scale-[1.06] clips the YouTube logo/watermark from all corners
+      // while keeping the video centered. Scale is imperceptible on a projection screen.
+      className={cn(
+        "h-full w-full overflow-hidden",
+        "[&>iframe]:pointer-events-none [&>iframe]:border-none",
+        "[&>iframe]:scale-[1.06] [&>iframe]:origin-center",
+        className,
+      )}
     />
   );
 }
