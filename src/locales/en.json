@@ -929,7 +929,10 @@
       "ytdlpUpdate": "Update yt-dlp",
       "ytdlpUpdating": "Updating...",
       "ytdlpUpdated": "yt-dlp updated successfully"
-    }
+    },
+    "presentationTitle": "Projection",
+    "presentationFontSize": "Default font size",
+    "presentationFontSizeHint": "Applies to hymnal lyrics, collection music, and Bible projections."
   },
   "shortcuts": {
     "categories": {
