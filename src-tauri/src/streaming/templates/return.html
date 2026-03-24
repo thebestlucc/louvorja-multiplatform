@@ -383,28 +383,35 @@ function encodePathSegment(value) {
 }
 
 function toStreamingMediaUrl(pathValue) {
-  const value = safeText(pathValue);
-  if (!value) return "";
-  if (
-    value.startsWith("http://")
-    || value.startsWith("https://")
-    || value.startsWith("data:")
-    || value.startsWith("blob:")
-  ) {
-    return value;
+  if (!pathValue) return "";
+  const v = String(pathValue);
+  if (v.startsWith("http://") || v.startsWith("https://") ||
+      v.startsWith("data:") || v.startsWith("blob:")) {
+    return v;
   }
-  // All non-URL paths (media/videos/foo.mp4, covers/brj.jpg, /media/..., etc.)
-  // are served via the streaming server's /media/ route. The server strips
-  // the leading /media/ prefix and joins the remainder with media_root
-  // (= app_data_dir). So to serve app_data_dir/media/videos/foo.mp4 the URL
-  // must be /media/media/videos/foo.mp4 — do NOT strip any leading path
-  // segment before building the URL.
-  const relative = value.startsWith("/") ? value.slice(1) : value;
-  return relative ? "/media/" + encodePathSegment(relative) : "";
+  // encodeURIComponent encodes the full path including slashes and drive letters,
+  // so /Users/user/bg.jpg → /media/%2FUsers%2Fuser%2Fbg.jpg
+  // and media/videos/hash.mp4 → /media/media%2Fvideos%2Fhash.mp4
+  return "/media/" + encodeURIComponent(v);
 }
 
 function getSlideType(payload) {
   return safeText(payload && (payload.slideType || payload.slide_type || payload.type)).toLowerCase();
+}
+
+function inferMediaType(path) {
+  if (!path) return null;
+  var normalized = path.replace(/\\/g, "/");
+  var parts = normalized.split("/");
+  var filename = parts[parts.length - 1] || "";
+  var extParts = filename.split(".");
+  var ext = extParts.length > 1 ? extParts[extParts.length - 1].split("?")[0].toLowerCase() : "";
+  if (!ext) return null;
+  var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff"];
+  var videoExts = ["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v"];
+  if (imageExts.indexOf(ext) !== -1) return "image";
+  if (videoExts.indexOf(ext) !== -1) return "video";
+  return null;
 }
 
 function firstDefined(values) {
@@ -765,6 +772,34 @@ function applyPanel(prefix, payload, mode) {
       panelImage.style.display = "block";
     }
     return;
+  }
+
+  // Extension-based fallback when slideType is not recognized as media
+  if (slideType !== "image" && slideType !== "video" && slideType !== "online_video") {
+    var bgInferred2 = inferMediaType(slide.backgroundImage);
+    var vpInferred2 = inferMediaType(slide.videoPath);
+    if (bgInferred2 === "image") {
+      var imgSrc2 = toStreamingMediaUrl(slide.backgroundImage || slide.src);
+      if (imgSrc2) {
+        panelImage.src = imgSrc2;
+        panelImage.style.display = "block";
+        if (title) {
+          panelTitle.style.display = "block";
+          panelTitle.textContent = title;
+        }
+        return;
+      }
+    }
+    if (vpInferred2 === "video" && mode !== "next") {
+      var vidSrc2 = toStreamingMediaUrl(slide.videoPath);
+      if (vidSrc2) {
+        panelVideo.src = vidSrc2;
+        panelVideo.style.display = "block";
+        var pr = panelVideo.play();
+        if (pr && typeof pr.catch === "function") { pr.catch(function(){}); }
+        return;
+      }
+    }
   }
 
   if (slideType === "bible" && title) {
