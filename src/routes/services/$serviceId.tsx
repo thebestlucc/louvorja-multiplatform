@@ -192,6 +192,20 @@ function ServiceEditor() {
       case "annotation":
         slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
         break;
+      case "file": {
+        const filePath = item.notes ?? "";
+        const ext = filePath.replace(/\\/g, "/").split(".").pop()?.toLowerCase() ?? "";
+        const imageExts = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff"]);
+        const videoExts = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v", "ts"]);
+        if (imageExts.has(ext)) {
+          slideData = { ...EMPTY_SLIDE_PROPS, slideType: "image", label: item.title, backgroundImage: filePath };
+        } else if (videoExts.has(ext)) {
+          slideData = { ...EMPTY_SLIDE_PROPS, slideType: "video", label: item.title, videoPath: filePath };
+        } else {
+          slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: filePath };
+        }
+        break;
+      }
       default:
         slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
         break;

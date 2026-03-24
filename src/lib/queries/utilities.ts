@@ -10,11 +10,8 @@ import {
   addLap,
   runLottery,
   formatText,
-  copyVideoToMedia,
   copyImageToMedia,
-  copySlideImageToMedia,
   getVideoMetadata,
-  resolveMediaPath,
 } from "../tauri";
 import type { TimerMode, TimerStateData } from "../bindings";
 import type { TextFormat } from "../../types/utilities";
@@ -147,29 +144,9 @@ export function useGetVideoMetadata(path: string | null) {
   });
 }
 
-export function useResolveMediaPath(path: string | null) {
-  return useQuery({
-    queryKey: queryKeys.video.resolvedPath(path ?? ""),
-    queryFn: () => resolveMediaPath(path ?? ""),
-    enabled: Boolean(path && path.trim().length > 0),
-  });
-}
-
-export function useCopyVideoToMedia() {
-  return useMutation({
-    mutationFn: (vars: { videoPath: string; presentationId: number }) =>
-      copyVideoToMedia(vars.videoPath, vars.presentationId),
-  });
-}
-
 export function useCopyImageToMedia() {
   return useMutation({
     mutationFn: (imagePath: string) => copyImageToMedia(imagePath),
   });
 }
 
-export function useCopySlideImageToMedia() {
-  return useMutation({
-    mutationFn: (imagePath: string) => copySlideImageToMedia(imagePath),
-  });
-}

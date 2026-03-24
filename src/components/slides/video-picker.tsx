@@ -10,12 +10,11 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
 interface VideoPickerProps {
-  presentationId: number;
   value: SlideContent;
   onChange: (next: SlideContent) => void;
 }
 
-export function VideoPicker({ presentationId: _presentationId, value, onChange }: VideoPickerProps) {
+export function VideoPicker({ value, onChange }: VideoPickerProps) {
   const { t } = useTranslation();
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
   const [loading, setLoading] = useState(false);
