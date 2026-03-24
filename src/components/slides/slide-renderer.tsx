@@ -9,6 +9,19 @@ import { useProjectionDisplay } from "../../lib/use-presentation-font-size";
 
 export type SlideRenderMode = "projector" | "return-current" | "return-next" | "editor" | "thumbnail";
 
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v", "ts"]);
+
+function inferMediaType(path: string | null | undefined): "image" | "video" | null {
+  if (!path) return null;
+  const normalized = path.replace(/\\/g, "/");
+  const filename = normalized.split("/").pop() ?? "";
+  const ext = filename.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "";
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  return null;
+}
+
 interface SlideRendererProps {
   slide: SlideContent | null;
   className?: string;
@@ -25,13 +38,14 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
     return slide.backgroundImage ?? null;
   }, [slide]);
   const imagePath = useMemo(() => {
-    if (!slide || slide.slideType !== "image") {
-      return null;
+    if (!slide) return null;
+    if (slide.slideType === "image") return slide.backgroundImage ?? null;
+    // Extension-based fallback: if backgroundImage looks like an image file, resolve it too
+    if (slide.slideType !== "cover" && slide.slideType !== "lyrics" && slide.slideType !== "text") {
+      const bi = slide.backgroundImage;
+      if (bi && inferMediaType(bi) === "image") return bi;
     }
-    // Note: old 'src' field was renamed to 'backgroundImage' in unified SlideContent for simple cases,
-    // or we use 'backgroundImage' for standard backgrounds. For image slides specifically, 
-    // we use backgroundImage as the main image source.
-    return slide.backgroundImage ?? null;
+    return null;
   }, [slide]);
   const resolvedBackgroundPath = useMediaSource(backgroundPath);
   const resolvedImagePath = useMediaSource(imagePath);
@@ -42,7 +56,7 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
         "relative flex items-center justify-center overflow-hidden bg-black text-white p-4",
         className,
       )}
-      style={globalFontFamily ? { fontFamily: globalFontFamily } : undefined}
+      style={(globalFontFamily && globalFontFamily !== "__system__") ? { fontFamily: globalFontFamily } : undefined}
     >
       {renderSlide(slide, renderMode, t, resolvedBackgroundPath, resolvedImagePath, globalFontSize)}
     </div>
@@ -226,6 +240,43 @@ function renderSlide(
 
   if (slide.slideType === "online_video") {
     return <OnlineVideoSlide slide={slide} renderMode={renderMode} className="h-full w-full" />;
+  }
+
+  // Extension-based fallback: render by file extension when slideType is unrecognized
+  {
+    const mediaPath = slide.backgroundImage ?? slide.videoPath ?? null;
+    const inferred = inferMediaType(mediaPath);
+    if (inferred === "image") {
+      return (
+        <img
+          src={resolvedImagePath ?? slide.backgroundImage ?? ""}
+          alt={slide.label ?? ""}
+          className="h-full w-full object-contain"
+        />
+      );
+    }
+    if (inferred === "video") {
+      if (renderMode === "thumbnail" || renderMode === "return-next") {
+        const videoLabel = getVideoLabel(slide.videoPath ?? slide.backgroundImage ?? "");
+        return (
+          <div className="flex h-full w-full min-w-0 max-w-full flex-col items-stretch justify-center gap-1 overflow-hidden px-2 text-center">
+            <span className="self-center rounded bg-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-white/80">
+              {t("presentations.types.video")}
+            </span>
+            <span className="block w-full overflow-hidden break-all text-[10px] leading-tight text-white/60">
+              {videoLabel || t("presentations.videoNoSource")}
+            </span>
+          </div>
+        );
+      }
+      return (
+        <VideoSlide
+          slide={slide}
+          renderMode={mapRenderMode(renderMode)}
+          className="h-full w-full"
+        />
+      );
+    }
   }
 
   return null;

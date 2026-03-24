@@ -9,7 +9,8 @@ export const PRESENTATION_FONT_SIZE_KEY = "presentation.defaultFontSize";
 export const DEFAULT_PRESENTATION_FONT_SIZE = 48;
 
 export const PROJECTION_FONT_FAMILY_KEY = "presentation.defaultFontFamily";
-export const DEFAULT_PROJECTION_FONT_FAMILY = ""; // empty = system default
+/** Sentinel value meaning "use the OS/browser default font" (Radix Select forbids empty string). */
+export const DEFAULT_PROJECTION_FONT_FAMILY = "__system__";
 
 export const PROJECTION_DISPLAY_EVENT = "projection-display-changed";
 
@@ -23,7 +24,7 @@ export interface ProjectionDisplaySettings {
 // ─── Font family options ──────────────────────────────────────────────────────
 
 export const FONT_FAMILY_OPTIONS = [
-  { value: "", label: "System Default" },
+  { value: "__system__", label: "System Default" },
   { value: "Inter", label: "Inter" },
   { value: "Arial", label: "Arial" },
   { value: "Verdana", label: "Verdana" },
@@ -32,6 +33,12 @@ export const FONT_FAMILY_OPTIONS = [
   { value: "Times New Roman", label: "Times New Roman" },
   { value: "Trebuchet MS", label: "Trebuchet MS" },
 ];
+
+/** Normalizes a stored font-family value — converts legacy `""` to the `__system__` sentinel. */
+function normalizeFontFamily(value: string | null | undefined): string {
+  if (!value || value === "") return DEFAULT_PROJECTION_FONT_FAMILY;
+  return value;
+}
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
@@ -60,7 +67,7 @@ export function useProjectionDisplay(): ProjectionDisplaySettings {
       if (mounted) {
         setSettings({
           fontSize: fontSize ?? DEFAULT_PRESENTATION_FONT_SIZE,
-          fontFamily: fontFamily ?? DEFAULT_PROJECTION_FONT_FAMILY,
+          fontFamily: normalizeFontFamily(fontFamily),
         });
       }
     };
