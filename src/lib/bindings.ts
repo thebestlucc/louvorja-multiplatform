@@ -1124,6 +1124,19 @@ async installUpdate() : Promise<Result<null, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Broadcasts projection display settings (font size + family) to all windows.
+ * Must route through Rust because JS `emit()` is scoped to the current window;
+ * `app.emit()` from Rust is global and reaches the projector/return webviews.
+ */
+async broadcastProjectionDisplay(fontSize: number, fontFamily: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("broadcast_projection_display", { fontSize, fontFamily }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async runLottery(names: string[]) : Promise<Result<string, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("run_lottery", { names }) };
@@ -1135,41 +1148,6 @@ async runLottery(names: string[]) : Promise<Result<string, AppErrorResponse>> {
 async formatText(text: string, format: string) : Promise<Result<string, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("format_text", { text, format }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async scanMediaIntegrity() : Promise<Result<MediaIntegrityReport, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("scan_media_integrity") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async deleteExcessMedia(paths: string[]) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_excess_media", { paths }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Copy a video file to the managed media directory.
- * 
- * Returns immediately — heavy work (blake3 hash + fs::copy) runs on a
- * background thread to avoid blocking the IPC bridge on Windows (where a
- * 2 GB file can take 10–30 seconds).
- * 
- * # Events
- * - `"video-copy-complete"`: `(presentation_id: i64, rel_path: String)` on success
- * - `"video-copy-error"`:    `(presentation_id: i64, error: String)` on failure
- */
-async copyVideoToMedia(videoPath: string, presentationId: number) : Promise<Result<null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("copy_video_to_media", { videoPath, presentationId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1194,14 +1172,6 @@ async copyImageToMedia(imagePath: string) : Promise<Result<string, AppErrorRespo
 async getVideoMetadata(path: string) : Promise<Result<VideoMetadata, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_video_metadata", { path }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async resolveMediaPath(path: string) : Promise<Result<string, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("resolve_media_path", { path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1416,7 +1386,6 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
-export type MediaIntegrityReport = { missingFiles: MissingFile[]; excessFiles: string[] }
 export type MediaLibraryCategory = { id: number; name: string; sortOrder: number; idLanguage: string }
 export type MediaLibraryCategoryInput = { id: number | null; name: string; sortOrder: number; idLanguage: string }
 export type MediaLibraryItem = { id: number; categoryId: number; name: string; filePath: string; fileType: string; thumbnailPath: string | null; scheduledDate: string | null; sortOrder: number; createdAt: string }
@@ -1427,7 +1396,6 @@ export type MigrationOptions = { includeHymns?: boolean; includeBible?: boolean;
 export type MigrationProgress = { runId: string; step: string; completed: number; total: number; percent: number; etaSeconds: number; message: string; status: string; updatedAt: string }
 export type MigrationReport = { runId: string; status: string; startedAt: string; finishedAt: string | null; sourcePath: string; domains: MigrationDomainReport[]; errors: MigrationErrorItem[] }
 export type MigrationRunInfo = { runId: string; startedAt: string; sourcePath: string }
-export type MissingFile = { path: string; sourceType: string; sourceId: number; sourceName: string }
 export type MonitorConfig = { id: number; monitorId: string; role: string; enabled: boolean }
 export type MonitorInfo = { id: string; name: string; friendlyName: string | null; manufacturer: string | null; model: string | null; connectionType: string | null; width: number; height: number; isPrimary: boolean; x: number; y: number; scaleFactor: number }
 /**

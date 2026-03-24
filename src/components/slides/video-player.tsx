@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type React from "react";
 import { cn } from "../../lib/utils";
 
 interface VideoPlayerProps {
@@ -11,6 +12,10 @@ interface VideoPlayerProps {
   className?: string;
   onEnded?: () => void;
   onTimeUpdate?: (currentTime: number) => void;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onVolumeChange?: () => void;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
 export function VideoPlayer({
@@ -23,8 +28,13 @@ export function VideoPlayer({
   className,
   onEnded,
   onTimeUpdate,
+  onPlay,
+  onPause,
+  onVolumeChange,
+  videoRef: externalRef,
 }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const internalRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = externalRef ?? internalRef;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +62,9 @@ export function VideoPlayer({
         }}
         onEnded={onEnded}
         onTimeUpdate={(e) => onTimeUpdate?.(e.currentTarget.currentTime)}
+        onPlay={onPlay}
+        onPause={onPause}
+        onVolumeChange={onVolumeChange}
       />
 
       {loading && (

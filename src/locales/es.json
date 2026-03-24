@@ -757,6 +757,8 @@
         "failed": "Fallido",
         "skipped": "Omitido"
       },
+      "packs": "paquetes",
+      "selectLanguagesHint": "Selecciona idiomas arriba para ver los paquetes disponibles",
       "selectLanguages": "Seleccione los idiomas para sincronizar",
       "fileType": {
         "audio": "Audio",

@@ -64,7 +64,7 @@ function PackSyncSettingsInline() {
               current: packSyncProgress!.packsProcessed,
               total: packSyncProgress!.packsTotal,
             })
-          : t("settings.packSync.description")}
+          : null}
       </div>
       <Button
         size="sm"

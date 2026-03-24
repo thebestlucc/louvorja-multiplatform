@@ -214,9 +214,13 @@ function RootLayout() {
     if (isBareRoute) return;
     const unlisten = listen<PackSyncProgress>("pack-sync-progress", (event) => {
       setPackSyncProgress(event.payload);
+      const status = event.payload.status;
+      if (status === "completed" || status === "failed" || status === "cancelled") {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+      }
     });
     return () => { void unlisten.then((fn) => fn()); };
-  }, [isBareRoute, setPackSyncProgress]);
+  }, [isBareRoute, setPackSyncProgress, queryClient]);
 
   usePlaybackCoordinator();
   useDownloadEvents();

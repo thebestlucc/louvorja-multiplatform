@@ -191,7 +191,7 @@ export function PackSyncDialog() {
                           <div key={lang}>
                             <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 bg-muted/60 backdrop-blur-sm border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                               {LANG_DISPLAY[lang] ?? lang}
-                              <span className="ml-auto font-normal normal-case">{items.length} {t("settings.packSync.packs", { defaultValue: "packs" })}</span>
+                              <span className="ml-auto font-normal normal-case">{items.length} {t("settings.packSync.packs")}</span>
                             </div>
                             {items.map((item) => (
                               <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
@@ -203,7 +203,7 @@ export function PackSyncDialog() {
                   )}
                   {needsLangSetup && !hasItems && (
                     <p className="text-sm text-muted-foreground px-1">
-                      {t("settings.packSync.selectLanguagesHint", { defaultValue: "Select a language above, then click Download to get started." })}
+                      {t("settings.packSync.selectLanguagesHint")}
                     </p>
                   )}
                 </div>

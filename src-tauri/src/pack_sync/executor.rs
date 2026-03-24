@@ -222,7 +222,16 @@ pub fn execute_pack_sync(
                             .unwrap()
                             .insert(item.pack_id.clone(), "verifying".to_string());
 
-                        match verify_sha256(&zip_path, &item.pack_sha256) {
+                        let zip_path_clone = zip_path.clone();
+                        let expected_sha = item.pack_sha256.clone();
+                        let verify_result = tokio::task::spawn_blocking(move || {
+                            verify_sha256(&zip_path_clone, &expected_sha)
+                        }).await;
+                        let verify_result = match verify_result {
+                            Ok(r) => r,
+                            Err(e) => Err(AppError::Internal(format!("SHA verify task panicked: {}", e))),
+                        };
+                        match verify_result {
                             Ok(true) => {
                                 statuses
                                     .lock()
@@ -270,9 +279,12 @@ pub fn execute_pack_sync(
         }
     });
 
-    // ── Phase 2: Sequential extract + DB update ──────────────────────────────
+    // ── Phase 2: Sequential extract ─────────────────────────────────────────
 
     let ok_set = downloaded_ok.lock().unwrap().clone();
+
+    // Collect successfully extracted ZIP packs; version writes are batched in Phase 2b.
+    let mut extracted_zip_versions: Vec<(String, u32)> = Vec::new();
 
     for (index, item) in plan_items.iter().enumerate() {
         if cancel_flag.load(Ordering::Relaxed) {
@@ -294,17 +306,13 @@ pub fn execute_pack_sync(
         if item.needs_download {
             if ok_set.contains(&item.pack_id) {
                 // Content DB items are not ZIPs — skip extraction (handled in Phase 3).
+                // Version tracking for content-db packs is done via settings in Phase 3
+                // after the .db.tmp file is renamed and hot-swapped.
                 if is_content_db {
                     pack_statuses
                         .lock()
                         .unwrap()
                         .insert(item.pack_id.clone(), "ready".to_string());
-                    // Record extracted version so planner doesn't re-download next time
-                    let _ = content_sync::set_pack_extracted_version(
-                        &conn,
-                        &item.pack_id,
-                        item.pack_version,
-                    );
                 } else {
                     let zip_path =
                         app_data_dir.join(format!("pack_{}.zip.tmp", item.pack_id));
@@ -328,6 +336,7 @@ pub fn execute_pack_sync(
                     ) {
                         Ok(_) => {
                             let _ = std::fs::remove_file(&zip_path);
+                            extracted_zip_versions.push((item.pack_id.clone(), item.pack_version));
                         }
                         Err(e) => {
                             let _ = std::fs::remove_file(&zip_path);
@@ -347,12 +356,6 @@ pub fn execute_pack_sync(
                             continue;
                         }
                     }
-
-                    let _ = content_sync::set_pack_extracted_version(
-                        &conn,
-                        &item.pack_id,
-                        item.pack_version,
-                    );
                 }
             } else {
                 // Download failed — already marked, skip.
@@ -373,6 +376,11 @@ pub fn execute_pack_sync(
             total,
             snapshot(),
         );
+    }
+
+    // ── Phase 2b: Batch DB version writes for successfully extracted ZIP packs ─
+    for (pack_id, version) in &extracted_zip_versions {
+        let _ = content_sync::set_pack_extracted_version(&conn, pack_id, *version);
     }
 
     // ── Phase 3: Save and hot-swap content DB files ─────────────────────────
@@ -428,6 +436,16 @@ pub fn execute_pack_sync(
 
     if let Some(v) = manifest_version_to_save {
         let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
+    }
+
+    // ── Post-sync: Reset manifest cache so next plan_pack_sync re-fetches ───
+    // Clear the in-memory flag so the next plan call hits CDN instead of stale cache.
+    if let Ok(mut runtime) = state.pack_sync.lock() {
+        runtime.manifest_fetched = false;
+    }
+    // Delete the on-disk manifest cache file.
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        let _ = std::fs::remove_file(data_dir.join("manifest_cache.json"));
     }
 
     emit(
