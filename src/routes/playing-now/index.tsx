@@ -15,9 +15,11 @@ import {
   Shuffle,
   XCircle
 } from "lucide-react";
+import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentSlide, getOverlayState, getSlideContext } from "../../lib/tauri";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
 import { PlayingQueue } from "../../components/playing-now/playing-queue";
+import type { VideoStateEvent } from "../../components/online-videos/online-video-slide";
 import { useDisplayStore } from "../../stores/display-store";
 import { useSlides } from "../../hooks/use-slides";
 import { useAudio } from "../../hooks/use-audio";
@@ -181,6 +183,7 @@ function PlayingNowScreen() {
   const [contextIndex, setContextIndex] = useState(0);
   const [contextTotal, setContextTotal] = useState(0);
   const [seekPreviewMs, setSeekPreviewMs] = useState<number | null>(null);
+  const [videoState, setVideoState] = useState<VideoStateEvent | null>(null);
 
   // Load initial state on mount
   useEffect(() => {
@@ -210,6 +213,7 @@ function PlayingNowScreen() {
       setCurrentSlide(null);
       setContextIndex(0);
       setContextTotal(0);
+      setVideoState(null);
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
   }, []);
@@ -231,8 +235,22 @@ function PlayingNowScreen() {
     return () => { void unsub.then((fn) => fn()); };
   }, []);
 
-  const hasAudioLoaded = !!currentAudioPath;
-  const isPlaying = audioStatus === "playing";
+  // Listen for video-state emitted by the projector window (local video slides)
+  useEffect(() => {
+    const unsub = listen<VideoStateEvent>("video-state", (e) => {
+      setVideoState(e.payload);
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, []);
+
+  const isVideoSlide = currentSlide?.slideType === "video" || currentSlide?.slideType === "online_video";
+  const isLocalVideo =
+    currentSlide?.slideType === "video" ||
+    (currentSlide?.slideType === "online_video" && currentSlide.videoSource === "local");
+  const hasAudioLoaded =
+    !isVideoSlide &&
+    (!!currentAudioPath || ((audioStatus === "playing" || audioStatus === "paused") && durationMs > 0));
+  const isPlaying = isVideoSlide ? videoState?.paused === false : audioStatus === "playing";
   const displayedSeekMs = seekPreviewMs ?? positionMs;
   const previewSlide = selectedSlide ?? currentSlide;
   const isGapIndicatorCandidate =
@@ -321,6 +339,17 @@ function PlayingNowScreen() {
     }
 
     await play(currentAudioPath, startMs);
+  };
+
+  const handleVideoPlayPause = async () => {
+    const action = videoState?.paused === false ? "pause" : "play";
+    await emitTo("projector", "video-control", { action }).catch(() => {});
+  };
+
+  const handleVideoSeek = async (value: number[]) => {
+    if (value[0] !== undefined) {
+      await emitTo("projector", "video-control", { action: "seek", value: value[0] }).catch(() => {});
+    }
   };
 
   const handleStop = async () => {
@@ -443,8 +472,8 @@ function PlayingNowScreen() {
 
         {/* Bottom Controls Section */}
         <div className="flex flex-col items-center gap-6 py-6 border-t border-border bg-muted/5">
-            {/* Playback Modes */}
-            <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg border border-border">
+            {/* Playback Modes — hidden for video slides */}
+            <div className={cn("flex items-center gap-1 bg-muted/30 p-1 rounded-lg border border-border", isVideoSlide && "invisible")}>
               <button 
                 onClick={() => handleModeChange("silent")}
                 className={cn("px-4 py-1.5 rounded-md text-sm transition-colors", selectedOutputMode === "silent" ? "bg-surface text-foreground font-semibold shadow-sm" : "text-muted-foreground hover:text-foreground")}
@@ -509,8 +538,8 @@ function PlayingNowScreen() {
                   variant="default"
                   size="icon"
                   className="h-14 w-14 sm:h-16 sm:w-16 rounded-full shadow-lg"
-                  onClick={() => void handlePrimaryPlayPause()}
-                  disabled={!hasAudioLoaded && slides.length === 0}
+                  onClick={() => void (isVideoSlide ? handleVideoPlayPause() : handlePrimaryPlayPause())}
+                  disabled={isVideoSlide ? !isLocalVideo : (!hasAudioLoaded && slides.length === 0)}
                   aria-label={isPlaying ? t("playingNow.pause") : t("playingNow.play")}
                 >
                   {isPlaying ? (
@@ -546,14 +575,36 @@ function PlayingNowScreen() {
 
             {/* Progress Bar Row */}
             <div className="w-full max-w-2xl flex items-center gap-4 px-4">
-              {hasAudioLoaded ? (
+              {isVideoSlide && isLocalVideo ? (
+                <>
+                  <span className="text-xs text-muted-foreground tabular-nums min-w-[45px] text-right">
+                    {formatTime((videoState?.currentTime ?? 0) * 1000)}
+                  </span>
+                  <Slider
+                    value={[videoState?.currentTime ?? 0]}
+                    max={(videoState?.duration ?? 0) > 0 ? videoState!.duration : 100}
+                    step={0.1}
+                    onValueCommit={(value) => void handleVideoSeek(value)}
+                    disabled={!videoState}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-muted-foreground tabular-nums min-w-[45px]">
+                    {formatTime((videoState?.duration ?? 0) * 1000)}
+                  </span>
+                </>
+              ) : isVideoSlide ? (
+                // YouTube / non-local online video — no seek control available
+                <p className="flex-1 text-center text-xs text-muted-foreground">
+                  {currentSlide?.videoTitle ?? currentSlide?.videoId ?? ""}
+                </p>
+              ) : hasAudioLoaded ? (
                 <>
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px] text-right">
                     {formatTime(displayedSeekMs)}
                   </span>
-                  <Slider 
-                    value={[displayedSeekMs]} 
-                    max={durationMs > 0 ? durationMs : 100} 
+                  <Slider
+                    value={[displayedSeekMs]}
+                    max={durationMs > 0 ? durationMs : 100}
                     step={100}
                     onValueChange={handleSeekPreviewChange}
                     onValueCommit={(value) => {
@@ -570,9 +621,9 @@ function PlayingNowScreen() {
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px] text-right">
                     {contextTotal > 0 ? contextIndex + 1 : 0}
                   </span>
-                  <Slider 
-                    value={[contextTotal > 0 ? contextIndex + 1 : 0]} 
-                    max={contextTotal > 0 ? contextTotal : 1} 
+                  <Slider
+                    value={[contextTotal > 0 ? contextIndex + 1 : 0]}
+                    max={contextTotal > 0 ? contextTotal : 1}
                     step={1}
                     disabled
                     className="flex-1 opacity-50 cursor-not-allowed"
