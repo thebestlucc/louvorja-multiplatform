@@ -9,6 +9,7 @@ interface PresentationState {
   activeServiceId: number | null;
   isPlayingService: boolean;
   activeServiceItemIndex: number;
+  currentVideoProjectionId: string | null;
   setCurrentPresentation: (id: number | null) => void;
   setActiveSlideIndex: (index: number) => void;
   setProjectorOpen: (open: boolean) => void;
@@ -16,6 +17,7 @@ interface PresentationState {
   setActiveService: (id: number | null) => void;
   setPlayingService: (playing: boolean) => void;
   setActiveServiceItemIndex: (index: number) => void;
+  setCurrentVideoProjectionId: (id: string | null) => void;
 }
 
 export const usePresentationStore = create<PresentationState>((set) => ({
@@ -26,6 +28,7 @@ export const usePresentationStore = create<PresentationState>((set) => ({
   activeServiceId: null,
   isPlayingService: false,
   activeServiceItemIndex: -1,
+  currentVideoProjectionId: null,
   setCurrentPresentation: (id) => set({ currentPresentationId: id }),
   setActiveService: (id) => set({ activeServiceId: id }),
   setPlayingService: (playing) =>
@@ -34,4 +37,5 @@ export const usePresentationStore = create<PresentationState>((set) => ({
   setActiveSlideIndex: (index) => set({ activeSlideIndex: index }),
   setProjectorOpen: (open) => set({ isProjectorOpen: open }),
   setSlides: (slides) => set({ slides, activeSlideIndex: 0 }),
+  setCurrentVideoProjectionId: (id) => set({ currentVideoProjectionId: id }),
 }));

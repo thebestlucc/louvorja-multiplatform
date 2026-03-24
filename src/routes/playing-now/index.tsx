@@ -214,6 +214,7 @@ function PlayingNowScreen() {
       setContextIndex(0);
       setContextTotal(0);
       setVideoState(null);
+      usePresentationStore.getState().setCurrentVideoProjectionId(null);
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
   }, []);
