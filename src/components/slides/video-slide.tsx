@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { catcher } from "../../lib/catcher";
-import { resolveMediaPath } from "../../lib/tauri";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { VideoPlayer } from "./video-player";
+import { useMediaSource } from "../../hooks/use-media-source";
 
 export type VideoRenderMode = "projector" | "return-current" | "editor";
 
@@ -17,40 +15,7 @@ interface VideoSlideProps {
 
 export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
   const { t } = useTranslation();
-  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadSource = async () => {
-      setError(null);
-      setResolvedSrc(null);
-
-      if (!slide.videoPath) {
-        setError(t("presentations.videoNoSource"));
-        return;
-      }
-
-      const [absolutePath, catcherError] = await catcher(resolveMediaPath(slide.videoPath));
-      if (cancelled) return;
-
-      if (catcherError) {
-        setError(catcherError.message);
-        return;
-      }
-
-      if (absolutePath) {
-        setResolvedSrc(convertFileSrc(absolutePath));
-      }
-    };
-
-    void loadSource();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [slide.videoPath, t]);
+  const srcUrl = useMediaSource(slide.videoPath ?? null);
 
   const shouldAutoplay = useMemo(() => {
     if (renderMode === "editor") {
@@ -61,11 +26,11 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
 
   const muted = renderMode === "return-current" ? true : (slide.muted ?? false);
 
-  if (!resolvedSrc) {
+  if (!srcUrl) {
     return (
       <div className={cn("flex h-full w-full items-center justify-center bg-black text-white/60", className)}>
         <span className="px-4 text-center text-sm">
-          {error ?? t("presentations.videoPreparing")}
+          {slide.videoPath ? t("presentations.videoPreparing") : t("presentations.videoNoSource")}
         </span>
       </div>
     );
@@ -76,7 +41,7 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
   return (
     <div className={cn("relative h-full w-full bg-black", className)}>
       <VideoPlayer
-        src={resolvedSrc}
+        src={srcUrl}
         autoPlay={shouldAutoplay}
         loop={slide.loop ?? false}
         muted={muted}
