@@ -324,12 +324,12 @@ export function PersistentVideoPlayer() {
       ref={hiddenHostRef}
       aria-hidden
       style={{
-        position: "absolute",
-        width: 1,
-        height: 1,
-        overflow: "hidden",
+        position: "fixed",
+        top: "-9999px",
+        left: "-9999px",
+        width: "640px",
+        height: "360px",
         pointerEvents: "none",
-        opacity: 0,
       }}
     />
   );
