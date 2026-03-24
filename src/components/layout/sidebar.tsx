@@ -100,6 +100,11 @@ export function Sidebar() {
   const pathname = location.pathname;
   const searchParams = location.search as Record<string, string | undefined>;
 
+  const isOnActiveServiceRoute =
+    activeServiceId !== null &&
+    (pathname === `/services/${activeServiceId}` ||
+      pathname.startsWith(`/services/${activeServiceId}/`));
+
   // Hover popover state for collapsed sidebar
   const [hoverOpen, setHoverOpen] = useState<string | null>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -326,7 +331,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {activeServiceId && activeServiceData && (
+      {activeServiceId && activeServiceData && !isOnActiveServiceRoute && (
         <div className="border-t border-border p-2">
           <Link
             to="/services/$serviceId"
