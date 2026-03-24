@@ -180,6 +180,64 @@ pub async fn copy_image_to_media(image_path: String, app: AppHandle) -> Result<S
     .map_err(|e| AppError::Internal(format!("Image copy task panicked: {}", e)))?
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn copy_slide_image_to_media(
+    image_path: String,
+    app: AppHandle,
+) -> Result<String, AppError> {
+    let source = PathBuf::from(&image_path);
+    if !source.exists() {
+        return Err(AppError::NotFound(format!(
+            "Image file '{}' does not exist",
+            source.display()
+        )));
+    }
+    let (canonical_source, err) = catcher(source.canonicalize());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let canonical_source = canonical_source.unwrap();
+    let extension = ensure_supported_cover_image(&canonical_source)?;
+    let (app_data_dir, err) = catcher(app.path().app_data_dir());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let app_data_dir = app_data_dir.unwrap();
+
+    tokio::task::spawn_blocking(move || {
+        let mut hasher = blake3::Hasher::new();
+        let mut input = File::open(&canonical_source)?;
+        let mut buf = [0u8; 8192];
+        loop {
+            let read = input.read(&mut buf)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buf[..read]);
+        }
+        let digest = hasher.finalize().to_hex().to_string();
+        let filename = format!("{}.{}", &digest[..24], extension);
+
+        let media_dir = app_data_dir.join("media").join("images");
+        std::fs::create_dir_all(&media_dir)?;
+
+        let destination = media_dir.join(&filename);
+        if destination != canonical_source && !destination.exists() {
+            std::fs::copy(&canonical_source, &destination).map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to copy image to managed media directory: {}",
+                    e
+                ))
+            })?;
+        }
+
+        Ok::<String, AppError>(format!("media/images/{}.{}", &digest[..24], extension))
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Image copy task panicked: {}", e)))?
+}
+
 pub(crate) fn ensure_supported_cover_image(path: &Path) -> Result<&'static str, AppError> {
     let extension = path
         .extension()

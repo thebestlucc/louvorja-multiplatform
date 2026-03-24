@@ -213,6 +213,7 @@ pub fn run() {
             commands::text_tools::format_text,
             commands::video_copy::copy_video_to_media,
             commands::video_copy::copy_image_to_media,
+            commands::video_copy::copy_slide_image_to_media,
             commands::utility::get_video_metadata,
             commands::utility::resolve_media_path,
             commands::utility::open_media_folder,

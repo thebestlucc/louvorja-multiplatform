@@ -139,6 +139,10 @@ export async function copyImageToMedia(imagePath: string): Promise<string> {
   return tauriInvoke<string>("copy_image_to_media", { imagePath });
 }
 
+export async function copySlideImageToMedia(imagePath: string): Promise<string> {
+  return tauriInvoke<string>("copy_slide_image_to_media", { imagePath });
+}
+
 export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
   return tauriInvoke<VideoMetadata>("get_video_metadata", { path });
 }

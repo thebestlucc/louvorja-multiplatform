@@ -3,7 +3,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../../lib/notifications";
 import { catcher } from "../../../lib/catcher";
-import { useCopyImageToMedia } from "../../../lib/queries";
+import { useCopySlideImageToMedia } from "../../../lib/queries";
 import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 
@@ -13,7 +13,7 @@ export function ImageFields({ src, alt, onChange }: {
   onChange: (src: string, alt?: string) => void;
 }) {
   const { t } = useTranslation();
-  const copyMutation = useCopyImageToMedia();
+  const copyMutation = useCopySlideImageToMedia();
   const [loading, setLoading] = useState(false);
 
   const handleBrowse = async () => {
