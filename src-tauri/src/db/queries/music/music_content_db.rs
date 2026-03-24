@@ -751,4 +751,51 @@ mod content_db_tests {
         // No category filter → both songs returned
         assert_eq!(hymns.len(), 2, "expected 2 hymns when categories tables absent, got {}", hymns.len());
     }
+
+    #[test]
+    fn get_hymns_from_content_db_paths_are_correctly_concatenated() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        // Raw paths (before resolve) should be concatenated dir + '/' + name
+        assert_eq!(hymns[0].audio_path.as_deref(), Some("/musics/pt/BrilhaJesus/song01.mp3"));
+        assert_eq!(hymns[0].cover_path.as_deref(), Some("/covers/brj.jpg"));
+        assert_eq!(hymns[0].playback_path.as_deref(), Some("/musics/pt/BrilhaJesus/song01_instrumental.mp3"));
+        // Category is always 'hymnal' from content DB
+        assert_eq!(hymns[0].category.as_deref(), Some("hymnal"));
+        // api_music_id is set to the music's id
+        assert_eq!(hymns[0].api_music_id, Some(1));
+    }
+
+    #[test]
+    fn get_collections_from_content_db_returns_cover_path() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let collections = get_collections_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(collections.len(), 1);
+        assert_eq!(collections[0].name, "1992 - Brilha Jesus");
+        assert_eq!(collections[0].cover_path.as_deref(), Some("/covers/brj.jpg"));
+        assert_eq!(collections[0].source_type, "api");
+        assert!(collections[0].song_count > 0);
+    }
+
+    #[test]
+    fn get_collections_from_content_db_returns_none_cover_when_no_image() {
+        // Album with no cover image (id_file_image = NULL)
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("
+            CREATE TABLE musics (id_music INTEGER PRIMARY KEY, name TEXT NOT NULL, id_language TEXT, id_file_music INTEGER, id_file_instrumental_music INTEGER, id_file_image INTEGER, created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '');
+            CREATE TABLE albums (id_album INTEGER PRIMARY KEY, name TEXT NOT NULL, id_language TEXT, id_file_image INTEGER, created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '');
+            CREATE TABLE albums_musics (id_album INTEGER, id_music INTEGER, track INTEGER);
+            CREATE TABLE files (id_file INTEGER PRIMARY KEY, dir TEXT, name TEXT);
+            CREATE TABLE lyrics (id_lyric INTEGER PRIMARY KEY, id_music INTEGER, lyric TEXT, \"order\" INTEGER, show_slide INTEGER, id_language TEXT);
+            INSERT INTO albums VALUES (1, 'No Cover Album', 'pt', NULL, '', '');
+            INSERT INTO musics VALUES (1, 'Test', 'pt', NULL, NULL, NULL, '', '');
+            INSERT INTO albums_musics VALUES (1, 1, 1);
+        ").unwrap();
+        let collections = get_collections_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(collections.len(), 1);
+        assert_eq!(collections[0].cover_path, None, "album with no image file should have None cover_path");
+    }
 }

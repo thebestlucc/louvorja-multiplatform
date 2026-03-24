@@ -199,6 +199,66 @@ pub fn delete_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<(), App
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use crate::db::models::Hymn;
+
+    fn make_hymn(audio: Option<&str>, cover: Option<&str>, playback: Option<&str>) -> Hymn {
+        Hymn {
+            id: 1,
+            number: Some(1),
+            title: "Test".to_string(),
+            author: None,
+            album: None,
+            lyrics: None,
+            chords: None,
+            audio_path: audio.map(str::to_string),
+            playback_path: playback.map(str::to_string),
+            category: Some("hymnal".to_string()),
+            notes: None,
+            cover_path: cover.map(str::to_string),
+            lyrics_sync: None,
+            api_music_id: None,
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
+        }
+    }
+
+    #[test]
+    fn resolve_hymn_paths_strips_leading_slash_and_resolves() {
+        let app_dir = PathBuf::from("/app/data");
+        let hymns = vec![make_hymn(
+            Some("/musics/pt/BrilhaJesus/song01.mp3"),
+            Some("/covers/brj.jpg"),
+            Some("/musics/pt/BrilhaJesus/song01_inst.mp3"),
+        )];
+        let resolved = super::resolve_hymn_paths(hymns, &app_dir);
+        assert_eq!(
+            resolved[0].audio_path.as_deref(),
+            Some("/app/data/musics/pt/BrilhaJesus/song01.mp3")
+        );
+        assert_eq!(
+            resolved[0].cover_path.as_deref(),
+            Some("/app/data/covers/brj.jpg")
+        );
+        assert_eq!(
+            resolved[0].playback_path.as_deref(),
+            Some("/app/data/musics/pt/BrilhaJesus/song01_inst.mp3")
+        );
+    }
+
+    #[test]
+    fn resolve_hymn_paths_none_paths_remain_none() {
+        let app_dir = PathBuf::from("/app/data");
+        let hymns = vec![make_hymn(None, None, None)];
+        let resolved = super::resolve_hymn_paths(hymns, &app_dir);
+        assert_eq!(resolved[0].audio_path, None);
+        assert_eq!(resolved[0].cover_path, None);
+        assert_eq!(resolved[0].playback_path, None);
+    }
+}
+
 fn validate_hymn_input(input: &HymnWriteInput) -> Result<(), AppError> {
     if input.title.trim().is_empty() {
         return Err(AppError::Internal("Hymn title is required.".into()));
