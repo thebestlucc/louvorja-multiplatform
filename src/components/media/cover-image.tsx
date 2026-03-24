@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { appDataDir, join } from "@tauri-apps/api/path";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { catcher } from "../../lib/catcher";
+import { useImageSrc } from "../../hooks/use-image-src";
 
 interface CoverImageProps {
   path?: string | null;
@@ -12,71 +10,13 @@ interface CoverImageProps {
   fallback?: ReactNode;
 }
 
-function isAbsolutePath(path: string): boolean {
-  // Matches /path or C:\path or C:/path
-  return path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path);
-}
-
 export function CoverImage({ path, title, className, fallback }: CoverImageProps) {
-  const [src, setSrc] = useState<string | null>(null);
+  const src = useImageSrc(path);
   const [failed, setFailed] = useState(false);
 
+  // Reset error state when the path changes
   useEffect(() => {
-    let cancelled = false;
     setFailed(false);
-
-    async function resolveSrc() {
-      if (!path || path.trim().length === 0) {
-        if (!cancelled) setSrc(null);
-        return;
-      }
-
-      // Normalize separators for consistent checks
-      const normalized = path.trim().replace(/\\/g, "/");
-
-      if (
-        normalized.startsWith("http://") ||
-        normalized.startsWith("https://") ||
-        normalized.startsWith("data:") ||
-        normalized.startsWith("blob:")
-      ) {
-        // Covers must come from managed/local media paths only.
-        if (!cancelled) setSrc(null);
-        return;
-      }
-
-      if (isAbsolutePath(normalized)) {
-        if (!cancelled) setSrc(convertFileSrc(normalized));
-        return;
-      }
-
-      if (normalized.startsWith("media/")) {
-        const [absolute, error] = await catcher(
-          async () => {
-            const appDir = await appDataDir();
-            return await join(appDir, normalized);
-          },
-          { notify: false },
-        );
-
-        if (error) {
-          if (!cancelled) setSrc(null);
-          return;
-        }
-
-        if (!cancelled) setSrc(convertFileSrc(absolute));
-        return;
-      }
-
-      // Fallback: if it's not a known prefix but could be a filename in media root
-      // Or just use as-is if it's already a valid URI we didn't catch
-      if (!cancelled) setSrc(normalized);
-    }
-
-    void resolveSrc();
-    return () => {
-      cancelled = true;
-    };
   }, [path]);
 
   const initials = useMemo(() => {

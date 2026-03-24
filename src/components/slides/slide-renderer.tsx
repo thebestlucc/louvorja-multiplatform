@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { SlideContent } from "../../lib/bindings";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
-import { useMediaSource } from "../../hooks/use-media-source";
+import { useImageSrc } from "../../hooks/use-image-src";
 import { VideoSlide, type VideoRenderMode } from "./video-slide";
 import { OnlineVideoSlide } from "../online-videos/online-video-slide";
 import { useProjectionDisplay } from "../../lib/use-presentation-font-size";
@@ -47,8 +47,8 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
     }
     return null;
   }, [slide]);
-  const resolvedBackgroundPath = useMediaSource(backgroundPath);
-  const resolvedImagePath = useMediaSource(imagePath);
+  const resolvedBackgroundPath = useImageSrc(backgroundPath);
+  const resolvedImagePath = useImageSrc(imagePath);
 
   return (
     <div

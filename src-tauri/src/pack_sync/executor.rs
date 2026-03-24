@@ -23,7 +23,7 @@ pub struct PackSyncProgress {
     pub packs_total: usize,
     pub packs_processed: usize,
     /// Per-pack download/extract status keyed by pack_id.
-    /// Values: "pending" | "downloading" | "verifying" | "ready" | "extracting" | "db_update" | "done" | "failed" | "skipped"
+    /// Values: "pending" | "downloading" | "verifying" | "ready" | "extracting" | "db_update" | "done" | "failed" | "skipped" | "retrying"
     pub pack_statuses: HashMap<String, String>,
 }
 
@@ -183,6 +183,7 @@ pub fn execute_pack_sync(
             let count = completed_count.clone();
             let app_clone = app.clone();
             let run_id_clone = run_id.clone();
+            let cancel = cancel_flag.clone();
 
             statuses
                 .lock()
@@ -190,6 +191,8 @@ pub fn execute_pack_sync(
                 .insert(item.pack_id.clone(), "downloading".to_string());
 
             let handle = tokio::spawn(async move {
+                const MAX_RETRIES: u32 = 3;
+
                 let _permit = permit;
                 let is_content_db = item.pack_id.starts_with("content-db-");
                 let tmp_filename = if is_content_db {
@@ -199,59 +202,132 @@ pub fn execute_pack_sync(
                 };
                 let zip_path = app_data.join(&tmp_filename);
 
-                let dl = crate::http_sync::downloader::download_file_http(
-                    &client,
-                    &item.pack_url,
-                    &zip_path,
-                    Some(item.pack_size),
-                )
-                .await;
+                let mut succeeded = false;
 
-                match dl {
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&zip_path);
-                        eprintln!("[pack-sync] Download failed for {}: {}", item.pack_id, e);
-                        statuses
-                            .lock()
-                            .unwrap()
-                            .insert(item.pack_id.clone(), "failed".to_string());
+                for attempt in 0..=MAX_RETRIES {
+                    // Check cancel flag before each attempt.
+                    if cancel.load(Ordering::Relaxed) {
+                        break;
                     }
-                    Ok(_) => {
+
+                    // Before retry: clean up leftover temp file and emit retrying status.
+                    if attempt > 0 {
+                        let _ = std::fs::remove_file(&zip_path);
+
                         statuses
                             .lock()
                             .unwrap()
-                            .insert(item.pack_id.clone(), "verifying".to_string());
+                            .insert(item.pack_id.clone(), "retrying".to_string());
 
-                        let zip_path_clone = zip_path.clone();
-                        let expected_sha = item.pack_sha256.clone();
-                        let verify_result = tokio::task::spawn_blocking(move || {
-                            verify_sha256(&zip_path_clone, &expected_sha)
-                        }).await;
-                        let verify_result = match verify_result {
-                            Ok(r) => r,
-                            Err(e) => Err(AppError::Internal(format!("SHA verify task panicked: {}", e))),
-                        };
-                        match verify_result {
-                            Ok(true) => {
-                                statuses
-                                    .lock()
-                                    .unwrap()
-                                    .insert(item.pack_id.clone(), "ready".to_string());
-                                ok_set.lock().unwrap().insert(item.pack_id.clone());
-                            }
-                            _ => {
-                                let _ = std::fs::remove_file(&zip_path);
-                                eprintln!(
-                                    "[pack-sync] SHA-256 mismatch for {}",
-                                    item.pack_id
-                                );
-                                statuses
-                                    .lock()
-                                    .unwrap()
-                                    .insert(item.pack_id.clone(), "failed".to_string());
+                        let statuses_snap = statuses.lock().unwrap().clone();
+                        let _ = app_clone.emit(
+                            "pack-sync-progress",
+                            PackSyncProgress {
+                                run_id: run_id_clone.clone(),
+                                status: "running".into(),
+                                percent: 0.0,
+                                message: Some(format!(
+                                    "Retrying {} (attempt {}/{})",
+                                    item.pack_id,
+                                    attempt + 1,
+                                    MAX_RETRIES + 1
+                                )),
+                                packs_total: download_total,
+                                packs_processed: 0,
+                                pack_statuses: statuses_snap,
+                            },
+                        );
+
+                        // Exponential backoff: 2s, 4s, 8s
+                        let backoff = std::time::Duration::from_secs(2u64.pow(attempt));
+                        tokio::time::sleep(backoff).await;
+
+                        // Re-check cancel after sleeping.
+                        if cancel.load(Ordering::Relaxed) {
+                            break;
+                        }
+
+                        statuses
+                            .lock()
+                            .unwrap()
+                            .insert(item.pack_id.clone(), "downloading".to_string());
+                    }
+
+                    // Download
+                    let dl = crate::http_sync::downloader::download_file_http(
+                        &client,
+                        &item.pack_url,
+                        &zip_path,
+                        Some(item.pack_size),
+                    )
+                    .await;
+
+                    match dl {
+                        Err(e) => {
+                            let _ = std::fs::remove_file(&zip_path);
+                            eprintln!(
+                                "[pack-sync] Download failed for {} (attempt {}/{}): {}",
+                                item.pack_id,
+                                attempt + 1,
+                                MAX_RETRIES + 1,
+                                e
+                            );
+                            // Continue to next retry attempt (or fall through if exhausted).
+                            continue;
+                        }
+                        Ok(_) => {
+                            // Verify SHA-256
+                            statuses
+                                .lock()
+                                .unwrap()
+                                .insert(item.pack_id.clone(), "verifying".to_string());
+
+                            let zip_path_clone = zip_path.clone();
+                            let expected_sha = item.pack_sha256.clone();
+                            let verify_result = tokio::task::spawn_blocking(move || {
+                                verify_sha256(&zip_path_clone, &expected_sha)
+                            })
+                            .await;
+                            let verify_result = match verify_result {
+                                Ok(r) => r,
+                                Err(e) => Err(AppError::Internal(format!(
+                                    "SHA verify task panicked: {}",
+                                    e
+                                ))),
+                            };
+                            match verify_result {
+                                Ok(true) => {
+                                    statuses
+                                        .lock()
+                                        .unwrap()
+                                        .insert(item.pack_id.clone(), "ready".to_string());
+                                    ok_set.lock().unwrap().insert(item.pack_id.clone());
+                                    succeeded = true;
+                                    break;
+                                }
+                                _ => {
+                                    let _ = std::fs::remove_file(&zip_path);
+                                    eprintln!(
+                                        "[pack-sync] SHA-256 mismatch for {} (attempt {}/{})",
+                                        item.pack_id,
+                                        attempt + 1,
+                                        MAX_RETRIES + 1
+                                    );
+                                    // Continue to next retry attempt.
+                                    continue;
+                                }
                             }
                         }
                     }
+                }
+
+                // After all attempts: if not succeeded, mark as failed and ensure cleanup.
+                if !succeeded {
+                    let _ = std::fs::remove_file(&zip_path);
+                    statuses
+                        .lock()
+                        .unwrap()
+                        .insert(item.pack_id.clone(), "failed".to_string());
                 }
 
                 let done = count.fetch_add(1, Ordering::Relaxed) + 1;
