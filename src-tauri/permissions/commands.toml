@@ -267,7 +267,8 @@ allow = [
     "get_slide_context",
     "get_overlay_state",
     "get_timer_state",
-    "get_streaming_status"
+    "get_streaming_status",
+    "get_all_settings"
 ]
 
 [[permission]]
