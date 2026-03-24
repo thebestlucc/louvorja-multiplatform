@@ -247,6 +247,7 @@ function PlayingNowScreen() {
   const isLocalVideo =
     currentSlide?.slideType === "video" ||
     (currentSlide?.slideType === "online_video" && currentSlide.videoSource === "local");
+  const isYouTubeVideo = currentSlide?.slideType === "online_video" && currentSlide.videoSource !== "local" && !!currentSlide.videoId;
   const hasAudioLoaded =
     !isVideoSlide &&
     (!!currentAudioPath || ((audioStatus === "playing" || audioStatus === "paused") && durationMs > 0));
@@ -536,13 +537,13 @@ function PlayingNowScreen() {
                   size="icon"
                   className="rounded-full h-10 w-10 sm:h-12 sm:w-12"
                   onClick={() => {
-                    if (isVideoSlide && isLocalVideo) {
+                    if (isVideoSlide && (isLocalVideo || isYouTubeVideo)) {
                       void emit("video-control", { action: "seek", value: 0 }).catch(() => {});
                     } else {
                       void prevSlide();
                     }
                   }}
-                  disabled={isVideoSlide ? !isLocalVideo : (contextIndex <= 0 && slides.length === 0)}
+                  disabled={isVideoSlide ? (videoState === null) : (contextIndex <= 0 && slides.length === 0)}
                   aria-label={t("playingNow.prevSlide")}
                 >
                   <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -553,7 +554,7 @@ function PlayingNowScreen() {
                   size="icon"
                   className="h-14 w-14 sm:h-16 sm:w-16 rounded-full shadow-lg"
                   onClick={() => void (isVideoSlide ? handleVideoPlayPause() : handlePrimaryPlayPause())}
-                  disabled={isVideoSlide ? !isLocalVideo : (!hasAudioLoaded && slides.length === 0)}
+                  disabled={isVideoSlide ? (videoState === null) : (!hasAudioLoaded && slides.length === 0)}
                   aria-label={isPlaying ? t("playingNow.pause") : t("playingNow.play")}
                 >
                   {isPlaying ? (
@@ -595,7 +596,7 @@ function PlayingNowScreen() {
 
             {/* Progress Bar Row */}
             <div className="w-full max-w-2xl flex items-center gap-4 px-4">
-              {isVideoSlide && isLocalVideo ? (
+              {isVideoSlide ? (
                 <>
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px] text-right">
                     {formatTime((videoState?.currentTime ?? 0) * 1000)}
@@ -605,18 +606,13 @@ function PlayingNowScreen() {
                     max={(videoState?.duration ?? 0) > 0 ? videoState!.duration : 100}
                     step={0.1}
                     onValueCommit={(value) => void handleVideoSeek(value)}
-                    disabled={!videoState}
+                    disabled={!videoState || (videoState.duration ?? 0) <= 0}
                     className="flex-1"
                   />
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px]">
                     {formatTime((videoState?.duration ?? 0) * 1000)}
                   </span>
                 </>
-              ) : isVideoSlide ? (
-                // YouTube / non-local online video — no seek control available
-                <p className="flex-1 text-center text-xs text-muted-foreground">
-                  {currentSlide?.videoTitle ?? currentSlide?.videoId ?? ""}
-                </p>
               ) : hasAudioLoaded ? (
                 <>
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px] text-right">

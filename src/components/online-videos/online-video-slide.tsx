@@ -1,9 +1,68 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { useMediaSource } from "../../hooks/use-media-source";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
+
+// ─── YouTube IFrame API types ──────────────────────────────────────────────
+
+type YTPlayerState = -1 | 0 | 1 | 2 | 3 | 5;
+
+interface YTPlayer {
+  playVideo(): void;
+  pauseVideo(): void;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  setVolume(volume: number): void;
+  getVolume(): number;
+  getCurrentTime(): number;
+  getDuration(): number;
+  getPlayerState(): YTPlayerState;
+  destroy(): void;
+}
+
+declare global {
+  interface Window {
+    YT: { Player: new (el: HTMLElement | string, cfg: YTPlayerConfig) => YTPlayer };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+interface YTPlayerConfig {
+  videoId?: string;
+  width?: string | number;
+  height?: string | number;
+  playerVars?: Record<string, string | number>;
+  events?: {
+    onReady?: (e: { target: YTPlayer }) => void;
+    onStateChange?: (e: { data: YTPlayerState; target: YTPlayer }) => void;
+  };
+}
+
+// ─── YouTube API singleton loader ─────────────────────────────────────────
+
+let ytApiLoaded = false;
+let ytApiReady = false;
+const ytReadyCbs: Array<() => void> = [];
+
+function loadYouTubeAPI(): Promise<void> {
+  return new Promise((resolve) => {
+    if (ytApiReady) { resolve(); return; }
+    ytReadyCbs.push(resolve);
+    if (!ytApiLoaded) {
+      ytApiLoaded = true;
+      window.onYouTubeIframeAPIReady = () => {
+        ytApiReady = true;
+        ytReadyCbs.splice(0).forEach((cb) => cb());
+      };
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+    }
+  });
+}
+
+// ─── Shared event types ───────────────────────────────────────────────────
 
 type VideoControlEvent = { action: "play" | "pause" | "seek" | "volume"; value?: number };
 export type VideoStateEvent = { paused: boolean; currentTime: number; duration: number; volume: number };
@@ -16,11 +75,7 @@ export type OnlineVideoRenderMode =
   | "editor"
   | "thumbnail";
 
-interface OnlineVideoSlideProps {
-  slide: SlideContent;
-  renderMode: OnlineVideoRenderMode;
-  className?: string;
-}
+// ─── LocalVideoPlayer ─────────────────────────────────────────────────────
 
 function LocalVideoPlayer({ src, title, className, muted }: { src: string; title: string; className?: string; muted?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -92,6 +147,105 @@ function LocalVideoPlayer({ src, title, className, muted }: { src: string; title
   );
 }
 
+// ─── YouTubePlayer ────────────────────────────────────────────────────────
+
+function YouTubePlayer({ videoId, title, className, muted = false }: {
+  videoId: string;
+  title: string;
+  className?: string;
+  muted?: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<YTPlayer | undefined>(undefined);
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const emitState = useCallback((player: YTPlayer) => {
+    void emitTo("main", "video-state", {
+      paused: player.getPlayerState() !== 1, // 1 = PLAYING
+      currentTime: player.getCurrentTime(),
+      duration: player.getDuration(),
+      volume: player.getVolume() / 100,
+    } satisfies VideoStateEvent).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let destroyed = false;
+    // Each mount gets a stable unique id for YT.Player
+    const uid = `yt-${videoId}-${Math.random().toString(36).slice(2)}`;
+
+    void loadYouTubeAPI().then(() => {
+      if (destroyed || !containerRef.current) return;
+      containerRef.current.id = uid;
+
+      const player = new window.YT.Player(uid, {
+        videoId,
+        width: "100%",
+        height: "100%",
+        playerVars: {
+          autoplay: 1,
+          controls: 0,
+          rel: 0,
+          modestbranding: 1,
+          showinfo: 0,
+          disablekb: 1,
+          iv_load_policy: 3,
+          mute: muted ? 1 : 0,
+          playsinline: 1,
+        },
+        events: {
+          onReady: ({ target }) => {
+            playerRef.current = target;
+            emitState(target);
+          },
+          onStateChange: ({ data, target }) => {
+            emitState(target);
+            clearInterval(pollRef.current);
+            if (data === 1) { // PLAYING
+              pollRef.current = setInterval(() => emitState(target), 250);
+            }
+          },
+        },
+      });
+      playerRef.current = player;
+    });
+
+    // Listen for video-control events
+    const unsub = listen<VideoControlEvent>("video-control", (e) => {
+      const p = playerRef.current;
+      if (!p) return;
+      const { action, value } = e.payload;
+      if (action === "play") p.playVideo();
+      else if (action === "pause") p.pauseVideo();
+      else if (action === "seek" && value !== undefined) p.seekTo(value, true);
+      else if (action === "volume" && value !== undefined) p.setVolume(Math.round(value * 100));
+    }).catch(() => () => {});
+
+    return () => {
+      destroyed = true;
+      clearInterval(pollRef.current);
+      try { playerRef.current?.destroy(); } catch (_) {}
+      playerRef.current = undefined;
+      void unsub.then((fn) => fn());
+    };
+  }, [videoId, muted, emitState]);
+
+  return (
+    <div
+      ref={containerRef}
+      title={title}
+      className={cn("h-full w-full [&>iframe]:pointer-events-none [&>iframe]:border-none", className)}
+    />
+  );
+}
+
+// ─── OnlineVideoSlide ─────────────────────────────────────────────────────
+
+interface OnlineVideoSlideProps {
+  slide: SlideContent;
+  renderMode: OnlineVideoRenderMode;
+  className?: string;
+}
+
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
   const localVideoSrc = useMediaSource(
@@ -110,13 +264,10 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
             className="h-full w-full"
           />
         ) : slide.videoId ? (
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${slide.videoId}?autoplay=1&controls=0&rel=0&modestbranding=1&showinfo=0&disablekb=1&iv_load_policy=3`}
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-            className="h-full w-full"
-            style={{ border: "none", pointerEvents: "none" }}
+          <YouTubePlayer
+            videoId={slide.videoId}
             title={slide.videoTitle ?? slide.videoId}
+            className="h-full w-full"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
@@ -204,13 +355,11 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
             muted
           />
         ) : slide.videoId ? (
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${slide.videoId}?autoplay=1&controls=0&rel=0&modestbranding=1&showinfo=0&disablekb=1&iv_load_policy=3&mute=1`}
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-            className="h-full w-full"
-            style={{ border: "none", pointerEvents: "none" }}
+          <YouTubePlayer
+            videoId={slide.videoId}
             title={slide.videoTitle ?? slide.videoId}
+            className="h-full w-full"
+            muted
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
