@@ -28,6 +28,72 @@ fn lyrics_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
     }
 }
 
+/// Returns the SQL fragment for the `lyrics_sync` column.
+///
+/// When the `lyrics` table exists and has a `time` column, builds a
+/// `json_group_array(json_object(...))` correlated subquery whose output is
+/// parseable by `parse_lyrics_sync_points` in `music_sync.rs`.
+///
+/// The JSON key for the instrumental field is `'instrumentalTime'` (camelCase)
+/// to match the `#[serde(rename_all = "camelCase")]` on `SyncLyric`.
+///
+/// Falls back to `NULL` for older content DBs that lack timing columns.
+fn lyrics_sync_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
+    if !lyrics_table_exists(conn) {
+        return "NULL".to_string();
+    }
+
+    let has_time = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('lyrics') WHERE name='time'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    if !has_time {
+        return "NULL".to_string();
+    }
+
+    let has_instrumental = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('lyrics') WHERE name='instrumental_time'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    let inst_field = if has_instrumental {
+        "'instrumentalTime', instrumental_time"
+    } else {
+        "'instrumentalTime', NULL"
+    };
+    let inst_select = if has_instrumental {
+        ", instrumental_time"
+    } else {
+        ""
+    };
+
+    format!(
+        "(SELECT json_group_array(json_object(\
+            'lyric', lyric, \
+            'order', \"order\", \
+            'time', time, \
+            {inst_field}\
+        )) FROM (\
+            SELECT lyric, \"order\", time{inst_select} \
+            FROM lyrics \
+            WHERE id_music = m.id_music AND id_language = {lang_param} \
+            ORDER BY \"order\"\
+        ))",
+        inst_field = inst_field,
+        inst_select = inst_select,
+        lang_param = lang_param,
+    )
+}
+
 /// Returns true if both `categories` and `categories_albums` tables exist in the content DB.
 fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
     let has_categories = content_db
@@ -80,6 +146,7 @@ pub fn get_hymns_from_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
     let lyrics_col = lyrics_subquery(content_db, "?1");
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?1");
     let (cat_join, cat_where) = hymnal_category_filter(content_db);
 
     let sql = format!(
@@ -96,7 +163,7 @@ pub fn get_hymns_from_content_db(
             'hymnal'                      AS category,
             NULL                          AS notes,
             fi.dir || '/' || fi.name      AS cover_path,
-            NULL                          AS lyrics_sync,
+            {lyrics_sync_col}             AS lyrics_sync,
             m.id_music                    AS api_music_id,
             m.created_at                  AS created_at,
             m.updated_at                  AS updated_at
@@ -190,6 +257,7 @@ pub fn search_hymns_content_db(
     }
 
     let lyrics_col = lyrics_subquery(content_db, "?2");
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
     let (cat_join, cat_where) = hymnal_category_filter(content_db);
 
     let sql = format!(
@@ -202,7 +270,7 @@ pub fn search_hymns_content_db(
             fp.dir || '/' || fp.name AS playback_path,
             'hymnal' AS category, NULL AS notes,
             fi.dir || '/' || fi.name AS cover_path,
-            NULL AS lyrics_sync, m.id_music AS api_music_id,
+            {lyrics_sync_col} AS lyrics_sync, m.id_music AS api_music_id,
             m.created_at, m.updated_at
          FROM musics_fts
          JOIN musics m ON musics_fts.rowid = m.id_music
@@ -314,6 +382,66 @@ pub fn get_collections_from_content_db(
     Ok(collections)
 }
 
+/// Fetch a single collection/album from the content DB by its album ID.
+/// Returns `None` when no matching album is found.
+pub fn get_collection_by_id_from_content_db(
+    content_db: &rusqlite::Connection,
+    album_id: i64,
+) -> Result<Option<crate::db::models::Collection>, AppError> {
+    let mut stmt = content_db
+        .prepare(
+            "SELECT
+                a.id_album                                   AS id,
+                a.name                                       AS name,
+                NULL                                         AS description,
+                CAST(SUBSTR(a.name, 1, 4) AS INTEGER)        AS year,
+                f.dir || '/' || f.name                       AS cover_path,
+                NULL                                         AS auto_cover_path,
+                COUNT(am.id_music)                           AS song_count,
+                'api'                                        AS source_type,
+                a.id_album                                   AS api_album_id,
+                a.created_at,
+                a.updated_at
+             FROM albums a
+             LEFT JOIN files f ON f.id_file = a.id_file_image
+             LEFT JOIN albums_musics am ON am.id_album = a.id_album
+             WHERE a.id_album = ?1
+             GROUP BY a.id_album",
+        )
+        .map_err(AppError::Database)?;
+
+    let mut rows = stmt
+        .query_map([album_id], |row| {
+            let year_raw: Option<i64> = row.get("year")?;
+            let year = year_raw
+                .and_then(|y| if (1900..=2100).contains(&y) { Some(y as i32) } else { None });
+            Ok(crate::db::models::Collection {
+                id: row.get("id")?,
+                name: row.get("name")?,
+                description: row.get("description")?,
+                year,
+                cover_path: row.get("cover_path")?,
+                auto_cover_path: row.get("auto_cover_path")?,
+                song_count: row.get::<_, i64>("song_count")? as i32,
+                source_type: row.get("source_type")?,
+                api_album_id: row.get("api_album_id")?,
+                created_at: row
+                    .get::<_, Option<String>>("created_at")?
+                    .unwrap_or_default(),
+                updated_at: row
+                    .get::<_, Option<String>>("updated_at")?
+                    .unwrap_or_default(),
+            })
+        })
+        .map_err(AppError::Database)?;
+
+    match rows.next() {
+        Some(Ok(collection)) => Ok(Some(collection)),
+        Some(Err(e)) => Err(AppError::Database(e)),
+        None => Ok(None),
+    }
+}
+
 /// Query hymns belonging to a specific album in the content DB.
 pub fn get_collection_hymns_from_content_db(
     content_db: &rusqlite::Connection,
@@ -323,6 +451,7 @@ pub fn get_collection_hymns_from_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
     let lyrics_col = lyrics_subquery(content_db, "?2");
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
 
     let sql = format!(
         "SELECT
@@ -334,7 +463,7 @@ pub fn get_collection_hymns_from_content_db(
             fp.dir || '/' || fp.name AS playback_path,
             'hymnal' AS category, NULL AS notes,
             fi.dir || '/' || fi.name AS cover_path,
-            NULL AS lyrics_sync, m.id_music AS api_music_id,
+            {lyrics_sync_col} AS lyrics_sync, m.id_music AS api_music_id,
             m.created_at, m.updated_at
          FROM musics m
          JOIN albums_musics am ON am.id_music = m.id_music
@@ -390,6 +519,7 @@ pub fn get_hymn_by_id_from_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
     let lyrics_col = lyrics_subquery(content_db, "?2");
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
 
     let sql = format!(
         "SELECT
@@ -405,7 +535,7 @@ pub fn get_hymn_by_id_from_content_db(
             'hymnal'                      AS category,
             NULL                          AS notes,
             fi.dir || '/' || fi.name      AS cover_path,
-            NULL                          AS lyrics_sync,
+            {lyrics_sync_col}             AS lyrics_sync,
             m.id_music                    AS api_music_id,
             COALESCE(m.created_at, '')    AS created_at,
             COALESCE(m.updated_at, '')    AS updated_at
@@ -467,6 +597,7 @@ pub fn get_hymns_by_album_from_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
     let lyrics_col = lyrics_subquery(content_db, "?2");
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
 
     let sql = format!(
         "SELECT
@@ -482,7 +613,7 @@ pub fn get_hymns_by_album_from_content_db(
             'hymnal'                      AS category,
             NULL                          AS notes,
             fi.dir || '/' || fi.name      AS cover_path,
-            NULL                          AS lyrics_sync,
+            {lyrics_sync_col}             AS lyrics_sync,
             m.id_music                    AS api_music_id,
             COALESCE(m.created_at, '')    AS created_at,
             COALESCE(m.updated_at, '')    AS updated_at
@@ -797,5 +928,98 @@ mod content_db_tests {
         let collections = get_collections_from_content_db(&conn, "pt-BR").unwrap();
         assert_eq!(collections.len(), 1);
         assert_eq!(collections[0].cover_path, None, "album with no image file should have None cover_path");
+    }
+
+    /// Helper: content DB with time + instrumental_time columns in lyrics table.
+    fn make_content_db_with_sync() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE musics (
+                id_music INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                id_language TEXT,
+                id_file_music INTEGER,
+                id_file_instrumental_music INTEGER,
+                id_file_image INTEGER,
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            );
+            CREATE TABLE albums (
+                id_album INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                id_language TEXT,
+                id_file_image INTEGER,
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            );
+            CREATE TABLE albums_musics (id_album INTEGER, id_music INTEGER, track INTEGER);
+            CREATE TABLE files (id_file INTEGER PRIMARY KEY, dir TEXT, name TEXT);
+            CREATE TABLE lyrics (
+                id_lyric INTEGER PRIMARY KEY,
+                id_music INTEGER,
+                lyric TEXT,
+                \"order\" INTEGER,
+                show_slide INTEGER,
+                id_language TEXT,
+                time TEXT,
+                instrumental_time TEXT
+            );",
+        ).unwrap();
+        conn
+    }
+
+    fn seed_with_sync(conn: &rusqlite::Connection) {
+        conn.execute_batch(
+            "INSERT INTO albums VALUES (1, '1992 - Brilha Jesus', 'pt', NULL, '', '');
+             INSERT INTO musics VALUES (1, 'Santo', 'pt', NULL, NULL, NULL, '', '');
+             INSERT INTO albums_musics VALUES (1, 1, 1);
+             INSERT INTO lyrics VALUES (1, 1, 'Santo, Santo, Santo',     1, 1, 'pt', '00:00:03', '00:00:05');
+             INSERT INTO lyrics VALUES (2, 1, 'Senhor Deus Todo-Poderoso', 2, 1, 'pt', '00:00:07', '00:00:09');",
+        ).unwrap();
+    }
+
+    #[test]
+    fn get_hymn_by_id_returns_lyrics_sync_json_with_time() {
+        let conn = make_content_db_with_sync();
+        seed_with_sync(&conn);
+        let hymn = get_hymn_by_id_from_content_db(&conn, 1, "pt-BR").unwrap();
+        let sync_json = hymn.lyrics_sync.expect("lyrics_sync should be Some when time columns exist");
+        // Verify the JSON shape expected by parse_lyrics_sync_points (music_sync.rs)
+        assert!(sync_json.contains("\"time\""), "lyrics_sync JSON must contain 'time' key: {sync_json}");
+        assert!(sync_json.contains("\"instrumentalTime\""), "lyrics_sync JSON must contain 'instrumentalTime' key: {sync_json}");
+        // Stanza 1: time=00:00:03, instrumental_time=00:00:05
+        assert!(sync_json.contains("00:00:03"), "must contain timing for stanza 1: {sync_json}");
+        assert!(sync_json.contains("00:00:05"), "must contain instrumental timing for stanza 1: {sync_json}");
+        // Stanza 2: time=00:00:07, instrumental_time=00:00:09
+        assert!(sync_json.contains("00:00:07"), "must contain timing for stanza 2: {sync_json}");
+        assert!(sync_json.contains("00:00:09"), "must contain instrumental timing for stanza 2: {sync_json}");
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_returns_lyrics_sync_when_time_columns_exist() {
+        let conn = make_content_db_with_sync();
+        seed_with_sync(&conn);
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        assert!(hymns[0].lyrics_sync.is_some(), "lyrics_sync must be populated when time columns exist");
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_lyrics_sync_null_when_no_time_column() {
+        // make_content_db() creates lyrics without time columns → lyrics_sync stays NULL
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        assert_eq!(hymns[0].lyrics_sync, None, "lyrics_sync must be None when lyrics table has no time column");
+    }
+
+    #[test]
+    fn get_collection_hymns_returns_lyrics_sync_when_time_columns_exist() {
+        let conn = make_content_db_with_sync();
+        seed_with_sync(&conn);
+        let hymns = get_collection_hymns_from_content_db(&conn, 1, "pt-BR").unwrap();
+        assert_eq!(hymns.len(), 1);
+        assert!(hymns[0].lyrics_sync.is_some(), "collection hymns must carry lyrics_sync");
     }
 }

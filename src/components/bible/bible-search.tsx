@@ -11,6 +11,7 @@ import {
   matchesBookQuery,
   resolveBookIndex,
 } from "./book-catalog";
+import { HighlightedSnippet } from "../ui/highlighted-snippet";
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -60,27 +61,6 @@ function parseReference(query: string, language: string, availableBooksByIndex: 
     chapter,
     verse,
   };
-}
-
-/** Renders an FTS snippet, turning <mark>…</mark> tags into highlighted spans. */
-function HighlightedSnippet({ html }: { html: string }) {
-  const parts = html.split(/(<mark>.*?<\/mark>)/g);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith("<mark>") && part.endsWith("</mark>") ? (
-          <mark
-            key={i}
-            className="rounded-sm bg-yellow-300/80 px-0.5 font-semibold text-yellow-900 dark:bg-yellow-600/60 dark:text-yellow-100"
-          >
-            {part.slice(6, -7)}
-          </mark>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
-    </>
-  );
 }
 
 interface BibleSearchProps {

@@ -5,6 +5,7 @@ import { useAudioStore } from "../stores/audio-store";
 import { useQueueStore } from "../stores/queue-store";
 import { getSyncPoints as fetchSyncPoints } from "../lib/tauri";
 import { catcher } from "../lib/catcher";
+import { parseLyricsSyncToPoints } from "../lib/audio-sync";
 import type { Hymn, SlideContent } from "../lib/bindings";
 import { buildHymnSlides } from "../lib/hymn-slides";
 
@@ -45,11 +46,14 @@ export function useHymnPlayback() {
 
     const clampedIndex = Math.max(0, Math.min(startIndex, generatedSlides.length - 1));
     const [points] = await catcher(fetchSyncPoints(hymn.id), { notify: false });
+    const effectiveSyncPoints = (points && points.length > 0)
+      ? points
+      : parseLyricsSyncToPoints(hymn.lyricsSync);
 
     setCurrentPresentation(null);
     setPresentationSlides(generatedSlides);
     setPresentationActiveSlideIndex(clampedIndex);
-    setAudioSyncPoints(points ?? []);
+    setAudioSyncPoints(effectiveSyncPoints);
 
     return { generatedSlides, clampedIndex };
   }, [setAudioSyncPoints, setCurrentPresentation, setPresentationActiveSlideIndex, setPresentationSlides]);

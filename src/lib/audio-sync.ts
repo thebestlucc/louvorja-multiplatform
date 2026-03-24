@@ -55,6 +55,62 @@ export function resolvePlaybackVariantPaths(
   };
 }
 
+/**
+ * Parse a lyricsSync JSON string (from content DB) into SyncPoint[].
+ * Format: [{ lyric, order, time, instrumentalTime }, ...]
+ * Time format: "HH:MM:SS" (e.g. "00:00:03" = 3000 ms)
+ *
+ * Returns [] when lyricsSync is null/empty/invalid.
+ * Used as a fallback when getSyncPoints() finds no data in the app DB
+ * (i.e., for content-DB / CDN hymns not stored in the local hymns table).
+ */
+export function parseLyricsSyncToPoints(lyricsSync: string | null | undefined): SyncPoint[] {
+  if (!lyricsSync) return [];
+
+  let entries: Array<{ order: number; time?: string; instrumentalTime?: string }>;
+  try {
+    entries = JSON.parse(lyricsSync);
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+
+  const parseTimeToMs = (time: string | undefined): number | null => {
+    if (!time) return null;
+    const parts = time.split(":");
+    if (parts.length === 3) {
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const s = parseInt(parts[2], 10);
+      if ([h, m, s].some(isNaN)) return null;
+      return (h * 3600 + m * 60 + s) * 1000;
+    }
+    return null;
+  };
+
+  const sorted = [...entries].sort((a, b) => a.order - b.order);
+
+  // Always start with the cover slide at t=0
+  const points: SyncPoint[] = [{ slideIndex: 0, timestampMs: 0, instrumentalTimestampMs: 0 }];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const entry = sorted[i];
+    const ms = parseTimeToMs(entry.time);
+    const instMs = parseTimeToMs(entry.instrumentalTime);
+    // Skip entries with no timing at all (gap/instrumental markers with time="00:00:00")
+    if (ms === null && instMs === null) continue;
+    if (ms === 0 && instMs === 0) continue;
+    points.push({
+      slideIndex: i + 1,
+      timestampMs: ms ?? instMs ?? 0,
+      instrumentalTimestampMs: instMs ?? null,
+    });
+  }
+
+  return points;
+}
+
 export function getActiveTimestamp(point: SyncPoint, mode: PlaybackMode): number {
   if (mode === "karaoke" && point.instrumentalTimestampMs != null) {
     return point.instrumentalTimestampMs;

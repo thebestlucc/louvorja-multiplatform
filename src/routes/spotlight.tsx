@@ -45,6 +45,7 @@ import {
 import type { Hymn, BibleSearchResult, CollectionSearchResult, MediaLibraryItem } from "../lib/bindings";
 import { CoverImage } from "../components/media/cover-image";
 import { useThemeStore } from "../stores/theme-store";
+import { HighlightedSnippet } from "../components/ui/highlighted-snippet";
 
 export const Route = createFileRoute("/spotlight")({
   component: SpotlightWindow,
@@ -427,8 +428,13 @@ function SpotlightWindow() {
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className={metaTextClass}>
                         {result.bookName} {result.verse.chapter}:{result.verse.verse}
+                        {result.versionAbbreviation ? (
+                          <span className="ml-1 font-normal opacity-60">· {result.versionAbbreviation}</span>
+                        ) : null}
                       </span>
-                      <span className="truncate">{result.snippet}</span>
+                      <span className="truncate">
+                        <HighlightedSnippet html={result.snippet} />
+                      </span>
                     </div>
                     <button
                       title={t("spotlight.projectToScreen")}

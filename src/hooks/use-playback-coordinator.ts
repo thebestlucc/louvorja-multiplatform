@@ -3,7 +3,7 @@ import { useQueueStore } from "../stores/queue-store";
 import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useDisplayStore } from "../stores/display-store";
-import { resolvePlaybackVariantPaths } from "../lib/audio-sync";
+import { resolvePlaybackVariantPaths, parseLyricsSyncToPoints } from "../lib/audio-sync";
 import { getSyncPoints } from "../lib/tauri";
 import { catcher } from "../lib/catcher";
 import { projectSlideIndex } from "../lib/projection-playback";
@@ -55,7 +55,10 @@ export function usePlaybackCoordinator() {
       // 1. Fetch sync points if it's a hymn
       if (hymnId) {
         const syncPoints = await getSyncPoints(hymnId);
-        setSyncPoints(syncPoints || []);
+        const effectiveSyncPoints = (syncPoints && syncPoints.length > 0)
+          ? syncPoints
+          : parseLyricsSyncToPoints(item.hymn?.lyricsSync);
+        setSyncPoints(effectiveSyncPoints);
       } else {
         setSyncPoints([]);
       }

@@ -123,7 +123,7 @@ pub fn search_bible_text(
             Ok(BibleSearchResult {
                 book_name: row.get::<_, String>("book")?,
                 snippet: row.get("snippet")?,
-                version_abbreviation: String::new(),
+                version_abbreviation: row.get::<_, String>("version_abbreviation").unwrap_or_default(),
                 verse,
             })
         };
@@ -131,9 +131,11 @@ pub fn search_bible_text(
         let fts_results = if let Some(vid) = version_id {
             let mut stmt = conn.prepare(
                 "SELECT v.id, v.version_id, v.book, v.chapter, v.verse, v.text,
+                        bv.abbreviation as version_abbreviation,
                         snippet(bible_fts, 0, '<mark>', '</mark>', '...', 32) as snippet
                  FROM bible_verses v
                  JOIN bible_fts ON bible_fts.rowid = v.id
+                 JOIN bible_versions bv ON bv.id = v.version_id
                  WHERE bible_fts MATCH ?1 AND v.version_id = ?2
                  ORDER BY rank
                  LIMIT 100",
@@ -145,9 +147,11 @@ pub fn search_bible_text(
         } else {
             let mut stmt = conn.prepare(
                 "SELECT v.id, v.version_id, v.book, v.chapter, v.verse, v.text,
+                        bv.abbreviation as version_abbreviation,
                         snippet(bible_fts, 0, '<mark>', '</mark>', '...', 32) as snippet
                  FROM bible_verses v
                  JOIN bible_fts ON bible_fts.rowid = v.id
+                 JOIN bible_versions bv ON bv.id = v.version_id
                  WHERE bible_fts MATCH ?1
                  ORDER BY rank
                  LIMIT 100",
@@ -174,16 +178,18 @@ pub fn search_bible_text(
             verse,
             book_name,
             snippet,
-            version_abbreviation: String::new(),
+            version_abbreviation: row.get::<_, String>("version_abbreviation").unwrap_or_default(),
         })
     };
 
     if let Some(vid) = version_id {
         let mut stmt = conn.prepare(
-            "SELECT id, version_id, book, chapter, verse, text
-             FROM bible_verses
-             WHERE text LIKE ?1 AND version_id = ?2
-             ORDER BY book, chapter, verse
+            "SELECT v.id, v.version_id, v.book, v.chapter, v.verse, v.text,
+                    bv.abbreviation as version_abbreviation
+             FROM bible_verses v
+             JOIN bible_versions bv ON bv.id = v.version_id
+             WHERE v.text LIKE ?1 AND v.version_id = ?2
+             ORDER BY v.book, v.chapter, v.verse
              LIMIT 50",
         )?;
         let results = stmt
@@ -192,10 +198,12 @@ pub fn search_bible_text(
         Ok(results)
     } else {
         let mut stmt = conn.prepare(
-            "SELECT id, version_id, book, chapter, verse, text
-             FROM bible_verses
-             WHERE text LIKE ?1
-             ORDER BY book, chapter, verse
+            "SELECT v.id, v.version_id, v.book, v.chapter, v.verse, v.text,
+                    bv.abbreviation as version_abbreviation
+             FROM bible_verses v
+             JOIN bible_versions bv ON bv.id = v.version_id
+             WHERE v.text LIKE ?1
+             ORDER BY v.book, v.chapter, v.verse
              LIMIT 50",
         )?;
         let results = stmt

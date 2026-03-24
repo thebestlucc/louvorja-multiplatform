@@ -428,12 +428,16 @@ fn resolve_audio_path(path: &str, app: &AppHandle) -> Result<String, AppError> {
 
     let safe_path = SafePath::new(&app_data_dir);
     let normalized = trimmed.replace('\\', "/");
-    
-    // Support paths that already start with "media/" or just raw filenames
-    let candidate = if normalized.starts_with("media/") {
-        normalized
+
+    // Absolute paths come from content DB (resolved by resolve_hymn_paths).
+    // SafePath validates they're within app_data_dir. Relative paths are
+    // user-uploaded files stored under media/.
+    let candidate: std::path::PathBuf = if std::path::Path::new(&normalized).is_absolute() {
+        std::path::PathBuf::from(&normalized)
+    } else if normalized.starts_with("media/") {
+        app_data_dir.join(&normalized)
     } else {
-        format!("media/{}", normalized)
+        app_data_dir.join(format!("media/{}", normalized))
     };
 
     let resolved = safe_path.resolve(candidate)?;

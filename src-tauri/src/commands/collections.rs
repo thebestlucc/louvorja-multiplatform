@@ -125,7 +125,30 @@ pub fn get_collection(
     state: tauri::State<'_, AppState>,
 ) -> Result<CollectionWithSongs, AppError> {
     let conn = state.db.get()?;
-    crate::db::queries::collections::get_collection_with_songs(&conn, id)
+
+    // Try main DB first
+    match crate::db::queries::collections::get_collection_with_songs(&conn, id) {
+        Ok(result) => return Ok(result),
+        Err(AppError::NotFound(_)) => {} // fall through to content DB
+        Err(e) => return Err(e),
+    }
+
+    // Fall back to content DB (collections from CDN packs are stored there)
+    if let Some((content_conn, _lang)) = get_content_db_conn(&state, &conn) {
+        if let Some(collection) =
+            crate::db::queries::music::get_collection_by_id_from_content_db(&content_conn, id)?
+        {
+            return Ok(CollectionWithSongs {
+                collection,
+                songs: vec![],
+            });
+        }
+    }
+
+    Err(AppError::NotFound(format!(
+        "Collection with id {} not found",
+        id
+    )))
 }
 
 #[tauri::command]

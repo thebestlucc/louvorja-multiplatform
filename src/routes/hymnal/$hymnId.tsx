@@ -5,6 +5,7 @@ import { useDeleteHymn, useHymn, useSyncPoints, useUpdateHymn } from "../../lib/
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAudioStore } from "../../stores/audio-store";
 import { useHymnPlayback, hymnToSlides } from "../../hooks/use-hymn-playback";
+import { parseLyricsSyncToPoints } from "../../lib/audio-sync";
 import { useSlides } from "../../hooks/use-slides";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { copyToClipboard } from "../../lib/clipboard";
@@ -110,8 +111,11 @@ function HymnDetail() {
     if (!isQueueBoundToHymn || syncPointsData === undefined) {
       return;
     }
-    setAudioSyncPoints(syncPointsData);
-  }, [isQueueBoundToHymn, setAudioSyncPoints, syncPointsData]);
+    const effectiveSyncPoints = syncPointsData.length > 0
+      ? syncPointsData
+      : parseLyricsSyncToPoints(hymn?.lyricsSync);
+    setAudioSyncPoints(effectiveSyncPoints);
+  }, [isQueueBoundToHymn, setAudioSyncPoints, syncPointsData, hymn?.lyricsSync]);
 
   useEffect(() => {
     setIsQueueBoundToHymn(false);

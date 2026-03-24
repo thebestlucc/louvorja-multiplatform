@@ -19,7 +19,10 @@
         "enable": true,
         "scope": [
           "$APPDATA/media/**",
-          "$APPLOCALDATA/media/**"
+          "$APPLOCALDATA/media/**",
+          "$APPDATA/images/**",
+          "$APPDATA/covers/**",
+          "$APPDATA/musics/**"
         ]
       }
     }
