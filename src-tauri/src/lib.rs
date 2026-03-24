@@ -418,6 +418,9 @@ pub fn run() {
                     let server_result = streaming.server.lock();
                     if let Ok(mut server) = server_result {
                         server.set_ui_language(&language);
+                        if let Ok(app_data_dir) = app.path().app_data_dir() {
+                            server.set_media_root(app_data_dir);
+                        }
                         if let Err(e) = server.start(Some(port)) {
                             eprintln!("[streaming] Failed to auto-start: {e}");
                         } else {
