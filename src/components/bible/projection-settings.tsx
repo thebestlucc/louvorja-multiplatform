@@ -151,7 +151,7 @@ export function ProjectionSettings({
 
   const bgType: "solid" | "gradient" | "image" = settings.backgroundGradient
     ? "gradient"
-    : settings.backgroundImage
+    : settings.backgroundImage !== null
       ? "image"
       : "solid";
 
