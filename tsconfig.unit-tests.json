@@ -29,6 +29,7 @@
     "tests/schedules/print-layout.test.ts",
     "tests/stores/queue-store.test.ts",
     "tests/stores/audio-store.test.ts",
+    "tests/stores/video-player-store.test.ts",
     "tests/components/playing-queue.test.tsx",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
@@ -46,6 +47,7 @@
     "src/stores/queue-store.ts",
     "src/stores/audio-store.ts",
     "src/stores/presentation-store.ts",
+    "src/stores/video-player-store.ts",
     "src/components/operator/playing-queue.tsx",
     "src/components/ui/button.tsx",
     "src/lib/utils.ts"
