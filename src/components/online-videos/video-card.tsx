@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Download, X, CheckCircle, AlertCircle, Trash2, Play, Monitor, MonitorPlay, Tv } from "lucide-react";
 import type { OnlineVideo, SlideContent } from "../../lib/bindings";
@@ -54,12 +55,12 @@ function buildVideoSlidePayload(video: OnlineVideo): SlideContent {
 
 export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const currentVideoProjectionId = usePresentationStore(
     (s) => s.currentVideoProjectionId,
   );
   const isProjecting =
-    currentVideoProjectionId === video.videoId ||
-    currentVideoProjectionId === video.localPath;
+    !!currentVideoProjectionId && currentVideoProjectionId === video.videoId;
   const download = useDownloadStore((s) => s.downloads[video.videoId]);
   const downloading = !!download;
   const progress = download?.progress ?? 0;
@@ -108,9 +109,8 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
           : setCurrentSlide;
     const [, err] = await catcher(fn(payload), { notify: true });
     if (!err) {
-      usePresentationStore.getState().setCurrentVideoProjectionId(
-        video.localPath ?? video.videoId,
-      );
+      usePresentationStore.getState().setCurrentVideoProjectionId(video.videoId);
+      void navigate({ to: "/playing-now" });
     }
   };
 

@@ -120,7 +120,9 @@ allow = [
     "clear_alert",
     "identify_monitors",
     "set_monitor_config",
-    "get_monitor_configs"
+    "get_monitor_configs",
+    "set_slide_on_projector",
+    "set_slide_on_return"
 ]
 
 [[permission]]
@@ -264,7 +266,8 @@ allow = [
     "get_current_slide",
     "get_slide_context",
     "get_overlay_state",
-    "get_timer_state"
+    "get_timer_state",
+    "get_streaming_status"
 ]
 
 [[permission]]

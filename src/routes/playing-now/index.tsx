@@ -535,8 +535,14 @@ function PlayingNowScreen() {
                   variant="outline"
                   size="icon"
                   className="rounded-full h-10 w-10 sm:h-12 sm:w-12"
-                  onClick={() => void prevSlide()}
-                  disabled={contextIndex <= 0 && slides.length === 0}
+                  onClick={() => {
+                    if (isVideoSlide && isLocalVideo) {
+                      void emit("video-control", { action: "seek", value: 0 }).catch(() => {});
+                    } else {
+                      void prevSlide();
+                    }
+                  }}
+                  disabled={isVideoSlide ? !isLocalVideo : (contextIndex <= 0 && slides.length === 0)}
                   aria-label={t("playingNow.prevSlide")}
                 >
                   <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -561,8 +567,14 @@ function PlayingNowScreen() {
                   variant="outline"
                   size="icon"
                   className="rounded-full h-10 w-10 sm:h-12 sm:w-12"
-                  onClick={() => void nextSlide()}
-                  disabled={contextIndex >= contextTotal - 1 && contextTotal > 0}
+                  onClick={() => {
+                    if (isVideoSlide) {
+                      nextQueueItem();
+                    } else {
+                      void nextSlide();
+                    }
+                  }}
+                  disabled={isVideoSlide ? !canNextQueue : (contextIndex >= contextTotal - 1 && contextTotal > 0)}
                   aria-label={t("playingNow.nextSlide")}
                 >
                   <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
