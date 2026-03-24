@@ -3,7 +3,37 @@ use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::streaming::StreamingInfo;
 use crate::utils::catcher::catcher;
+use std::path::Path;
 use tauri::{AppHandle, Manager};
+
+/// Convert an absolute or ambiguous media path to a relative path suitable
+/// for the streaming server's `/media/` route.
+///
+/// - URLs and data URIs pass through unchanged.
+/// - Paths already prefixed with `media/` or `/media/` pass through unchanged.
+/// - Absolute paths under `app_data_dir` are stripped to their relative form
+///   so the streaming HTML can build `/media/<relative>`.
+fn to_streaming_path(path: &str, app_data_dir: Option<&Path>) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+    if path.starts_with("http://")
+        || path.starts_with("https://")
+        || path.starts_with("data:")
+        || path.starts_with("blob:")
+    {
+        return path.to_string();
+    }
+    if path.starts_with("media/") || path.starts_with("/media/") {
+        return path.to_string();
+    }
+    if let Some(root) = app_data_dir {
+        if let Ok(rel) = Path::new(path).strip_prefix(root) {
+            return rel.to_string_lossy().into_owned();
+        }
+    }
+    path.to_string()
+}
 
 pub(crate) fn streaming_slide_title(slide: &SlideContent) -> String {
     slide
@@ -35,19 +65,28 @@ pub(crate) fn is_empty_hymn_gap_slide(slide: &SlideContent) -> bool {
             .is_empty()
 }
 
-pub(crate) fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value {
+pub(crate) fn streaming_slide_payload(
+    slide: &SlideContent,
+    app_data_dir: Option<&Path>,
+) -> serde_json::Value {
     let is_image = slide.slide_type == "image";
     let text_value = slide.text.as_deref().unwrap_or("");
-    let video_path = slide.video_path.as_deref().unwrap_or("");
-    let background_image = slide.background_image.as_deref().unwrap_or("");
+    let video_path = to_streaming_path(slide.video_path.as_deref().unwrap_or(""), app_data_dir);
+    let background_image =
+        to_streaming_path(slide.background_image.as_deref().unwrap_or(""), app_data_dir);
     let background_color = slide.background_color.as_deref().unwrap_or("");
     let text_color = slide.text_color.as_deref().unwrap_or("");
-    let audio_path = slide.audio_path.as_deref().unwrap_or("");
+    let audio_path = to_streaming_path(slide.audio_path.as_deref().unwrap_or(""), app_data_dir);
     let text_size = slide.text_size.unwrap_or(0);
     let video_url = slide.video_url.as_deref().unwrap_or("");
     let video_id = slide.video_id.as_deref().unwrap_or("");
     let video_source = slide.video_source.as_deref().unwrap_or("");
     let video_title = slide.video_title.as_deref().unwrap_or("");
+    let src = if is_image {
+        background_image.clone()
+    } else {
+        String::new()
+    };
 
     serde_json::json!({
         "slideType": slide.slide_type,
@@ -70,7 +109,7 @@ pub(crate) fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value
         "fontSize": text_size,
         "audioPath": audio_path,
         "audio_path": audio_path,
-        "src": if is_image { text_value } else { "" },
+        "src": src,
         "videoUrl": video_url,
         "video_url": video_url,
         "videoId": video_id,
@@ -85,9 +124,10 @@ pub(crate) fn streaming_slide_payload(slide: &SlideContent) -> serde_json::Value
 pub(crate) fn build_music_stream_payload(
     current: &SlideContent,
     context: Option<&SlideContext>,
+    app_data_dir: Option<&Path>,
 ) -> serde_json::Value {
     let current_title = streaming_slide_title(current);
-    let mut payload = streaming_slide_payload(current);
+    let mut payload = streaming_slide_payload(current, app_data_dir);
 
     if let Some(ctx) = context {
         if is_empty_hymn_gap_slide(current) || (!ctx.title.is_empty() && ctx.title == current_title)
@@ -150,14 +190,15 @@ pub(crate) fn empty_streaming_music_payload() -> serde_json::Value {
 pub(crate) fn build_return_stream_payload(
     current: &SlideContent,
     context: Option<&SlideContext>,
+    app_data_dir: Option<&Path>,
 ) -> serde_json::Value {
     let current_title = streaming_slide_title(current);
     if let Some(ctx) = context {
         if is_empty_hymn_gap_slide(current) || (!ctx.title.is_empty() && ctx.title == current_title)
         {
             return serde_json::json!({
-                "current": streaming_slide_payload(current),
-                "next": ctx.next.as_ref().map(streaming_slide_payload),
+                "current": streaming_slide_payload(current, app_data_dir),
+                "next": ctx.next.as_ref().map(|s| streaming_slide_payload(s, app_data_dir)),
                 "index": ctx.index,
                 "total": ctx.total,
                 "title": ctx.title,
@@ -169,7 +210,7 @@ pub(crate) fn build_return_stream_payload(
     }
 
     serde_json::json!({
-        "current": streaming_slide_payload(current),
+        "current": streaming_slide_payload(current, app_data_dir),
         "next": null,
         "index": 0,
         "total": 1,
@@ -197,6 +238,7 @@ fn sync_streaming_projection_state(
     server: &crate::streaming::StreamingServer,
     current_slide: Option<SlideContent>,
     slide_context: Option<SlideContext>,
+    app_data_dir: Option<&Path>,
 ) {
     if let Some(slide_data) = current_slide {
         if slide_data.slide_type == "bible" {
@@ -225,7 +267,8 @@ fn sync_streaming_projection_state(
             });
             server.broadcast_bible(&bible_json.to_string());
         } else {
-            let music_json = build_music_stream_payload(&slide_data, slide_context.as_ref());
+            let music_json =
+                build_music_stream_payload(&slide_data, slide_context.as_ref(), app_data_dir);
             server.broadcast_music(&music_json.to_string());
 
             let bible_json = serde_json::json!({
@@ -235,7 +278,8 @@ fn sync_streaming_projection_state(
             server.broadcast_bible(&bible_json.to_string());
         }
 
-        let return_payload = build_return_stream_payload(&slide_data, slide_context.as_ref());
+        let return_payload =
+            build_return_stream_payload(&slide_data, slide_context.as_ref(), app_data_dir);
         server.broadcast_return(&return_payload.to_string());
         return;
     }
@@ -294,10 +338,15 @@ pub fn start_streaming_server(
     }
     let app_data_dir = app_data_dir.unwrap();
 
-    server.set_media_root(app_data_dir.join("media"));
+    server.set_media_root(app_data_dir.clone());
     let info = server.start(port).map_err(AppError::Internal)?;
 
-    sync_streaming_projection_state(&server, current_slide, slide_context);
+    sync_streaming_projection_state(
+        &server,
+        current_slide,
+        slide_context,
+        Some(&app_data_dir),
+    );
     Ok(info)
 }
 
@@ -330,6 +379,7 @@ pub fn get_streaming_status(
 #[specta::specta]
 pub fn set_streaming_broadcast(
     enabled: bool,
+    app: AppHandle,
     state: tauri::State<'_, StreamingState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
@@ -351,9 +401,16 @@ pub fn set_streaming_broadcast(
     }
     let server = server.unwrap();
 
+    let app_data_dir = app.path().app_data_dir().ok();
+
     server.set_broadcast_enabled(enabled);
     if enabled {
-        sync_streaming_projection_state(&server, current_slide, slide_context);
+        sync_streaming_projection_state(
+            &server,
+            current_slide,
+            slide_context,
+            app_data_dir.as_deref(),
+        );
     }
     Ok(())
 }

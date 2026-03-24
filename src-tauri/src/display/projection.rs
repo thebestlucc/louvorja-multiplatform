@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::db::models::{SlideContent, SlideContext};
@@ -57,6 +57,9 @@ pub fn update_current_slide(
     app.emit("slide-context", &slide_context)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
+    let app_data_dir = app.path().app_data_dir().ok();
+    let adr = app_data_dir.as_deref();
+
     if let Ok(server) = streaming_state.server.lock() {
         if slide_data.slide_type == "bible" {
             let json = serde_json::json!({
@@ -71,12 +74,12 @@ pub fn update_current_slide(
             server.broadcast_music(&empty_streaming_music_payload().to_string());
         } else {
             server.broadcast_music(
-                &build_music_stream_payload(&slide_data, Some(&slide_context)).to_string(),
+                &build_music_stream_payload(&slide_data, Some(&slide_context), adr).to_string(),
             );
             let clear_bible = serde_json::json!({ "reference": "", "text": "" });
             server.broadcast_bible(&clear_bible.to_string());
         }
-        let return_payload = build_return_stream_payload(&slide_data, Some(&slide_context));
+        let return_payload = build_return_stream_payload(&slide_data, Some(&slide_context), adr);
         server.broadcast_return(&return_payload.to_string());
     }
 
@@ -99,16 +102,19 @@ pub fn update_slide_context(
     app.emit("slide-context", &context_data)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
+    let app_data_dir = app.path().app_data_dir().ok();
+    let adr = app_data_dir.as_deref();
+
     if let Ok(server) = streaming_state.server.lock() {
         let current_slide = state.current_slide.read().ok().and_then(|s| s.clone());
         if let Some(slide) = current_slide.as_ref() {
-            let music_json = build_music_stream_payload(slide, Some(&context_data));
+            let music_json = build_music_stream_payload(slide, Some(&context_data), adr);
             server.broadcast_music(&music_json.to_string());
         }
 
         let json = serde_json::json!({
-            "current": current_slide.as_ref().map(streaming_slide_payload),
-            "next": context_data.next.as_ref().map(streaming_slide_payload),
+            "current": current_slide.as_ref().map(|s| streaming_slide_payload(s, adr)),
+            "next": context_data.next.as_ref().map(|s| streaming_slide_payload(s, adr)),
             "index": context_data.index,
             "total": context_data.total,
             "title": context_data.title,

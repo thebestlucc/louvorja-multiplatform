@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, CaseSensitive, Clock3, FileSearch, Library, Shuffle, Timer, Type } from "lucide-react";
+import { CalendarDays, CaseSensitive, Clock3, Library, Shuffle, Timer, Type } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 
 export const Route = createFileRoute("/utilities/")({
@@ -52,12 +52,6 @@ function UtilitiesIndex() {
       icon: Type,
       title: t("interactiveText.title"),
       description: t("utilities.interactiveText.description"),
-    },
-    {
-      to: "/utilities/integrity",
-      icon: FileSearch,
-      title: t("mediaIntegrity.title"),
-      description: t("mediaIntegrity.description"),
     },
   ] as const;
 
