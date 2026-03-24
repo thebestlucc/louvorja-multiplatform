@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { catcher } from "../../lib/catcher";
 import { getPreference, setPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
@@ -17,6 +18,8 @@ import {
   EyeOff,
   ArrowUp,
   ArrowDown,
+  FolderOpen,
+  X,
 } from "lucide-react";
 
 export interface BibleProjectionSettings {
@@ -319,17 +322,55 @@ export function ProjectionSettings({
           </TabsContent>
 
           <TabsContent value="image">
-            <Input
-              value={settings.backgroundImage ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...settings,
-                  backgroundImage: e.target.value || null,
-                })
-              }
-              placeholder={t("presentations.imagePathPlaceholder")}
-              className="h-7 text-xs"
-            />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 px-2 text-xs shrink-0"
+                  onClick={async () => {
+                    const selected = await openFileDialog({
+                      multiple: false,
+                      filters: [
+                        {
+                          name: t("bible.imageFilter"),
+                          extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg", "avif"],
+                        },
+                      ],
+                    });
+                    if (typeof selected === "string") {
+                      onChange({ ...settings, backgroundImage: selected });
+                    }
+                  }}
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  {t("actions.browse")}
+                </Button>
+                {settings.backgroundImage && (
+                  <span className="flex-1 truncate text-xs text-muted-foreground" title={settings.backgroundImage}>
+                    {settings.backgroundImage.split(/[\\/]/).pop()}
+                  </span>
+                )}
+                {!settings.backgroundImage && (
+                  <span className="flex-1 text-xs text-muted-foreground/60 italic">
+                    {t("presentations.imagePathPlaceholder")}
+                  </span>
+                )}
+                {settings.backgroundImage && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onChange({ ...settings, backgroundImage: null })}
+                    aria-label={t("actions.clear")}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
