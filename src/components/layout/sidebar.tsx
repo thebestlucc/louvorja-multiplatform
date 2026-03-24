@@ -140,17 +140,19 @@ export function Sidebar() {
         sidebarOpen ? "w-60" : "w-14",
       )}
     >
-      <div className="flex h-14 items-center justify-between border-b border-border px-3">
+      <div className="flex h-12 items-center justify-between border-b border-border px-3">
         {sidebarOpen && (
-          <span className="text-sm font-semibold text-primary">
-            {t("app.name")}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold tracking-tight text-foreground">
+              {t("app.name")}
+            </span>
+          </div>
         )}
         <Button
           variant="ghost"
           size="icon"
           onClick={toggleSidebar}
-          className="ml-auto h-8 w-8"
+          className={cn("h-8 w-8 shrink-0", !sidebarOpen && "mx-auto")}
         >
           {sidebarOpen ? (
             <PanelLeftClose className="h-4 w-4" />
@@ -232,14 +234,15 @@ export function Sidebar() {
               <div key={item.to}>
                 <div
                   className={cn(
-                    "flex items-center rounded-md text-sm font-medium transition-colors",
-                    "hover:bg-surface-hover",
-                    anyChildIsActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
+                    "flex items-center rounded-r-md text-sm transition-colors hover:bg-surface-hover hover:text-foreground",
+                    anyChildIsActive
+                      ? "border-l-2 border-primary bg-accent/60 text-foreground font-medium"
+                      : "border-l-2 border-transparent text-muted-foreground",
                   )}
                 >
                   <Link
                     to={item.to}
-                    className="flex flex-1 items-center gap-3 px-3 py-2"
+                    className="flex flex-1 items-center gap-3 pl-[10px] pr-3 py-2"
                   >
                     <div className="relative shrink-0">
                       <item.icon className="h-4 w-4" />
@@ -262,7 +265,7 @@ export function Sidebar() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-0.5 flex flex-col gap-0.5 pl-4">
+                  <div className="mt-0.5 flex flex-col gap-0.5 ml-[13px] border-l border-border pl-3">
                     {item.children!.map((child) => {
                       const childActive = isChildActive(pathname, searchParams, child, item.children!);
                       return (
@@ -271,9 +274,9 @@ export function Sidebar() {
                           to={child.to}
                           search={child.search ?? {}}
                           className={cn(
-                            "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                            "hover:bg-surface-hover",
-                            childActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
+                            "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+                            "hover:bg-surface-hover hover:text-foreground",
+                            childActive ? "text-primary font-medium bg-accent/40" : "text-muted-foreground",
                           )}
                         >
                           <child.icon className="h-3.5 w-3.5 shrink-0" />
@@ -293,10 +296,12 @@ export function Sidebar() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                "hover:bg-surface-hover",
-                isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                !sidebarOpen && "justify-center px-0",
+                "flex items-center gap-3 rounded-r-md py-2 text-sm transition-colors",
+                "hover:bg-surface-hover hover:text-foreground",
+                isActive
+                  ? "border-l-2 border-primary bg-accent/60 text-foreground font-medium pl-[10px] pr-3"
+                  : "border-l-2 border-transparent text-muted-foreground pl-[10px] pr-3",
+                !sidebarOpen && "justify-center pl-0 pr-0 border-l-0 rounded-md",
               )}
             >
               <div className="relative shrink-0">
@@ -332,20 +337,19 @@ export function Sidebar() {
       </nav>
 
       {activeServiceId && activeServiceData && !isOnActiveServiceRoute && (
-        <div className="border-t border-border p-2">
+        <div className="border-t border-border px-2 py-2">
           <Link
             to="/services/$serviceId"
             params={{ serviceId: String(activeServiceId) }}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-xs transition-colors hover:bg-surface-hover",
+              "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              "bg-primary/10 text-primary hover:bg-primary/20",
               !sidebarOpen && "justify-center px-0",
             )}
           >
-            <ListChecks className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <ListChecks className="h-3.5 w-3.5 shrink-0" />
             {sidebarOpen && (
-              <span className="truncate text-muted-foreground">
-                {activeServiceData.service.title}
-              </span>
+              <span className="truncate">{activeServiceData.service.title}</span>
             )}
           </Link>
         </div>
