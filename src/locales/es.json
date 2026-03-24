@@ -929,7 +929,10 @@
       "ytdlpUpdate": "Actualizar yt-dlp",
       "ytdlpUpdating": "Actualizando...",
       "ytdlpUpdated": "yt-dlp actualizado con éxito"
-    }
+    },
+    "presentationTitle": "Proyección",
+    "presentationFontSize": "Tamaño de fuente predeterminado",
+    "presentationFontSizeHint": "Aplicado a letras de himnos, músicas de colección y proyecciones bíblicas."
   },
   "shortcuts": {
     "categories": {

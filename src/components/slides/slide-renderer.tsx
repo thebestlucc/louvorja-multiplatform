@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { VideoSlide, type VideoRenderMode } from "./video-slide";
 import { OnlineVideoSlide } from "../online-videos/online-video-slide";
+import { usePresentationFontSize } from "../../lib/use-presentation-font-size";
 
 export type SlideRenderMode = "projector" | "return-current" | "return-next" | "editor" | "thumbnail";
 
@@ -16,6 +17,7 @@ interface SlideRendererProps {
 
 export function SlideRenderer({ slide, className, renderMode = "projector" }: SlideRendererProps) {
   const { t } = useTranslation();
+  const globalFontSize = usePresentationFontSize();
   const backgroundPath = useMemo(() => {
     if (!slide || (slide.slideType !== "cover" && slide.slideType !== "lyrics" && slide.slideType !== "text")) {
       return null;
@@ -41,7 +43,7 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
         className,
       )}
     >
-      {renderSlide(slide, renderMode, t, resolvedBackgroundPath, resolvedImagePath)}
+      {renderSlide(slide, renderMode, t, resolvedBackgroundPath, resolvedImagePath, globalFontSize)}
     </div>
   );
 }
@@ -52,6 +54,7 @@ function renderSlide(
   t: (key: string) => string,
   resolvedBackgroundPath: string | null,
   resolvedImagePath: string | null,
+  globalFontSize: number = 48,
 ) {
   if (!slide || slide.slideType === "pause") {
     return <div />;
@@ -96,7 +99,7 @@ function renderSlide(
   }
 
   if (slide.slideType === "lyrics") {
-    const textLineStyle = textStyle(slide, 36, renderMode, "lyrics");
+    const textLineStyle = textStyle(slide, globalFontSize, renderMode, "lyrics");
     const labelStyle = secondaryTextStyle(slide, 13, renderMode);
     const backgroundImage = resolvedBackgroundPath ?? slide.backgroundImage ?? null;
     const showLyricTextPanel = shouldRenderLyricTextPanel(renderMode, backgroundImage);
