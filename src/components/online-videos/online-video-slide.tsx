@@ -192,6 +192,7 @@ function YouTubePlayer({ videoId, title, className, muted = false }: {
           cc_load_policy: 0,
           mute: muted ? 1 : 0,
           playsinline: 1,
+          origin: window.location.origin,
         },
         events: {
           onReady: ({ target }) => {
