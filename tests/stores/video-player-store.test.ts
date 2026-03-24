@@ -1,14 +1,20 @@
-import { test, describe } from "node:test";
+import { test, describe, beforeEach } from "node:test";
 import * as assert from "node:assert";
 import { useVideoPlayerStore } from "../../src/stores/video-player-store";
 
 describe("videoPlayerStore", () => {
+  beforeEach(() => {
+    useVideoPlayerStore.getState().resetVideoState();
+  });
+
   test("initial state", () => {
     const s = useVideoPlayerStore.getState();
     assert.strictEqual(s.currentTime, 0);
     assert.strictEqual(s.duration, 0);
     assert.strictEqual(s.paused, true);
+    assert.strictEqual(s.volume, 1);
     assert.strictEqual(s.videoId, null);
+    assert.strictEqual(s.videoSrc, null);
     assert.strictEqual(s.videoSource, null);
   });
 
@@ -28,7 +34,11 @@ describe("videoPlayerStore", () => {
     useVideoPlayerStore.getState().resetVideoState();
     const s = useVideoPlayerStore.getState();
     assert.strictEqual(s.currentTime, 0);
+    assert.strictEqual(s.duration, 0);
+    assert.strictEqual(s.paused, true);
+    assert.strictEqual(s.volume, 1);
     assert.strictEqual(s.videoId, null);
+    assert.strictEqual(s.videoSrc, null);
     assert.strictEqual(s.videoSource, null);
   });
 });

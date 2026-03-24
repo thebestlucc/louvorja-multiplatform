@@ -12,14 +12,16 @@ interface VideoPlayerState {
   resetVideoState: () => void;
 }
 
-const initialState = {
+type VideoPlayerData = Omit<VideoPlayerState, "setVideoState" | "resetVideoState">;
+
+const initialState: VideoPlayerData = {
   currentTime: 0,
   duration: 0,
   paused: true,
   volume: 1,
   videoId: null,
   videoSrc: null,
-  videoSource: null as "youtube" | "local" | null,
+  videoSource: null,
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
