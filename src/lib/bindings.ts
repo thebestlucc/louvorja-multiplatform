@@ -820,6 +820,22 @@ async setCurrentSlide(slideData: SlideContent) : Promise<Result<null, AppErrorRe
     else return { status: "error", error: e  as any };
 }
 },
+async setSlideOnProjector(slideData: SlideContent) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_slide_on_projector", { slideData }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setSlideOnReturn(slideData: SlideContent) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_slide_on_return", { slideData }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getCurrentSlide() : Promise<Result<SlideContent | null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_current_slide") };
