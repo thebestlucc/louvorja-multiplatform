@@ -28,6 +28,49 @@ fn lyrics_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
     }
 }
 
+/// Returns true if both `categories` and `categories_albums` tables exist in the content DB.
+fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
+    let has_categories = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    let has_cat_albums = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories_albums'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    has_categories && has_cat_albums
+}
+
+/// Returns SQL fragments `(join_clause, where_extra)` to restrict musics to those whose
+/// album is categorised as `'hymnal'`.
+///
+/// When the categories tables are present it returns:
+/// - a JOIN clause that brings in `categories_albums` and `categories` via LEFT JOINs
+/// - a WHERE extra clause `AND (cat.slug IS NULL OR cat.slug = 'hymnal')` that keeps
+///   albums with no category entry (safe fallback within the same DB)
+///
+/// When the tables don't exist both strings are empty, leaving the query unchanged.
+fn hymnal_category_filter(content_db: &rusqlite::Connection) -> (String, String) {
+    if categories_tables_exist(content_db) {
+        let join = "LEFT JOIN categories_albums ca \
+                        ON ca.id_album = a.id_album AND ca.id_language = m.id_language\n\
+                    LEFT JOIN categories cat ON cat.id_category = ca.id_category"
+            .to_string();
+        let extra_where = "AND (cat.slug IS NULL OR cat.slug = 'hymnal')".to_string();
+        (join, extra_where)
+    } else {
+        (String::new(), String::new())
+    }
+}
+
 /// Query hymnal from the content DB (downloaded legacy DB).
 /// Returns Hymn structs with file paths ready for app_data_dir resolution.
 pub fn get_hymns_from_content_db(
@@ -37,6 +80,7 @@ pub fn get_hymns_from_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
     let lyrics_col = lyrics_subquery(content_db, "?1");
+    let (cat_join, cat_where) = hymnal_category_filter(content_db);
 
     let sql = format!(
         "SELECT
@@ -59,10 +103,12 @@ pub fn get_hymns_from_content_db(
          FROM musics m
          LEFT JOIN albums_musics am ON am.id_music = m.id_music
          LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         {cat_join}
          LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
          LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
          LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
          WHERE m.id_language = ?1
+           {cat_where}
          ORDER BY a.name, am.track"
     );
 
@@ -144,6 +190,7 @@ pub fn search_hymns_content_db(
     }
 
     let lyrics_col = lyrics_subquery(content_db, "?2");
+    let (cat_join, cat_where) = hymnal_category_filter(content_db);
 
     let sql = format!(
         "SELECT
@@ -161,11 +208,13 @@ pub fn search_hymns_content_db(
          JOIN musics m ON musics_fts.rowid = m.id_music
          LEFT JOIN albums_musics am ON am.id_music = m.id_music
          LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         {cat_join}
          LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
          LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
          LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
          WHERE musics_fts MATCH ?1
            AND m.id_language = ?2
+           {cat_where}
          ORDER BY rank
          LIMIT 50"
     );
@@ -657,5 +706,49 @@ mod content_db_tests {
         // No lyrics table!
         let hymn = get_hymn_by_id_from_content_db(&conn, 1, "pt-BR").unwrap();
         assert_eq!(hymn.lyrics, None, "when lyrics table absent, should return None not error");
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_filters_by_hymnal_category() {
+        let conn = make_content_db();
+        // Create categories tables
+        conn.execute_batch(
+            "CREATE TABLE categories (id_category INTEGER PRIMARY KEY, slug TEXT);
+             CREATE TABLE categories_albums (id_category INTEGER, id_album INTEGER, id_language TEXT);",
+        ).unwrap();
+        seed_basic(&conn);
+
+        // Album 1 (from seed_basic: '1992 - Brilha Jesus') → hymnal category
+        // Album 2 → music category (should be excluded)
+        conn.execute_batch(
+            "INSERT INTO categories VALUES (1, 'hymnal');
+             INSERT INTO categories VALUES (2, 'music');
+             INSERT INTO categories_albums VALUES (1, 1, 'pt');
+             INSERT INTO albums VALUES (2, 'Musicas Contemporaneas', 'pt', NULL, '', '');
+             INSERT INTO musics VALUES (2, 'Musica Pop', 'pt', NULL, NULL, NULL, '', '');
+             INSERT INTO albums_musics VALUES (2, 2, 1);
+             INSERT INTO categories_albums VALUES (2, 2, 'pt');",
+        ).unwrap();
+
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        // Only the hymnal item (id=1, 'Santo') should be returned; 'Musica Pop' is excluded
+        assert_eq!(hymns.len(), 1, "expected 1 hymnal item, got {}: {:?}", hymns.len(), hymns.iter().map(|h| &h.title).collect::<Vec<_>>());
+        assert_eq!(hymns[0].title, "Santo");
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_returns_all_when_no_categories_tables() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        // Add a second song in a second album — no categories tables present
+        conn.execute_batch(
+            "INSERT INTO albums VALUES (2, 'Album 2', 'pt', NULL, '', '');
+             INSERT INTO musics VALUES (2, 'Aleluia', 'pt', NULL, NULL, NULL, '', '');
+             INSERT INTO albums_musics VALUES (2, 2, 1);",
+        ).unwrap();
+
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        // No category filter → both songs returned
+        assert_eq!(hymns.len(), 2, "expected 2 hymns when categories tables absent, got {}", hymns.len());
     }
 }
