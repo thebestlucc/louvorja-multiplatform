@@ -12,6 +12,7 @@ export type OnlineVideoRenderMode =
   | "projector"
   | "return-current"
   | "return-next"
+  | "playing-now-preview"
   | "editor"
   | "thumbnail";
 
@@ -186,6 +187,41 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
         >
           {slide.videoTitle ?? slide.videoId ?? ""}
         </span>
+      </div>
+    );
+  }
+
+  if (renderMode === "playing-now-preview") {
+    const isLocal = slide.videoSource === "local" && !!localVideoSrc;
+
+    return (
+      <div className={cn("h-full w-full bg-black relative overflow-hidden", className)}>
+        {isLocal ? (
+          <LocalVideoPlayer
+            src={localVideoSrc!}
+            title={slide.videoTitle ?? ""}
+            className="h-full w-full object-contain"
+            muted
+          />
+        ) : slide.videoId ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${slide.videoId}?autoplay=1&controls=0&rel=0&modestbranding=1&showinfo=0&disablekb=1&iv_load_policy=3&mute=1`}
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+            className="h-full w-full"
+            style={{ border: "none", pointerEvents: "none" }}
+            title={slide.videoTitle ?? slide.videoId}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
+            {t("presentations.types.onlineVideo")}
+          </div>
+        )}
+        <div className="absolute bottom-2 left-2 right-2 flex items-end gap-2 pointer-events-none">
+          <span className="rounded bg-black/60 px-2 py-0.5 text-[10px] text-white/80 truncate max-w-full">
+            {slide.videoTitle ?? ""}
+          </span>
+        </div>
       </div>
     );
   }

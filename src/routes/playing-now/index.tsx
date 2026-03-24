@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -15,7 +15,6 @@ import {
   Shuffle,
   XCircle
 } from "lucide-react";
-import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentSlide, getOverlayState, getSlideContext } from "../../lib/tauri";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
 import { PlayingQueue } from "../../components/playing-now/playing-queue";
@@ -344,12 +343,12 @@ function PlayingNowScreen() {
 
   const handleVideoPlayPause = async () => {
     const action = videoState?.paused === false ? "pause" : "play";
-    await emitTo("projector", "video-control", { action }).catch(() => {});
+    await emit("video-control", { action }).catch(() => {});
   };
 
   const handleVideoSeek = async (value: number[]) => {
     if (value[0] !== undefined) {
-      await emitTo("projector", "video-control", { action: "seek", value: value[0] }).catch(() => {});
+      await emit("video-control", { action: "seek", value: value[0] }).catch(() => {});
     }
   };
 
@@ -433,7 +432,15 @@ function PlayingNowScreen() {
           <div className="flex-1 w-full rounded-xl border border-border bg-black relative overflow-hidden flex items-center justify-center shadow-inner">
             {previewSlide ? (
               <>
-                <SlideRenderer slide={previewSlide} renderMode="return-current" className="h-full w-full" />
+                <SlideRenderer
+                slide={previewSlide}
+                renderMode={
+                  previewSlide?.slideType === "online_video" || previewSlide?.slideType === "video"
+                    ? "playing-now-preview"
+                    : "return-current"
+                }
+                className="h-full w-full"
+              />
                 {showGapIndicator && (
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-6">
                     <div className="w-full max-w-md rounded-full border border-white/10 bg-black/55 px-4 py-3 shadow-2xl backdrop-blur-sm">
