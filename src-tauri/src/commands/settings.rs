@@ -243,3 +243,24 @@ pub fn clear_database(
 
     Ok(ClearDatabaseResult { success: true })
 }
+
+/// Broadcasts projection display settings (font size + family) to all windows.
+/// Must route through Rust because JS `emit()` is scoped to the current window;
+/// `app.emit()` from Rust is global and reaches the projector/return webviews.
+#[tauri::command]
+#[specta::specta]
+pub fn broadcast_projection_display(
+    app: AppHandle,
+    font_size: f64,
+    font_family: String,
+) -> Result<(), AppError> {
+    #[derive(Clone, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Payload {
+        font_size: f64,
+        font_family: String,
+    }
+    app.emit("projection-display-changed", Payload { font_size, font_family })
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    Ok(())
+}

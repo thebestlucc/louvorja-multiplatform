@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { listen, emit } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { catcher } from "./catcher";
 import { getPreference, setPreference } from "./store";
+import { broadcastProjectionDisplay } from "./tauri/settings";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,8 @@ export function useProjectionDisplaySetting() {
     setSettings(next);
     void catcher(setPreference(PRESENTATION_FONT_SIZE_KEY, next.fontSize));
     void catcher(setPreference(PROJECTION_FONT_FAMILY_KEY, next.fontFamily));
-    void emit(PROJECTION_DISPLAY_EVENT, next);
+    // Route broadcast through Rust so app.emit() reaches all webview windows
+    void catcher(broadcastProjectionDisplay(next.fontSize, next.fontFamily));
   };
 
   return { settings, update, loaded };
