@@ -182,10 +182,7 @@
     "mediaLibrary": "Itens Agendados",
     "navigation": "Navegação",
     "noResults": "Nenhum resultado encontrado",
-    "onlinePlaylists": "Playlists Online",
-    "placeholder": "Digite um comando...",
-    "searching": "Pesquisando...",
-    "utilities": "Utilidades"
+    "placeholder": "Digite um comando..."
   },
   "dashboard": {
     "greetingDawn": "Madrugada abençoada",
