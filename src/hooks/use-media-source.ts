@@ -1,88 +1,21 @@
-import { useEffect, useState } from "react";
-import { appDataDir, join } from "@tauri-apps/api/path";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { catcher } from "../lib/catcher";
+import { useQuery } from "@tanstack/react-query";
+import { getStreamingStatus } from "../lib/tauri/streaming";
+import { buildMediaUrl } from "../lib/media-url";
 
-const mediaSourceCache = new Map<string, string>();
-
-function isAbsolutePath(path: string): boolean {
-  return path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path);
-}
-
+/**
+ * Converts a media path (absolute OS path, relative managed path, or URL) to
+ * a URL the webview can load. All local files are served through the streaming
+ * server so Rust's full OS access is used — no asset protocol scope needed.
+ *
+ * Returns null until the streaming port is known (brief startup window only).
+ */
 export function useMediaSource(path: string | null | undefined): string | null {
-  const [resolvedPath, setResolvedPath] = useState<string | null>(null);
+  const { data: streamingInfo } = useQuery({
+    queryKey: ["streaming-status"],
+    queryFn: getStreamingStatus,
+    staleTime: Infinity, // port never changes during a session
+    gcTime: Infinity,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const resolvePath = async () => {
-      if (!path || path.trim().length === 0) {
-        if (!cancelled) {
-          setResolvedPath(null);
-        }
-        return;
-      }
-
-      // Normalize separators for consistent checks
-      const normalized = path.trim().replace(/\\/g, "/");
-
-      if (
-        normalized.startsWith("data:")
-        || normalized.startsWith("blob:")
-        || normalized.startsWith("http://")
-        || normalized.startsWith("https://")
-      ) {
-        if (!cancelled) {
-          setResolvedPath(normalized);
-        }
-        return;
-      }
-
-      if (mediaSourceCache.has(normalized)) {
-        if (!cancelled) {
-          setResolvedPath(mediaSourceCache.get(normalized) ?? null);
-        }
-        return;
-      }
-
-      if (isAbsolutePath(normalized)) {
-        const fileUrl = convertFileSrc(normalized);
-        mediaSourceCache.set(normalized, fileUrl);
-        if (!cancelled) {
-          setResolvedPath(fileUrl);
-        }
-        return;
-      }
-
-      if (normalized.startsWith("media/")) {
-        const [appDir, error] = await catcher(appDataDir(), { notify: false });
-        if (!error && appDir) {
-          const absolutePath = await join(appDir, normalized);
-          const fileUrl = convertFileSrc(absolutePath);
-          mediaSourceCache.set(normalized, fileUrl);
-          if (!cancelled) {
-            setResolvedPath(fileUrl);
-          }
-          return;
-        }
-
-        if (!cancelled) {
-          setResolvedPath(normalized);
-        }
-        return;
-      }
-
-      if (!cancelled) {
-        setResolvedPath(normalized);
-      }
-    };
-
-    void resolvePath();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
-  return resolvedPath;
+  return buildMediaUrl(path, streamingInfo?.port);
 }
