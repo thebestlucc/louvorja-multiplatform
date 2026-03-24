@@ -399,7 +399,10 @@ function toStreamingMediaUrl(pathValue) {
   if (value.startsWith("media/")) {
     return "/media/" + encodePathSegment(value.slice("media/".length));
   }
-  return value;
+  // Any other relative path (covers/, musics/, images/, etc.) — strip leading
+  // slash if present and serve via the streaming server's /media/ route.
+  const relative = value.startsWith("/") ? value.slice(1) : value;
+  return relative ? "/media/" + encodePathSegment(relative) : "";
 }
 
 function getSlideType(payload) {

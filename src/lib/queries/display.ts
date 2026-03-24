@@ -8,8 +8,6 @@ import {
   toggleBlackScreen,
   toggleLogoScreen,
   getOverlayState,
-  scanMediaIntegrity,
-  deleteExcessMedia,
   setSetting,
   updateGlobalShortcut,
 } from "../tauri";
@@ -106,20 +104,3 @@ export function useIdentifyMonitors() {
   });
 }
 
-// Media Integrity
-export function useMediaIntegrity() {
-  return useQuery({
-    queryKey: queryKeys.mediaIntegrity,
-    queryFn: () => scanMediaIntegrity(),
-  });
-}
-
-export function useDeleteExcessMedia() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (paths: string[]) => deleteExcessMedia(paths),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.mediaIntegrity });
-    },
-  });
-}

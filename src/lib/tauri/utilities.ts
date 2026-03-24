@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { MediaIntegrityReport, TimerMode, TimerStateData, VideoMetadata } from "../bindings";
+import type { TimerMode, TimerStateData, VideoMetadata } from "../bindings";
 import type { TextFormat } from "../../types/utilities";
 
 async function tauriInvoke<T>(
@@ -87,14 +87,6 @@ export async function runLottery(names: string[]): Promise<string> {
 
 export async function formatText(text: string, format: TextFormat): Promise<string> {
   return tauriInvoke<string>("format_text", { text, format });
-}
-
-export async function scanMediaIntegrity(): Promise<MediaIntegrityReport> {
-  return tauriInvoke<MediaIntegrityReport>("scan_media_integrity");
-}
-
-export async function deleteExcessMedia(paths: string[]): Promise<void> {
-  return tauriInvoke<void>("delete_excess_media", { paths });
 }
 
 // Video
