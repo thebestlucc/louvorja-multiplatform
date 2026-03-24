@@ -9,7 +9,7 @@ import type { YTPlayer } from "../../lib/youtube-api";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
-type VideoControlEvent = { action: "play" | "pause" | "seek" | "volume"; value?: number };
+export type VideoControlEvent = { action: "play" | "pause" | "seek" | "volume"; value?: number };
 export type VideoStateEvent = { paused: boolean; currentTime: number; duration: number; volume: number };
 
 export type OnlineVideoRenderMode =
