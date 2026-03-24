@@ -18,7 +18,7 @@ import {
 import { getCurrentSlide, getOverlayState, getSlideContext } from "../../lib/tauri";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
 import { PlayingQueue } from "../../components/playing-now/playing-queue";
-import type { VideoStateEvent } from "../../components/online-videos/online-video-slide";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { useDisplayStore } from "../../stores/display-store";
 import { useSlides } from "../../hooks/use-slides";
 import { useAudio } from "../../hooks/use-audio";
@@ -182,7 +182,10 @@ function PlayingNowScreen() {
   const [contextIndex, setContextIndex] = useState(0);
   const [contextTotal, setContextTotal] = useState(0);
   const [seekPreviewMs, setSeekPreviewMs] = useState<number | null>(null);
-  const [videoState, setVideoState] = useState<VideoStateEvent | null>(null);
+  const videoCurrentTime = useVideoPlayerStore((s) => s.currentTime);
+  const videoDuration = useVideoPlayerStore((s) => s.duration);
+  const videoPaused = useVideoPlayerStore((s) => s.paused);
+  const videoActive = useVideoPlayerStore((s) => s.videoId !== null || s.videoSrc !== null);
 
   // Load initial state on mount
   useEffect(() => {
@@ -212,7 +215,6 @@ function PlayingNowScreen() {
       setCurrentSlide(null);
       setContextIndex(0);
       setContextTotal(0);
-      setVideoState(null);
       usePresentationStore.getState().setCurrentVideoProjectionId(null);
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
@@ -235,14 +237,6 @@ function PlayingNowScreen() {
     return () => { void unsub.then((fn) => fn()); };
   }, []);
 
-  // Listen for video-state emitted by the projector window (local video slides)
-  useEffect(() => {
-    const unsub = listen<VideoStateEvent>("video-state", (e) => {
-      setVideoState(e.payload);
-    }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
-  }, []);
-
   const isVideoSlide = currentSlide?.slideType === "video" || currentSlide?.slideType === "online_video";
   const isLocalVideo =
     currentSlide?.slideType === "video" ||
@@ -251,7 +245,7 @@ function PlayingNowScreen() {
   const hasAudioLoaded =
     !isVideoSlide &&
     (!!currentAudioPath || ((audioStatus === "playing" || audioStatus === "paused") && durationMs > 0));
-  const isPlaying = isVideoSlide ? videoState?.paused === false : audioStatus === "playing";
+  const isPlaying = isVideoSlide ? !videoPaused : audioStatus === "playing";
   const displayedSeekMs = seekPreviewMs ?? positionMs;
   const previewSlide = selectedSlide ?? currentSlide;
   const isGapIndicatorCandidate =
@@ -343,7 +337,7 @@ function PlayingNowScreen() {
   };
 
   const handleVideoPlayPause = async () => {
-    const action = videoState?.paused === false ? "pause" : "play";
+    const action = !videoPaused ? "pause" : "play";
     await emit("video-control", { action }).catch(() => {});
   };
 
@@ -543,7 +537,7 @@ function PlayingNowScreen() {
                       void prevSlide();
                     }
                   }}
-                  disabled={isVideoSlide ? (videoState === null) : (contextIndex <= 0 && slides.length === 0)}
+                  disabled={isVideoSlide ? !videoActive : (contextIndex <= 0 && slides.length === 0)}
                   aria-label={t("playingNow.prevSlide")}
                 >
                   <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -554,7 +548,7 @@ function PlayingNowScreen() {
                   size="icon"
                   className="h-14 w-14 sm:h-16 sm:w-16 rounded-full shadow-lg"
                   onClick={() => void (isVideoSlide ? handleVideoPlayPause() : handlePrimaryPlayPause())}
-                  disabled={isVideoSlide ? (videoState === null) : (!hasAudioLoaded && slides.length === 0)}
+                  disabled={isVideoSlide ? !videoActive : (!hasAudioLoaded && slides.length === 0)}
                   aria-label={isPlaying ? t("playingNow.pause") : t("playingNow.play")}
                 >
                   {isPlaying ? (
@@ -599,18 +593,18 @@ function PlayingNowScreen() {
               {isVideoSlide ? (
                 <>
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px] text-right">
-                    {formatTime((videoState?.currentTime ?? 0) * 1000)}
+                    {formatTime(videoCurrentTime * 1000)}
                   </span>
                   <Slider
-                    value={[videoState?.currentTime ?? 0]}
-                    max={(videoState?.duration ?? 0) > 0 ? videoState!.duration : 100}
+                    value={[videoCurrentTime]}
+                    max={videoDuration > 0 ? videoDuration : 100}
                     step={0.1}
                     onValueCommit={(value) => void handleVideoSeek(value)}
-                    disabled={!videoState || (videoState.duration ?? 0) <= 0}
+                    disabled={!videoActive || videoDuration <= 0}
                     className="flex-1"
                   />
                   <span className="text-xs text-muted-foreground tabular-nums min-w-[45px]">
-                    {formatTime((videoState?.duration ?? 0) * 1000)}
+                    {formatTime(videoDuration * 1000)}
                   </span>
                 </>
               ) : hasAudioLoaded ? (
