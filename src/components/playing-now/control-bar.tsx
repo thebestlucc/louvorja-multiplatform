@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Play,
   Pause,
@@ -9,6 +10,9 @@ import {
   ChevronRight,
   Volume2,
   VolumeX,
+  Mic,
+  Music2,
+  MonitorPlay,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
@@ -35,6 +39,8 @@ interface ControlBarProps {
   onMuteToggle: () => void;
   onPrevItem: () => void;
   onNextItem: () => void;
+  currentMode?: "sung" | "karaoke" | "silent";
+  onModeChange?: (mode: "sung" | "karaoke" | "silent") => void;
 }
 
 function formatTime(ms: number): string {
@@ -63,7 +69,10 @@ export function ControlBar({
   onMuteToggle,
   onPrevItem,
   onNextItem,
+  currentMode,
+  onModeChange,
 }: ControlBarProps) {
+  const { t } = useTranslation();
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
 
   if (!currentItem) return null;
@@ -161,6 +170,39 @@ export function ControlBar({
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onStop} aria-label="Stop">
               <Square className="h-3.5 w-3.5" />
             </Button>
+          )}
+
+          {/* Mode toggle (hymns only) */}
+          {currentMode && onModeChange && (
+            <div className="ml-2 flex items-center gap-0.5 rounded-md border border-border p-0.5">
+              <Button
+                variant={currentMode === "sung" ? "default" : "ghost"}
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onModeChange("sung")}
+                title={t("playingNow.modeSung")}
+              >
+                <Mic className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={currentMode === "karaoke" ? "default" : "ghost"}
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onModeChange("karaoke")}
+                title={t("playingNow.modeKaraoke")}
+              >
+                <Music2 className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={currentMode === "silent" ? "default" : "ghost"}
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onModeChange("silent")}
+                title={t("playingNow.modeSilent")}
+              >
+                <MonitorPlay className="h-3 w-3" />
+              </Button>
+            </div>
           )}
         </div>
 

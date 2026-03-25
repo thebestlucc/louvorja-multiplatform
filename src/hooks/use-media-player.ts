@@ -6,7 +6,7 @@ import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useAudioStore } from "../stores/audio-store";
 import { useQueueStore } from "../stores/queue-store";
 import { useSlides } from "./use-slides";
-import { resolveSlideSeekTimestamp } from "../lib/audio-sync";
+import { resolveSlideSeekTimestamp, resolvePlaybackVariantPaths } from "../lib/audio-sync";
 import type { OverlayState } from "../lib/bindings";
 
 /**
@@ -186,5 +186,43 @@ export function useMediaPlayer() {
     useQueueStore.getState().prev();
   }, []);
 
-  return { play, pause, stop, seek, goToSlide, nextSlide, prevSlide, nextItem, prevItem };
+  const switchMode = useCallback(async (mode: "sung" | "karaoke" | "silent") => {
+    const state = store.getState();
+    if (state.currentItem?.type !== "hymn") return;
+
+    const hymn = state.currentItem.hymn;
+    store.getState().setMode(mode);
+
+    // Stop current audio
+    await useAudioStore.getState().stop();
+
+    if (mode === "silent") {
+      useAudioStore.getState().setPlaybackMode("silent");
+      return;
+    }
+
+    // Start appropriate audio
+    const audioPath = mode === "karaoke"
+      ? (hymn.playbackPath || hymn.audioPath)
+      : hymn.audioPath;
+
+    if (audioPath) {
+      const playbackMode = mode === "karaoke" ? "karaoke" : "sung";
+      useAudioStore.getState().setPlaybackMode(playbackMode);
+
+      const variantPaths = resolvePlaybackVariantPaths(hymn.audioPath, hymn.playbackPath);
+      if (variantPaths) {
+        await useAudioStore.getState().playVariants(
+          variantPaths.sungPath,
+          variantPaths.karaokePath,
+          playbackMode,
+          state.currentTime,
+        );
+      } else {
+        await useAudioStore.getState().play(audioPath, state.currentTime);
+      }
+    }
+  }, []);
+
+  return { play, pause, stop, seek, goToSlide, nextSlide, prevSlide, nextItem, prevItem, switchMode };
 }

@@ -47,6 +47,7 @@ function PlayingNowScreen() {
 
   const currentSlide = slides[activeSlideIndex] ?? null;
   const showSlides = currentItem ? mediaHasSlides(currentItem) : false;
+  const currentMode = currentItem?.type === "hymn" ? currentItem.mode : undefined;
 
   return (
     <div className="flex h-full flex-col">
@@ -92,6 +93,8 @@ function PlayingNowScreen() {
             }}
             onPrevItem={actions.prevItem}
             onNextItem={actions.nextItem}
+            currentMode={currentMode}
+            onModeChange={actions.switchMode}
           />
         </div>
 
