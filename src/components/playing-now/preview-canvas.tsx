@@ -45,8 +45,8 @@ export function PreviewCanvas({
   // Video preview (online or offline)
   if (currentItem && mediaHasVideo(currentItem)) {
     return (
-      <div className="flex h-full flex-col items-center justify-center bg-black">
-        <div className="relative aspect-video w-full max-w-full">
+      <div className="flex h-full items-center justify-center bg-black p-4">
+        <div className="relative h-full w-full max-h-full">
           <VideoPreviewSlot className="h-full w-full" />
         </div>
       </div>
@@ -57,7 +57,7 @@ export function PreviewCanvas({
   if (currentSlide) {
     return (
       <div className="flex h-full items-center justify-center bg-black/90 p-4">
-        <div className="relative aspect-video w-full max-w-full overflow-hidden rounded-lg shadow-lg">
+        <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-lg shadow-lg">
           <SlideRenderer
             slide={currentSlide}
             renderMode="playing-now-preview"
