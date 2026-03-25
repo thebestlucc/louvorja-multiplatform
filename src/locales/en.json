@@ -423,7 +423,11 @@
     "queueEmpty": "Queue is empty",
     "shuffleQueue": "Shuffle queue",
     "stop": "Stop",
-    "slides": "Slides"
+    "slides": "Slides",
+    "queue": "Queue",
+    "nowPlaying": "Now Playing",
+    "nextUp": "Next Up",
+    "emptyQueue": "Queue is empty"
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",

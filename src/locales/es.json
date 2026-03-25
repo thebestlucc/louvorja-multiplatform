@@ -423,7 +423,11 @@
     "queueEmpty": "Cola vacía",
     "shuffleQueue": "Mezclar cola",
     "stop": "Detener",
-    "slides": "Diapositivas"
+    "slides": "Diapositivas",
+    "queue": "Cola",
+    "nowPlaying": "Reproduciendo ahora",
+    "nextUp": "A continuacion",
+    "emptyQueue": "Cola vacía"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",

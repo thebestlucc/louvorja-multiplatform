@@ -423,7 +423,11 @@
     "queueEmpty": "Fila vazia",
     "shuffleQueue": "Embaralhar fila",
     "stop": "Parar",
-    "slides": "Slides"
+    "slides": "Slides",
+    "queue": "Fila",
+    "nowPlaying": "Tocando agora",
+    "nextUp": "A seguir",
+    "emptyQueue": "Fila vazia"
   },
   "presentations": {
     "aspectRatio": "Proporção",
