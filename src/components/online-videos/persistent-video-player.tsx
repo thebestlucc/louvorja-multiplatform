@@ -3,11 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
-import { useMediaSource } from "../../hooks/use-media-source";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import type { PreviewRect } from "../../stores/video-player-store";
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "../../lib/utils";
 
 // ─── VideoPreviewSlot ─────────────────────────────────────────────────────────
@@ -75,10 +75,14 @@ export function PersistentVideoPlayer() {
 
   const previewRect = useVideoPlayerStore((s) => s.previewRect);
 
-  // Resolve local video URL via streaming server (same hook used elsewhere)
-  const localVideoSrc = useMediaSource(
-    activeSlide?.videoSource === "local" ? (activeSlide.videoUrl ?? null) : null
-  );
+  // Resolve local video URL via the asset protocol (synchronous, no streaming server needed).
+  const localVideoSrc = (() => {
+    if (activeSlide?.videoSource !== "local" || !activeSlide.videoUrl) return null;
+    const path = activeSlide.videoUrl.trim();
+    if (!path) return null;
+    if (/^(https?:|blob:|data:)/.test(path)) return path;
+    return convertFileSrc(path);
+  })();
 
   // Helper: broadcast current player state to all windows + update Zustand store
   const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }) => {
@@ -243,14 +247,11 @@ export function PersistentVideoPlayer() {
 
   // ── Local video player lifecycle ──────────────────────────────────────────
 
-  const localVideoSrcRef = useRef<string | null>(null);
-  localVideoSrcRef.current = localVideoSrc;
-
-  // Effect A: create/destroy the <video> element only when slide identity changes.
+  // Effect A: create/destroy the <video> element when slide identity or resolved src changes.
   useEffect(() => {
     const isLocal = activeSlide?.videoSource === "local";
-    const videoSrc = activeSlide?.videoUrl ?? null;
-    if (!isLocal || !videoSrc || !playerHostRef.current) return;
+    const videoUrl = activeSlide?.videoUrl ?? null;
+    if (!isLocal || !videoUrl || !playerHostRef.current || !localVideoSrc) return;
 
     // Clean up previous local player
     clearInterval(pollTimerRef.current ?? undefined);
@@ -265,14 +266,11 @@ export function PersistentVideoPlayer() {
     const video = document.createElement("video");
     video.style.cssText = "width:100%;height:100%;object-fit:contain;";
     video.playsInline = true;
+    video.src = localVideoSrc;
     playerHostRef.current.appendChild(video);
     videoRef.current = video;
 
-    if (localVideoSrcRef.current) {
-      video.src = localVideoSrcRef.current;
-    }
-
-    const startPoll = (resolvedSrc: string) => {
+    const startPoll = () => {
       clearInterval(pollTimerRef.current ?? undefined);
       pollTimerRef.current = setInterval(() => {
         const snap: VideoStateEvent = {
@@ -281,7 +279,7 @@ export function PersistentVideoPlayer() {
           duration: isFinite(video.duration) ? video.duration : 0,
           volume: video.volume,
         };
-        broadcastState(snap, { videoId: null, videoSrc: resolvedSrc, videoSource: "local" });
+        broadcastState(snap, { videoId: null, videoSrc: localVideoSrc, videoSource: "local" });
       }, 250);
     };
 
@@ -289,8 +287,16 @@ export function PersistentVideoPlayer() {
       video.muted = true;
       void video.play()
         .then(() => { video.muted = false; })
-        .catch(() => { video.muted = false; });
-      startPoll(localVideoSrcRef.current ?? videoSrc);
+        .catch((err) => {
+          console.warn("[PVP] autoplay failed:", err);
+          video.muted = false;
+        });
+      startPoll();
+    };
+
+    const onError = () => {
+      const e = video.error;
+      console.error("[PVP] video error:", e?.code, e?.message, "src:", video.src.slice(0, 120));
     };
 
     const onPause = () => {
@@ -298,10 +304,11 @@ export function PersistentVideoPlayer() {
       pollTimerRef.current = null;
       broadcastState(
         { paused: true, currentTime: video.currentTime, duration: isFinite(video.duration) ? video.duration : 0, volume: video.volume },
-        { videoId: null, videoSrc: localVideoSrcRef.current ?? videoSrc, videoSource: "local" },
+        { videoId: null, videoSrc: localVideoSrc, videoSource: "local" },
       );
     };
 
+    video.addEventListener("error", onError);
     if (video.readyState >= 3) {
       onCanPlay();
     } else {
@@ -313,20 +320,13 @@ export function PersistentVideoPlayer() {
       clearInterval(pollTimerRef.current ?? undefined);
       pollTimerRef.current = null;
       video.removeEventListener("pause", onPause);
+      video.removeEventListener("error", onError);
       video.pause();
       video.src = "";
       video.remove();
       videoRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSlide?.videoSource, activeSlide?.videoUrl, broadcastState]);
-
-  // Effect B: imperatively update video.src when the resolved URL arrives.
-  useEffect(() => {
-    if (!localVideoSrc || !videoRef.current) return;
-    if (videoRef.current.src === localVideoSrc) return;
-    videoRef.current.src = localVideoSrc;
-  }, [localVideoSrc]);
+  }, [activeSlide?.videoSource, activeSlide?.videoUrl, localVideoSrc, broadcastState]);
 
   // ── Compute player host style ──────────────────────────────────────────────
 
