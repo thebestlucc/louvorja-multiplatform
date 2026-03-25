@@ -262,14 +262,17 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
 
     return (
       <div className={cn("h-full w-full bg-black", className)}>
-        {isLocalFile && localVideoSrc ? (
-          <LocalVideoPlayer
-            src={localVideoSrc}
-            title={slide.videoTitle ?? ""}
-            className="h-full w-full"
-            muted
-            isFollower
-          />
+        {isLocalFile ? (
+          // Downloaded video: always use local player, never fall back to YouTube
+          localVideoSrc ? (
+            <LocalVideoPlayer
+              src={localVideoSrc}
+              title={slide.videoTitle ?? ""}
+              className="h-full w-full"
+              muted
+              isFollower
+            />
+          ) : null
         ) : slide.videoId ? (
           <YouTubePlayer
             videoId={slide.videoId}
@@ -288,17 +291,20 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   }
 
   if (renderMode === "return-current") {
-    const isLocalVideo = slide.videoSource === "local" && !!localVideoSrc;
+    const isLocalFile = slide.videoSource === "local" && !!slide.videoUrl;
     return (
       <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
-        {isLocalVideo ? (
-          <LocalVideoPlayer
-            src={localVideoSrc!}
-            title={slide.videoTitle ?? ""}
-            className="h-full w-full object-contain"
-            muted
-            isFollower
-          />
+        {isLocalFile ? (
+          // Downloaded video: always use local player, never fall back to YouTube
+          localVideoSrc ? (
+            <LocalVideoPlayer
+              src={localVideoSrc}
+              title={slide.videoTitle ?? ""}
+              className="h-full w-full object-contain"
+              muted
+              isFollower
+            />
+          ) : null
         ) : slide.videoId ? (
           <YouTubePlayer
             videoId={slide.videoId}
