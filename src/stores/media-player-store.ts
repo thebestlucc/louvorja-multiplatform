@@ -36,6 +36,8 @@ interface MediaPlayerState {
 
   setOverlay: (overlay: "black" | "logo" | null) => void;
 
+  setMode: (mode: "sung" | "karaoke" | "silent") => void;
+
   stop: () => void;
 }
 
@@ -100,6 +102,15 @@ export const useMediaPlayerStore = create<MediaPlayerState>((set) => ({
     }),
 
   setOverlay: (overlay) => set({ overlay }),
+
+  setMode: (mode) =>
+    set((state) => {
+      if (state.currentItem?.type !== "hymn") return state;
+      return {
+        currentItem: { ...state.currentItem, mode },
+        timelineSource: mode === "silent" ? "none" : "audio",
+      };
+    }),
 
   stop: () => set({ ...initialState }),
 }));

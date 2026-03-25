@@ -432,7 +432,10 @@
     "logoScreen": "Pantalla de logo",
     "emptyPreview": "Selecciona un himno, video o presentación para comenzar",
     "presentation": "Presentación",
-    "projectorConnected": "Proyector conectado"
+    "projectorConnected": "Proyector conectado",
+    "modeSung": "Cantado",
+    "modeKaraoke": "Karaoke",
+    "modeSilent": "Solo diapositivas"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",
