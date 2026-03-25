@@ -5,6 +5,8 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import type { PreviewRect } from "../../stores/video-player-store";
+import { useMediaPlayerStore } from "../../stores/media-player-store";
+import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/media";
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -96,6 +98,30 @@ export function PersistentVideoPlayer() {
       const slide = e.payload;
       if (slide.slideType === "online_video") {
         setActiveSlide(slide);
+
+        // Bridge to media-player-store so Playing Now shows video preview
+        const mpState = useMediaPlayerStore.getState();
+        if (slide.videoSource === "local" && slide.videoUrl) {
+          const item: OfflineVideoMediaItem = {
+            type: "offline_video",
+            videoPath: slide.videoUrl,
+            title: slide.videoTitle ?? "Video",
+            isManaged: slide.videoUrl.startsWith("media/"),
+          };
+          if (mpState.currentItem?.type !== "offline_video" || (mpState.currentItem as OfflineVideoMediaItem).videoPath !== slide.videoUrl) {
+            mpState.load(item);
+          }
+        } else if (slide.videoId) {
+          const item: OnlineVideoMediaItem = {
+            type: "online_video",
+            videoId: slide.videoId,
+            videoSource: "youtube",
+            title: slide.videoTitle ?? "Video",
+          };
+          if (mpState.currentItem?.type !== "online_video" || (mpState.currentItem as OnlineVideoMediaItem).videoId !== slide.videoId) {
+            mpState.load(item);
+          }
+        }
       } else {
         // Non-video slide projected: pause but keep player alive
         ytPlayerRef.current?.pauseVideo();
