@@ -85,10 +85,14 @@ export function ControlBar({
             min={0}
             max={Math.max(duration, 1)}
             value={[seekPreview ?? currentTime]}
-            onValueChange={([v]: number[]) => setSeekPreview(v)}
-            onValueCommit={([v]: number[]) => {
-              onSeek(v);
-              setSeekPreview(null);
+            onValueChange={(values) => {
+              if (values[0] !== undefined) setSeekPreview(values[0]);
+            }}
+            onValueCommit={(values) => {
+              if (values[0] !== undefined) {
+                onSeek(values[0]);
+                setSeekPreview(null);
+              }
             }}
             className="flex-1"
           />
@@ -109,6 +113,7 @@ export function ControlBar({
               className="h-8 w-8"
               onClick={onPrevSlide}
               disabled={activeSlideIndex === 0}
+              aria-label="Previous slide"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -116,7 +121,7 @@ export function ControlBar({
 
           {hasTimeline && (
             <>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevItem}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevItem} aria-label="Previous item">
                 <SkipBack className="h-4 w-4" />
               </Button>
               <Button
@@ -125,6 +130,7 @@ export function ControlBar({
                 className="h-9 w-9"
                 onClick={isPlaying ? onPause : onPlay}
                 disabled={status === "loading"}
+                aria-label={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
                   <Pause className="h-5 w-5" />
@@ -132,7 +138,7 @@ export function ControlBar({
                   <Play className="h-5 w-5" />
                 )}
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextItem}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextItem} aria-label="Next item">
                 <SkipForward className="h-4 w-4" />
               </Button>
             </>
@@ -145,13 +151,14 @@ export function ControlBar({
               className="h-8 w-8"
               onClick={onNextSlide}
               disabled={activeSlideIndex >= totalSlides - 1}
+              aria-label="Next slide"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           )}
 
           {isActive && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onStop}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onStop} aria-label="Stop">
               <Square className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -170,7 +177,7 @@ export function ControlBar({
         <div className="flex items-center gap-1">
           {hasTimeline && (
             <>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMuteToggle}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMuteToggle} aria-label={muted ? "Unmute" : "Mute"}>
                 {muted ? (
                   <VolumeX className="h-3.5 w-3.5" />
                 ) : (
@@ -181,7 +188,9 @@ export function ControlBar({
                 min={0}
                 max={100}
                 value={[muted ? 0 : volume * 100]}
-                onValueChange={([v]: number[]) => onVolumeChange(v / 100)}
+                onValueChange={(values) => {
+                  if (values[0] !== undefined) onVolumeChange(values[0] / 100);
+                }}
                 className="w-20"
               />
             </>
