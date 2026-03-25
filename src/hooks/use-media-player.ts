@@ -1,6 +1,7 @@
 // src/hooks/use-media-player.ts
 import { useEffect, useCallback } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
+import i18next from "i18next";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useAudioStore } from "../stores/audio-store";
 import { useQueueStore } from "../stores/queue-store";
@@ -19,10 +20,12 @@ export function useMediaPlayer() {
   // --- Subscribe to Tauri events ---
 
   useEffect(() => {
+    let mounted = true;
     const unlisteners: (() => void)[] = [];
 
-    // Audio timeline updates
-    const unAudio = listen<{ positionMs: number; durationMs: number; isPlaying: boolean }>(
+    // Note: useAudioStore also listens to audio-status for its own state.
+    // This listener updates useMediaPlayerStore separately — both are intentional.
+    listen<{ positionMs: number; durationMs: number; isPlaying: boolean }>(
       "audio-status",
       (event) => {
         const state = store.getState();
@@ -33,11 +36,13 @@ export function useMediaPlayer() {
           store.getState().setStatus("playing");
         }
       },
-    );
-    unAudio.then((u) => unlisteners.push(u));
+    ).then((u) => {
+      if (!mounted) u();
+      else unlisteners.push(u);
+    }).catch(() => {});
 
     // Video timeline updates
-    const unVideo = listen<{ currentTime: number; duration: number; paused: boolean }>(
+    listen<{ currentTime: number; duration: number; paused: boolean }>(
       "media-state",
       (event) => {
         const state = store.getState();
@@ -54,25 +59,32 @@ export function useMediaPlayer() {
           store.getState().setStatus("paused");
         }
       },
-    );
-    unVideo.then((u) => unlisteners.push(u));
+    ).then((u) => {
+      if (!mounted) u();
+      else unlisteners.push(u);
+    }).catch(() => {});
 
     // Overlay changes
-    const unOverlay = listen<OverlayState>("overlay-changed", (event) => {
+    listen<OverlayState>("overlay-changed", (event) => {
       const overlay = event.payload?.blackScreen
         ? "black"
         : event.payload?.logoScreen
           ? "logo"
           : null;
       store.getState().setOverlay(overlay);
-    });
-    unOverlay.then((u) => unlisteners.push(u));
+    }).then((u) => {
+      if (!mounted) u();
+      else unlisteners.push(u);
+    }).catch(() => {});
 
     // Slide cleared
-    const unCleared = listen("slide-cleared", () => {});
-    unCleared.then((u) => unlisteners.push(u));
+    listen("slide-cleared", () => {}).then((u) => {
+      if (!mounted) u();
+      else unlisteners.push(u);
+    }).catch(() => {});
 
     return () => {
+      mounted = false;
       unlisteners.forEach((u) => u());
     };
   }, []);
@@ -129,7 +141,7 @@ export function useMediaPlayer() {
         state.currentItem?.type === "hymn"
           ? state.currentItem.hymn.title
           : state.currentItem?.type === "presentation"
-            ? "Presentation"
+            ? i18next.t("playingNow.presentation")
             : "";
 
       await projectSlideWithContext(slide, nextSlide, index, state.slides.length, title);

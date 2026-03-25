@@ -431,6 +431,7 @@
     "blackScreen": "Black Screen",
     "logoScreen": "Logo Screen",
     "emptyPreview": "Select a hymn, video, or presentation to start",
+    "presentation": "Presentation",
     "projectorConnected": "Projector connected"
   },
   "presentations": {

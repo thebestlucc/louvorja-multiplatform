@@ -431,6 +431,7 @@
     "blackScreen": "Pantalla negra",
     "logoScreen": "Pantalla de logo",
     "emptyPreview": "Selecciona un himno, video o presentación para comenzar",
+    "presentation": "Presentación",
     "projectorConnected": "Proyector conectado"
   },
   "presentations": {
