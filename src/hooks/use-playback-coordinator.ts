@@ -1,13 +1,14 @@
 import { useEffect, useCallback, useRef } from "react";
 import { useQueueStore } from "../stores/queue-store";
 import { useAudioStore } from "../stores/audio-store";
-import { usePresentationStore } from "../stores/presentation-store";
 import { useDisplayStore } from "../stores/display-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 import { resolvePlaybackVariantPaths, parseLyricsSyncToPoints } from "../lib/audio-sync";
 import { getSyncPoints } from "../lib/tauri";
 import { catcher } from "../lib/catcher";
 import { projectSlideIndex } from "../lib/projection-playback";
 import { hymnToSlides } from "./use-hymn-playback";
+import type { HymnMediaItem } from "../types/media";
 
 /**
  * Centralized hook to coordinate playback and projection based on the queue store.
@@ -19,16 +20,11 @@ export function usePlaybackCoordinator() {
   const currentIndex = useQueueStore((s) => s.currentIndex);
   const next = useQueueStore((s) => s.next);
 
-  const setSyncPoints = useAudioStore((s) => s.setSyncPoints);
   const setOnFinished = useAudioStore((s) => s.setOnFinished);
   const setPlaybackMode = useAudioStore((s) => s.setPlaybackMode);
   const playAudio = useAudioStore((s) => s.play);
   const playAudioVariants = useAudioStore((s) => s.playVariants);
   const stopAudio = useAudioStore((s) => s.stop);
-
-  const setActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
-  const setPresentationSlides = usePresentationStore((s) => s.setSlides);
-  const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
 
   const lastPlayedIndexRef = useRef<number | null>(null);
 
@@ -52,18 +48,47 @@ export function usePlaybackCoordinator() {
         : item.hymn?.audioPath; // "audio" = Cantado = sung version
 
     await catcher(async () => {
-      // 1. Fetch sync points if it's a hymn
+      // 1. Resolve sync points
+      let effectiveSyncPoints: import("../lib/bindings").SyncPoint[] = [];
       if (hymnId) {
         const syncPoints = await getSyncPoints(hymnId);
-        const effectiveSyncPoints = (syncPoints && syncPoints.length > 0)
+        effectiveSyncPoints = (syncPoints && syncPoints.length > 0)
           ? syncPoints
           : parseLyricsSyncToPoints(item.hymn?.lyricsSync);
-        setSyncPoints(effectiveSyncPoints);
-      } else {
-        setSyncPoints([]);
       }
 
-      // 2. Start audio playback if applicable
+      // 2. Build slides
+      const slides = item.hymn
+        ? hymnToSlides(
+            item.hymn.title,
+            item.hymn.lyrics,
+            item.hymn.album,
+            item.hymn.coverPath,
+            item.hymn.lyricsSync,
+          )
+        : [];
+
+      // 3. Map queue type → media mode
+      const mode: HymnMediaItem["mode"] =
+        item.type === "playback" ? "karaoke"
+        : item.type === "projection" ? "silent"
+        : "sung";
+
+      // 4. Construct HymnMediaItem and dispatch to media-player-store
+      if (item.hymn) {
+        const mediaItem: HymnMediaItem = {
+          type: "hymn",
+          hymn: item.hymn,
+          mode,
+          slides,
+          syncPoints: effectiveSyncPoints,
+          audioPath: item.hymn.audioPath ?? undefined,
+          playbackPath: item.hymn.playbackPath ?? undefined,
+        };
+        useMediaPlayerStore.getState().load(mediaItem);
+      }
+
+      // 5. Start audio playback (rodio lifecycle stays here)
       if (audioPath) {
         const activeMode = item.type === "playback" ? "karaoke" : "sung";
         setPlaybackMode(activeMode);
@@ -79,28 +104,14 @@ export function usePlaybackCoordinator() {
         }
       } else {
         setPlaybackMode("silent");
-        // If no audio, we might need to stop any current audio
         await stopAudio();
       }
 
-      // 3. Reset to first slide and project it
-      if (item.hymn) {
-        setCurrentPresentation(null);
-        const generatedSlides = hymnToSlides(
-          item.hymn.title,
-          item.hymn.lyrics,
-          item.hymn.album,
-          item.hymn.coverPath,
-          item.hymn.lyricsSync,
-        );
-        setPresentationSlides(generatedSlides);
-      }
-
+      // 6. Project first slide
       useDisplayStore.getState().setCurrentProjectionType("hymn");
-      setActiveSlideIndex(0);
       await projectSlideIndex(0);
 
-    }, { notify: true });  }, [items, setSyncPoints, setActiveSlideIndex, setPresentationSlides, setCurrentPresentation, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
+    }, { notify: true });  }, [items, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
 
   // Effect: React to queue index changes
   useEffect(() => {
