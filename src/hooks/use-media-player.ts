@@ -68,6 +68,10 @@ export function useMediaPlayer() {
     });
     unOverlay.then((u) => unlisteners.push(u));
 
+    // Slide cleared
+    const unCleared = listen("slide-cleared", () => {});
+    unCleared.then((u) => unlisteners.push(u));
+
     return () => {
       unlisteners.forEach((u) => u());
     };
@@ -77,13 +81,10 @@ export function useMediaPlayer() {
 
   const play = useCallback(() => {
     const state = store.getState();
-    if (!state.currentItem) return;
 
     if (state.timelineSource === "audio") {
       const audioState = useAudioStore.getState();
-      if (audioState.status === "paused") {
-        void audioState.resume();
-      }
+      void audioState.resume();
     } else if (state.timelineSource === "video") {
       void emit("video-control", { action: "play" });
     }
