@@ -427,7 +427,11 @@
     "queue": "Fila",
     "nowPlaying": "Tocando agora",
     "nextUp": "A seguir",
-    "emptyQueue": "Fila vazia"
+    "emptyQueue": "Fila vazia",
+    "blackScreen": "Tela preta",
+    "logoScreen": "Tela de logo",
+    "emptyPreview": "Selecione um hino, vídeo ou apresentação para começar",
+    "projectorConnected": "Projetor conectado"
   },
   "presentations": {
     "aspectRatio": "Proporção",

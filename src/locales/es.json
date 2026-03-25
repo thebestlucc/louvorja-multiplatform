@@ -427,7 +427,11 @@
     "queue": "Cola",
     "nowPlaying": "Reproduciendo ahora",
     "nextUp": "A continuacion",
-    "emptyQueue": "Cola vacía"
+    "emptyQueue": "Cola vacía",
+    "blackScreen": "Pantalla negra",
+    "logoScreen": "Pantalla de logo",
+    "emptyPreview": "Selecciona un himno, video o presentación para comenzar",
+    "projectorConnected": "Proyector conectado"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",

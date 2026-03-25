@@ -427,7 +427,11 @@
     "queue": "Queue",
     "nowPlaying": "Now Playing",
     "nextUp": "Next Up",
-    "emptyQueue": "Queue is empty"
+    "emptyQueue": "Queue is empty",
+    "blackScreen": "Black Screen",
+    "logoScreen": "Logo Screen",
+    "emptyPreview": "Select a hymn, video, or presentation to start",
+    "projectorConnected": "Projector connected"
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",
