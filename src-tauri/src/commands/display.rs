@@ -338,6 +338,22 @@ pub fn set_slide_on_projector(
     if !is_live_utility_slide(&slide_data) {
         stop_live_utility_projection(&state)?;
     }
+    // Enrich online_video slides with local path if the video has been downloaded
+    let mut slide_data = slide_data;
+    if slide_data.slide_type == "online_video" {
+        if let Some(ref video_id) = slide_data.video_id.clone() {
+            if let Ok(conn) = state.db.get() {
+                if let Ok(Some(local_path)) =
+                    crate::db::queries::online_videos::get_video_local_path(&conn, video_id)
+                {
+                    if !local_path.is_empty() {
+                        slide_data.video_source = Some("local".to_string());
+                        slide_data.video_url = Some(local_path);
+                    }
+                }
+            }
+        }
+    }
     {
         let mut current = state
             .current_slide
@@ -364,6 +380,22 @@ pub fn set_slide_on_return(
 ) -> Result<(), AppError> {
     if !is_live_utility_slide(&slide_data) {
         stop_live_utility_projection(&state)?;
+    }
+    // Enrich online_video slides with local path if the video has been downloaded
+    let mut slide_data = slide_data;
+    if slide_data.slide_type == "online_video" {
+        if let Some(ref video_id) = slide_data.video_id.clone() {
+            if let Ok(conn) = state.db.get() {
+                if let Ok(Some(local_path)) =
+                    crate::db::queries::online_videos::get_video_local_path(&conn, video_id)
+                {
+                    if !local_path.is_empty() {
+                        slide_data.video_source = Some("local".to_string());
+                        slide_data.video_url = Some(local_path);
+                    }
+                }
+            }
+        }
     }
     {
         let mut current = state

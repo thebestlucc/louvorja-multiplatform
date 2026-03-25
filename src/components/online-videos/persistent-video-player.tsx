@@ -5,14 +5,7 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
-import {
-  registerHiddenHost,
-  registerPlayerNode,
-  clearPlayerNode,
-  attachPlayerTo,
-  detachPlayerToHost,
-  getPlayerNode,
-} from "../../lib/video-player-registry";
+import type { PreviewRect } from "../../stores/video-player-store";
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
 import { cn } from "../../lib/utils";
@@ -21,36 +14,40 @@ import { cn } from "../../lib/utils";
 
 /**
  * Rendered inside Playing Now's preview area.
- * Moves the master player's DOM node INTO this slot on mount,
- * and BACK to the hidden host on unmount.
- * The player keeps playing through route changes — no restart.
+ * Measures its own bounding rect and publishes it to the store so that
+ * PersistentVideoPlayer can overlay the player using CSS position: fixed.
+ * No DOM transplanting — the iframe never changes parent.
  */
 export function VideoPreviewSlot({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const setPreviewRect = useVideoPlayerStore((s) => s.setPreviewRect);
 
   useEffect(() => {
-    // Re-run when the player node becomes available after a video change
-    const tryAttach = () => {
-      if (ref.current && getPlayerNode()) {
-        attachPlayerTo(ref.current);
-      }
+    const el = ref.current;
+    if (!el) return;
+
+    const publish = () => {
+      const r = el.getBoundingClientRect();
+      setPreviewRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     };
 
-    tryAttach();
-    // Poll briefly to handle the gap between VideoPreviewSlot mounting and
-    // the player finishing initialization (< 1s for YouTube onReady)
-    const timer = setInterval(() => {
-      if (getPlayerNode()) {
-        tryAttach();
-        clearInterval(timer);
-      }
-    }, 100);
+    // Publish initial rect
+    publish();
+
+    // Track size/position changes
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+
+    // Also re-publish on scroll (in case the preview area scrolls)
+    const scrollArea = document.getElementById("main-scroll-area");
+    if (scrollArea) scrollArea.addEventListener("scroll", publish, { passive: true });
 
     return () => {
-      clearInterval(timer);
-      detachPlayerToHost();
+      ro.disconnect();
+      if (scrollArea) scrollArea.removeEventListener("scroll", publish);
+      setPreviewRect(null);
     };
-  }, []);
+  }, [setPreviewRect]);
 
   return <div ref={ref} className={cn("h-full w-full", className)} />;
 }
@@ -59,27 +56,29 @@ export function VideoPreviewSlot({ className }: { className?: string }) {
 
 /**
  * Always-mounted master player. Place in __root.tsx outside <Outlet>.
- * Hidden via a 1×1px absolute div. Owns the real player element that
- * VideoPreviewSlot transplants into the Playing Now preview area.
+ *
+ * The player host div uses position: fixed to overlay the Playing Now preview
+ * when VideoPreviewSlot is mounted (previewRect !== null). When the user
+ * navigates away, previewRect becomes null and the host falls back to a
+ * "resting" position: visible to the browser (so YouTube keeps playing)
+ * but behind all app UI (z-index: -1).
+ *
+ * The iframe/video element NEVER changes DOM parent — eliminating the browser
+ * throttling / YouTube pause that the old DOM-transplant approach caused.
  */
 export function PersistentVideoPlayer() {
-  const hiddenHostRef = useRef<HTMLDivElement>(null);
+  const playerHostRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [activeSlide, setActiveSlide] = useState<SlideContent | null>(null);
 
+  const previewRect = useVideoPlayerStore((s) => s.previewRect);
+
   // Resolve local video URL via streaming server (same hook used elsewhere)
   const localVideoSrc = useMediaSource(
     activeSlide?.videoSource === "local" ? (activeSlide.videoUrl ?? null) : null
   );
-
-  // Register the hidden host div once
-  useEffect(() => {
-    if (hiddenHostRef.current) {
-      registerHiddenHost(hiddenHostRef.current);
-    }
-  }, []);
 
   // Helper: broadcast current player state to all windows + update Zustand store
   const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }) => {
@@ -103,11 +102,8 @@ export function PersistentVideoPlayer() {
   }, []);
 
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
-  // Ignoring slide-cleared when no video is active prevents unrelated clear events
-  // (e.g. clearing a hymn slide, pressing Escape) from tearing down the player.
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
-      // If no video is active, there is nothing to tear down. Ignore the event.
       if (!ytPlayerRef.current && !videoRef.current) return;
 
       clearInterval(pollTimerRef.current ?? undefined);
@@ -123,10 +119,8 @@ export function PersistentVideoPlayer() {
         videoRef.current.remove();
         videoRef.current = null;
       }
-      clearPlayerNode();
       useVideoPlayerStore.getState().resetVideoState();
       setActiveSlide(null);
-      // Broadcast zero-state so followers reset lastStateRef to zeros (Bug 1 fix)
       void emit("video-state", {
         paused: true,
         currentTime: 0,
@@ -165,7 +159,7 @@ export function PersistentVideoPlayer() {
 
   useEffect(() => {
     const videoId = activeSlide?.videoSource !== "local" ? (activeSlide?.videoId ?? null) : null;
-    if (!videoId || !hiddenHostRef.current) return;
+    if (!videoId || !playerHostRef.current) return;
 
     let destroyed = false;
 
@@ -176,12 +170,11 @@ export function PersistentVideoPlayer() {
       try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
       ytPlayerRef.current = null;
     }
-    clearPlayerNode();
 
     // Create container div imperatively (React must not manage this node)
     const container = document.createElement("div");
     container.style.cssText = "width:100%;height:100%;overflow:hidden;";
-    hiddenHostRef.current.appendChild(container);
+    playerHostRef.current.appendChild(container);
     const uid = `yt-master-${Math.random().toString(36).slice(2)}`;
     container.id = uid;
 
@@ -196,7 +189,7 @@ export function PersistentVideoPlayer() {
           autoplay: 1, controls: 0, rel: 0,
           modestbranding: 1, showinfo: 0,
           disablekb: 1, iv_load_policy: 3, cc_load_policy: 0,
-          mute: 0, // master is unmuted — it is the audio source
+          mute: 0,
           playsinline: 1,
           origin: window.location.origin,
         },
@@ -204,14 +197,11 @@ export function PersistentVideoPlayer() {
           onReady: ({ target }) => {
             if (destroyed) return;
             ytPlayerRef.current = target;
-            // Apply CSS to hide YT controls and disable interaction on the master iframe (Bug 2 fix)
             const iframe = target.getIframe();
             iframe.style.cssText =
               "width:100%;height:100%;pointer-events:none;border:none;" +
               "transform:scale(1.06);transform-origin:center;display:block;";
-            registerPlayerNode(iframe);
 
-            // Start polling every 250ms
             pollTimerRef.current = setInterval(() => {
               const snap: VideoStateEvent = {
                 paused: target.getPlayerState() !== 1,
@@ -224,7 +214,6 @@ export function PersistentVideoPlayer() {
           },
           onStateChange: ({ data, target }) => {
             if (destroyed) return;
-            // Emit immediately on pause/stop so followers react without waiting for the poll
             if (data !== 1) {
               broadcastState(
                 {
@@ -248,24 +237,20 @@ export function PersistentVideoPlayer() {
       pollTimerRef.current = null;
       try { ytPlayerRef.current?.destroy(); } catch (_) { /* ignore */ }
       ytPlayerRef.current = null;
-      clearPlayerNode();
       container.remove();
     };
   }, [activeSlide?.videoId, activeSlide?.videoSource, broadcastState]);
 
   // ── Local video player lifecycle ──────────────────────────────────────────
 
-  // Keep a ref to the latest resolved URL so Effect B can read it imperatively
-  // without adding it as a dependency to Effect A (which owns the video element).
   const localVideoSrcRef = useRef<string | null>(null);
   localVideoSrcRef.current = localVideoSrc;
 
   // Effect A: create/destroy the <video> element only when slide identity changes.
-  // Never re-runs due to transient localVideoSrc null values during re-renders.
   useEffect(() => {
     const isLocal = activeSlide?.videoSource === "local";
     const videoSrc = activeSlide?.videoUrl ?? null;
-    if (!isLocal || !videoSrc || !hiddenHostRef.current) return;
+    if (!isLocal || !videoSrc || !playerHostRef.current) return;
 
     // Clean up previous local player
     clearInterval(pollTimerRef.current ?? undefined);
@@ -276,16 +261,13 @@ export function PersistentVideoPlayer() {
       videoRef.current.remove();
       videoRef.current = null;
     }
-    clearPlayerNode();
 
-    // Create <video> imperatively (src will be set by Effect B once resolved)
     const video = document.createElement("video");
     video.style.cssText = "width:100%;height:100%;object-fit:contain;";
     video.playsInline = true;
-    hiddenHostRef.current.appendChild(video);
+    playerHostRef.current.appendChild(video);
     videoRef.current = video;
 
-    // If the URL is already resolved (Effect B already ran), apply it immediately
     if (localVideoSrcRef.current) {
       video.src = localVideoSrcRef.current;
     }
@@ -304,13 +286,10 @@ export function PersistentVideoPlayer() {
     };
 
     const onCanPlay = () => {
-      registerPlayerNode(video);
-      video.muted = true; // allow autoplay without user gesture (WKWebView/WebView2 policy)
+      video.muted = true;
       void video.play()
-        .then(() => { video.muted = false; }) // restore audio once playing
-        .catch(() => {
-          video.muted = false; // restore even on failure so controls work
-        });
+        .then(() => { video.muted = false; })
+        .catch(() => { video.muted = false; });
       startPoll(localVideoSrcRef.current ?? videoSrc);
     };
 
@@ -338,33 +317,53 @@ export function PersistentVideoPlayer() {
       video.src = "";
       video.remove();
       videoRef.current = null;
-      clearPlayerNode();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSlide?.videoSource, activeSlide?.videoUrl, broadcastState]);
 
-  // Effect B: imperatively update video.src when the resolved URL arrives or changes.
-  // Does NOT create or destroy the video element — safe to run on every localVideoSrc change.
+  // Effect B: imperatively update video.src when the resolved URL arrives.
   useEffect(() => {
     if (!localVideoSrc || !videoRef.current) return;
     if (videoRef.current.src === localVideoSrc) return;
     videoRef.current.src = localVideoSrc;
   }, [localVideoSrc]);
 
+  // ── Compute player host style ──────────────────────────────────────────────
+
+  const hostStyle = computeHostStyle(previewRect);
+
   return (
     <div
-      ref={hiddenHostRef}
+      ref={playerHostRef}
       aria-hidden
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "640px",
-        height: "360px",
-        pointerEvents: "none",
-        opacity: 0,
-        zIndex: -9999,
-      }}
+      style={hostStyle}
     />
   );
+}
+
+// ── Style helper ──────────────────────────────────────────────────────────────
+
+const RESTING_STYLE: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: 640,
+  height: 360,
+  pointerEvents: "none",
+  zIndex: -1,
+  overflow: "hidden",
+};
+
+function computeHostStyle(rect: PreviewRect | null): React.CSSProperties {
+  if (!rect) return RESTING_STYLE;
+  return {
+    position: "fixed",
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+    pointerEvents: "none",
+    zIndex: 10,
+    overflow: "hidden",
+  };
 }

@@ -14,6 +14,23 @@ pub fn update_current_slide(
     streaming_state: &StreamingState,
     slide_data: SlideContent,
 ) -> Result<(), AppError> {
+    // Enrich online_video slides with local path if the video has been downloaded
+    let mut slide_data = slide_data;
+    if slide_data.slide_type == "online_video" {
+        if let Some(ref video_id) = slide_data.video_id.clone() {
+            if let Ok(conn) = state.db.get() {
+                if let Ok(Some(local_path)) =
+                    crate::db::queries::online_videos::get_video_local_path(&conn, video_id)
+                {
+                    if !local_path.is_empty() {
+                        slide_data.video_source = Some("local".to_string());
+                        slide_data.video_url = Some(local_path);
+                    }
+                }
+            }
+        }
+    }
+
     {
         let mut current = state
             .current_slide
