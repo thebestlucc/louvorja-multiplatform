@@ -102,9 +102,14 @@ export function PersistentVideoPlayer() {
     return () => { void unsub.then((fn) => fn()); };
   }, []);
 
-  // Listen to slide-cleared: fully reset
+  // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
+  // Ignoring slide-cleared when no video is active prevents unrelated clear events
+  // (e.g. clearing a hymn slide, pressing Escape) from tearing down the player.
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
+      // If no video is active, there is nothing to tear down. Ignore the event.
+      if (!ytPlayerRef.current && !videoRef.current) return;
+
       clearInterval(pollTimerRef.current ?? undefined);
       pollTimerRef.current = null;
 
@@ -300,7 +305,12 @@ export function PersistentVideoPlayer() {
 
     const onCanPlay = () => {
       registerPlayerNode(video);
-      void video.play().catch(() => {});
+      video.muted = true; // allow autoplay without user gesture (WKWebView/WebView2 policy)
+      void video.play()
+        .then(() => { video.muted = false; }) // restore audio once playing
+        .catch(() => {
+          video.muted = false; // restore even on failure so controls work
+        });
       startPoll(localVideoSrcRef.current ?? videoSrc);
     };
 
