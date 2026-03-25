@@ -422,7 +422,8 @@
     "projectorInactive": "Projetor inativo",
     "queueEmpty": "Fila vazia",
     "shuffleQueue": "Embaralhar fila",
-    "stop": "Parar"
+    "stop": "Parar",
+    "slides": "Slides"
   },
   "presentations": {
     "aspectRatio": "Proporção",

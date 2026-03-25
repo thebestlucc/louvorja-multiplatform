@@ -422,7 +422,8 @@
     "projectorInactive": "Proyector inactivo",
     "queueEmpty": "Cola vacía",
     "shuffleQueue": "Mezclar cola",
-    "stop": "Detener"
+    "stop": "Detener",
+    "slides": "Diapositivas"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",
