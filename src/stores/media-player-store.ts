@@ -37,7 +37,6 @@ interface MediaPlayerState {
   setOverlay: (overlay: "black" | "logo" | null) => void;
 
   stop: () => void;
-  reset: () => void;
 }
 
 const initialState = {
@@ -102,10 +101,5 @@ export const useMediaPlayerStore = create<MediaPlayerState>((set) => ({
 
   setOverlay: (overlay) => set({ overlay }),
 
-  stop: () =>
-    set({
-      ...initialState,
-    }),
-
-  reset: () => set(initialState),
+  stop: () => set({ ...initialState }),
 }));

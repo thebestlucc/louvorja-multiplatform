@@ -130,7 +130,6 @@ export function usePlaybackCoordinator() {
   // Effect: Register Auto-Next callback
   useEffect(() => {
     setOnFinished(() => {
-      console.log("[playback-coordinator] Audio finished, advancing queue");
       next();
     });
     

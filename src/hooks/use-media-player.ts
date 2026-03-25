@@ -78,7 +78,9 @@ export function useMediaPlayer() {
     }).catch(() => {});
 
     // Slide cleared
-    listen("slide-cleared", () => {}).then((u) => {
+    listen("slide-cleared", () => {
+      useMediaPlayerStore.getState().stop();
+    }).then((u) => {
       if (!mounted) u();
       else unlisteners.push(u);
     }).catch(() => {});
