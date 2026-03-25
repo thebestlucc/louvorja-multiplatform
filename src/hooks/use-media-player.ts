@@ -119,6 +119,7 @@ export function useMediaPlayer() {
     void useAudioStore.getState().stop();
     void emit("video-control", { action: "stop" });
     store.getState().stop();
+    useQueueStore.getState().clearQueue();
   }, []);
 
   const seek = useCallback((timeMs: number) => {
