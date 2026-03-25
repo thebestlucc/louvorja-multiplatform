@@ -86,9 +86,10 @@ function PlayingNowScreen() {
             onPrevSlide={actions.prevSlide}
             onNextSlide={actions.nextSlide}
             onVolumeChange={(v) => useAudioStore.getState().setVolume(v)}
-            onMuteToggle={() =>
-              useAudioStore.getState().setOutputMuted(!outputMuted)
-            }
+            onMuteToggle={() => {
+              const s = useAudioStore.getState();
+              s.setOutputMuted(!s.outputMuted);
+            }}
             onPrevItem={actions.prevItem}
             onNextItem={actions.nextItem}
           />
