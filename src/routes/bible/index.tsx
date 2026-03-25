@@ -111,6 +111,9 @@ function BibleIndex() {
       } else {
         bible.selectSingleVerse(verse);
       }
+      if (bible.isProjecting) {
+        void bible.updateBibleProjection();
+      }
     },
     [bible],
   );
