@@ -1,15 +1,9 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   PanelRightClose,
   PanelRight,
   Music,
-  Video,
-  BookOpen,
-  FileText,
-  Image,
   Presentation,
   X,
   GripVertical,
@@ -26,15 +20,10 @@ interface QueuePanelProps {
 
 const PREF_KEY = "playing-now-queue-panel-collapsed";
 
-const typeIcons: Record<string, typeof Music> = {
+const typeIcons: Record<QueueItem["type"], typeof Music> = {
   audio: Music,
   playback: Music,
   projection: Presentation,
-  online_video: Video,
-  offline_video: Video,
-  image: Image,
-  bible: BookOpen,
-  annotation: FileText,
 };
 
 function getItemTitle(item: QueueItem): string {
@@ -189,6 +178,9 @@ function QueueItemRow({
           ? "bg-primary/10 text-primary"
           : "cursor-pointer hover:bg-accent"
       )}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
       onClick={onClick}
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/40" />
