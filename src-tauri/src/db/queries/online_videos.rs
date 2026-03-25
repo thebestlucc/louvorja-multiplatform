@@ -167,6 +167,20 @@ pub fn get_playlist_videos(
     Ok(result)
 }
 
+/// Returns the local_path for a downloaded video, if it exists.
+pub fn get_video_local_path(
+    conn: &Connection,
+    video_id: &str,
+) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    conn.query_row(
+        "SELECT local_path FROM online_videos WHERE video_id = ?1 AND local_path IS NOT NULL",
+        params![video_id],
+        |row| row.get(0),
+    )
+    .optional()
+}
+
 /// Used by yt-dlp download command (Task 5) when a video is fully downloaded.
 #[allow(dead_code)]
 pub fn update_video_local_path(

@@ -3,6 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 
+- When reporting information to me, be extremely concise and sacrifice grammar for the sake of concision.
+
 ## LouvorJA Multiplatform
 
 ## Project Overview

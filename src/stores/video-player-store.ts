@@ -1,5 +1,12 @@
 import { create } from "zustand";
 
+export interface PreviewRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
 interface VideoPlayerState {
   currentTime: number;
   duration: number;
@@ -8,11 +15,13 @@ interface VideoPlayerState {
   videoId: string | null;
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState">>) => void;
+  previewRect: PreviewRect | null;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setPreviewRect">>) => void;
   resetVideoState: () => void;
+  setPreviewRect: (rect: PreviewRect | null) => void;
 }
 
-type VideoPlayerData = Omit<VideoPlayerState, "setVideoState" | "resetVideoState">;
+type VideoPlayerData = Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setPreviewRect">;
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -22,10 +31,12 @@ const initialState: VideoPlayerData = {
   videoId: null,
   videoSrc: null,
   videoSource: null,
+  previewRect: null,
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   setVideoState: (partial) => set(partial),
-  resetVideoState: () => set(initialState),
+  resetVideoState: () => set({ ...initialState, previewRect: useVideoPlayerStore.getState().previewRect }),
+  setPreviewRect: (rect) => set({ previewRect: rect }),
 }));
