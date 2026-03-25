@@ -7,6 +7,7 @@ import {
   Presentation,
   X,
   GripVertical,
+  Trash2,
 } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
@@ -43,6 +44,7 @@ export function QueuePanel({ className }: QueuePanelProps) {
   const currentIndex = useQueueStore((s) => s.currentIndex);
   const setCurrentIndex = useQueueStore((s) => s.setCurrentIndex);
   const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
+  const clearQueue = useQueueStore((s) => s.clearQueue);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -94,14 +96,28 @@ export function QueuePanel({ className }: QueuePanelProps) {
         <span className="text-xs font-medium text-muted-foreground">
           {t("playingNow.queue")} ({items.length})
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={toggleCollapsed}
-        >
-          <PanelRightClose className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          {items.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={clearQueue}
+              aria-label={t("playingNow.clearQueue")}
+              title={t("playingNow.clearQueue")}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={toggleCollapsed}
+          >
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
