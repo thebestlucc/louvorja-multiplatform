@@ -357,11 +357,13 @@ export function PersistentVideoPlayer() {
       aria-hidden
       style={{
         position: "fixed",
-        top: "-9999px",
-        left: "-9999px",
+        top: 0,
+        left: 0,
         width: "640px",
         height: "360px",
         pointerEvents: "none",
+        opacity: 0,
+        zIndex: -9999,
       }}
     />
   );
