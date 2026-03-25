@@ -44,6 +44,8 @@ export function useVideoFollower(
 
       if (playerKind === "youtube") {
         const yp = p as YTPlayer;
+        // Player may not be fully initialized yet (onReady hasn't fired)
+        if (typeof yp.getPlayerState !== "function") return;
         const state = yp.getPlayerState();
         if (paused && state === 1) yp.pauseVideo();
         else if (!paused && state !== 1) yp.playVideo();
