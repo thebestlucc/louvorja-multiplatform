@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useVideoPlayerStore } from "../stores/video-player-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useSetting } from "../lib/queries";
@@ -23,6 +24,12 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   );
 
   const clearPresentation = useCallback(() => {
+    // Do not clear projection via Escape when a video is actively playing —
+    // the video has its own stop mechanism in the Playing Now controls.
+    const videoState = useVideoPlayerStore.getState();
+    const isVideoPlaying = videoState.videoId !== null || videoState.videoSrc !== null;
+    if (isVideoPlaying) return;
+
     usePresentationStore.getState().setSlides([]);
     void stopProjectionAndSongAudio();
   }, []);

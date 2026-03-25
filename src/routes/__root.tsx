@@ -287,7 +287,15 @@ function RootLayout() {
   }, []); // stable refs — no deps needed
 
   if (isBareRoute) {
-    return <Outlet />;
+    return (
+      <>
+        <Outlet />
+        {/* PersistentVideoPlayer must stay mounted across ALL routes — including bare
+            projection/return/spotlight windows — so that videos keep playing while
+            the user opens those windows or navigates away from Playing Now. */}
+        <PersistentVideoPlayer />
+      </>
+    );
   }
 
   return (

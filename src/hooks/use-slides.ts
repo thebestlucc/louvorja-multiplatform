@@ -3,6 +3,7 @@ import { usePresentationStore } from "../stores/presentation-store";
 import { setSlideContext } from "../lib/tauri";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useAudioStore } from "../stores/audio-store";
+import { useVideoPlayerStore } from "../stores/video-player-store";
 import { catcher } from "../lib/catcher";
 import { resolveSlideSeekTimestamp as resolveSlideSeekTimestampForMode } from "../lib/audio-sync";
 import { buildProjectionSlideContext } from "../lib/projection-playback";
@@ -111,6 +112,13 @@ export function useSlides() {
       await goToSlide(idx + 1, { seekAudio: true });
       return;
     }
+
+    // Do not stop projection when a video is currently playing.
+    // The video has its own slide type (online_video / video) and the hymn
+    // slide list ending should not tear down an unrelated video player.
+    const videoState = useVideoPlayerStore.getState();
+    const isVideoPlaying = videoState.videoId !== null || videoState.videoSrc !== null;
+    if (isVideoPlaying) return;
 
     await stopProjectionAndSongAudio();
   }, [goToSlide]);
