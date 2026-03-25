@@ -422,7 +422,8 @@
     "projectorInactive": "Projector inactive",
     "queueEmpty": "Queue is empty",
     "shuffleQueue": "Shuffle queue",
-    "stop": "Stop"
+    "stop": "Stop",
+    "slides": "Slides"
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",
