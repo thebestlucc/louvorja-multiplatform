@@ -164,7 +164,7 @@ export const useQueueStore = create<QueueState>((set) => ({
       items: [...state.sourceQueue],
       currentIndex: state.currentIndex >= state.manualQueue.length
         ? state.currentIndex - state.manualQueue.length
-        : 0,
+        : state.sourceQueue.length > 0 ? 0 : -1,
     })),
 
   setRepeat: (mode) => set({ repeat: mode }),
