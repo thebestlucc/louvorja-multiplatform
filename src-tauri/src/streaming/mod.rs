@@ -174,12 +174,18 @@ impl StreamingServer {
             return self.get_status();
         }
 
-        let port = port.unwrap_or(self.port);
-        self.port = port;
+        let requested_port = port.unwrap_or(self.port);
 
-        let addr = format!("0.0.0.0:{}", port);
+        let addr = format!("0.0.0.0:{}", requested_port);
         let listener =
             TcpListener::bind(&addr).map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+
+        // When port=0 the OS picks a free port — read the actual assigned port.
+        let actual_port = listener
+            .local_addr()
+            .map(|a| a.port())
+            .unwrap_or(requested_port);
+        self.port = actual_port;
         // Non-blocking so our loop can check is_running
         listener
             .set_nonblocking(true)

@@ -45,10 +45,8 @@ export function PreviewCanvas({
   // Video preview (online or offline)
   if (currentItem && mediaHasVideo(currentItem)) {
     return (
-      <div className="flex h-full items-center justify-center bg-black p-4">
-        <div className="relative h-full w-full max-h-full">
-          <VideoPreviewSlot className="h-full w-full" />
-        </div>
+      <div className="h-full w-full bg-black">
+        <VideoPreviewSlot className="h-full w-full" />
       </div>
     );
   }

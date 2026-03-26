@@ -5,6 +5,7 @@ import { useMediaPlayer } from "../../hooks/use-media-player";
 import { usePlaybackCoordinator } from "../../hooks/use-playback-coordinator";
 import { useAudioStore } from "../../stores/audio-store";
 import { useDisplayStore } from "../../stores/display-store";
+import { usePresentationStore } from "../../stores/presentation-store";
 import { SlidePanel } from "../../components/playing-now/slide-panel";
 import { QueuePanel } from "../../components/playing-now/queue-panel";
 import { PreviewCanvas } from "../../components/playing-now/preview-canvas";
@@ -45,8 +46,15 @@ function PlayingNowScreen() {
   const outputMuted = useAudioStore((s) => s.outputMuted);
   const isProjectorOpen = useDisplayStore((s) => s.projectorWindowOpen);
 
-  const currentSlide = slides[activeSlideIndex] ?? null;
-  const showSlides = currentItem ? mediaHasSlides(currentItem) : false;
+  // Fallback to presentation-store slides when media-player-store has none
+  // (e.g. when projecting a standalone presentation without going through the queue)
+  const presentationSlides = usePresentationStore((s) => s.slides);
+  const presentationActiveIndex = usePresentationStore((s) => s.activeSlideIndex);
+  const effectiveSlides = slides.length > 0 ? slides : presentationSlides;
+  const effectiveActiveIndex = slides.length > 0 ? activeSlideIndex : presentationActiveIndex;
+
+  const currentSlide = effectiveSlides[effectiveActiveIndex] ?? null;
+  const showSlides = currentItem ? mediaHasSlides(currentItem) : effectiveSlides.length > 0;
   const currentMode = currentItem?.type === "hymn" ? currentItem.mode : undefined;
 
   return (
@@ -55,8 +63,8 @@ function PlayingNowScreen() {
       <div className="flex min-h-0 flex-1">
         {/* Left: Slide Panel */}
         <SlidePanel
-          slides={slides}
-          activeSlideIndex={activeSlideIndex}
+          slides={effectiveSlides}
+          activeSlideIndex={effectiveActiveIndex}
           onSlideClick={actions.goToSlide}
           visible={showSlides}
         />
@@ -76,8 +84,8 @@ function PlayingNowScreen() {
             status={status}
             currentTime={currentTime}
             duration={duration}
-            activeSlideIndex={activeSlideIndex}
-            totalSlides={slides.length}
+            activeSlideIndex={effectiveActiveIndex}
+            totalSlides={effectiveSlides.length}
             volume={volume}
             muted={outputMuted}
             onPlay={actions.play}

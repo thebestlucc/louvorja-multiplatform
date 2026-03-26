@@ -22,7 +22,13 @@
           "$APPLOCALDATA/media/**",
           "$APPDATA/images/**",
           "$APPDATA/covers/**",
-          "$APPDATA/musics/**"
+          "$APPDATA/musics/**",
+          "$HOME/**",
+          "$DESKTOP/**",
+          "$DOCUMENT/**",
+          "$DOWNLOAD/**",
+          "$VIDEO/**",
+          "$AUDIO/**"
         ]
       }
     }

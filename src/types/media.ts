@@ -82,7 +82,7 @@ export function mediaHasSlides(item: MediaItem): boolean {
 
 /** Helper: does this media type have a playback timeline? */
 export function mediaHasTimeline(item: MediaItem): boolean {
-  return (item.type === "hymn" && item.mode !== "silent")
+  return item.type === "hymn"
     || item.type === "online_video"
     || item.type === "offline_video";
 }
