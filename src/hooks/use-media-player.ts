@@ -201,29 +201,32 @@ export function useMediaPlayer() {
     store.getState().setMode(mode);
 
     if (mode === "silent") {
-      // Just stop audio; keep queue intact
-      await useAudioStore.getState().stop();
+      // Mute audio but keep it playing so timeline stays in sync
+      await useAudioStore.getState().setOutputMuted(true);
       useAudioStore.getState().setPlaybackMode("silent");
       return;
     }
 
     const prevMode = state.currentItem.mode;
     const variantPaths = resolvePlaybackVariantPaths(hymn.audioPath, hymn.playbackPath);
+    const audioState = useAudioStore.getState();
 
-    // Smooth switch between sung/karaoke if variants are available and we're not coming from silent
-    if (
-      prevMode !== "silent" &&
-      (mode === "sung" || mode === "karaoke") &&
-      variantPaths
-    ) {
+    // Unmute when leaving silent mode
+    if (prevMode === "silent" && audioState.outputMuted) {
+      await audioState.setOutputMuted(false);
+    }
+
+    // Smooth switch between sung/karaoke if variants are available
+    if ((mode === "sung" || mode === "karaoke") && variantPaths) {
       const activeFilePath = mode === "karaoke"
-        ? (variantPaths.karaokePath)
+        ? variantPaths.karaokePath
         : variantPaths.sungPath;
       await useAudioStore.getState().switchVariant(mode === "karaoke" ? "karaoke" : "sung", activeFilePath);
+      useAudioStore.getState().setPlaybackMode(mode === "karaoke" ? "karaoke" : "sung");
       return;
     }
 
-    // Fresh start (switching FROM silent, or no variant paths available)
+    // Fallback: no variant paths available, restart with single track
     await useAudioStore.getState().stop();
 
     const audioPath = mode === "karaoke"
@@ -233,17 +236,7 @@ export function useMediaPlayer() {
     if (audioPath) {
       const playbackMode = mode === "karaoke" ? "karaoke" : "sung";
       useAudioStore.getState().setPlaybackMode(playbackMode);
-
-      if (variantPaths) {
-        await useAudioStore.getState().playVariants(
-          variantPaths.sungPath,
-          variantPaths.karaokePath,
-          playbackMode,
-          state.currentTime,
-        );
-      } else {
-        await useAudioStore.getState().play(audioPath, state.currentTime);
-      }
+      await useAudioStore.getState().play(audioPath, state.currentTime);
     }
   }, []);
 

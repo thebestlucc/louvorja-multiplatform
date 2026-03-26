@@ -505,6 +505,7 @@ impl AudioPlayer {
         let sink = Sink::try_new(self.stream_handle.as_ref().unwrap())
             .map_err(|e| AppError::Internal(format!("Failed to create audio sink: {}", e)))?;
 
+        sink.set_volume(0.0);
         sink.pause();
         sink.append(source);
 
