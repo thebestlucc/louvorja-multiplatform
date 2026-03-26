@@ -58,115 +58,112 @@ export function QueuePanel({ className }: QueuePanelProps) {
     setPreference(PREF_KEY, next);
   };
 
-  if (collapsed) {
-    return (
-      <div
-        className={cn(
-          "flex h-full w-10 flex-col items-center border-l border-border bg-muted/30 pt-2",
-          className
-        )}
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={toggleCollapsed}
-        >
-          <PanelRight className="h-4 w-4" />
-        </Button>
-        <div className="mt-2 -rotate-90 whitespace-nowrap text-xs text-muted-foreground">
-          {t("playingNow.queue")} ({items.length})
-        </div>
-      </div>
-    );
-  }
-
   const nowPlaying = currentIndex >= 0 ? items[currentIndex] : null;
   const upNext = items.filter((_, i) => i > currentIndex);
 
   return (
     <div
       className={cn(
-        "flex h-full w-[280px] min-w-[220px] max-w-[400px] flex-col border-l border-border bg-muted/30",
-        className
+        "relative flex h-full flex-col border-l border-border bg-muted/30 overflow-hidden transition-[width] duration-200 ease-in-out",
+        className,
       )}
+      style={{ width: collapsed ? 40 : 280 }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-xs font-medium text-muted-foreground">
+      {/* Collapsed state */}
+      <div
+        className="absolute inset-0 flex flex-col items-center pt-2 transition-opacity duration-200"
+        style={{ opacity: collapsed ? 1 : 0, pointerEvents: collapsed ? "auto" : "none" }}
+      >
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleCollapsed}>
+          <PanelRight className="h-4 w-4" />
+        </Button>
+        <span className="writing-vertical-lr mt-2 text-xs text-muted-foreground">
           {t("playingNow.queue")} ({items.length})
         </span>
-        <div className="flex items-center gap-0.5">
-          {items.length > 0 && (
+      </div>
+
+      {/* Expanded state */}
+      <div
+        className="flex h-full w-[280px] flex-col transition-opacity duration-200"
+        style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? "none" : "auto" }}
+      >
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+          <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            {t("playingNow.queue")} ({items.length})
+          </span>
+          <div className="flex items-center gap-0.5">
+            {items.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={clearQueue}
+                aria-label={t("playingNow.clearQueue")}
+                title={t("playingNow.clearQueue")}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={clearQueue}
-              aria-label={t("playingNow.clearQueue")}
-              title={t("playingNow.clearQueue")}
+              onClick={toggleCollapsed}
             >
-              <Trash2 className="h-3 w-3" />
+              <PanelRightClose className="h-3.5 w-3.5" />
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={toggleCollapsed}
-          >
-            <PanelRightClose className="h-3.5 w-3.5" />
-          </Button>
+          </div>
         </div>
+
+        <ScrollArea className="flex-1">
+          <div className="flex flex-col gap-1 p-2">
+            {/* Now Playing */}
+            {nowPlaying && (
+              <>
+                <div className="px-1 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("playingNow.nowPlaying")}
+                </div>
+                <QueueItemRow
+                  item={nowPlaying}
+                  isActive
+                  onRemove={undefined}
+                  onClick={undefined}
+                />
+              </>
+            )}
+
+            {/* Up Next */}
+            {upNext.length > 0 && (
+              <>
+                <div className="mt-2 px-1 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("playingNow.nextUp")} ({upNext.length})
+                </div>
+                {upNext.map((item, i) => {
+                  const actualIndex = currentIndex + 1 + i;
+                  return (
+                    <QueueItemRow
+                      key={item.id}
+                      item={item}
+                      isActive={false}
+                      onClick={() => setCurrentIndex(actualIndex)}
+                      onRemove={() => removeFromQueue(actualIndex)}
+                    />
+                  );
+                })}
+              </>
+            )}
+
+            {/* Empty state */}
+            {items.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
+                <Music className="mb-2 h-8 w-8 opacity-40" />
+                {t("playingNow.emptyQueue")}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
       </div>
-
-      <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-1 p-2">
-          {/* Now Playing */}
-          {nowPlaying && (
-            <>
-              <div className="px-1 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {t("playingNow.nowPlaying")}
-              </div>
-              <QueueItemRow
-                item={nowPlaying}
-                isActive
-                onRemove={undefined}
-                onClick={undefined}
-              />
-            </>
-          )}
-
-          {/* Up Next */}
-          {upNext.length > 0 && (
-            <>
-              <div className="mt-2 px-1 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {t("playingNow.nextUp")} ({upNext.length})
-              </div>
-              {upNext.map((item, i) => {
-                const actualIndex = currentIndex + 1 + i;
-                return (
-                  <QueueItemRow
-                    key={item.id}
-                    item={item}
-                    isActive={false}
-                    onClick={() => setCurrentIndex(actualIndex)}
-                    onRemove={() => removeFromQueue(actualIndex)}
-                  />
-                );
-              })}
-            </>
-          )}
-
-          {/* Empty state */}
-          {items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
-              <Music className="mb-2 h-8 w-8 opacity-40" />
-              {t("playingNow.emptyQueue")}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
     </div>
   );
 }

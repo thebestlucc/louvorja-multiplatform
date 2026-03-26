@@ -55,7 +55,7 @@ export function PreviewCanvas({
   if (currentSlide) {
     return (
       <div className="flex h-full items-center justify-center bg-black/90 p-4">
-        <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-lg shadow-lg">
+        <div className="relative aspect-video h-full max-w-full overflow-hidden rounded-lg shadow-lg">
           <SlideRenderer
             slide={currentSlide}
             renderMode="playing-now-preview"
