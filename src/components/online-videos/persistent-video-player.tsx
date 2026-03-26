@@ -161,7 +161,8 @@ export function PersistentVideoPlayer() {
       }
       if (videoRef.current) {
         videoRef.current.pause();
-        videoRef.current.src = "";
+        videoRef.current.removeAttribute("src");
+        videoRef.current.load();
         videoRef.current.remove();
         videoRef.current = null;
       }
@@ -300,7 +301,8 @@ export function PersistentVideoPlayer() {
     pollTimerRef.current = null;
     if (videoRef.current) {
       videoRef.current.pause();
-      videoRef.current.src = "";
+      videoRef.current.removeAttribute("src");
+      videoRef.current.load();
       videoRef.current.remove();
       videoRef.current = null;
     }
@@ -337,6 +339,8 @@ export function PersistentVideoPlayer() {
     };
 
     const onError = () => {
+      // Ignore errors from intentional cleanup (removeAttribute("src") + load())
+      if (!video.src || video.src === window.location.href) return;
       const e = video.error;
       console.error("[PVP] video error:", e?.code, e?.message, "src:", video.src.slice(0, 120));
     };
@@ -364,7 +368,8 @@ export function PersistentVideoPlayer() {
       video.removeEventListener("pause", onPause);
       video.removeEventListener("error", onError);
       video.pause();
-      video.src = "";
+      video.removeAttribute("src");
+      video.load();
       video.remove();
       videoRef.current = null;
     };
