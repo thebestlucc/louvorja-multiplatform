@@ -80,7 +80,10 @@ export function useMediaPlayer() {
     // Slide cleared
     listen("slide-cleared", () => {
       useMediaPlayerStore.getState().stop();
-      useQueueStore.getState().clearQueue();
+      const q = useQueueStore.getState();
+      if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
+        q.clearQueue();
+      }
     }).then((u) => {
       if (!mounted) u();
       else unlisteners.push(u);
@@ -120,7 +123,10 @@ export function useMediaPlayer() {
     void useAudioStore.getState().stop();
     void emit("video-control", { action: "stop" });
     store.getState().stop();
-    useQueueStore.getState().clearQueue();
+    const q = useQueueStore.getState();
+    if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
+      q.clearQueue();
+    }
   }, []);
 
   const seek = useCallback((timeMs: number) => {
