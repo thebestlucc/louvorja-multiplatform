@@ -106,13 +106,19 @@ function BibleIndex() {
 
   const handleSelectVerse = useCallback(
     (verse: number, shiftKey?: boolean) => {
+      let newVerses: number[];
       if (shiftKey && bible.lastSelectedVerse !== null) {
+        const min = Math.min(bible.lastSelectedVerse, verse);
+        const max = Math.max(bible.lastSelectedVerse, verse);
+        newVerses = [];
+        for (let i = min; i <= max; i++) newVerses.push(i);
         bible.selectVerseRange(bible.lastSelectedVerse, verse);
       } else {
+        newVerses = [verse];
         bible.selectSingleVerse(verse);
       }
       if (bible.isProjecting) {
-        void bible.updateBibleProjection();
+        void bible.updateBibleProjection(newVerses);
       }
     },
     [bible],
@@ -122,7 +128,7 @@ function BibleIndex() {
     (verseNum: number) => {
       bible.selectSingleVerse(verseNum);
       if (bible.isProjecting) {
-        void bible.updateBibleProjection();
+        void bible.updateBibleProjection([verseNum]);
       } else {
         void bible.startBibleProjection();
       }
@@ -352,14 +358,21 @@ function BibleIndex() {
         shiftAnchorRef.current = null;
         const clamped = Math.max(1, Math.min(verse, verseCount));
         bible.selectSingleVerse(clamped);
-        if (isProjecting) void bible.updateBibleProjection();
+        if (isProjecting) void bible.updateBibleProjection([clamped]);
       };
 
       const moveToVerseShift = (targetVerse: number) => {
         const clamped = Math.max(1, Math.min(targetVerse, verseCount));
         if (shiftAnchorRef.current === null) shiftAnchorRef.current = activeVerse;
-        bible.selectVerseRange(shiftAnchorRef.current, clamped);
-        if (isProjecting) void bible.updateBibleProjection();
+        const anchor = shiftAnchorRef.current;
+        bible.selectVerseRange(anchor, clamped);
+        if (isProjecting) {
+          const min = Math.min(anchor, clamped);
+          const max = Math.max(anchor, clamped);
+          const range: number[] = [];
+          for (let i = min; i <= max; i++) range.push(i);
+          void bible.updateBibleProjection(range);
+        }
       };
 
       switch (e.key) {
@@ -422,7 +435,7 @@ function BibleIndex() {
         case "Spacebar":
           e.preventDefault();
           bible.selectSingleVerse(activeVerse);
-          if (isProjecting) void bible.updateBibleProjection();
+          if (isProjecting) void bible.updateBibleProjection([activeVerse]);
           else void bible.startBibleProjection();
           break;
         case "Escape":

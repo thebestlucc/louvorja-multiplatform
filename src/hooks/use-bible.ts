@@ -104,10 +104,11 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     setLastSelectedVerse(end);
   };
 
-  const projectSelectedVersesRange = useCallback(async () => {
-    if (selectedVerses.length === 0) return;
+  const projectSelectedVersesRange = useCallback(async (overrideVerses?: number[]) => {
+    const effectiveVerses = overrideVerses ?? selectedVerses;
+    if (effectiveVerses.length === 0) return;
 
-    const sorted = [...selectedVerses].sort((a, b) => a - b);
+    const sorted = [...effectiveVerses].sort((a, b) => a - b);
     const range = sorted.length === 1 ? String(sorted[0]) : `${sorted[0]}-${sorted[sorted.length - 1]}`;
     const title = `${currentBook} ${currentChapter}:${range}`;
     const verseSet = new Set(sorted);
@@ -159,9 +160,9 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     await projectSelectedVersesRange();
   }, [projectSelectedVersesRange, setCurrentProjectionType]);
 
-  const updateBibleProjection = useCallback(async () => {
+  const updateBibleProjection = useCallback(async (overrideVerses?: number[]) => {
     if (isProjecting) {
-      await projectSelectedVersesRange();
+      await projectSelectedVersesRange(overrideVerses);
     }
   }, [isProjecting, projectSelectedVersesRange]);
 

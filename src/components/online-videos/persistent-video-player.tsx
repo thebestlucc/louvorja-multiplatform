@@ -1,6 +1,7 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
+import { appDataDir, join } from "@tauri-apps/api/path";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
@@ -10,6 +11,7 @@ import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/me
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { catcher } from "../../lib/catcher";
 import { cn } from "../../lib/utils";
 
 // ─── VideoPreviewSlot ─────────────────────────────────────────────────────────
@@ -77,14 +79,28 @@ export function PersistentVideoPlayer() {
 
   const previewRect = useVideoPlayerStore((s) => s.previewRect);
 
-  // Resolve local video URL via the asset protocol (synchronous, no streaming server needed).
-  const localVideoSrc = (() => {
-    if (activeSlide?.videoSource !== "local" || !activeSlide.videoUrl) return null;
-    const path = activeSlide.videoUrl.trim();
-    if (!path) return null;
-    if (/^(https?:|blob:|data:)/.test(path)) return path;
-    return convertFileSrc(path);
-  })();
+  // Resolve local video URL via the asset protocol (async — relative paths need appDataDir).
+  const [localVideoSrc, setLocalVideoSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const rawUrl = activeSlide?.videoSource === "local" ? (activeSlide.videoUrl ?? null) : null;
+    if (!rawUrl) { setLocalVideoSrc(null); return; }
+    const path = rawUrl.trim();
+    if (!path) { setLocalVideoSrc(null); return; }
+    if (/^(https?:|blob:|data:)/.test(path)) { setLocalVideoSrc(path); return; }
+
+    if (path.startsWith("media/")) {
+      void (async () => {
+        const [appDir, appDirErr] = await catcher(appDataDir());
+        if (appDirErr || !appDir) { setLocalVideoSrc(null); return; }
+        const [abs, absErr] = await catcher(join(appDir, path));
+        if (absErr || !abs) { setLocalVideoSrc(null); return; }
+        setLocalVideoSrc(convertFileSrc(abs));
+      })();
+    } else {
+      setLocalVideoSrc(convertFileSrc(path));
+    }
+  }, [activeSlide?.videoSource, activeSlide?.videoUrl]);
 
   // Helper: broadcast current player state to all windows + update Zustand store
   const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }) => {

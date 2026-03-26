@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
-import { useMediaSource } from "../../hooks/use-media-source";
+import { appDataDir, join } from "@tauri-apps/api/path";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { catcher } from "../../lib/catcher";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
@@ -253,9 +255,28 @@ interface OnlineVideoSlideProps {
 
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
-  const localVideoSrc = useMediaSource(
-    slide.videoSource === "local" ? (slide.videoUrl ?? null) : null
-  );
+
+  const [localVideoSrc, setLocalVideoSrc] = useState<string | null>(null);
+  const rawVideoUrl = slide.videoSource === "local" ? (slide.videoUrl ?? null) : null;
+
+  useEffect(() => {
+    if (!rawVideoUrl) { setLocalVideoSrc(null); return; }
+    const path = rawVideoUrl.trim();
+    if (!path) { setLocalVideoSrc(null); return; }
+    if (/^(https?:|blob:|data:)/.test(path)) { setLocalVideoSrc(path); return; }
+
+    if (path.startsWith("media/")) {
+      void (async () => {
+        const [appDir, appDirErr] = await catcher(appDataDir());
+        if (appDirErr || !appDir) { setLocalVideoSrc(null); return; }
+        const [abs, absErr] = await catcher(join(appDir, path));
+        if (absErr || !abs) { setLocalVideoSrc(null); return; }
+        setLocalVideoSrc(convertFileSrc(abs));
+      })();
+    } else {
+      setLocalVideoSrc(convertFileSrc(path));
+    }
+  }, [rawVideoUrl]);
 
   if (renderMode === "projector") {
     const isLocalFile = slide.videoSource === "local" && !!slide.videoUrl;
