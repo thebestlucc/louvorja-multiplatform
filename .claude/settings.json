@@ -1,0 +1,42 @@
+{
+  "model": "sonnet",
+  "env": {
+    "MAX_THINKING_TOKENS": "10000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "65"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(pnpm vite:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)",
+      "Bash(sqlite3:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(git add:*)",
+      "Bash(git:*)",
+      "Bash(python3:*)",
+      "Bash(find /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform -maxdepth 1 -name *Pascal* -o -name *.pas)",
+      "Bash(find /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform -name *legacy* -type f)",
+      "WebSearch",
+      "Bash(find /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src -path *components* -name *bible* -o -path *components* -name *verse*)",
+      "Bash(find /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/.worktrees/bible-multi-version/src-tauri -name *.sqlite)",
+      "Bash(head -5 find /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri -name *.sqlite)",
+      "Bash(ln -s /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/resources /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/.worktrees/bible-multi-version/src-tauri/resources ls /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/.worktrees/bible-multi-version/src-tauri/resources/bible/)",
+      "Bash(cargo run:*)",
+      "Bash(/Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/docs/superpowers/plans/2026-03-19-manifest-cdn-sync.md:*)",
+      "Bash(agent-browser *)",
+      "Bash(find /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src/components/content-sync -type f -name *.tsx)",
+      "Bash(CDN_MANIFEST_URL=https://example.com/manifest.json cargo build --manifest-path /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/Cargo.toml)",
+      "Bash(pnpm lint:i18n)",
+      "Bash(npx:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(xargs kill:*)",
+      "Bash(head -10 grep -r \"plan_pack_sync\\\\|pack_sync\" /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/gen/)",
+      "Bash(head -10 grep -r \"allow-content-sync\\\\|allow-ftp\\\\|allow-pack\" /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/ --include=\"*.toml\")",
+      "Bash(/dev/null grep:*)",
+      "Bash(ls -la /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/src/commands/*.rs)"
+    ]
+  }
+}
