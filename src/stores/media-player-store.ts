@@ -70,7 +70,7 @@ export const useMediaPlayerStore = create<MediaPlayerState>((set) => ({
       syncPoints: "syncPoints" in item ? item.syncPoints : [],
       activeSlideIndex: 0,
       timelineSource:
-        item.type === "hymn" && item.mode !== "silent"
+        item.type === "hymn"
           ? "audio"
           : item.type === "online_video" || item.type === "offline_video"
             ? "video"
@@ -108,7 +108,7 @@ export const useMediaPlayerStore = create<MediaPlayerState>((set) => ({
       if (state.currentItem?.type !== "hymn") return state;
       return {
         currentItem: { ...state.currentItem, mode },
-        timelineSource: mode === "silent" ? "none" : "audio",
+        timelineSource: "audio",
       };
     }),
 
