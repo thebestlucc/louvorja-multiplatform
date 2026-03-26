@@ -10,6 +10,7 @@ import {
 import { useDisplayStore } from "../stores/display-store";
 import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 import type { SlideContent, SlideContext } from "./bindings";
 import { resolveSlideTimingWindow } from "./audio-sync";
 import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
@@ -73,16 +74,25 @@ export async function ensureProjectionScreensStarted(): Promise<void> {
 }
 
 export async function projectSlideIndex(index: number): Promise<void> {
+  // Try presentation-store first, fall back to media-player-store (Playing Now queue)
   const presentationState = usePresentationStore.getState();
-  if (index < 0 || index >= presentationState.slides.length) {
+  const mediaPlayerState = useMediaPlayerStore.getState();
+  const slides = presentationState.slides.length > 0
+    ? presentationState.slides
+    : mediaPlayerState.slides;
+
+  if (index < 0 || index >= slides.length) {
     return;
   }
 
-  presentationState.setActiveSlideIndex(index);
-  const currentSlide = presentationState.slides[index];
-  const nextSlide = index + 1 < presentationState.slides.length
-    ? presentationState.slides[index + 1]
-    : null;
+  if (presentationState.slides.length > 0) {
+    presentationState.setActiveSlideIndex(index);
+  } else {
+    mediaPlayerState.setActiveSlideIndex(index);
+  }
+
+  const currentSlide = slides[index];
+  const nextSlide = index + 1 < slides.length ? slides[index + 1] : null;
 
   // Determine projection type based on context
   const currentPresentationId = presentationState.currentPresentationId;
@@ -93,7 +103,7 @@ export async function projectSlideIndex(index: number): Promise<void> {
     buildProjectionSlideContext(
       nextSlide,
       index,
-      presentationState.slides.length,
+      slides.length,
       getSlideTitle(currentSlide),
     ),
   );
@@ -101,13 +111,18 @@ export async function projectSlideIndex(index: number): Promise<void> {
 
 export async function projectCurrentSlideFromStore(): Promise<void> {
   const presentationState = usePresentationStore.getState();
-  if (presentationState.slides.length === 0) {
+  const mediaPlayerState = useMediaPlayerStore.getState();
+  const slides = presentationState.slides.length > 0
+    ? presentationState.slides
+    : mediaPlayerState.slides;
+  const activeIndex = presentationState.slides.length > 0
+    ? presentationState.activeSlideIndex
+    : mediaPlayerState.activeSlideIndex;
+
+  if (slides.length === 0) {
     return;
   }
-  const index = Math.max(
-    0,
-    Math.min(presentationState.activeSlideIndex, presentationState.slides.length - 1),
-  );
+  const index = Math.max(0, Math.min(activeIndex, slides.length - 1));
   await projectSlideIndex(index);
 }
 
