@@ -259,3 +259,8 @@ body {
     display: none !important;
   }
 }
+
+/* ========== Custom Utilities ========== */
+@utility writing-vertical-lr {
+  writing-mode: vertical-lr;
+}

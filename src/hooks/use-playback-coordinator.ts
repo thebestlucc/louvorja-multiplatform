@@ -22,6 +22,7 @@ export function usePlaybackCoordinator() {
 
   const setOnFinished = useAudioStore((s) => s.setOnFinished);
   const setPlaybackMode = useAudioStore((s) => s.setPlaybackMode);
+  const setSyncPoints = useAudioStore((s) => s.setSyncPoints);
   const playAudio = useAudioStore((s) => s.play);
   const playAudioVariants = useAudioStore((s) => s.playVariants);
   const stopAudio = useAudioStore((s) => s.stop);
@@ -88,7 +89,10 @@ export function usePlaybackCoordinator() {
         useMediaPlayerStore.getState().load(mediaItem);
       }
 
-      // 5. Start audio playback (rodio lifecycle stays here)
+      // 5. Push sync points to audio store so the sync loop can auto-advance slides
+      setSyncPoints(effectiveSyncPoints);
+
+      // 6. Start audio playback (rodio lifecycle stays here)
       if (audioPath) {
         const activeMode = item.type === "playback" ? "karaoke" : "sung";
         setPlaybackMode(activeMode);
@@ -107,11 +111,11 @@ export function usePlaybackCoordinator() {
         await stopAudio();
       }
 
-      // 6. Project first slide
+      // 7. Project first slide
       useDisplayStore.getState().setCurrentProjectionType("hymn");
       await projectSlideIndex(0);
 
-    }, { notify: true });  }, [items, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
+    }, { notify: true });  }, [items, setSyncPoints, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
 
   // Effect: React to queue index changes
   useEffect(() => {
