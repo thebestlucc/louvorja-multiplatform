@@ -3,6 +3,7 @@ use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::migration::MigrationRuntimeState;
 use crate::streaming::StreamingServer;
+use crate::video_server::VideoServer;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use serde::Serialize;
@@ -247,6 +248,18 @@ impl StreamingState {
     pub fn new(port: u16) -> Self {
         Self {
             server: Mutex::new(StreamingServer::new(port)),
+        }
+    }
+}
+
+pub struct VideoServerState {
+    pub server: Mutex<VideoServer>,
+}
+
+impl Default for VideoServerState {
+    fn default() -> Self {
+        Self {
+            server: Mutex::new(VideoServer::new()),
         }
     }
 }

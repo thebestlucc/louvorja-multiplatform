@@ -120,6 +120,12 @@ export function ProjectorView() {
     };
   }, []);
 
+  // Disable pointer events on body when projecting online video (hides YouTube iframe controls)
+  useEffect(() => {
+    document.body.style.pointerEvents = slide?.slideType === "online_video" ? "none" : "";
+    return () => { document.body.style.pointerEvents = ""; };
+  }, [slide?.slideType]);
+
   // Keyboard handling: ESC clears content to logo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

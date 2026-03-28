@@ -228,6 +228,67 @@ pub fn search_hymns_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
 
+    // If query is a pure number, search by track number directly (FTS5 doesn't index integers).
+    if let Ok(num) = trimmed.parse::<i64>() {
+        let lyrics_col = lyrics_subquery(content_db, "?2");
+        let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
+        let (cat_join, cat_where) = hymnal_category_filter(content_db);
+        let sql = format!(
+            "SELECT
+                m.id_music AS id, am.track AS number, m.name AS title,
+                NULL AS author, a.name AS album,
+                {lyrics_col} AS lyrics,
+                NULL AS chords,
+                fa.dir || '/' || fa.name AS audio_path,
+                fp.dir || '/' || fp.name AS playback_path,
+                'hymnal' AS category, NULL AS notes,
+                fi.dir || '/' || fi.name AS cover_path,
+                {lyrics_sync_col} AS lyrics_sync, m.id_music AS api_music_id,
+                m.created_at, m.updated_at
+             FROM musics m
+             LEFT JOIN albums_musics am ON am.id_music = m.id_music
+             LEFT JOIN albums        a  ON a.id_album  = am.id_album
+             {cat_join}
+             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+             WHERE am.track = ?1
+               AND m.id_language = ?2
+               {cat_where}
+             ORDER BY a.name, am.track"
+        );
+        let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
+        let hymns = stmt
+            .query_map(params![num, lang_short], |row| {
+                Ok(crate::db::models::Hymn {
+                    id: row.get("id")?,
+                    number: row.get("number")?,
+                    title: row.get("title")?,
+                    author: row.get("author")?,
+                    album: row.get("album")?,
+                    lyrics: row.get("lyrics")?,
+                    chords: row.get("chords")?,
+                    audio_path: row.get("audio_path")?,
+                    playback_path: row.get("playback_path")?,
+                    category: row.get("category")?,
+                    notes: row.get("notes")?,
+                    cover_path: row.get("cover_path")?,
+                    lyrics_sync: row.get("lyrics_sync")?,
+                    api_music_id: row.get("api_music_id")?,
+                    created_at: row
+                        .get::<_, Option<String>>("created_at")?
+                        .unwrap_or_default(),
+                    updated_at: row
+                        .get::<_, Option<String>>("updated_at")?
+                        .unwrap_or_default(),
+                })
+            })
+            .map_err(AppError::Database)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::Database)?;
+        return Ok(hymns);
+    }
+
     // Sanitize query: keep alphanumeric + whitespace, then build FTS5 prefix query.
     let sanitized: String = trimmed
         .chars()

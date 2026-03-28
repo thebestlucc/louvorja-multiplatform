@@ -96,6 +96,11 @@ pub struct StreamingServer {
     pub alert_broadcaster: Arc<SseBroadcaster>,
     pub utility_broadcaster: Arc<SseBroadcaster>,
     pub ui_broadcaster: Arc<SseBroadcaster>,
+    /// Video state/control broadcaster for streaming clients.
+    /// Uses `broadcast` (sticky replay) for state updates so new connections
+    /// immediately receive the current video position, and `broadcast_transient`
+    /// for seek/play/pause commands so they are not replayed on reconnect.
+    pub video_broadcaster: Arc<SseBroadcaster>,
     latest_audio_status: Arc<Mutex<Option<String>>>,
     ui_language: Arc<Mutex<String>>,
     media_root: Arc<Mutex<Option<PathBuf>>>,
@@ -134,6 +139,7 @@ impl StreamingServer {
             alert_broadcaster: Arc::new(SseBroadcaster::new()),
             utility_broadcaster: Arc::new(SseBroadcaster::new()),
             ui_broadcaster: Arc::new(SseBroadcaster::new()),
+            video_broadcaster: Arc::new(SseBroadcaster::new()),
             latest_audio_status: Arc::new(Mutex::new(None)),
             ui_language: Arc::new(Mutex::new("pt".to_string())),
             media_root: Arc::new(Mutex::new(None)),
@@ -202,6 +208,7 @@ impl StreamingServer {
         let alert_bc = Arc::clone(&self.alert_broadcaster);
         let utility_bc = Arc::clone(&self.utility_broadcaster);
         let ui_bc = Arc::clone(&self.ui_broadcaster);
+        let video_bc = Arc::clone(&self.video_broadcaster);
         let latest_audio_status = Arc::clone(&self.latest_audio_status);
         let ui_language = Arc::clone(&self.ui_language);
         let media_root = Arc::clone(&self.media_root);
@@ -220,6 +227,7 @@ impl StreamingServer {
                         let alert = Arc::clone(&alert_bc);
                         let utility = Arc::clone(&utility_bc);
                         let ui = Arc::clone(&ui_bc);
+                        let video = Arc::clone(&video_bc);
                         let running = Arc::clone(&is_running);
                         let language = Arc::clone(&ui_language);
                         let media_root_for_connection = Arc::clone(&media_root);
@@ -234,6 +242,7 @@ impl StreamingServer {
                                 alert_bc: &alert,
                                 utility_bc: &utility,
                                 ui_bc: &ui,
+                                video_bc: &video,
                                 latest_audio_status: &latest_audio_status_for_connection,
                                 ui_language: &language,
                                 media_root: &media_root_for_connection,
@@ -264,6 +273,7 @@ impl StreamingServer {
         self.alert_broadcaster.disconnect_all();
         self.utility_broadcaster.disconnect_all();
         self.ui_broadcaster.disconnect_all();
+        self.video_broadcaster.disconnect_all();
         self.listener = None;
 
         if let Some(handle) = self.thread_handle.take() {
@@ -285,7 +295,8 @@ impl StreamingServer {
                 + self.return_broadcaster.connection_count()
                 + self.alert_broadcaster.connection_count()
                 + self.utility_broadcaster.connection_count()
-                + self.ui_broadcaster.connection_count()) as u32
+                + self.ui_broadcaster.connection_count()
+                + self.video_broadcaster.connection_count()) as u32
         } else {
             0
         };
@@ -347,6 +358,23 @@ impl StreamingServer {
             *latest_audio_status = Some(data.to_string());
         }
     }
+
+    /// Broadcast a sticky video state snapshot (replayed to new connections).
+    /// Used for play/pause/currentTime/duration updates so late-joining clients
+    /// immediately sync to the current position.
+    pub fn broadcast_video_state(&self, data: &str) {
+        if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
+            self.video_broadcaster.broadcast(data);
+        }
+    }
+
+    /// Broadcast a transient video command (NOT replayed to new connections).
+    /// Used for seek commands where replaying old positions would be wrong.
+    pub fn broadcast_video_cmd(&self, data: &str) {
+        if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
+            self.video_broadcaster.broadcast_transient(data);
+        }
+    }
 }
 
 // --- Connection handler ---
@@ -358,6 +386,7 @@ struct ConnectionContext<'a> {
     alert_bc: &'a Arc<SseBroadcaster>,
     utility_bc: &'a Arc<SseBroadcaster>,
     ui_bc: &'a Arc<SseBroadcaster>,
+    video_bc: &'a Arc<SseBroadcaster>,
     latest_audio_status: &'a Arc<Mutex<Option<String>>>,
     ui_language: &'a Arc<Mutex<String>>,
     media_root: &'a Arc<Mutex<Option<PathBuf>>>,
@@ -442,6 +471,14 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         "/sse/alert" => serve_sse(stream, context.alert_bc, context.is_running),
         "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running),
         "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running),
+        "/sse/video" => serve_sse(stream, context.video_bc, context.is_running),
+        "/state/video" => {
+            let body = context.video_bc.latest_payload().unwrap_or_else(|| {
+                r#"{"type":"state","paused":true,"currentTime":0,"duration":0,"volume":1,"videoId":null,"videoSource":null}"#
+                    .to_string()
+            });
+            serve_json(&mut stream, &body);
+        }
         _ if request.path.starts_with("/media/") => {
             serve_media(stream, &request.path, &request.headers, context.media_root)
         }
@@ -754,7 +791,7 @@ fn stream_bytes(reader: &mut std::fs::File, writer: &mut TcpStream, limit: u64) 
     }
 }
 
-fn media_content_type(path: &Path) -> &'static str {
+pub(crate) fn media_content_type(path: &Path) -> &'static str {
     match path
         .extension()
         .and_then(|value| value.to_str())

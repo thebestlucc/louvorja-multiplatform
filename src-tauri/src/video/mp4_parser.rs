@@ -69,11 +69,49 @@ fn parse_mp4_boxes<R: Read + Seek>(
         }
 
         let payload_start = box_start + header_size;
-        let payload_end = box_start + box_size;
-        if payload_end > end {
-            return Err(AppError::Internal(
-                "MP4 box exceeds container bounds".into(),
-            ));
+        let payload_end = (box_start + box_size).min(end);
+        if box_start + box_size > end {
+            // Box claims to extend beyond container — tolerate this (common with
+            // some encoders/remuxers that leave the last box slightly oversized).
+            // Clamp to container end and stop after processing this box.
+            match &box_type {
+                b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" | b"edts" | b"moof"
+                | b"traf" | b"mvex" => {
+                    reader.seek(SeekFrom::Start(payload_start))?;
+                    parse_mp4_boxes(reader, payload_end, state)?;
+                }
+                b"mvhd" => {
+                    reader.seek(SeekFrom::Start(payload_start))?;
+                    if let Ok(duration_ms) = parse_mvhd(reader) {
+                        if duration_ms > 0 {
+                            state.duration_ms = Some(duration_ms);
+                        }
+                    }
+                }
+                b"mdhd" => {
+                    reader.seek(SeekFrom::Start(payload_start))?;
+                    if let Ok(duration_ms) = parse_mdhd(reader) {
+                        if duration_ms > 0 {
+                            state.duration_ms = Some(duration_ms);
+                        }
+                    }
+                }
+                b"tkhd" => {
+                    reader.seek(SeekFrom::Start(payload_start))?;
+                    if let Ok((width, height)) = parse_tkhd(reader) {
+                        if width > 0 && height > 0 {
+                            let current_area =
+                                state.width.unwrap_or(0) * state.height.unwrap_or(0);
+                            if width * height >= current_area {
+                                state.width = Some(width);
+                                state.height = Some(height);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            break;
         }
 
         match &box_type {

@@ -13,10 +13,11 @@ mod state;
 mod streaming;
 mod utils;
 mod video;
+mod video_server;
 mod youtube;
 mod ytdlp;
 
-use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState};
+use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState, VideoServerState};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
 use tauri::{Emitter, Manager};
@@ -183,6 +184,7 @@ pub fn run() {
             commands::streaming::stop_streaming_server,
             commands::streaming::get_streaming_status,
             commands::streaming::set_streaming_broadcast,
+            commands::streaming::broadcast_video_state_to_streaming,
             // Settings
             commands::settings::get_setting,
             commands::settings::set_setting,
@@ -242,6 +244,9 @@ pub fn run() {
             commands::youtube::cancel_download,
             // Online Playlists search
             commands::youtube::search_online_playlists,
+            // Video Server
+            commands::video_server::start_video_server,
+            commands::video_server::get_video_server_status,
         ]);
 
     #[cfg(debug_assertions)]
@@ -337,6 +342,9 @@ pub fn run() {
 
             // Initialize Streaming Server State
             app.manage(StreamingState::default());
+
+            // Initialize Video Server State (loopback-only, for serving local video files)
+            app.manage(VideoServerState::default());
 
             // Startup scan: open existing content-*.db files so they are
             // available for queries immediately (no sync required).

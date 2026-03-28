@@ -435,7 +435,9 @@
     "projectorConnected": "Projector connected",
     "modeSung": "Sung",
     "modeKaraoke": "Karaoke",
-    "modeSilent": "Slides only"
+    "modeSilent": "Slides only",
+    "videoTargetProjector": "Play video on projector",
+    "videoTargetReturn": "Play video on return screen"
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",

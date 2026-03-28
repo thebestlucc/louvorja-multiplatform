@@ -435,7 +435,9 @@
     "projectorConnected": "Proyector conectado",
     "modeSung": "Cantado",
     "modeKaraoke": "Karaoke",
-    "modeSilent": "Solo diapositivas"
+    "modeSilent": "Solo diapositivas",
+    "videoTargetProjector": "Reproducir video en proyector",
+    "videoTargetReturn": "Reproducir video en pantalla de retorno"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",

@@ -3,6 +3,8 @@ use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::streaming::StreamingInfo;
 use crate::utils::catcher::catcher;
+use serde::Deserialize;
+use specta::Type;
 use std::path::Path;
 use tauri::{AppHandle, Manager};
 
@@ -421,5 +423,69 @@ pub fn set_streaming_broadcast(
             app_data_dir.as_deref(),
         );
     }
+    Ok(())
+}
+
+/// Payload forwarded from the frontend video master to streaming SSE clients.
+/// The `event_type` field distinguishes state snapshots from transient commands
+/// so the broadcaster knows whether to replay the message to new connections.
+#[derive(Debug, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoStreamPayload {
+    /// "state" = sticky snapshot (replayed on connect), "cmd" = transient command.
+    pub event_type: String,
+    /// play | pause | seek | state
+    pub action: String,
+    /// Current playback position in seconds (present for "state" and "seek").
+    pub current_time: Option<f64>,
+    /// Total duration in seconds (present for "state").
+    pub duration: Option<f64>,
+    /// Whether the video is paused (present for "state").
+    pub paused: Option<bool>,
+    /// Volume 0..1 (present for "state").
+    pub volume: Option<f64>,
+    /// YouTube video ID (present when source == "youtube").
+    pub video_id: Option<String>,
+    /// Video source: "youtube" | "local" | null.
+    pub video_source: Option<String>,
+}
+
+/// Forward a video state snapshot or control command from the master player
+/// (running in the main Tauri window) to the SSE video broadcaster, so
+/// streaming clients (OBS, external browsers) can stay synchronized.
+///
+/// Call this command whenever the video state changes (play, pause, seek,
+/// time update). The frontend should throttle time-update calls to avoid
+/// flooding the SSE channel (e.g. max once per 500 ms).
+#[tauri::command]
+#[specta::specta]
+pub fn broadcast_video_state_to_streaming(
+    payload: VideoStreamPayload,
+    state: tauri::State<'_, StreamingState>,
+) -> Result<(), AppError> {
+    let (server, err) = catcher(state.server.lock());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let server = server.unwrap();
+
+    let json = serde_json::json!({
+        "type": payload.event_type,
+        "action": payload.action,
+        "currentTime": payload.current_time,
+        "duration": payload.duration,
+        "paused": payload.paused,
+        "volume": payload.volume,
+        "videoId": payload.video_id,
+        "videoSource": payload.video_source,
+    });
+    let data = json.to_string();
+
+    if payload.event_type == "state" {
+        server.broadcast_video_state(&data);
+    } else {
+        server.broadcast_video_cmd(&data);
+    }
+
     Ok(())
 }

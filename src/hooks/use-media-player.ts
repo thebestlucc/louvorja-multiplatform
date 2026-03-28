@@ -1,9 +1,11 @@
 // src/hooks/use-media-player.ts
 import { useEffect, useCallback } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
+import { clearCurrentSlide } from "../lib/tauri/display";
 import i18next from "i18next";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useAudioStore } from "../stores/audio-store";
+import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 import { useSlides } from "./use-slides";
 import { resolveSlideSeekTimestamp, resolvePlaybackVariantPaths } from "../lib/audio-sync";
@@ -80,10 +82,6 @@ export function useMediaPlayer() {
     // Slide cleared
     listen("slide-cleared", () => {
       useMediaPlayerStore.getState().stop();
-      const q = useQueueStore.getState();
-      if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
-        q.clearQueue();
-      }
     }).then((u) => {
       if (!mounted) u();
       else unlisteners.push(u);
@@ -120,13 +118,13 @@ export function useMediaPlayer() {
   }, []);
 
   const stop = useCallback(() => {
-    void useAudioStore.getState().stop();
-    void emit("video-control", { action: "stop" });
-    store.getState().stop();
-    const q = useQueueStore.getState();
-    if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
-      q.clearQueue();
+    // Seek video to beginning before clearing screens
+    if (store.getState().timelineSource === "video") {
+      void emit("video-control", { action: "seek", value: 0 });
     }
+    void useAudioStore.getState().stop();
+    void clearCurrentSlide();
+    store.getState().stop();
   }, []);
 
   const seek = useCallback((timeMs: number) => {
@@ -141,12 +139,20 @@ export function useMediaPlayer() {
   const goToSlide = useCallback(
     async (index: number) => {
       const state = store.getState();
-      if (index < 0 || index >= state.slides.length) return;
+      // Fall back to presentation-store slides when media-player-store has none
+      const effectiveSlides = state.slides.length > 0
+        ? state.slides
+        : usePresentationStore.getState().slides;
+      if (index < 0 || index >= effectiveSlides.length) return;
       store.getState().setActiveSlideIndex(index);
+      // Also sync presentation-store index for the fallback path
+      if (state.slides.length === 0) {
+        usePresentationStore.getState().setActiveSlideIndex(index);
+      }
 
-      const slide = state.slides[index];
+      const slide = effectiveSlides[index];
       if (!slide) return;
-      const nextSlide = index + 1 < state.slides.length ? state.slides[index + 1] : null;
+      const nextSlide = index + 1 < effectiveSlides.length ? effectiveSlides[index + 1] : null;
       const title =
         state.currentItem?.type === "hymn"
           ? state.currentItem.hymn.title
@@ -154,7 +160,7 @@ export function useMediaPlayer() {
             ? i18next.t("playingNow.presentation")
             : "";
 
-      await projectSlideWithContext(slide, nextSlide, index, state.slides.length, title);
+      await projectSlideWithContext(slide, nextSlide, index, effectiveSlides.length, title);
 
       // Seek audio to sync point if applicable
       if (state.currentItem?.type === "hymn" && state.syncPoints.length > 0) {
@@ -173,15 +179,24 @@ export function useMediaPlayer() {
 
   const nextSlide = useCallback(async () => {
     const state = store.getState();
-    if (state.activeSlideIndex < state.slides.length - 1) {
-      await goToSlide(state.activeSlideIndex + 1);
+    const effectiveSlides = state.slides.length > 0
+      ? state.slides
+      : usePresentationStore.getState().slides;
+    const effectiveIndex = state.slides.length > 0
+      ? state.activeSlideIndex
+      : usePresentationStore.getState().activeSlideIndex;
+    if (effectiveIndex < effectiveSlides.length - 1) {
+      await goToSlide(effectiveIndex + 1);
     }
   }, [goToSlide]);
 
   const prevSlide = useCallback(async () => {
     const state = store.getState();
-    if (state.activeSlideIndex > 0) {
-      await goToSlide(state.activeSlideIndex - 1);
+    const effectiveIndex = state.slides.length > 0
+      ? state.activeSlideIndex
+      : usePresentationStore.getState().activeSlideIndex;
+    if (effectiveIndex > 0) {
+      await goToSlide(effectiveIndex - 1);
     }
   }, [goToSlide]);
 
@@ -240,5 +255,15 @@ export function useMediaPlayer() {
     }
   }, []);
 
-  return { play, pause, stop, seek, goToSlide, nextSlide, prevSlide, nextItem, prevItem, switchMode };
+  const setVolume = useCallback((volume: number) => {
+    if (store.getState().timelineSource === "video") {
+      // Bypass rodio command (no audio player active in video mode)
+      useAudioStore.setState({ volume });
+      void emit("video-control", { action: "volume", value: volume });
+    } else {
+      void useAudioStore.getState().setVolume(volume);
+    }
+  }, []);
+
+  return { play, pause, stop, seek, goToSlide, nextSlide, prevSlide, nextItem, prevItem, switchMode, setVolume };
 }

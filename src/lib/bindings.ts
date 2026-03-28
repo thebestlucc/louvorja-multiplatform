@@ -964,6 +964,23 @@ async setStreamingBroadcast(enabled: boolean) : Promise<Result<null, AppErrorRes
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Forward a video state snapshot or control command from the master player
+ * (running in the main Tauri window) to the SSE video broadcaster, so
+ * streaming clients (OBS, external browsers) can stay synchronized.
+ * 
+ * Call this command whenever the video state changes (play, pause, seek,
+ * time update). The frontend should throttle time-update calls to avoid
+ * flooding the SSE channel (e.g. max once per 500 ms).
+ */
+async broadcastVideoStateToStreaming(payload: VideoStreamPayload) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("broadcast_video_state_to_streaming", { payload }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getSetting(key: string) : Promise<Result<Setting, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_setting", { key }) };
@@ -1382,6 +1399,22 @@ async searchOnlinePlaylists(query: string) : Promise<Result<OnlinePlaylistSearch
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async startVideoServer() : Promise<Result<VideoServerInfo, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_video_server") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getVideoServerStatus() : Promise<Result<VideoServerInfo, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_video_server_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1472,6 +1505,45 @@ export type TimerStateData = { mode: TimerMode; isRunning: boolean; currentTimeM
 export type UpdateInfo = { version: string; currentVersion: string; notes: string | null }
 export type Verse = { id: number; versionId: number; book: string; chapter: number; verse: number; text: string }
 export type VideoMetadata = { durationMs: number; width: number; height: number; fileSize: number; format: string }
+export type VideoServerInfo = { isRunning: boolean; port: number; accessToken: string }
+/**
+ * Payload forwarded from the frontend video master to streaming SSE clients.
+ * The `event_type` field distinguishes state snapshots from transient commands
+ * so the broadcaster knows whether to replay the message to new connections.
+ */
+export type VideoStreamPayload = { 
+/**
+ * "state" = sticky snapshot (replayed on connect), "cmd" = transient command.
+ */
+eventType: string; 
+/**
+ * play | pause | seek | state
+ */
+action: string; 
+/**
+ * Current playback position in seconds (present for "state" and "seek").
+ */
+currentTime: number | null; 
+/**
+ * Total duration in seconds (present for "state").
+ */
+duration: number | null; 
+/**
+ * Whether the video is paused (present for "state").
+ */
+paused: boolean | null; 
+/**
+ * Volume 0..1 (present for "state").
+ */
+volume: number | null; 
+/**
+ * YouTube video ID (present when source == "youtube").
+ */
+videoId: string | null; 
+/**
+ * Video source: "youtube" | "local" | null.
+ */
+videoSource: string | null }
 
 /** tauri-specta globals **/
 

@@ -46,6 +46,7 @@
     "allow-system-commands",
     "allow-schedule-commands",
     "allow-media-library-commands",
-    "allow-youtube-commands"
+    "allow-youtube-commands",
+    "allow-video-server-commands"
   ]
 }

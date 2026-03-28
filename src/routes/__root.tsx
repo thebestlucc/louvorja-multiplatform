@@ -48,6 +48,15 @@ function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isBareRoute = usesBareLayout(pathname);
   const queryClient = useQueryClient();
+
+  // Projection windows: disable pointer events on body so YouTube iframes never
+  // show their native controls/HUD on hover or focus.
+  useEffect(() => {
+    if (isBareRoute) {
+      document.body.classList.add("pointer-events-none");
+      return () => { document.body.classList.remove("pointer-events-none"); };
+    }
+  }, [isBareRoute]);
   const setLanguage = useThemeStore((state) => state.setLanguage);
   const { data: monitors = [], isSuccess: monitorsLoaded } = useMonitors();
   const { data: monitorConfigs = [], isSuccess: monitorConfigsLoaded } = useMonitorConfigs();

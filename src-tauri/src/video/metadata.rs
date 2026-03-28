@@ -29,8 +29,15 @@ pub fn parse_video_metadata(path: &Path) -> Result<ParsedVideoMetadata, AppError
         // MP4 files start with an `ftyp` box at offset 4. MOV files may start
         // with `ftyp`, `moov`, `wide`, `free`, or `mdat` atoms instead.
         "mp4" | "mov" | "m4v" | "3gp" => {
-            // Skip magic-byte validation — valid ISO BMFF files can start with many
-            // different box types (ftyp, moov, mdat, wide, free, skip, uuid, pnot, …).
+            // Detect MPEG-TS sync byte — yt-dlp sometimes produces MPEG-TS files
+            // with a .mp4 extension when remuxing fails. Route these to ffprobe.
+            if read >= 1 && magic[0] == 0x47 {
+                return Err(AppError::Internal(
+                    "File is MPEG Transport Stream (.ts) with a .mp4 extension — native parser skipped".into(),
+                ));
+            }
+            // Skip further magic-byte validation — valid ISO BMFF files can start with
+            // many different box types (ftyp, moov, mdat, wide, free, skip, uuid, …).
             // The parser itself will fail with a meaningful error on truly invalid files.
             parse_mp4(path)
         }

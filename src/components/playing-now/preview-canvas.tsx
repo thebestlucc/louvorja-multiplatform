@@ -1,10 +1,14 @@
+import { useRef, useEffect } from "react";
 import { SlideRenderer } from "../slides/slide-renderer";
-import { VideoPreviewSlot } from "../online-videos/persistent-video-player";
 import { useTranslation } from "react-i18next";
 import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import type { MediaItem } from "../../types/media";
 import { mediaHasVideo } from "../../types/media";
+import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/media";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
+import { localVideoMasterRef } from "../online-videos/persistent-video-player";
+import { YouTubePlayer } from "../online-videos/online-video-slide";
 
 interface PreviewCanvasProps {
   currentItem: MediaItem | null;
@@ -20,6 +24,8 @@ export function PreviewCanvas({
   isProjectorOpen,
 }: PreviewCanvasProps) {
   const { t } = useTranslation();
+  const ytCurrentTime = useVideoPlayerStore((s) => s.currentTime);
+  const ytDuration = useVideoPlayerStore((s) => s.duration);
 
   // Overlay takes priority
   if (overlay === "black") {
@@ -42,11 +48,36 @@ export function PreviewCanvas({
     );
   }
 
-  // Video preview (online or offline)
+  // Video preview — live video for both local (canvas) and YouTube (muted follower)
   if (currentItem && mediaHasVideo(currentItem)) {
+    if (currentItem.type === "offline_video") {
+      return <LocalVideoPreview videoPath={(currentItem as OfflineVideoMediaItem).videoPath} />;
+    }
+
+    // YouTube — live muted follower (synced via video-state / video-control-cmd events)
+    const ytItem = currentItem as OnlineVideoMediaItem;
+    const progress = ytDuration > 0 ? Math.min(ytCurrentTime / ytDuration, 1) : 0;
+
     return (
-      <div className="h-full w-full bg-black">
-        <VideoPreviewSlot className="h-full w-full" />
+      <div className="relative h-full w-full bg-black overflow-hidden pointer-events-none">
+        <YouTubePlayer
+          videoId={ytItem.videoId}
+          title={ytItem.title}
+          className="h-full w-full"
+          muted
+          isFollower
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex flex-col gap-2 pointer-events-none">
+          <p className="text-xs text-white/80 truncate">{ytItem.title}</p>
+          {ytDuration > 0 && (
+            <div className="h-1 w-full rounded-full bg-white/20 overflow-hidden">
+              <div
+                className="h-full bg-white/60 rounded-full transition-[width] duration-300"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -66,7 +97,7 @@ export function PreviewCanvas({
     );
   }
 
-  // Empty state
+  // Empty state — no item and no slide
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
       <MonitorPlay className="h-12 w-12 opacity-30" />
@@ -80,5 +111,46 @@ export function PreviewCanvas({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── LocalVideoPreview ────────────────────────────────────────────────────
+
+function LocalVideoPreview(_: { videoPath: string }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    // Preview resolution — good enough for operator reference, still below projector quality
+    canvas.width = 640;
+    canvas.height = 360;
+
+    let rafId: number;
+    let lastDraw = 0;
+    const DRAW_INTERVAL = 1000 / 24; // 24 fps
+
+    const draw = (time: number) => {
+      if (time - lastDraw >= DRAW_INTERVAL) {
+        const master = localVideoMasterRef.current;
+        if (master && master.readyState >= 2) {
+          ctx.drawImage(master, 0, 0, 640, 360);
+        }
+        lastDraw = time;
+      }
+      rafId = requestAnimationFrame(draw);
+    };
+    rafId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="h-full w-full bg-black"
+      style={{ objectFit: "contain", imageRendering: "auto" }}
+    />
   );
 }

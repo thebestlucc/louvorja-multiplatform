@@ -91,6 +91,22 @@ body {
   height: 100%;
   object-fit: contain;
 }
+.youtube-container {
+  display: none;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.youtube-container iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  pointer-events: none;
+  transform: scale(1.06);
+  transform-origin: center;
+}
 .status {
   position: relative;
   z-index: 2;
@@ -194,6 +210,7 @@ body {
 
   <img id="image-media" class="image-media" alt="">
   <video id="video-media" class="video-media" autoplay muted loop playsinline></video>
+  <div id="youtube-container" class="youtube-container"></div>
 
   <div id="content" class="content" aria-live="polite">
     <div id="label" class="label"></div>
@@ -380,6 +397,10 @@ function normalizeSlidePayload(raw) {
   const backgroundColor = firstDefined([source.backgroundColor, source.background_color]);
   const textColor = firstDefined([source.textColor, source.text_color]);
   const audioPath = firstDefined([source.audioPath, source.audio_path]);
+  const videoUrl = firstDefined([source.videoUrl, source.video_url]);
+  const videoId = firstDefined([source.videoId, source.video_id]);
+  const videoSource = firstDefined([source.videoSource, source.video_source]);
+  const videoTitle = firstDefined([source.videoTitle, source.video_title]);
 
   return {
     slideType: slideType || "text",
@@ -393,7 +414,11 @@ function normalizeSlidePayload(raw) {
     backgroundColor: typeof backgroundColor === "string" ? backgroundColor : "",
     textColor: typeof textColor === "string" ? textColor : "",
     textSize: safeNumber(textSize) ?? 0,
-    audioPath: typeof audioPath === "string" ? audioPath : ""
+    audioPath: typeof audioPath === "string" ? audioPath : "",
+    videoUrl: typeof videoUrl === "string" ? videoUrl : "",
+    videoId: typeof videoId === "string" ? videoId : "",
+    videoSource: typeof videoSource === "string" ? videoSource : "",
+    videoTitle: typeof videoTitle === "string" ? videoTitle : ""
   };
 }
 
@@ -535,6 +560,7 @@ function hideMedia() {
   video.pause();
   video.removeAttribute("src");
   video.style.display = "none";
+  destroyYouTubePlayer();
 }
 
 function resetVisualStyle() {
@@ -631,6 +657,144 @@ function showVideo(path) {
   }
 }
 
+// ── YouTube Player API with sync support ──────────────────────────────────────
+// We use the YT.Player API (youtube-nocookie.com) with onReady callback so that
+// play/pause/seek commands are never sent to an uninitialized player.
+// Pending commands that arrive before onReady fires are queued and flushed on ready.
+// The player is UNMUTED so streaming clients hear audio.
+var _ytPlayer = null;    // YT.Player instance
+var _ytVideoId = null;   // currently loaded video id
+var _ytReady = false;    // true once onReady has fired
+var _ytCmdQueue = [];    // commands queued before player is ready
+
+// Load the YouTube IFrame API script once
+(function() {
+  var tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+})();
+
+function onYouTubeIframeAPIReady() {
+  // API is loaded; player is created lazily in showYouTubeEmbed
+}
+
+function _ytExec(fn) {
+  if (_ytReady && _ytPlayer) {
+    try { fn(_ytPlayer); } catch (_) {}
+  } else {
+    _ytCmdQueue.push(fn);
+  }
+}
+
+function _ytFlushQueue() {
+  var fns = _ytCmdQueue.splice(0);
+  for (var i = 0; i < fns.length; i++) {
+    try { fns[i](_ytPlayer); } catch (_) {}
+  }
+}
+
+function showYouTubeEmbed(videoId) {
+  const container = document.getElementById("youtube-container");
+  container.style.display = "block";
+
+  // Reuse existing player for same video
+  if (_ytPlayer && _ytVideoId === videoId) {
+    return;
+  }
+
+  // Destroy previous player if any
+  if (_ytPlayer) {
+    try { _ytPlayer.destroy(); } catch (_) {}
+    _ytPlayer = null;
+  }
+  _ytReady = false;
+  _ytCmdQueue = [];
+  _ytVideoId = videoId;
+
+  // Create a placeholder div for YT.Player to replace
+  while (container.firstChild) container.removeChild(container.firstChild);
+  var placeholder = document.createElement("div");
+  placeholder.id = "yt-streaming-player";
+  container.appendChild(placeholder);
+
+  function doCreate() {
+    if (typeof YT === "undefined" || !YT.Player) {
+      setTimeout(doCreate, 200);
+      return;
+    }
+    _ytPlayer = new YT.Player("yt-streaming-player", {
+      videoId: videoId,
+      host: "https://www.youtube-nocookie.com",
+      playerVars: {
+        autoplay: 1,
+        controls: 0,
+        rel: 0,
+        modestbranding: 1,
+        playsinline: 1,
+        mute: 0,
+        iv_load_policy: 3,
+        cc_load_policy: 0
+      },
+      events: {
+        onReady: function() {
+          _ytReady = true;
+          try { _ytPlayer.unMute(); } catch (_) {}
+          var iframe = _ytPlayer.getIframe();
+          if (iframe) {
+            iframe.style.width = "100%";
+            iframe.style.height = "100%";
+            iframe.style.border = "none";
+          }
+          _ytFlushQueue();
+        }
+      }
+    });
+  }
+  doCreate();
+}
+
+function destroyYouTubePlayer() {
+  if (_ytPlayer) {
+    try { _ytPlayer.destroy(); } catch (_) {}
+    _ytPlayer = null;
+  }
+  _ytVideoId = null;
+  _ytReady = false;
+  _ytCmdQueue = [];
+  var container = document.getElementById("youtube-container");
+  while (container.firstChild) container.removeChild(container.firstChild);
+  container.style.display = "none";
+}
+
+function showOnlineVideo(slide) {
+  var videoSource = safeText(slide.videoSource);
+  var videoUrl = safeText(slide.videoUrl);
+  var videoId = safeText(slide.videoId);
+
+  if (videoSource === "local" && videoUrl) {
+    var src = toStreamingMediaUrl(videoUrl);
+    if (src) {
+      // Local video: unmuted, allow audio on streaming screens
+      var video = document.getElementById("video-media");
+      video.src = src;
+      video.muted = false;
+      video.autoplay = true;
+      video.loop = false;
+      video.style.display = "block";
+      var playResult = video.play();
+      if (playResult && typeof playResult.catch === "function") {
+        playResult.catch(function () {});
+      }
+      return;
+    }
+  }
+
+  if (videoId) {
+    showYouTubeEmbed(videoId);
+    return;
+  }
+}
+
 function renderPayload(payload, persistRealPayload) {
   const normalizedSlide = normalizeSlidePayload(payload);
   const slide = resolveCoverFallbackPayload(normalizedSlide);
@@ -701,6 +865,17 @@ function renderPayload(payload, persistRealPayload) {
     } else {
       setTextPanel(false);
     }
+    return;
+  }
+
+  if (slideType === "online_video") {
+    showOnlineVideo(slide);
+    var videoTitleText = safeText(slide.videoTitle) || safeText(slide.videoId) || "";
+    if (videoTitleText) {
+      titleElement.style.display = "block";
+      titleElement.textContent = videoTitleText;
+    }
+    setTextPanel(false);
     return;
   }
 
@@ -1067,6 +1242,104 @@ async function fetchAlertSnapshot() {
   } catch (_) {}
 }
 
+// ── Video synchronization SSE ──────────────────────────────────────────────────
+// The /sse/video stream carries play/pause/seek/state events emitted by the
+// master video player (PersistentVideoPlayer in the Tauri main window).
+// Streaming screens use these to stay synchronized with the master.
+
+let videoEs = null;
+
+function applyVideoEvent(data) {
+  if (!data || typeof data !== "object") return;
+  var action = safeText(data.action).toLowerCase();
+  var videoMedia = document.getElementById("video-media");
+
+  if (action === "clear") {
+    // Video slide ended — hide video elements
+    if (videoMedia) {
+      videoMedia.pause();
+      videoMedia.removeAttribute("src");
+      videoMedia.style.display = "none";
+    }
+    destroyYouTubePlayer();
+    return;
+  }
+
+  // Local video sync
+  if (videoMedia && videoMedia.getAttribute("src") && videoMedia.style.display !== "none") {
+    var ct = safeNumber(data.currentTime);
+    if (action === "play") {
+      videoMedia.play().catch(function() {});
+    } else if (action === "pause") {
+      videoMedia.pause();
+    } else if (action === "seek" && ct != null) {
+      videoMedia.currentTime = ct;
+    } else if (action === "state") {
+      // Full state snapshot: seek to master position then match play/pause
+      if (ct != null) {
+        var drift = Math.abs(videoMedia.currentTime - ct);
+        if (drift > 1.5) {
+          videoMedia.currentTime = ct;
+        }
+      }
+      if (data.paused === true && !videoMedia.paused) {
+        videoMedia.pause();
+      } else if (data.paused === false && videoMedia.paused) {
+        videoMedia.play().catch(function() {});
+      }
+    }
+    return;
+  }
+
+  // YouTube sync via YT.Player API (commands queued until onReady fires)
+  if (_ytPlayer || _ytVideoId) {
+    var ct2 = safeNumber(data.currentTime);
+    if (action === "play") {
+      _ytExec(function(p) { p.playVideo(); });
+    } else if (action === "pause") {
+      _ytExec(function(p) { p.pauseVideo(); });
+    } else if (action === "seek" && ct2 != null) {
+      _ytExec(function(p) { p.seekTo(ct2, true); });
+    } else if (action === "state") {
+      var paused = data.paused;
+      _ytExec(function(p) {
+        if (ct2 != null) { p.seekTo(ct2, true); }
+        if (paused === false) { p.playVideo(); }
+        else if (paused === true) { p.pauseVideo(); }
+      });
+    }
+  }
+}
+
+async function fetchVideoSnapshot() {
+  try {
+    var response = await fetch("/state/video", { cache: "no-store" });
+    if (!response.ok) return;
+    var data = await response.json();
+    applyVideoEvent(data);
+  } catch (_) {}
+}
+
+function connectVideo() {
+  if (videoEs) return;
+  videoEs = new EventSource("/sse/video");
+  videoEs.onopen = function() {
+    void fetchVideoSnapshot();
+  };
+  videoEs.onmessage = function(event) {
+    try {
+      applyVideoEvent(JSON.parse(event.data));
+    } catch (_) {}
+  };
+  videoEs.onerror = function() {
+    if (videoEs) {
+      videoEs.close();
+      videoEs = null;
+    }
+    setTimeout(connectVideo, 3000);
+  };
+}
+
 function connect() {
   if (es) return;
   es = new EventSource("/sse/music");
@@ -1075,6 +1348,7 @@ function connect() {
     void fetchUtilitySnapshot();
     void fetchAudioSnapshot();
     connectAlert();
+    connectVideo();
   };
   es.onmessage = function (event) {
     try {
@@ -1101,6 +1375,7 @@ window.addEventListener("beforeunload", function () {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (es) es.close();
   if (alertEs) alertEs.close();
+  if (videoEs) videoEs.close();
 });
 </script>
 </body>

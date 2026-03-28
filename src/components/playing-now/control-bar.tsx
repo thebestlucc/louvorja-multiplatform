@@ -75,12 +75,13 @@ export function ControlBar({
   const { t } = useTranslation();
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
 
-  if (!currentItem) return null;
-
-  const hasTimeline = mediaHasTimeline(currentItem);
-  const hasSlides = mediaHasSlides(currentItem);
+  const hasTimeline = currentItem ? mediaHasTimeline(currentItem) : false;
+  const hasSlides = currentItem ? mediaHasSlides(currentItem) : totalSlides > 0;
   const isPlaying = status === "playing";
   const isActive = isPlaying || status === "paused";
+
+  // Nothing to show at all
+  if (!currentItem && totalSlides === 0) return null;
 
   return (
     <div className="flex flex-col gap-1 border-t border-border bg-background px-4 py-2">
@@ -204,6 +205,7 @@ export function ControlBar({
               </Button>
             </div>
           )}
+
         </div>
 
         {/* Center: slide counter */}
@@ -242,3 +244,4 @@ export function ControlBar({
     </div>
   );
 }
+
