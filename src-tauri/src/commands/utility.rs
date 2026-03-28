@@ -52,42 +52,56 @@ pub async fn get_video_metadata(
 
     // Load ffprobe settings before entering spawn_blocking — tauri::State
     // is not Send and cannot cross the async boundary.
-    let (ffprobe_enabled, ffprobe_path) = load_ffprobe_settings(&state)?;
+    let (_, ffprobe_path) = load_ffprobe_settings(&state)?;
 
     let resolved_path_clone = resolved_path.clone();
-    let parsed = tokio::task::spawn_blocking(move || {
+    let format_clone = format.clone();
+    let parsed = tokio::task::spawn_blocking(move || -> Result<Option<crate::video::metadata::ParsedVideoMetadata>, AppError> {
         match video::parse_video_metadata(&resolved_path_clone) {
-            Ok(parsed) => Ok(parsed),
+            Ok(parsed) => Ok(Some(parsed)),
             Err(primary_error) => {
-                if !ffprobe_enabled {
-                    return Err(primary_error);
-                }
-                video::parse_video_metadata_with_ffprobe(
+                // Attempt ffprobe fallback (uses PATH when no path is configured).
+                // This handles MPEG-TS files stored with .mp4 extension (common with
+                // yt-dlp downloads) and other formats the native parser can't handle.
+                match video::parse_video_metadata_with_ffprobe(
                     &resolved_path_clone,
                     ffprobe_path.as_deref(),
                     4000,
-                )
-                .map_err(|fallback_error| {
-                    AppError::Internal(format!(
-                        "Video metadata parsing failed (native parser error: {}; ffprobe fallback error: {})",
-                        primary_error, fallback_error
-                    ))
-                })
+                ) {
+                    Ok(parsed) => Ok(Some(parsed)),
+                    Err(_) => {
+                        // Both parsers failed — log and continue with unknown metadata.
+                        // The file passed extension validation so playback will still work
+                        // via the streaming server. Metadata (dimensions/duration) is
+                        // display-only and 0/unknown is safe.
+                        eprintln!(
+                            "[video-metadata] could not extract metadata from '{}': {}. Continuing with unknown metadata.",
+                            resolved_path_clone.display(),
+                            primary_error
+                        );
+                        Ok(None)
+                    }
+                }
             }
         }
     })
     .await
     .map_err(|e| AppError::Internal(format!("Metadata task panicked: {}", e)))??;
 
+    let (duration_ms, width, height, parsed_format) = match parsed {
+        Some(p) => (p.duration_ms, p.width, p.height, p.format),
+        None => (0, 0, 0, String::new()),
+    };
+
     Ok(crate::db::models::VideoMetadata {
-        duration_ms: parsed.duration_ms,
-        width: parsed.width,
-        height: parsed.height,
+        duration_ms,
+        width,
+        height,
         file_size,
-        format: if parsed.format.is_empty() {
+        format: if parsed_format.is_empty() {
             format
         } else {
-            parsed.format
+            parsed_format
         },
     })
 }

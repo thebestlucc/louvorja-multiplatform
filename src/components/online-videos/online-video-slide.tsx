@@ -1,20 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
-import { appDataDir, join } from "@tauri-apps/api/path";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { catcher } from "../../lib/catcher";
+import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
-import { useVideoFollower } from "../../hooks/use-video-follower";
-import { VideoPreviewSlot } from "./persistent-video-player";
+import { VideoFollowerElement } from "./video-follower-element";
+import { useVideoSource } from "../../hooks/use-video-source";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
 export type VideoControlEvent = { action: "play" | "pause" | "seek" | "volume"; value?: number };
-export type VideoStateEvent = { paused: boolean; currentTime: number; duration: number; volume: number };
+export type VideoStateEvent = {
+  paused: boolean;
+  currentTime: number;
+  duration: number;
+  volume: number;
+  seeking?: boolean;
+  seeked?: boolean;
+};
 
 export type OnlineVideoRenderMode =
   | "projector"
@@ -24,125 +29,57 @@ export type OnlineVideoRenderMode =
   | "editor"
   | "thumbnail";
 
-// ─── LocalVideoPlayer ─────────────────────────────────────────────────────
-
-function LocalVideoPlayer({ src, title, className, muted, isFollower = false }: {
-  src: string; title: string; className?: string; muted?: boolean; isFollower?: boolean;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const lastStateRef = useVideoFollower(
-    videoRef as React.RefObject<HTMLVideoElement | null>,
-    "local",
-    isFollower,
-  );
-
-  // Autoplay with canplay guard (avoids NotSupportedError in Tauri webview)
-  useEffect(() => {
-    if (isFollower) return;
-    const video = videoRef.current;
-    if (!video) return;
-    const tryPlay = () => {
-      void video.play().catch(() => {
-        // Already failed — leave it paused; Playing Now controls can resume
-      });
-    };
-    if (video.readyState >= 3) {
-      tryPlay();
-    } else {
-      video.addEventListener("canplay", tryPlay, { once: true });
-      return () => video.removeEventListener("canplay", tryPlay);
-    }
-  }, [src, isFollower]);
-
-  // Listen for video-control events from main window
-  useEffect(() => {
-    if (isFollower) return;
-    const unsub = listen<VideoControlEvent>("video-control", (e) => {
-      const video = videoRef.current;
-      if (!video) return;
-      const { action, value } = e.payload;
-      if (action === "play") void video.play().catch(() => {});
-      else if (action === "pause") video.pause();
-      else if (action === "seek" && value !== undefined) video.currentTime = value;
-      else if (action === "volume" && value !== undefined) video.volume = value;
-    }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
-  }, [isFollower]);
-
-  // Emit video-state to main window on playback events
-  useEffect(() => {
-    if (isFollower) return;
-    const video = videoRef.current;
-    if (!video) return;
-    const emit = () => {
-      void emitTo("main", "video-state", {
-        paused: video.paused,
-        currentTime: video.currentTime,
-        duration: isFinite(video.duration) ? video.duration : 0,
-        volume: video.volume,
-      } satisfies VideoStateEvent).catch(() => {});
-    };
-    video.addEventListener("timeupdate", emit);
-    video.addEventListener("play", emit);
-    video.addEventListener("pause", emit);
-    video.addEventListener("volumechange", emit);
-    return () => {
-      video.removeEventListener("timeupdate", emit);
-      video.removeEventListener("play", emit);
-      video.removeEventListener("pause", emit);
-      video.removeEventListener("volumechange", emit);
-    };
-  }, [src, isFollower]);
-
-  // When follower: seek to last known state on canplay
-  useEffect(() => {
-    if (!isFollower) return;
-    const video = videoRef.current;
-    if (!video) return;
-    const onCanPlay = () => {
-      const last = lastStateRef.current;
-      if (last && last.currentTime > 2) {
-        video.currentTime = last.currentTime;
-      }
-      if (last && !last.paused) {
-        void video.play().catch(() => {});
-      }
-    };
-    if (video.readyState >= 3) {
-      onCanPlay();
-    } else {
-      video.addEventListener("canplay", onCanPlay, { once: true });
-      return () => video.removeEventListener("canplay", onCanPlay);
-    }
-  }, [src, isFollower, lastStateRef]);
-
-  return (
-    <video
-      ref={videoRef}
-      src={src}
-      className={className}
-      title={title}
-      playsInline
-      muted={muted}
-    />
-  );
-}
-
 // ─── YouTubePlayer ────────────────────────────────────────────────────────
 
-function YouTubePlayer({ videoId, title, className, muted = false, isFollower = false }: {
+export function YouTubePlayer({ videoId, title, className, muted = false, isFollower = false }: {
   videoId: string; title: string; className?: string; muted?: boolean; isFollower?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const lastStateRef = useRef<VideoStateEvent | null>(null);
 
-  const lastStateRef = useVideoFollower(
-    playerRef as React.RefObject<YTPlayer | null>,
-    "youtube",
-    isFollower,
-  );
+  // Track master video-state for follower sync + drift correction
+  useEffect(() => {
+    if (!isFollower) return;
+    const unsub = listen<VideoStateEvent>("video-state", (e) => {
+      lastStateRef.current = e.payload;
+      const p = playerRef.current;
+      if (!p || typeof p.getPlayerState !== "function") return;
+      const { paused, seeking, currentTime } = e.payload;
+      if (seeking) {
+        if (p.getPlayerState() === 1) p.pauseVideo();
+        return;
+      }
+      // Drift correction: resync if follower is >0.5s off master
+      if (!paused) {
+        try {
+          const followerTime = p.getCurrentTime();
+          if (Math.abs(followerTime - currentTime) > 0.5) {
+            p.seekTo(currentTime, true);
+          }
+        } catch (_) {}
+      }
+      const state = p.getPlayerState();
+      if (paused && state === 1) p.pauseVideo();
+      else if (!paused && state !== 1) p.playVideo();
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, [isFollower]);
+
+  // Direct command listener for immediate follower response (play/pause/seek)
+  useEffect(() => {
+    if (!isFollower) return;
+    const unsub = listen<VideoControlEvent>("video-control-cmd", (e) => {
+      const p = playerRef.current;
+      if (!p || typeof p.getPlayerState !== "function") return;
+      const { action, value } = e.payload;
+      if (action === "play") p.playVideo();
+      else if (action === "pause") p.pauseVideo();
+      else if (action === "seek" && value !== undefined) p.seekTo(value, true);
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, [isFollower]);
 
   const emitState = useCallback((player: YTPlayer) => {
     void emitTo("main", "video-state", {
@@ -183,12 +120,13 @@ function YouTubePlayer({ videoId, title, className, muted = false, isFollower = 
           onReady: ({ target }) => {
             playerRef.current = target;
             if (isFollower) {
-              // Seek to last known master position on init
+              // Seek to last known master position on init.
+              // If no state yet (late joiner), autoplay — master is already active.
               const last = lastStateRef.current;
               if (last && last.currentTime > 2) {
                 target.seekTo(last.currentTime, true);
-                if (!last.paused) target.playVideo();
               }
+              if (!last || !last.paused) target.playVideo();
             } else {
               emitState(target);
             }
@@ -227,7 +165,7 @@ function YouTubePlayer({ videoId, title, className, muted = false, isFollower = 
       playerRef.current = undefined;
       void unsub.then((fn) => fn());
     };
-  }, [videoId, muted, isFollower, emitState, lastStateRef]);
+  }, [videoId, muted, isFollower, emitState]);
 
   return (
     <div
@@ -245,6 +183,20 @@ function YouTubePlayer({ videoId, title, className, muted = false, isFollower = 
   );
 }
 
+// ─── LocalVideoFollower ───────────────────────────────────────────────────
+
+function LocalVideoFollower({ videoPath, className }: { videoPath: string; className?: string }) {
+  const videoUrl = useVideoSource(videoPath);
+  if (!videoUrl) {
+    return (
+      <div className={cn("flex h-full w-full items-center justify-center bg-black", className)}>
+        <MonitorPlay className="h-12 w-12 text-white/15" />
+      </div>
+    );
+  }
+  return <VideoFollowerElement videoUrl={videoUrl} className={className} />;
+}
+
 // ─── OnlineVideoSlide ─────────────────────────────────────────────────────
 
 interface OnlineVideoSlideProps {
@@ -256,44 +208,13 @@ interface OnlineVideoSlideProps {
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
 
-  const [localVideoSrc, setLocalVideoSrc] = useState<string | null>(null);
-  const rawVideoUrl = slide.videoSource === "local" ? (slide.videoUrl ?? null) : null;
-
-  useEffect(() => {
-    if (!rawVideoUrl) { setLocalVideoSrc(null); return; }
-    const path = rawVideoUrl.trim();
-    if (!path) { setLocalVideoSrc(null); return; }
-    if (/^(https?:|blob:|data:)/.test(path)) { setLocalVideoSrc(path); return; }
-
-    if (path.startsWith("media/")) {
-      void (async () => {
-        const [appDir, appDirErr] = await catcher(appDataDir());
-        if (appDirErr || !appDir) { setLocalVideoSrc(null); return; }
-        const [abs, absErr] = await catcher(join(appDir, path));
-        if (absErr || !abs) { setLocalVideoSrc(null); return; }
-        setLocalVideoSrc(convertFileSrc(abs));
-      })();
-    } else {
-      setLocalVideoSrc(convertFileSrc(path));
-    }
-  }, [rawVideoUrl]);
-
-  if (renderMode === "projector") {
+  // Live video renderer for projector/return screens
+  const renderLiveVideo = () => {
     const isLocalFile = slide.videoSource === "local" && !!slide.videoUrl;
-
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile ? (
-          // Downloaded video: always use local player, never fall back to YouTube
-          localVideoSrc ? (
-            <LocalVideoPlayer
-              src={localVideoSrc}
-              title={slide.videoTitle ?? ""}
-              className="h-full w-full"
-              muted
-              isFollower
-            />
-          ) : null
+          <LocalVideoFollower videoPath={slide.videoUrl!} className="h-full w-full" />
         ) : slide.videoId ? (
           <YouTubePlayer
             videoId={slide.videoId}
@@ -309,40 +230,14 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
         )}
       </div>
     );
+  };
+
+  if (renderMode === "projector") {
+    return renderLiveVideo();
   }
 
   if (renderMode === "return-current") {
-    const isLocalFile = slide.videoSource === "local" && !!slide.videoUrl;
-    return (
-      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
-        {isLocalFile ? (
-          // Downloaded video: always use local player, never fall back to YouTube
-          localVideoSrc ? (
-            <LocalVideoPlayer
-              src={localVideoSrc}
-              title={slide.videoTitle ?? ""}
-              className="h-full w-full object-contain"
-              muted
-              isFollower
-            />
-          ) : null
-        ) : slide.videoId ? (
-          <YouTubePlayer
-            videoId={slide.videoId}
-            title={slide.videoTitle ?? slide.videoId}
-            className="h-full w-full"
-            muted
-            isFollower
-          />
-        ) : null}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex flex-col gap-1">
-          <span className="rounded bg-white/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.3em] text-white/70 self-start">
-            {t("presentations.types.onlineVideo")}
-          </span>
-          <p className="text-xs text-white/80 truncate">{slide.videoTitle ?? slide.videoId ?? ""}</p>
-        </div>
-      </div>
-    );
+    return renderLiveVideo();
   }
 
   if (renderMode === "return-next") {
@@ -382,11 +277,13 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   }
 
   if (renderMode === "playing-now-preview") {
-    const hasVideo = (slide.videoSource === "local" && !!slide.videoUrl) || !!slide.videoId;
+    const thumbUrl = slide.videoId
+      ? `https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`
+      : null;
     return (
       <div className={cn("h-full w-full bg-black relative overflow-hidden", className)}>
-        {hasVideo ? (
-          <VideoPreviewSlot className="h-full w-full" />
+        {thumbUrl ? (
+          <img src={thumbUrl} alt="" className="h-full w-full object-contain" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
             {t("presentations.types.onlineVideo")}

@@ -1,59 +1,145 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen, emit } from "@tauri-apps/api/event";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { listen, emitTo } from "@tauri-apps/api/event";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
-import type { PreviewRect } from "../../stores/video-player-store";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
+import { useQueueStore } from "../../stores/queue-store";
+import { useVideoSource } from "../../hooks/use-video-source";
+import { clearCurrentSlide } from "../../lib/tauri/display";
 import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/media";
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { catcher } from "../../lib/catcher";
-import { cn } from "../../lib/utils";
 
-// ─── VideoPreviewSlot ─────────────────────────────────────────────────────────
+/** Heartbeat interval for progress bar updates and drift detection (ms). */
+const HEARTBEAT_INTERVAL_MS = 250;
 
 /**
- * Rendered inside Playing Now's preview area.
- * Measures its own bounding rect and publishes it to the store so that
- * PersistentVideoPlayer can overlay the player using CSS position: fixed.
- * No DOM transplanting — the iframe never changes parent.
+ * Checks if there is a next item in the queue (accounting for repeat mode).
+ * Returns true if the queue coordinator will handle advancing; false if we are
+ * at the last item with no loop — meaning we should clear the screens.
  */
-export function VideoPreviewSlot({ className }: { className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const setPreviewRect = useVideoPlayerStore((s) => s.setPreviewRect);
+function hasNextQueueItem(): boolean {
+  const q = useQueueStore.getState();
+  if (q.repeat === "one" || q.repeat === "all") return true;
+  return q.items.length > 0 && q.currentIndex < q.items.length - 1;
+}
 
+/** Clears projection screens when a video ends with no next queue item. */
+function handleVideoEnded() {
+  if (!hasNextQueueItem()) {
+    void clearCurrentSlide();
+    useVideoPlayerStore.getState().resetVideoState();
+  }
+}
+
+// ─── LocalVideoMaster ─────────────────────────────────────────────────────────
+
+/**
+ * Module-level ref giving the preview canvas direct access to the master video
+ * element without an extra decode or IPC round-trip.
+ */
+export const localVideoMasterRef: { current: HTMLVideoElement | null } = { current: null };
+
+/**
+ * Hidden HTML5 <video> element that acts as the master player for local files.
+ * Emits video-state events on time updates and control events.
+ */
+function LocalVideoMaster({
+  videoPath,
+  onBroadcast,
+}: {
+  videoPath: string;
+  onBroadcast: (snap: VideoStateEvent) => void;
+}) {
+  const videoUrl = useVideoSource(videoPath);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const onBroadcastRef = useRef(onBroadcast);
+  onBroadcastRef.current = onBroadcast;
+
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    localVideoMasterRef.current = el;
+  }, []);
+
+  // Listen to video-control events and apply to local video element
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const unsub = listen<VideoControlEvent>("video-control", (e) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const { action, value } = e.payload;
+      if (action === "play") {
+        void video.play().catch(() => {});
+        // Broadcast to all windows
+        for (const target of ["main", "projector", "return"] as const) {
+          void emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
+        }
+      } else if (action === "pause") {
+        video.pause();
+        for (const target of ["main", "projector", "return"] as const) {
+          void emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
+        }
+      } else if (action === "seek" && value !== undefined) {
+        video.currentTime = value;
+        for (const target of ["main", "projector", "return"] as const) {
+          void emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
+        }
+      } else if (action === "volume" && value !== undefined) {
+        video.volume = value;
+      }
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, []);
 
-    const publish = () => {
-      const r = el.getBoundingClientRect();
-      setPreviewRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
+  if (!videoUrl) return null;
 
-    // Publish initial rect
-    publish();
-
-    // Track size/position changes
-    const ro = new ResizeObserver(publish);
-    ro.observe(el);
-
-    // Also re-publish on scroll (in case the preview area scrolls)
-    const scrollArea = document.getElementById("main-scroll-area");
-    if (scrollArea) scrollArea.addEventListener("scroll", publish, { passive: true });
-
-    return () => {
-      ro.disconnect();
-      if (scrollArea) scrollArea.removeEventListener("scroll", publish);
-      setPreviewRect(null);
-    };
-  }, [setPreviewRect]);
-
-  return <div ref={ref} className={cn("h-full w-full", className)} />;
+  return (
+    <video
+      ref={setVideoRef}
+      src={videoUrl}
+      autoPlay
+      playsInline
+      style={{ width: 1, height: 1, opacity: 0, position: "absolute", pointerEvents: "none" }}
+      onTimeUpdate={(e) => {
+        const v = e.currentTarget;
+        onBroadcastRef.current({
+          paused: v.paused,
+          currentTime: v.currentTime,
+          duration: v.duration || 0,
+          volume: v.volume,
+        });
+      }}
+      onPlay={(e) => {
+        const v = e.currentTarget;
+        onBroadcastRef.current({
+          paused: false,
+          currentTime: v.currentTime,
+          duration: v.duration || 0,
+          volume: v.volume,
+        });
+      }}
+      onPause={(e) => {
+        const v = e.currentTarget;
+        onBroadcastRef.current({
+          paused: true,
+          currentTime: v.currentTime,
+          duration: v.duration || 0,
+          volume: v.volume,
+        });
+      }}
+      onEnded={(e) => {
+        const v = e.currentTarget;
+        onBroadcastRef.current({
+          paused: true,
+          currentTime: v.currentTime,
+          duration: v.duration || 0,
+          volume: v.volume,
+        });
+        handleVideoEnded();
+      }}
+    />
+  );
 }
 
 // ─── PersistentVideoPlayer ────────────────────────────────────────────────────
@@ -61,11 +147,9 @@ export function VideoPreviewSlot({ className }: { className?: string }) {
 /**
  * Always-mounted master player. Place in __root.tsx outside <Outlet>.
  *
- * The player host div uses position: fixed to overlay the Playing Now preview
- * when VideoPreviewSlot is mounted (previewRect !== null). When the user
- * navigates away, previewRect becomes null and the host falls back to a
- * "resting" position: visible to the browser (so YouTube keeps playing)
- * but behind all app UI (z-index: -1).
+ * The player host div uses position: fixed behind all app UI (z-index: -1),
+ * visible to the browser (so YouTube keeps playing) but not to the user.
+ * Playing Now shows a thumbnail instead of this live player.
  *
  * The iframe/video element NEVER changes DOM parent — eliminating the browser
  * throttling / YouTube pause that the old DOM-transplant approach caused.
@@ -73,46 +157,37 @@ export function VideoPreviewSlot({ className }: { className?: string }) {
 export function PersistentVideoPlayer() {
   const playerHostRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const seekingRef = useRef(false);
+  const playSessionIdRef = useRef(0);
   const [activeSlide, setActiveSlide] = useState<SlideContent | null>(null);
+  const [playSessionId, setPlaySessionId] = useState(0);
 
-  const previewRect = useVideoPlayerStore((s) => s.previewRect);
-
-  // Resolve local video URL via the asset protocol (async — relative paths need appDataDir).
-  const [localVideoSrc, setLocalVideoSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    const rawUrl = activeSlide?.videoSource === "local" ? (activeSlide.videoUrl ?? null) : null;
-    if (!rawUrl) { setLocalVideoSrc(null); return; }
-    const path = rawUrl.trim();
-    if (!path) { setLocalVideoSrc(null); return; }
-    if (/^(https?:|blob:|data:)/.test(path)) { setLocalVideoSrc(path); return; }
-
-    if (path.startsWith("media/")) {
-      void (async () => {
-        const [appDir, appDirErr] = await catcher(appDataDir());
-        if (appDirErr || !appDir) { setLocalVideoSrc(null); return; }
-        const [abs, absErr] = await catcher(join(appDir, path));
-        if (absErr || !abs) { setLocalVideoSrc(null); return; }
-        setLocalVideoSrc(convertFileSrc(abs));
-      })();
-    } else {
-      setLocalVideoSrc(convertFileSrc(path));
-    }
-  }, [activeSlide?.videoSource, activeSlide?.videoUrl]);
-
-  // Helper: broadcast current player state to all windows + update Zustand store
-  const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }) => {
+  // Helper: broadcast current player state to all windows + update Zustand store.
+  // Must use emitTo() for each window — JS emit() only reaches the current webview.
+  // Skips broadcasts while master is seeking (prevents state flood + follower seek storm).
+  const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }, force = false) => {
+    if (seekingRef.current && !force) return;
     useVideoPlayerStore.getState().setVideoState({ ...snap, ...meta });
-    void emit("video-state", snap).catch(() => {});
+    const enriched = { ...snap, seeking: seekingRef.current };
+    for (const target of ["main", "projector", "return"]) {
+      void emitTo(target, "video-state", enriched).catch(() => {});
+    }
   }, []);
+
+  // Callback for LocalVideoMaster to broadcast state
+  const broadcastLocalState = useCallback((snap: VideoStateEvent) => {
+    broadcastState(snap, { videoId: null, videoSrc: null, videoSource: "local" });
+  }, [broadcastState]);
 
   // Listen to slide-changed
   useEffect(() => {
     const unsub = listen<SlideContent>("slide-changed", (e) => {
       const slide = e.payload;
       if (slide.slideType === "online_video") {
+        // Increment session so YouTube player lifecycle effect re-runs even for same videoId
+        playSessionIdRef.current += 1;
+        setPlaySessionId(playSessionIdRef.current);
         setActiveSlide(slide);
 
         // Bridge to media-player-store so Playing Now shows video preview
@@ -124,9 +199,8 @@ export function PersistentVideoPlayer() {
             title: slide.videoTitle ?? "Video",
             isManaged: slide.videoUrl.startsWith("media/"),
           };
-          if (mpState.currentItem?.type !== "offline_video" || (mpState.currentItem as OfflineVideoMediaItem).videoPath !== slide.videoUrl) {
-            mpState.load(item);
-          }
+          // Always load to reset timelineSource to "video" (stop() sets it to "none")
+          mpState.load(item);
         } else if (slide.videoId) {
           const item: OnlineVideoMediaItem = {
             type: "online_video",
@@ -134,14 +208,11 @@ export function PersistentVideoPlayer() {
             videoSource: "youtube",
             title: slide.videoTitle ?? "Video",
           };
-          if (mpState.currentItem?.type !== "online_video" || (mpState.currentItem as OnlineVideoMediaItem).videoId !== slide.videoId) {
-            mpState.load(item);
-          }
+          mpState.load(item);
         }
       } else {
         // Non-video slide projected: pause but keep player alive
         ytPlayerRef.current?.pauseVideo();
-        if (videoRef.current) videoRef.current.pause();
       }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
@@ -150,7 +221,7 @@ export function PersistentVideoPlayer() {
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
-      if (!ytPlayerRef.current && !videoRef.current) return;
+      if (!activeSlide) return;
 
       clearInterval(pollTimerRef.current ?? undefined);
       pollTimerRef.current = null;
@@ -159,44 +230,48 @@ export function PersistentVideoPlayer() {
         try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
         ytPlayerRef.current = null;
       }
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.removeAttribute("src");
-        videoRef.current.load();
-        videoRef.current.remove();
-        videoRef.current = null;
-      }
+
+      // For local video: clearing activeSlide unmounts LocalVideoMaster
       useVideoPlayerStore.getState().resetVideoState();
       setActiveSlide(null);
-      void emit("video-state", {
-        paused: true,
-        currentTime: 0,
-        duration: 0,
-        volume: 1,
-      } satisfies VideoStateEvent).catch(() => {});
+      const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
+      for (const target of ["main", "projector", "return"]) {
+        void emitTo(target, "video-state", resetSnap).catch(() => {});
+      }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
-  }, []);
+  }, [activeSlide]);
 
-  // Listen to video-control: apply to master player
+  // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
   useEffect(() => {
     const unsub = listen<VideoControlEvent>("video-control", (e) => {
       const { action, value } = e.payload;
 
-      if (ytPlayerRef.current) {
-        const p = ytPlayerRef.current;
-        if (action === "play") p.playVideo();
-        else if (action === "pause") p.pauseVideo();
-        else if (action === "seek" && value !== undefined) p.seekTo(value, true);
-        else if (action === "volume" && value !== undefined) p.setVolume(Math.round(value * 100));
+      if (action === "seek") {
+        seekingRef.current = true;
+        setTimeout(() => { seekingRef.current = false; }, 500);
       }
 
-      if (videoRef.current) {
-        const v = videoRef.current;
-        if (action === "play") void v.play().catch(() => {});
-        else if (action === "pause") v.pause();
-        else if (action === "seek" && value !== undefined) v.currentTime = value;
-        else if (action === "volume" && value !== undefined) v.volume = value;
+      if (ytPlayerRef.current) {
+        const p = ytPlayerRef.current;
+        if (action === "play") {
+          p.playVideo();
+          for (const target of ["projector", "return"] as const) {
+            void emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
+          }
+        } else if (action === "pause") {
+          p.pauseVideo();
+          for (const target of ["projector", "return"] as const) {
+            void emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
+          }
+        } else if (action === "seek" && value !== undefined) {
+          p.seekTo(value, true);
+          for (const target of ["projector", "return"] as const) {
+            void emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
+          }
+        } else if (action === "volume" && value !== undefined) {
+          p.setVolume(Math.round(value * 100));
+        }
       }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
@@ -250,27 +325,29 @@ export function PersistentVideoPlayer() {
               "transform:scale(1.06);transform-origin:center;display:block;";
 
             pollTimerRef.current = setInterval(() => {
+              if (target.getPlayerState() !== 1) return; // only heartbeat while playing
               const snap: VideoStateEvent = {
-                paused: target.getPlayerState() !== 1,
+                paused: false,
                 currentTime: target.getCurrentTime(),
                 duration: target.getDuration(),
                 volume: target.getVolume() / 100,
               };
               broadcastState(snap, { videoId, videoSrc: null, videoSource: "youtube" });
-            }, 250);
+            }, HEARTBEAT_INTERVAL_MS);
           },
           onStateChange: ({ data, target }) => {
             if (destroyed) return;
-            if (data !== 1) {
-              broadcastState(
-                {
-                  paused: true,
-                  currentTime: target.getCurrentTime(),
-                  duration: target.getDuration(),
-                  volume: target.getVolume() / 100,
-                },
-                { videoId, videoSrc: null, videoSource: "youtube" },
-              );
+            seekingRef.current = false;
+            const snap: VideoStateEvent = {
+              paused: data !== 1,
+              currentTime: target.getCurrentTime(),
+              duration: target.getDuration(),
+              volume: target.getVolume() / 100,
+            };
+            broadcastState(snap, { videoId, videoSrc: null, videoSource: "youtube" }, true);
+            // data === 0 means ENDED
+            if (data === 0) {
+              handleVideoEnded();
             }
           },
         },
@@ -286,105 +363,23 @@ export function PersistentVideoPlayer() {
       ytPlayerRef.current = null;
       container.remove();
     };
-  }, [activeSlide?.videoId, activeSlide?.videoSource, broadcastState]);
+  }, [activeSlide?.videoId, activeSlide?.videoSource, broadcastState, playSessionId]);
 
-  // ── Local video player lifecycle ──────────────────────────────────────────
-
-  // Effect A: create/destroy the <video> element when slide identity or resolved src changes.
-  useEffect(() => {
-    const isLocal = activeSlide?.videoSource === "local";
-    const videoUrl = activeSlide?.videoUrl ?? null;
-    if (!isLocal || !videoUrl || !playerHostRef.current || !localVideoSrc) return;
-
-    // Clean up previous local player
-    clearInterval(pollTimerRef.current ?? undefined);
-    pollTimerRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.removeAttribute("src");
-      videoRef.current.load();
-      videoRef.current.remove();
-      videoRef.current = null;
-    }
-
-    const video = document.createElement("video");
-    video.style.cssText = "width:100%;height:100%;object-fit:contain;";
-    video.playsInline = true;
-    video.src = localVideoSrc;
-    playerHostRef.current.appendChild(video);
-    videoRef.current = video;
-
-    const startPoll = () => {
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = setInterval(() => {
-        const snap: VideoStateEvent = {
-          paused: video.paused,
-          currentTime: video.currentTime,
-          duration: isFinite(video.duration) ? video.duration : 0,
-          volume: video.volume,
-        };
-        broadcastState(snap, { videoId: null, videoSrc: localVideoSrc, videoSource: "local" });
-      }, 250);
-    };
-
-    const onCanPlay = () => {
-      video.muted = true;
-      void video.play()
-        .then(() => { video.muted = false; })
-        .catch((err) => {
-          console.warn("[PVP] autoplay failed:", err);
-          video.muted = false;
-        });
-      startPoll();
-    };
-
-    const onError = () => {
-      // Ignore errors from intentional cleanup (removeAttribute("src") + load())
-      if (!video.src || video.src === window.location.href) return;
-      const e = video.error;
-      console.error("[PVP] video error:", e?.code, e?.message, "src:", video.src.slice(0, 120));
-    };
-
-    const onPause = () => {
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = null;
-      broadcastState(
-        { paused: true, currentTime: video.currentTime, duration: isFinite(video.duration) ? video.duration : 0, volume: video.volume },
-        { videoId: null, videoSrc: localVideoSrc, videoSource: "local" },
-      );
-    };
-
-    video.addEventListener("error", onError);
-    if (video.readyState >= 3) {
-      onCanPlay();
-    } else {
-      video.addEventListener("canplay", onCanPlay, { once: true });
-    }
-    video.addEventListener("pause", onPause);
-
-    return () => {
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = null;
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("error", onError);
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-      video.remove();
-      videoRef.current = null;
-    };
-  }, [activeSlide?.videoSource, activeSlide?.videoUrl, localVideoSrc, broadcastState]);
-
-  // ── Compute player host style ──────────────────────────────────────────────
-
-  const hostStyle = computeHostStyle(previewRect);
+  const isLocalVideo = activeSlide?.videoSource === "local" && !!activeSlide?.videoUrl;
 
   return (
     <div
       ref={playerHostRef}
       aria-hidden
-      style={hostStyle}
-    />
+      style={RESTING_STYLE}
+    >
+      {isLocalVideo && activeSlide?.videoUrl && (
+        <LocalVideoMaster
+          videoPath={activeSlide.videoUrl}
+          onBroadcast={broadcastLocalState}
+        />
+      )}
+    </div>
   );
 }
 
@@ -400,17 +395,3 @@ const RESTING_STYLE: React.CSSProperties = {
   zIndex: -1,
   overflow: "hidden",
 };
-
-function computeHostStyle(rect: PreviewRect | null): React.CSSProperties {
-  if (!rect) return RESTING_STYLE;
-  return {
-    position: "fixed",
-    top: rect.top,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
-    pointerEvents: "none",
-    zIndex: 10,
-    overflow: "hidden",
-  };
-}

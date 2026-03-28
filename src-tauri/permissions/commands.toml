@@ -137,6 +137,7 @@ allow = [
     "copy_image_to_media",
     "get_video_metadata",
     "open_media_folder",
+    "copy_video_to_media",
     "start_timer",
     "pause_timer",
     "resume_timer",
@@ -259,6 +260,15 @@ allow = [
 ]
 
 [[permission]]
+identifier = "allow-video-server-commands"
+description = "Allows video server start and status commands"
+[permission.commands]
+allow = [
+    "start_video_server",
+    "get_video_server_status"
+]
+
+[[permission]]
 identifier = "allow-projection-view-only"
 description = "Minimal commands needed for projector/return windows"
 [permission.commands]
@@ -268,6 +278,7 @@ allow = [
     "get_overlay_state",
     "get_timer_state",
     "get_streaming_status",
+    "get_video_server_status",
     "get_all_settings"
 ]
 

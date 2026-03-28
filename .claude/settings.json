@@ -1,5 +1,4 @@
 {
-  "model": "sonnet",
   "env": {
     "MAX_THINKING_TOKENS": "10000",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "65"
@@ -38,5 +37,9 @@
       "Bash(/dev/null grep:*)",
       "Bash(ls -la /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/src/commands/*.rs)"
     ]
+  },
+  "model": "sonnet",
+  "enabledPlugins": {
+    "rust-skills@rust-skills": true
   }
 }

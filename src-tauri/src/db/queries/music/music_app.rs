@@ -120,6 +120,22 @@ pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, App
         return Ok(hymns);
     }
 
+    // If numeric, search by number
+    if let Ok(num) = trimmed.parse::<i64>() {
+        let mut stmt = conn.prepare(
+            "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
+             FROM hymns h
+             WHERE h.number = ?1
+             AND h.category = 'hymnal'
+             ORDER BY h.title
+             LIMIT 100"
+        )?;
+        let hymns = stmt
+            .query_map(params![num], map_hymn_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
     // Text search via FTS5
     let Some(fts_query) = build_fts_prefix_query(trimmed) else {
         return Ok(vec![]);

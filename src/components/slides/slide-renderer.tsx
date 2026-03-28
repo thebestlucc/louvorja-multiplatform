@@ -179,9 +179,10 @@ function renderSlide(
   }
 
   if (slide.slideType === "image") {
+    if (!resolvedImagePath) return null;
     return (
       <img
-        src={resolvedImagePath ?? ""}
+        src={resolvedImagePath}
         alt={slide.label ?? ""}
         className="h-full w-full object-contain"
       />
@@ -247,9 +248,10 @@ function renderSlide(
     const mediaPath = slide.backgroundImage ?? slide.videoPath ?? null;
     const inferred = inferMediaType(mediaPath);
     if (inferred === "image") {
+      if (!resolvedImagePath) return null;
       return (
         <img
-          src={resolvedImagePath ?? ""}
+          src={resolvedImagePath}
           alt={slide.label ?? ""}
           className="h-full w-full object-contain"
         />

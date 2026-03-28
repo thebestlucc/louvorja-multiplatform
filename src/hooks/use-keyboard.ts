@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useQueueStore } from "../stores/queue-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useSetting } from "../lib/queries";
@@ -25,6 +26,11 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const clearPresentation = useCallback(() => {
     usePresentationStore.getState().setSlides([]);
     void stopProjectionAndSongAudio();
+    // Clear queue when ESC is pressed with one item or at the last item
+    const q = useQueueStore.getState();
+    if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
+      q.clearQueue();
+    }
   }, []);
 
   useEffect(() => {

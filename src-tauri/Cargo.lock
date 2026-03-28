@@ -2859,6 +2859,7 @@ dependencies = [
  "dotenvy",
  "global-hotkey",
  "log",
+ "memmap2",
  "mimalloc",
  "monitor",
  "objc2 0.6.3",

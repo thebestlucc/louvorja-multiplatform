@@ -112,5 +112,18 @@ export const useMediaPlayerStore = create<MediaPlayerState>((set) => ({
       };
     }),
 
-  stop: () => set({ ...initialState }),
+  stop: () =>
+    set((state) => ({
+      status: "idle",
+      currentTime: 0,
+      duration: 0,
+      timelineSource: "none" as TimelineSource,
+      activeSlideIndex: 0,
+      error: null,
+      // Preserve currentItem and overlay — stop ≠ unload
+      currentItem: state.currentItem,
+      overlay: state.overlay,
+      slides: state.slides,
+      syncPoints: state.syncPoints,
+    })),
 }));

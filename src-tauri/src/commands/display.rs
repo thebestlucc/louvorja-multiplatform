@@ -463,6 +463,18 @@ pub fn clear_current_slide(
         server.broadcast_music(&empty_streaming_music_payload().to_string());
         server.broadcast_bible(&serde_json::json!({ "reference": "", "text": "" }).to_string());
         server.broadcast_return(&empty_return_stream_payload().to_string());
+        // Clear video state on streaming clients
+        let video_clear = serde_json::json!({
+            "type": "state",
+            "action": "clear",
+            "currentTime": null,
+            "duration": null,
+            "paused": true,
+            "volume": null,
+            "videoId": null,
+            "videoSource": null,
+        });
+        server.broadcast_video_state(&video_clear.to_string());
     }
     Ok(())
 }

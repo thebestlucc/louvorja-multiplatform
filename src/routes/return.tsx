@@ -29,6 +29,7 @@ export { ReturnPage };
 
 function ReturnPage() {
   const { t, i18n } = useTranslation();
+
   const [currentSlide, setCurrentSlide] = useState<SlideContent | null>(null);
   const [nextSlide, setNextSlide] = useState<SlideContent | null>(null);
   const [slideTitle, setSlideTitle] = useState("");
@@ -159,6 +160,12 @@ function ReturnPage() {
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
+
+  // Disable pointer events on body when projecting online video (hides YouTube iframe controls)
+  useEffect(() => {
+    document.body.style.pointerEvents = currentSlide?.slideType === "online_video" ? "none" : "";
+    return () => { document.body.style.pointerEvents = ""; };
+  }, [currentSlide?.slideType]);
 
   // Keyboard: ESC to close
   useEffect(() => {

@@ -40,6 +40,7 @@ import { usePresentationStore } from "../../stores/presentation-store";
 import { cn } from "../../lib/utils";
 
 import { useQueueStore } from "../../stores/queue-store";
+import { useMediaPlayerStore } from "../../stores/media-player-store";
 
 export const Route = createFileRoute("/presentations/$presentationId")({
   component: PresentationDetail,
@@ -101,6 +102,12 @@ function PresentationDetail() {
       setCurrentPresentation(id);
       setPresentationSlides(slideContents);
       setPresentationActiveSlideIndex(0);
+
+      useMediaPlayerStore.getState().load({
+        type: "presentation",
+        presentationId: id,
+        slides: slideContents,
+      });
 
       useQueueStore.getState().addToQueue([{
         id: crypto.randomUUID(),

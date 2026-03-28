@@ -50,7 +50,8 @@ pub fn download_video(
         .args([
             "-f", format_str,
             "--merge-output-format", "mp4",
-            "--newline",           // Force progress on new lines
+            "--remux-video", "mp4", // Force remux to real MP4 (avoids TS-in-.mp4 container)
+            "--newline",            // Force progress on new lines
             "--no-colors",
             "-o", output_template.to_str().unwrap_or(""),
             &url,

@@ -4,7 +4,7 @@ import { listen, emitTo } from "@tauri-apps/api/event";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { VideoPlayer } from "./video-player";
-import { useMediaSource } from "../../hooks/use-media-source";
+import { useVideoSource } from "../../hooks/use-video-source";
 
 type VideoCtrl = { action: "play" | "pause" | "seek" | "volume"; value?: number };
 
@@ -18,7 +18,7 @@ interface VideoSlideProps {
 
 export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
   const { t } = useTranslation();
-  const srcUrl = useMediaSource(slide.videoPath ?? null);
+  const srcUrl = useVideoSource(slide.videoPath ?? null);
   const projectorVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // In projector mode: listen for control events + emit state back to main window
