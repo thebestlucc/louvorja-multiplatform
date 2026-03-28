@@ -473,15 +473,26 @@ pub fn execute_pack_sync(
             continue;
         }
 
+        // Step 1: Remove old pool from state (releases file handles on Windows)
+        {
+            let mut content_dbs = state.content_dbs.lock().unwrap();
+            content_dbs.remove(lang);
+        }
+
+        // Step 2: Rename tmp -> dest (now safe on Windows since pool is dropped)
         let dest = match content_sync::save_content_db(&tmp_path, lang, &app_data_dir) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("[pack-sync] Failed to save content DB for {}: {}", lang, e);
+                pack_statuses
+                    .lock()
+                    .unwrap()
+                    .insert(item.pack_id.clone(), "failed".to_string());
                 continue;
             }
         };
 
-        // Open new pool and initialise FTS5 index
+        // Step 3: Open new pool and initialise FTS5 index
         match content_sync::open_content_db_pool(&dest) {
             Ok(new_pool) => {
                 match new_pool.get() {
@@ -492,7 +503,7 @@ pub fn execute_pack_sync(
                         eprintln!("[pack-sync] FTS init failed for {}: {}", lang, e);
                     }
                 }
-                // Hot-swap in AppState
+                // Step 4: Hot-swap in AppState
                 {
                     let mut content_dbs = state.content_dbs.lock().unwrap();
                     content_dbs.insert(lang.clone(), new_pool);
@@ -506,12 +517,26 @@ pub fn execute_pack_sync(
             }
             Err(e) => {
                 eprintln!("[pack-sync] Pool open failed for {}: {}", lang, e);
+                pack_statuses
+                    .lock()
+                    .unwrap()
+                    .insert(item.pack_id.clone(), "failed".to_string());
             }
         }
     }
 
-    if let Some(v) = manifest_version_to_save {
-        let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
+    // Only save manifest version if all packs succeeded — partial failure
+    // must allow the planner to re-detect pending items on next run.
+    let any_failed = pack_statuses
+        .lock()
+        .unwrap()
+        .values()
+        .any(|s| s == "failed");
+
+    if !any_failed {
+        if let Some(v) = manifest_version_to_save {
+            let _ = settings::set_setting(&conn, "pack_sync.manifest_version", &v);
+        }
     }
 
     // ── Post-sync: Reset manifest cache so next plan_pack_sync re-fetches ───
@@ -524,14 +549,28 @@ pub fn execute_pack_sync(
         let _ = std::fs::remove_file(data_dir.join("manifest_cache.json"));
     }
 
-    emit(
-        "completed",
-        100.0,
-        "Sincronização de pacotes concluída.",
-        total,
-        total,
-        snapshot(),
-    );
+    let final_statuses = snapshot();
+    let failed_count = final_statuses.values().filter(|s| s.as_str() == "failed").count();
+
+    if failed_count > 0 {
+        emit(
+            "completed_with_errors",
+            100.0,
+            &format!("{} pacotes falharam.", failed_count),
+            total,
+            total,
+            final_statuses,
+        );
+    } else {
+        emit(
+            "completed",
+            100.0,
+            "Sincronização de pacotes concluída.",
+            total,
+            total,
+            final_statuses,
+        );
+    }
 }
 
 fn verify_sha256(path: &Path, expected: &str) -> Result<bool, AppError> {

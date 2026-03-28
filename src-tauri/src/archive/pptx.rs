@@ -9,10 +9,19 @@ use std::path::Path;
 /// A text shape extracted from a PPTX slide.
 #[derive(Debug)]
 struct ShapeText {
-    /// Placeholder type: "title", "ctrTitle", "subTitle", "body", "other"
+    /// Placeholder type: "title", "ctrTitle", "subTitle", "body", "obj", "other"
     placeholder_type: String,
     /// Paragraphs of text within this shape
     paragraphs: Vec<String>,
+    /// First explicit text color found in this shape (e.g. "#FFFFFF")
+    text_color: Option<String>,
+    /// First explicit font size found in this shape (in points)
+    text_size: Option<i32>,
+}
+
+struct SlideExtraction {
+    shapes: Vec<ShapeText>,
+    background_color: Option<String>,
 }
 
 /// Read a .pptx file and convert it to a PresentationArchive.
@@ -42,8 +51,8 @@ pub fn read_pptx(path: &Path) -> Result<PresentationArchive, AppError> {
 
     let mut slides = Vec::new();
     for slide_name in &slide_names {
-        let shapes = extract_slide_shapes(&mut archive, slide_name)?;
-        let slide_data = shapes_to_slide_data(&shapes);
+        let extraction = extract_slide_content(&mut archive, slide_name)?;
+        let slide_data = shapes_to_slide_data(&extraction.shapes, extraction.background_color);
         slides.push(slide_data);
     }
 
@@ -118,11 +127,23 @@ pub fn read_pptx(path: &Path) -> Result<PresentationArchive, AppError> {
     })
 }
 
-/// Convert extracted shapes into a SlideData with appropriate type.
-fn shapes_to_slide_data(shapes: &[ShapeText]) -> SlideData {
+/// Convert extracted shapes into a SlideData with appropriate type and styling.
+fn shapes_to_slide_data(shapes: &[ShapeText], background_color: Option<String>) -> SlideData {
     let mut title_text = String::new();
     let mut subtitle_text = String::new();
     let mut body_paragraphs: Vec<String> = Vec::new();
+
+    // Dominant text color: prefer body/title placeholder, fall back to any shape
+    let dominant_color = shapes
+        .iter()
+        .find_map(|s| s.text_color.clone());
+
+    // Dominant font size: prefer body placeholder so body text size is used
+    let dominant_size = shapes
+        .iter()
+        .find(|s| matches!(s.placeholder_type.as_str(), "body" | "obj"))
+        .and_then(|s| s.text_size)
+        .or_else(|| shapes.iter().find_map(|s| s.text_size));
 
     for shape in shapes {
         let text = shape
@@ -148,7 +169,6 @@ fn shapes_to_slide_data(shapes: &[ShapeText]) -> SlideData {
                 body_paragraphs.push(text);
             }
             _ => {
-                // Non-placeholder shapes — treat as body text
                 body_paragraphs.push(text);
             }
         }
@@ -156,13 +176,15 @@ fn shapes_to_slide_data(shapes: &[ShapeText]) -> SlideData {
 
     let body_text = body_paragraphs.join("\n\n");
 
-    // Determine slide type based on what we found
     if !title_text.is_empty() && body_text.is_empty() {
         // Title-only slide → cover
         let content = serde_json::json!({
-            "type": "cover",
+            "slideType": "cover",
             "title": title_text,
             "subtitle": if subtitle_text.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(subtitle_text) },
+            "textColor": dominant_color,
+            "backgroundColor": background_color,
+            "textSize": dominant_size,
         })
         .to_string();
 
@@ -181,8 +203,11 @@ fn shapes_to_slide_data(shapes: &[ShapeText]) -> SlideData {
         };
 
         let content = serde_json::json!({
-            "type": "text",
+            "slideType": "text",
             "text": full_text.trim(),
+            "textColor": dominant_color,
+            "backgroundColor": background_color,
+            "textSize": dominant_size,
         })
         .to_string();
 
@@ -195,8 +220,11 @@ fn shapes_to_slide_data(shapes: &[ShapeText]) -> SlideData {
     } else if !body_text.is_empty() {
         // Body only → text slide
         let content = serde_json::json!({
-            "type": "text",
+            "slideType": "text",
             "text": body_text,
+            "textColor": dominant_color,
+            "backgroundColor": background_color,
+            "textSize": dominant_size,
         })
         .to_string();
 
@@ -209,7 +237,7 @@ fn shapes_to_slide_data(shapes: &[ShapeText]) -> SlideData {
     } else {
         // Empty slide → pause
         let content = serde_json::json!({
-            "type": "pause",
+            "slideType": "pause",
         })
         .to_string();
 
@@ -229,11 +257,11 @@ fn extract_slide_number(name: &str) -> u32 {
         .unwrap_or(0)
 }
 
-/// Extract all text shapes from a slide XML, detecting placeholder types.
-fn extract_slide_shapes(
+/// Extract all text shapes and slide styling from a slide XML.
+fn extract_slide_content(
     archive: &mut zip::ZipArchive<std::fs::File>,
     slide_name: &str,
-) -> Result<Vec<ShapeText>, AppError> {
+) -> Result<SlideExtraction, AppError> {
     let mut slide_file = archive
         .by_name(slide_name)
         .map_err(|e| AppError::Internal(format!("Failed to read slide {}: {}", slide_name, e)))?;
@@ -243,15 +271,25 @@ fn extract_slide_shapes(
     let mut reader = Reader::from_str(&xml_str);
     let mut shapes: Vec<ShapeText> = Vec::new();
 
-    // State tracking
-    let mut in_sp = false; // inside <p:sp> (shape)
-    let mut in_txbody = false; // inside <p:txBody>
-    let mut in_paragraph = false; // inside <a:p>
-    let mut in_text_run = false; // inside <a:t>
-    let mut sp_depth: usize = 0;
+    // --- Shape parsing state ---
+    let mut in_sp = false;
+    let mut in_txbody = false;
+    let mut in_paragraph = false;
+    let mut in_run = false;       // inside <a:r> (text run element)
+    let mut in_rpr = false;       // inside <a:rPr> (run properties)
+    let mut in_rpr_fill = false;  // inside <a:solidFill> inside <a:rPr>
+    let mut in_text_elem = false; // inside <a:t>
     let mut placeholder_type = String::new();
     let mut current_paragraphs: Vec<String> = Vec::new();
     let mut current_paragraph_runs: Vec<String> = Vec::new();
+    let mut shape_text_color: Option<String> = None;
+    let mut shape_text_size: Option<i32> = None;
+
+    // --- Background parsing state ---
+    let mut in_bg = false;
+    let mut in_bgpr = false;
+    let mut bg_in_fill = false;
+    let mut background_color: Option<String> = None;
 
     loop {
         match reader.read_event() {
@@ -262,18 +300,29 @@ fn extract_slide_shapes(
 
                 if local == b"sp" && !in_sp {
                     in_sp = true;
-                    sp_depth = 1;
                     placeholder_type = "other".to_string();
                     current_paragraphs.clear();
-                } else if in_sp {
-                    sp_depth += 1;
-
+                    shape_text_color = None;
+                    shape_text_size = None;
+                } else if !in_sp {
+                    // Background color detection (outside shapes)
+                    if local == b"bg" {
+                        in_bg = true;
+                    } else if in_bg && local == b"bgPr" {
+                        in_bgpr = true;
+                    } else if in_bgpr && local == b"solidFill" {
+                        bg_in_fill = true;
+                    } else if bg_in_fill && local == b"srgbClr" && background_color.is_none() {
+                        if let Some(color) = extract_attr_val(e.attributes()) {
+                            background_color = Some(format!("#{}", color));
+                        }
+                    }
+                } else {
+                    // Inside a shape
                     if local == b"ph" {
-                        // <p:ph type="title"/> — extract placeholder type
+                        // Extract placeholder type attribute
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"type"
-                                || local_name(attr.key.as_ref()) == b"type"
-                            {
+                            if local_name(attr.key.as_ref()) == b"type" {
                                 if let Ok(val) = std::str::from_utf8(&attr.value) {
                                     placeholder_type = val.to_string();
                                 }
@@ -284,52 +333,50 @@ fn extract_slide_shapes(
                     } else if in_txbody && local == b"p" {
                         in_paragraph = true;
                         current_paragraph_runs.clear();
-                    } else if in_paragraph && local == b"t" {
-                        in_text_run = true;
-                    }
-                }
-            }
-            Ok(Event::End(ref e)) => {
-                let name = e.name();
-                let name_ref = name.as_ref();
-                let local = local_name(name_ref);
-
-                if in_sp {
-                    if local == b"t" && in_text_run {
-                        in_text_run = false;
-                    } else if local == b"p" && in_paragraph {
-                        in_paragraph = false;
-                        let para_text = current_paragraph_runs.join("");
-                        current_paragraphs.push(para_text);
-                    } else if local == b"txBody" {
-                        in_txbody = false;
-                    } else if local == b"sp" {
-                        sp_depth -= 1;
-                        if sp_depth == 0 {
-                            in_sp = false;
-                            if current_paragraphs.iter().any(|p| !p.trim().is_empty()) {
-                                shapes.push(ShapeText {
-                                    placeholder_type: placeholder_type.clone(),
-                                    paragraphs: current_paragraphs.clone(),
-                                });
+                    } else if in_paragraph && local == b"r" {
+                        in_run = true;
+                    } else if in_run && local == b"rPr" {
+                        in_rpr = true;
+                        // Extract font size from sz attribute (hundredths of a point → points)
+                        if shape_text_size.is_none() {
+                            for attr in e.attributes().flatten() {
+                                if local_name(attr.key.as_ref()) == b"sz" {
+                                    if let Ok(val) = std::str::from_utf8(&attr.value) {
+                                        if let Ok(sz) = val.parse::<i32>() {
+                                            shape_text_size = Some((sz / 100).clamp(8, 96));
+                                        }
+                                    }
+                                }
                             }
                         }
-                    } else {
-                        sp_depth = sp_depth.saturating_sub(0); // sp_depth tracking for nested elements
+                    } else if in_rpr && local == b"solidFill" {
+                        in_rpr_fill = true;
+                    } else if in_rpr_fill && local == b"srgbClr" && shape_text_color.is_none() {
+                        if let Some(color) = extract_attr_val(e.attributes()) {
+                            shape_text_color = Some(format!("#{}", color));
+                        }
+                    } else if in_paragraph && local == b"t" {
+                        in_text_elem = true;
                     }
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if in_sp {
-                    let name = e.name();
-                    let name_ref = name.as_ref();
-                    let local = local_name(name_ref);
+                let name = e.name();
+                let name_ref = name.as_ref();
+                let local = local_name(name_ref);
 
+                if !in_sp {
+                    // Self-closing background color elements
+                    if bg_in_fill && local == b"srgbClr" && background_color.is_none() {
+                        if let Some(color) = extract_attr_val(e.attributes()) {
+                            background_color = Some(format!("#{}", color));
+                        }
+                    }
+                } else {
+                    // Self-closing elements inside a shape
                     if local == b"ph" {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"type"
-                                || local_name(attr.key.as_ref()) == b"type"
-                            {
+                            if local_name(attr.key.as_ref()) == b"type" {
                                 if let Ok(val) = std::str::from_utf8(&attr.value) {
                                     placeholder_type = val.to_string();
                                 }
@@ -338,11 +385,80 @@ fn extract_slide_shapes(
                     } else if in_paragraph && local == b"br" {
                         // Line break within paragraph
                         current_paragraph_runs.push("\n".to_string());
+                    } else if in_run && local == b"rPr" {
+                        // Self-closing run properties — only carries sz, no fill children
+                        if shape_text_size.is_none() {
+                            for attr in e.attributes().flatten() {
+                                if local_name(attr.key.as_ref()) == b"sz" {
+                                    if let Ok(val) = std::str::from_utf8(&attr.value) {
+                                        if let Ok(sz) = val.parse::<i32>() {
+                                            shape_text_size = Some((sz / 100).clamp(8, 96));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if in_rpr_fill && local == b"srgbClr" && shape_text_color.is_none() {
+                        if let Some(color) = extract_attr_val(e.attributes()) {
+                            shape_text_color = Some(format!("#{}", color));
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let name = e.name();
+                let name_ref = name.as_ref();
+                let local = local_name(name_ref);
+
+                if !in_sp {
+                    if local == b"bg" {
+                        in_bg = false;
+                        in_bgpr = false;
+                        bg_in_fill = false;
+                    } else if local == b"bgPr" {
+                        in_bgpr = false;
+                        bg_in_fill = false;
+                    } else if local == b"solidFill" && bg_in_fill {
+                        bg_in_fill = false;
+                    }
+                } else {
+                    // Inside a shape — detect closing tags
+                    if local == b"sp" {
+                        // Shape closed: PPTX shapes are not nested so this is always our shape.
+                        in_sp = false;
+                        if current_paragraphs.iter().any(|p| !p.trim().is_empty()) {
+                            shapes.push(ShapeText {
+                                placeholder_type: placeholder_type.clone(),
+                                paragraphs: current_paragraphs.clone(),
+                                text_color: shape_text_color.clone(),
+                                text_size: shape_text_size,
+                            });
+                        }
+                    } else if local == b"t" && in_text_elem {
+                        in_text_elem = false;
+                    } else if local == b"r" && in_run {
+                        in_run = false;
+                        in_rpr = false;
+                        in_rpr_fill = false;
+                    } else if local == b"rPr" && in_rpr {
+                        in_rpr = false;
+                        in_rpr_fill = false;
+                    } else if local == b"solidFill" && in_rpr_fill {
+                        in_rpr_fill = false;
+                    } else if local == b"p" && in_paragraph {
+                        in_paragraph = false;
+                        in_run = false;
+                        let para_text = current_paragraph_runs.join("");
+                        current_paragraphs.push(para_text);
+                    } else if local == b"txBody" {
+                        in_txbody = false;
+                        in_paragraph = false;
+                        in_run = false;
                     }
                 }
             }
             Ok(Event::Text(ref e)) => {
-                if in_text_run {
+                if in_text_elem {
                     if let Ok(text) = e.unescape() {
                         current_paragraph_runs.push(text.to_string());
                     }
@@ -354,7 +470,24 @@ fn extract_slide_shapes(
         }
     }
 
-    Ok(shapes)
+    Ok(SlideExtraction {
+        shapes,
+        background_color,
+    })
+}
+
+/// Extract the `val` attribute from an element's attributes (used for srgbClr).
+fn extract_attr_val(
+    attrs: quick_xml::events::attributes::Attributes,
+) -> Option<String> {
+    for attr in attrs.flatten() {
+        if local_name(attr.key.as_ref()) == b"val" {
+            if let Ok(val) = std::str::from_utf8(&attr.value) {
+                return Some(val.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Extract local name from a potentially namespaced XML tag (e.g., "a:t" -> "t")

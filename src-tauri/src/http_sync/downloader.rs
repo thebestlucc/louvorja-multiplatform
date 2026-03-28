@@ -111,6 +111,10 @@ async fn download_bytes_to_path(
 
     match result {
         Ok(()) => {
+            // Windows: fs::rename fails when destination exists. Remove first.
+            if local_path.exists() {
+                let _ = std::fs::remove_file(local_path);
+            }
             std::fs::rename(&temp_path, local_path).map_err(|e| {
                 let _ = std::fs::remove_file(&temp_path);
                 AppError::Io(e)

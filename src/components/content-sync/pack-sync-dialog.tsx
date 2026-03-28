@@ -11,6 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useContentSyncStore } from "../../stores/content-sync-store";
 import { usePlanPackSync, useStartPackSync } from "../../lib/queries";
+import { cancelPackSync } from "../../lib/tauri/pack-sync";
 import { catcher } from "../../lib/catcher";
 import { toast } from "sonner";
 import { ChevronRight, CheckCircle2, XCircle, Loader2, Clock, Download } from "lucide-react";
@@ -114,6 +115,9 @@ export function PackSyncDialog() {
   const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
   // content-db-* items are internal — only visible packs from manifest.packs shown to user
   const visibleItems = plan?.items.filter((i) => !i.packId.startsWith("content-db-")) ?? [];
+  const isLoading = planQuery.isLoading;
+  const needsLangSetup = !!plan && plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
+  const isUpToDate = !!plan && visibleItems.length === 0 && !needsLangSetup;
 
   useEffect(() => {
     if (plan?.selectedLanguages?.length) {
@@ -136,16 +140,34 @@ export function PackSyncDialog() {
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
       <DialogContent className="max-w-3xl text-base">
         <DialogHeader>
-          <DialogTitle>{t("settings.packSync.dialogTitle")}</DialogTitle>
+          <DialogTitle>
+            {isUpToDate
+              ? t("settings.packSync.upToDateTitle")
+              : t("settings.packSync.dialogTitle")}
+          </DialogTitle>
           <DialogDescription>
-            {t("settings.packSync.dialogDescription")}
+            {isLoading
+              ? t("settings.packSync.checking")
+              : isUpToDate
+                ? t("settings.packSync.upToDateDescription")
+                : t("settings.packSync.dialogDescription")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-2">
           {(() => {
-            const needsLangSetup = !!plan && plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
             const hasItems = visibleItems.length > 0;
+
+            if (isLoading) {
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t("settings.packSync.checking")}
+                  </div>
+                </div>
+              );
+            }
 
             if (hasItems || needsLangSetup) {
               return (
@@ -210,27 +232,35 @@ export function PackSyncDialog() {
               );
             }
 
-            return <p className="text-sm text-muted-foreground">{t("settings.packSync.upToDate")}</p>;
+            return null;
           })()}
         </div>
 
         <DialogFooter className="mt-6 gap-2 sm:justify-between">
-          <Button variant="ghost" onClick={close}>
-            {t("settings.packSync.later")}
-          </Button>
-          <Button
-            onClick={() => void handleStart(undefined)}
-            disabled={
-              !plan ||
-              startMutation.isPending ||
-              selectedLangs.length === 0 ||
-              (visibleItems.length === 0 && plan.selectedLanguages.length > 0)
-            }
-          >
-            {startMutation.isPending
-              ? t("settings.packSync.starting")
-              : t("settings.packSync.downloadNow")}
-          </Button>
+          {isUpToDate || isLoading ? (
+            <Button variant="ghost" onClick={close}>
+              {t("settings.packSync.close")}
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={close}>
+                {t("settings.packSync.later")}
+              </Button>
+              <Button
+                onClick={() => void handleStart(undefined)}
+                disabled={
+                  !plan ||
+                  startMutation.isPending ||
+                  selectedLangs.length === 0 ||
+                  (visibleItems.length === 0 && plan.selectedLanguages.length > 0)
+                }
+              >
+                {startMutation.isPending
+                  ? t("settings.packSync.starting")
+                  : t("settings.packSync.downloadNow")}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -246,7 +276,7 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-const ACTIVE_STATUSES = new Set(["downloading", "verifying", "extracting", "db_update"]);
+const ACTIVE_STATUSES = new Set(["downloading", "verifying", "extracting", "db_update", "retrying"]);
 const DONE_STATUSES = new Set(["done", "ready"]);
 const FAILED_STATUSES = new Set(["failed"]);
 const SKIPPED_STATUSES = new Set(["skipped"]);
@@ -269,10 +299,45 @@ export function PackSyncProgressDialog() {
   const close = useContentSyncStore((s) => s.closePackSyncProgress);
   const plan = useContentSyncStore((s) => s.packSyncPlan);
   const progress = useContentSyncStore((s) => s.packSyncProgress);
+  const setRunId = useContentSyncStore((s) => s.setPackSyncRunId);
+  const startMutation = useStartPackSync();
 
   const statuses = progress?.packStatuses ?? {};
   const percent = progress?.percent ?? 0;
-  const isDone = progress?.status === "completed" || progress?.status === "failed" || progress?.status === "cancelled";
+  const isDone =
+    progress?.status === "completed" ||
+    progress?.status === "completed_with_errors" ||
+    progress?.status === "failed" ||
+    progress?.status === "cancelled";
+  const hasErrors =
+    progress?.status === "completed_with_errors" || progress?.status === "failed";
+
+  const failedItems = plan?.items.filter((i) => statuses[i.packId] === "failed") ?? [];
+  const failedCount = failedItems.length;
+
+  const handleCancel = async () => {
+    const runId = useContentSyncStore.getState().packSyncRunId;
+    if (runId) {
+      const [, err] = await catcher(cancelPackSync(runId));
+      if (err) toast.error(String(err));
+    }
+  };
+
+  const handleRetryFailed = async () => {
+    if (failedItems.length === 0) return;
+    const selectedLangs = plan?.selectedLanguages ?? [];
+    const [runId, err] = await catcher(
+      startMutation.mutateAsync({
+        items: failedItems,
+        selectedLanguages: selectedLangs.length > 0 ? selectedLangs : null,
+      }),
+    );
+    if (err) {
+      toast.error(String(err));
+      return;
+    }
+    if (runId) setRunId(runId);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && close()}>
@@ -280,12 +345,17 @@ export function PackSyncProgressDialog() {
         <DialogHeader>
           <DialogTitle>{t("settings.packSync.progressTitle")}</DialogTitle>
           <DialogDescription>
-            {isDone
-              ? t("settings.packSync.progressDone")
-              : t("settings.packSync.statusBar", {
+            {!isDone
+              ? t("settings.packSync.statusBar", {
                   current: progress?.packsProcessed ?? 0,
                   total: progress?.packsTotal ?? 0,
-                })}
+                })
+              : hasErrors
+                ? t("settings.packSync.progressPartialFailure", {
+                    failed: failedCount,
+                    total: plan?.items.length ?? 0,
+                  })
+                : t("settings.packSync.progressDone")}
           </DialogDescription>
         </DialogHeader>
 
@@ -293,7 +363,10 @@ export function PackSyncProgressDialog() {
           {/* Progress bar */}
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-sky-500 transition-all duration-300"
+              className={cn(
+                "h-full rounded-full transition-all duration-300",
+                hasErrors ? "bg-amber-500" : "bg-sky-500",
+              )}
               style={{ width: `${Math.min(percent, 100)}%` }}
             />
           </div>
@@ -316,13 +389,18 @@ export function PackSyncProgressDialog() {
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {formatBytes(item.packSize)}
                     </span>
-                    <span className={cn(
-                      "shrink-0 text-xs",
-                      ACTIVE_STATUSES.has(status) && "text-sky-400",
-                      DONE_STATUSES.has(status) && "text-emerald-500",
-                      FAILED_STATUSES.has(status) && "text-destructive",
-                      !ACTIVE_STATUSES.has(status) && !DONE_STATUSES.has(status) && !FAILED_STATUSES.has(status) && "text-muted-foreground",
-                    )}>
+                    <span
+                      className={cn(
+                        "shrink-0 text-xs",
+                        ACTIVE_STATUSES.has(status) && "text-sky-400",
+                        DONE_STATUSES.has(status) && "text-emerald-500",
+                        FAILED_STATUSES.has(status) && "text-destructive",
+                        !ACTIVE_STATUSES.has(status) &&
+                          !DONE_STATUSES.has(status) &&
+                          !FAILED_STATUSES.has(status) &&
+                          "text-muted-foreground",
+                      )}
+                    >
                       {t(`settings.packSync.packStatus.${status}`, { defaultValue: status })}
                     </span>
                   </div>
@@ -336,7 +414,24 @@ export function PackSyncProgressDialog() {
           )}
         </div>
 
-        <DialogFooter className="mt-4">
+        <DialogFooter className="mt-4 gap-2 sm:justify-between">
+          <div className="flex gap-2">
+            {!isDone && (
+              <Button variant="destructive" size="sm" onClick={() => void handleCancel()}>
+                {t("settings.packSync.cancel")}
+              </Button>
+            )}
+            {isDone && failedCount > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => void handleRetryFailed()}
+                disabled={startMutation.isPending}
+              >
+                {t("settings.packSync.retryFailed", { count: failedCount })}
+              </Button>
+            )}
+          </div>
           <Button variant="ghost" onClick={close} disabled={!isDone}>
             {isDone ? t("settings.packSync.close") : t("settings.packSync.runningInBackground")}
           </Button>

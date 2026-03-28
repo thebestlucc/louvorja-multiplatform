@@ -739,6 +739,8 @@
       "description": "Baixar pacotes de mídia via CDN. Os pacotes contêm áudio, playback e capas para hinos e álbuns.",
       "dialogTitle": "Pacotes de Conteúdo Disponíveis",
       "dialogDescription": "Novos pacotes de mídia estão disponíveis para download.",
+      "upToDateTitle": "Conteúdo Atualizado",
+      "upToDateDescription": "Todos os seus pacotes de conteúdo estão atualizados.",
       "packsToDownload": "Pacotes para baixar",
       "totalSize": "Tamanho total",
       "files": "arquivos",
@@ -771,7 +773,8 @@
         "db_update": "Atualizando",
         "done": "Concluído",
         "failed": "Falhou",
-        "skipped": "Ignorado"
+        "skipped": "Ignorado",
+        "retrying": "Tentando novamente"
       },
       "packs": "pacotes",
       "selectLanguagesHint": "Selecione idiomas acima para ver os pacotes disponíveis",
@@ -781,7 +784,10 @@
         "playback": "Playback",
         "cover": "Capa",
         "album_cover": "Capa do Álbum"
-      }
+      },
+      "cancel": "Cancelar",
+      "retryFailed": "Repetir Falhas ({{count}})",
+      "progressPartialFailure": "{{failed}} de {{total}} pacotes falharam."
     },
     "language": "Idioma",
     "languageDesc": "Escolha o idioma do aplicativo.",

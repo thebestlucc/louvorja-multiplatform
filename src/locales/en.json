@@ -739,6 +739,8 @@
       "description": "Download media packs from CDN. Packs contain audio, playback, and cover files for hymns and albums.",
       "dialogTitle": "Content Packs Available",
       "dialogDescription": "New media packs are available for download.",
+      "upToDateTitle": "Content Up to Date",
+      "upToDateDescription": "All your content packs are up to date.",
       "packsToDownload": "Packs to download",
       "totalSize": "Total download size",
       "files": "files",
@@ -771,7 +773,8 @@
         "db_update": "Updating",
         "done": "Done",
         "failed": "Failed",
-        "skipped": "Skipped"
+        "skipped": "Skipped",
+        "retrying": "Retrying"
       },
       "packs": "packs",
       "selectLanguagesHint": "Select languages above to see available packs",
@@ -781,7 +784,10 @@
         "playback": "Playback",
         "cover": "Cover",
         "album_cover": "Album Cover"
-      }
+      },
+      "cancel": "Cancel",
+      "retryFailed": "Retry Failed ({{count}})",
+      "progressPartialFailure": "{{failed}} of {{total}} packs failed to download."
     },
     "language": "Language",
     "languageDesc": "Choose the app language.",

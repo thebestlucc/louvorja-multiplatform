@@ -18,8 +18,11 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    console.log("[VideoFollower] loading src:", videoUrl);
     video.src = videoUrl;
-    video.play().catch(() => {});
+    video.play().catch((err) => {
+      console.warn("[VideoFollower] play() rejected:", err?.message ?? err);
+    });
   }, [videoUrl]);
 
   useEffect(() => {
@@ -63,6 +66,16 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
       muted
       playsInline
       autoPlay
+      onError={(e) => {
+        const v = e.currentTarget;
+        const err = v.error;
+        console.error(
+          "[VideoFollower] video error:",
+          err ? `code=${err.code} message="${err.message}"` : "unknown",
+          "src:", v.src,
+        );
+      }}
+      onCanPlay={() => console.log("[VideoFollower] canplay — ready to render")}
       className={cn("w-full h-full bg-black object-contain", className)}
     />
   );

@@ -125,6 +125,12 @@ export function useMediaPlayer() {
     void useAudioStore.getState().stop();
     void clearCurrentSlide();
     store.getState().stop();
+
+    const queueState = useQueueStore.getState();
+    if (queueState.items.length <= 1) {
+      queueState.clearQueue();
+      store.getState().unload();
+    }
   }, []);
 
   const seek = useCallback((timeMs: number) => {
@@ -255,6 +261,18 @@ export function useMediaPlayer() {
     }
   }, []);
 
+  const restart = useCallback(() => {
+    const state = store.getState();
+    if (state.timelineSource === "video") {
+      void emit("video-control", { action: "seek", value: 0 });
+      void emit("video-control", { action: "play" });
+    } else {
+      void useAudioStore.getState().seek(0);
+      void useAudioStore.getState().resume();
+    }
+    useMediaPlayerStore.setState({ currentTime: 0, activeSlideIndex: 0 });
+  }, []);
+
   const setVolume = useCallback((volume: number) => {
     if (store.getState().timelineSource === "video") {
       // Bypass rodio command (no audio player active in video mode)
@@ -265,5 +283,5 @@ export function useMediaPlayer() {
     }
   }, []);
 
-  return { play, pause, stop, seek, goToSlide, nextSlide, prevSlide, nextItem, prevItem, switchMode, setVolume };
+  return { play, pause, stop, seek, restart, goToSlide, nextSlide, prevSlide, nextItem, prevItem, switchMode, setVolume };
 }

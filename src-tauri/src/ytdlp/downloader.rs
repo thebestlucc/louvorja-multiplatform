@@ -8,6 +8,11 @@ use serde::Serialize;
 use specta::Type;
 use tauri::{AppHandle, Emitter};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct YtdlpProgress {
@@ -46,8 +51,8 @@ pub fn download_video(
 
     let url = format!("https://www.youtube.com/watch?v={}", video_id);
 
-    let mut child = Command::new(binary_path)
-        .args([
+    let mut cmd = Command::new(binary_path);
+    cmd.args([
             "-f", format_str,
             "--merge-output-format", "mp4",
             "--remux-video", "mp4", // Force remux to real MP4 (avoids TS-in-.mp4 container)
@@ -57,7 +62,12 @@ pub fn download_video(
             &url,
         ])
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = cmd
         .spawn()
         .map_err(|e| AppError::Internal(format!("Failed to spawn yt-dlp: {}", e)))?;
 

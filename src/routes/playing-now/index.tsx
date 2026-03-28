@@ -91,6 +91,7 @@ function PlayingNowScreen() {
             onPlay={actions.play}
             onPause={actions.pause}
             onStop={actions.stop}
+            onRestart={actions.restart}
             onSeek={actions.seek}
             onPrevSlide={actions.prevSlide}
             onNextSlide={actions.nextSlide}
