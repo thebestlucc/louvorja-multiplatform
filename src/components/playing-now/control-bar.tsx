@@ -4,6 +4,7 @@ import {
   Play,
   Pause,
   Square,
+  RotateCcw,
   SkipBack,
   SkipForward,
   ChevronLeft,
@@ -37,6 +38,7 @@ interface ControlBarProps {
   onNextSlide: () => void;
   onVolumeChange: (volume: number) => void;
   onMuteToggle: () => void;
+  onRestart?: () => void;
   onPrevItem: () => void;
   onNextItem: () => void;
   currentMode?: "sung" | "karaoke" | "silent";
@@ -62,6 +64,7 @@ export function ControlBar({
   onPlay,
   onPause,
   onStop,
+  onRestart,
   onSeek,
   onPrevSlide,
   onNextSlide,
@@ -164,6 +167,12 @@ export function ControlBar({
               aria-label="Next slide"
             >
               <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+
+          {isActive && onRestart && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRestart} aria-label="Restart">
+              <RotateCcw className="h-3.5 w-3.5" />
             </Button>
           )}
 

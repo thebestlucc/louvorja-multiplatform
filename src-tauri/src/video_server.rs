@@ -505,14 +505,25 @@ fn detect_video_content_type_from_bytes(data: &[u8], path: &Path) -> &'static st
         return media_content_type(path);
     }
 
-    // MPEG Transport Stream: sync byte 0x47
-    if data[0] == 0x47 {
-        return "video/mp2t";
-    }
-
-    // ISO BMFF / MP4 / MOV: "ftyp" at offset 4
+    // ISO BMFF / MP4 / MOV: "ftyp" at offset 4 — check BEFORE MPEG-TS sync byte
+    // because a valid MP4 file should never be served as video/mp2t even if byte 0
+    // happens to be 0x47 (the MPEG-TS sync byte).
     if data.len() >= 8 && &data[4..8] == b"ftyp" {
         return "video/mp4";
+    }
+
+    // MPEG Transport Stream: sync byte 0x47 at multiple offsets for confidence.
+    // TS packets are 188 bytes, so check at offsets 0, 188, and 376.
+    if data[0] == 0x47 {
+        let is_ts = (data.len() < 189 || data[188] == 0x47)
+            && (data.len() < 377 || data[376] == 0x47);
+        if is_ts {
+            println!(
+                "[video-server] WARNING: file '{}' is MPEG-TS — may not play on Chromium/WebView2",
+                path.display()
+            );
+            return "video/mp2t";
+        }
     }
 
     // WebM / Matroska: EBML header 0x1A45DFA3

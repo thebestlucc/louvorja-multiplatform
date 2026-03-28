@@ -94,7 +94,7 @@ export interface PackSyncPlan {
 
 export interface PackSyncProgress {
   runId: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  status: "pending" | "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
   percent: number;
   message: string | null;
   packsTotal: number;

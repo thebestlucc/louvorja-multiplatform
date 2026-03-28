@@ -225,7 +225,7 @@ function RootLayout() {
     const unlisten = listen<PackSyncProgress>("pack-sync-progress", (event) => {
       setPackSyncProgress(event.payload);
       const status = event.payload.status;
-      if (status === "completed" || status === "failed" || status === "cancelled") {
+      if (status === "completed" || status === "completed_with_errors" || status === "failed" || status === "cancelled") {
         void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
       }
     });

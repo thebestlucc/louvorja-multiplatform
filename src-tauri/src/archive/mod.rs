@@ -343,9 +343,9 @@ fn convert_legacy_slide(
                 (
                     "image".to_string(),
                     serde_json::json!({
-                        "type": "image",
-                        "src": to_media_path(image_path),
-                        "alt": "Legacy cover",
+                        "slideType": "image",
+                        "backgroundImage": to_media_path(image_path),
+                        "label": "Legacy cover",
                         "audioPath": slide_audio_path,
                     }),
                 )
@@ -370,13 +370,13 @@ fn convert_legacy_slide(
             (
                 "cover".to_string(),
                 serde_json::json!({
-                    "type": "cover",
+                    "slideType": "cover",
                     "title": title,
                     "subtitle": subtitle,
                     "backgroundImage": background_image,
                     "textColor": text_color,
                     "backgroundColor": background_color,
-                    "fontSize": font_size,
+                    "textSize": font_size,
                     "audioPath": slide_audio_path,
                 }),
             )
@@ -385,12 +385,12 @@ fn convert_legacy_slide(
         (
             "lyrics".to_string(),
             serde_json::json!({
-                "type": "lyrics",
+                "slideType": "lyrics",
                 "text": text,
                 "backgroundImage": background_image,
                 "textColor": text_color,
                 "backgroundColor": background_color,
-                "fontSize": font_size,
+                "textSize": font_size,
                 "audioPath": slide_audio_path,
             }),
         )
@@ -398,12 +398,12 @@ fn convert_legacy_slide(
         (
             "text".to_string(),
             serde_json::json!({
-                "type": "text",
+                "slideType": "text",
                 "text": text,
                 "backgroundImage": background_image,
                 "textColor": text_color,
                 "backgroundColor": background_color,
-                "fontSize": font_size,
+                "textSize": font_size,
                 "audioPath": slide_audio_path,
             }),
         )
@@ -411,9 +411,9 @@ fn convert_legacy_slide(
         (
             "image".to_string(),
             serde_json::json!({
-                "type": "image",
-                "src": to_media_path(image_path),
-                "alt": "Legacy slide image",
+                "slideType": "image",
+                "backgroundImage": to_media_path(image_path),
+                "label": "Legacy slide image",
                 "audioPath": slide_audio_path,
             }),
         )
@@ -670,12 +670,12 @@ imagem=imagens\fundo.jpg
 
         let cover_content: serde_json::Value = serde_json::from_str(&parsed.slides[0].content)
             .expect("cover content should be valid json");
-        assert_eq!(cover_content["type"], "cover");
+        assert_eq!(cover_content["slideType"], "cover");
         assert_eq!(cover_content["title"], "HOJE É O TEMPO");
 
         let lyrics_content: serde_json::Value = serde_json::from_str(&parsed.slides[1].content)
             .expect("lyrics content should be valid json");
-        assert_eq!(lyrics_content["type"], "lyrics");
+        assert_eq!(lyrics_content["slideType"], "lyrics");
         assert_eq!(lyrics_content["text"], "linha 1\nlinha 2");
     }
 }

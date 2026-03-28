@@ -101,6 +101,16 @@ function LocalVideoMaster({
       autoPlay
       playsInline
       style={{ width: 1, height: 1, opacity: 0, position: "absolute", pointerEvents: "none" }}
+      onError={(e) => {
+        const v = e.currentTarget;
+        const err = v.error;
+        console.error(
+          "[LocalVideoMaster] video error:",
+          err ? `code=${err.code} message="${err.message}"` : "unknown",
+          "src:", v.src,
+        );
+      }}
+      onCanPlay={() => console.log("[LocalVideoMaster] canplay — video ready")}
       onTimeUpdate={(e) => {
         const v = e.currentTarget;
         onBroadcastRef.current({

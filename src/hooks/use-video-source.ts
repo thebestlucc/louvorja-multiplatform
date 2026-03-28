@@ -48,7 +48,18 @@ export function useVideoSource(path: string | null | undefined): string | null {
     };
   }, [needsServer, queryClient]);
 
-  return buildVideoUrl(path, serverInfo?.isRunning ? serverInfo.port : null, serverInfo?.accessToken ?? null);
+  const url = buildVideoUrl(path, serverInfo?.isRunning ? serverInfo.port : null, serverInfo?.accessToken ?? null);
+
+  // Diagnostic: log when we have a path but no URL (server not ready)
+  if (path && path.trim().length > 0 && !url) {
+    console.warn(
+      "[useVideoSource] path provided but URL is null — server running:",
+      serverInfo?.isRunning ?? false,
+      "port:", serverInfo?.port ?? "none",
+    );
+  }
+
+  return url;
 }
 
 /** Protocols that pass through to the browser unchanged. */

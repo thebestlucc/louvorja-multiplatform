@@ -739,6 +739,8 @@
       "description": "Descargar paquetes de medios desde CDN. Los paquetes contienen audio, playback y portadas para himnos y álbumes.",
       "dialogTitle": "Paquetes de Contenido Disponibles",
       "dialogDescription": "Nuevos paquetes de medios están disponibles para descargar.",
+      "upToDateTitle": "Contenido Actualizado",
+      "upToDateDescription": "Todos tus paquetes de contenido están actualizados.",
       "packsToDownload": "Paquetes para descargar",
       "totalSize": "Tamaño total",
       "files": "archivos",
@@ -771,7 +773,8 @@
         "db_update": "Actualizando",
         "done": "Hecho",
         "failed": "Fallido",
-        "skipped": "Omitido"
+        "skipped": "Omitido",
+        "retrying": "Reintentando"
       },
       "packs": "paquetes",
       "selectLanguagesHint": "Selecciona idiomas arriba para ver los paquetes disponibles",
@@ -781,7 +784,10 @@
         "playback": "Playback",
         "cover": "Portada",
         "album_cover": "Portada del Álbum"
-      }
+      },
+      "cancel": "Cancelar",
+      "retryFailed": "Reintentar Fallidos ({{count}})",
+      "progressPartialFailure": "{{failed}} de {{total}} paquetes fallaron."
     },
     "language": "Idioma",
     "languageDesc": "Elija el idioma de la aplicación.",

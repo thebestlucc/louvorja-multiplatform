@@ -5,6 +5,7 @@ import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useSetting } from "../lib/queries";
 import { matchesShortcutCombo, normalizeShortcutCombo } from "../lib/shortcut-definitions";
 import { spotlightOpen } from "../lib/tauri";
@@ -30,6 +31,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     const q = useQueueStore.getState();
     if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
       q.clearQueue();
+      useMediaPlayerStore.getState().unload();
     }
   }, []);
 

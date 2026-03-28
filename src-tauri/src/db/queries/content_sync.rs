@@ -696,6 +696,10 @@ pub fn save_content_db(
 ) -> Result<PathBuf, AppError> {
     let filename = format!("content-{}.db", lang_bcp47);
     let dest = app_data_dir.join(&filename);
+    // Windows: fs::rename fails when destination exists. Remove first.
+    if dest.exists() {
+        std::fs::remove_file(&dest).map_err(AppError::Io)?;
+    }
     std::fs::rename(tmp_path, &dest).map_err(AppError::Io)?;
     Ok(dest)
 }

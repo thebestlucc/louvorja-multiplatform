@@ -39,6 +39,7 @@ interface MediaPlayerState {
   setMode: (mode: "sung" | "karaoke" | "silent") => void;
 
   stop: () => void;
+  unload: () => void;
 }
 
 const initialState = {
@@ -126,4 +127,18 @@ export const useMediaPlayerStore = create<MediaPlayerState>((set) => ({
       slides: state.slides,
       syncPoints: state.syncPoints,
     })),
+
+  unload: () =>
+    set({
+      currentItem: null,
+      slides: [],
+      syncPoints: [],
+      overlay: null,
+      status: "idle",
+      currentTime: 0,
+      duration: 0,
+      timelineSource: "none" as TimelineSource,
+      activeSlideIndex: 0,
+      error: null,
+    }),
 }));
