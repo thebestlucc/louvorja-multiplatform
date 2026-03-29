@@ -11,9 +11,9 @@ export function useStreamingStatus() {
   return useQuery({
     queryKey: queryKeys.streaming.status,
     queryFn: () => getStreamingStatus(),
-    refetchInterval: (query) => {
-      return query.state.data?.isRunning ? 2000 : 30000;
-    },
+    // Primary invalidation is event-driven via "streaming-status-changed" listener in __root.tsx.
+    // This interval is a safety-net fallback only (e.g. app restart, missed events).
+    refetchInterval: 60_000,
   });
 }
 

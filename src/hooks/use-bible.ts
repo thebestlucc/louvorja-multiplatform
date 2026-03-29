@@ -4,7 +4,7 @@ import { getPreference, setPreference } from "../lib/store";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContent } from "../lib/bindings";
-import { projectSlideWithType } from "../lib/projection-playback";
+import { projectSlideWithType, clearActivePlayback } from "../lib/projection-playback";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
@@ -156,6 +156,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
   }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides, projectionSettings]);
 
   const startBibleProjection = useCallback(async () => {
+    await clearActivePlayback();
     setCurrentProjectionType("bible");
     await projectSelectedVersesRange();
   }, [projectSelectedVersesRange, setCurrentProjectionType]);

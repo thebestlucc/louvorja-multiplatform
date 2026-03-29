@@ -51,6 +51,16 @@ fn create_main_window(app: &tauri::AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Cap Tokio thread pool for low-memory systems (≤8GB target).
+    // Default spawns num_cpus threads (~8MB stack each); 2 is sufficient
+    // for this app's async workload (HTTP fetches, pack sync).
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("Failed to build Tokio runtime");
+    tauri::async_runtime::set(rt.handle().clone());
+
     // Specta builder
     let specta_builder =
         tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
@@ -67,6 +77,7 @@ pub fn run() {
             // Collections
             commands::collections::get_collections,
             commands::collections::search_collections,
+            commands::collections::search_collections_content,
             commands::collections::get_collection,
             commands::collections::create_collection,
             commands::collections::update_collection,
@@ -95,6 +106,7 @@ pub fn run() {
             commands::favorites::get_favorite_hymns,
             commands::favorites::get_favorite_collections,
             commands::favorites::is_favorite,
+            commands::favorites::get_all_favorite_ids,
             // Slides
             commands::slides::get_presentations,
             commands::slides::get_presentation,
@@ -321,7 +333,7 @@ pub fn run() {
             app.manage(AppState {
                 db: pool.clone(),
                 bible_db: bible_pool,
-                content_dbs: std::sync::Arc::new(std::sync::Mutex::new(
+                content_dbs: std::sync::Arc::new(std::sync::RwLock::new(
                     std::collections::HashMap::new(),
                 )),
                 timer: RwLock::new(TimerRuntimeState::default()),
@@ -338,7 +350,30 @@ pub fn run() {
                 global_shortcuts: RwLock::new(std::collections::HashMap::new()),
             });
 
-            app.manage(AudioState::default());
+            // Manage a disabled AudioState immediately (non-blocking).
+            // A background thread attempts real audio init with a 5s timeout;
+            // on success it swaps in the real AudioPlayer.
+            app.manage(AudioState::disabled());
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let (tx, rx) = std::sync::mpsc::channel::<Result<crate::audio::AudioPlayer, crate::error::AppError>>();
+                    std::thread::spawn(move || {
+                        tx.send(crate::audio::AudioPlayer::new()).ok();
+                    });
+                    match rx.recv_timeout(std::time::Duration::from_secs(5)) {
+                        Ok(Ok(player)) => {
+                            let state = handle.state::<AudioState>();
+                            match state.player.write() {
+                                Ok(mut guard) => *guard = player,
+                                Err(e) => eprintln!("[audio] failed to swap in player: {e}"),
+                            };
+                        }
+                        Ok(Err(e)) => eprintln!("[audio] init failed: {e}"),
+                        Err(_) => eprintln!("[audio] init timed out — staying disabled"),
+                    }
+                });
+            }
 
             // Initialize Streaming Server State
             app.manage(StreamingState::default());
@@ -346,38 +381,72 @@ pub fn run() {
             // Initialize Video Server State (loopback-only, for serving local video files)
             app.manage(VideoServerState::default());
 
-            // Startup scan: open existing content-*.db files so they are
-            // available for queries immediately (no sync required).
+            // Background thread for non-critical startup tasks:
+            // content DB scan + global shortcut registration
             {
-                let state = app.state::<AppState>();
-                if let Ok(entries) = std::fs::read_dir(&app_data_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        let name = path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if name.starts_with("content-") && name.ends_with(".db") {
-                            let lang = name
-                                .strip_prefix("content-")
-                                .unwrap_or("")
-                                .strip_suffix(".db")
+                let bg_handle = app.handle().clone();
+                let bg_app_data_dir = app_data_dir.clone();
+                std::thread::spawn(move || {
+                    // Startup scan: open existing content-*.db files
+                    let state = bg_handle.state::<AppState>();
+                    if let Ok(entries) = std::fs::read_dir(&bg_app_data_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            let name = path
+                                .file_name()
+                                .and_then(|n| n.to_str())
                                 .unwrap_or("")
                                 .to_string();
-                            if !lang.is_empty() {
-                                if let Ok(p) =
-                                    crate::db::queries::content_sync::open_content_db_pool(&path)
-                                {
-                                    if let Ok(conn) = p.get() {
-                                        let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
+                            if name.starts_with("content-") && name.ends_with(".db") {
+                                let lang = name
+                                    .strip_prefix("content-")
+                                    .unwrap_or("")
+                                    .strip_suffix(".db")
+                                    .unwrap_or("")
+                                    .to_string();
+                                if !lang.is_empty() {
+                                    if let Ok(p) =
+                                        crate::db::queries::content_sync::open_content_db_pool(&path)
+                                    {
+                                        if let Ok(conn) = p.get() {
+                                            let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
+                                        }
+                                        state.content_dbs.write().unwrap().insert(lang, p);
                                     }
-                                    state.content_dbs.lock().unwrap().insert(lang, p);
                                 }
                             }
                         }
                     }
-                }
+
+                    // Register global shortcuts from settings
+                    let global_defaults = [
+                        ("app-command-palette", "CmdOrCtrl+Shift+K"),
+                        ("app-shortcuts-help", "Alt+H"),
+                    ];
+
+                    if let Ok(conn) = state.db.get() {
+                        if let Ok(mut shortcuts_map) = state.global_shortcuts.write() {
+                            for (action, default_str) in global_defaults {
+                                let key = format!("shortcut.{}.global", action);
+                                let combo_str = crate::db::queries::settings::get_setting(&conn, &key)
+                                    .ok()
+                                    .map(|s| s.value)
+                                    .filter(|v| !v.is_empty())
+                                    .unwrap_or_else(|| default_str.to_string());
+
+                                if !combo_str.is_empty() {
+                                    if let Ok(normalized) = commands::settings::register_global_shortcut(
+                                        action,
+                                        &combo_str,
+                                        &bg_handle,
+                                    ) {
+                                        shortcuts_map.insert(action.to_string(), normalized);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
             }
 
             commands::display::start_monitor_hotplug_watcher(app.handle().clone());
@@ -385,23 +454,6 @@ pub fn run() {
             // Create main window after setup
             create_main_window(app.handle())?;
 
-            // Pre-create the spotlight window hidden so it lives on the current
-            // OS Space. When the user triggers the shortcut, open_spotlight_window()
-            // simply repositions and shows it — no Space switch occurs.
-            if let Err(e) = commands::spotlight::create_spotlight_window(app.handle()) {
-                eprintln!("[spotlight] Failed to pre-create spotlight window: {e}");
-            }
-
-            // tauri-plugin-window-state saves the spotlight window's visibility.
-            // If the app was closed while spotlight was open, the plugin restores it
-            // as visible after DomContentLoaded. Force-hide it after a short delay
-            // to ensure it stays hidden on startup regardless of saved state.
-            if let Some(spotlight_win) = app.get_webview_window("spotlight") {
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                    let _ = spotlight_win.hide();
-                });
-            }
 
             // Auto-start streaming server if configured
             {
@@ -423,56 +475,22 @@ pub fn run() {
                 drop(conn); // release connection back to pool before locking streaming state
 
                 if auto_start {
-                    let streaming = app.state::<StreamingState>();
-                    let server_result = streaming.server.lock();
-                    if let Ok(mut server) = server_result {
-                        server.set_ui_language(&language);
-                        if let Ok(app_data_dir) = app.path().app_data_dir() {
-                            server.set_media_root(app_data_dir);
-                        }
-                        if let Err(e) = server.start(Some(port)) {
-                            eprintln!("[streaming] Failed to auto-start: {e}");
-                        } else {
-                            println!("[streaming] Auto-started on port {port}");
-                        }
-                    }
+                    let handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        let streaming = handle.state::<StreamingState>();
+                        if let Ok(mut server) = streaming.server.lock() {
+                            server.set_ui_language(&language);
+                            if let Ok(app_data) = handle.path().app_data_dir() {
+                                server.set_media_root(app_data);
+                            }
+                            if let Err(e) = server.start(Some(port)) {
+                                eprintln!("[streaming] Failed to auto-start: {e}");
+                            } else {
+                                println!("[streaming] Auto-started on port {port}");
+                            }
+                        };
+                    });
                 }
-            }
-
-            // Register global shortcuts from settings
-            {
-                let global_defaults = [
-                    ("app-command-palette", "CmdOrCtrl+Shift+K"),
-                    ("app-shortcuts-help", "Alt+H"),
-                ];
-
-                let db_state = app.state::<AppState>();
-                let conn = db_state.db.get().map_err(|e| e.to_string())?;
-                let mut shortcuts_map = db_state
-                    .global_shortcuts
-                    .write()
-                    .map_err(|e| e.to_string())?;
-
-                for (action, default_str) in global_defaults {
-                    let key = format!("shortcut.{}.global", action);
-                    let combo_str = crate::db::queries::settings::get_setting(&conn, &key)
-                        .ok()
-                        .map(|s| s.value)
-                        .filter(|v| !v.is_empty())
-                        .unwrap_or_else(|| default_str.to_string());
-
-                    if !combo_str.is_empty() {
-                        if let Ok(normalized) = commands::settings::register_global_shortcut(
-                            action,
-                            &combo_str,
-                            app.handle(),
-                        ) {
-                            shortcuts_map.insert(action.to_string(), normalized);
-                        }
-                    }
-                }
-                drop(conn);
-                drop(shortcuts_map);
             }
 
             Ok(())
@@ -489,6 +507,12 @@ pub fn run() {
                         let state = window.state::<AppState>();
                         state.return_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("return-state-changed", false);
+                    }
+                    "main" => {
+                        let state = window.state::<AppState>();
+                        if let Ok(conn) = state.db.get() {
+                            let _ = conn.execute_batch("PRAGMA optimize;");
+                        }
                     }
                     _ => {}
                 }

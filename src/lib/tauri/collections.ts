@@ -28,6 +28,10 @@ export async function searchCollections(query: string): Promise<CollectionSearch
   return tauriInvoke<CollectionSearchResult[]>("search_collections", { query });
 }
 
+export async function searchCollectionsContent(query: string): Promise<CollectionSearchResult[]> {
+  return tauriInvoke<CollectionSearchResult[]>("search_collections_content", { query });
+}
+
 export async function createCollection(
   name: string,
   description: string | null,

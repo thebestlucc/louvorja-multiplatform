@@ -14,7 +14,7 @@ fn get_content_db_conn(
 )> {
     let langs = crate::db::queries::content_sync::get_selected_languages(conn);
     let lang = langs.into_iter().next()?;
-    let map = state.content_dbs.lock().ok()?;
+    let map = state.content_dbs.read().ok()?;
     let pool = map.get(&lang)?.clone(); // clone pool before dropping lock
     drop(map); // release lock before .get()
     let pooled = pool.get().ok()?;

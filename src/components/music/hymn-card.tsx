@@ -5,7 +5,7 @@ import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { useAddServiceItem } from "../../lib/queries";
+import { useAddServiceItem, useFavoriteIds } from "../../lib/queries";
 import type { Hymn } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 import { LyricsModal } from "./lyrics-modal";
@@ -23,6 +23,8 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
   const addItemMutation = useAddServiceItem();
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
+  const { data: favoriteIds } = useFavoriteIds("hymn");
+  const isFav = favoriteIds?.has(hymn.id);
 
   const hasAudio = Boolean(hymn.audioPath);
   const hasPlayback = Boolean(hymn.playbackPath);
@@ -133,7 +135,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                   <Plus className="h-4 w-4" />
                 </Button>
               )}
-              <FavoriteButton itemType="hymn" itemId={hymn.id} size="icon" className="h-8 w-8" />
+              <FavoriteButton itemType="hymn" itemId={hymn.id} size="icon" className="h-8 w-8" isFavoriteOverride={isFav} />
             </div>
           </div>
         </div>
@@ -163,6 +165,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
             size="icon"
             variant="outline"
             className="h-8 w-8 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md border-white/10"
+            isFavoriteOverride={isFav}
           />
         </div>
 

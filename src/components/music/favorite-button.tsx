@@ -11,6 +11,8 @@ interface FavoriteButtonProps {
   className?: string;
   size?: "sm" | "md" | "lg" | "icon";
   variant?: "ghost" | "outline" | "default";
+  /** Pre-computed favorite state from a batch Set lookup. When provided, skips per-item IPC query. */
+  isFavoriteOverride?: boolean;
 }
 
 export function FavoriteButton({
@@ -19,9 +21,13 @@ export function FavoriteButton({
   className,
   size = "icon",
   variant = "ghost",
+  isFavoriteOverride,
 }: FavoriteButtonProps) {
   const { t } = useTranslation();
-  const { data: isFav, isLoading } = useIsFavorite(itemType, itemId);
+  const { data: isFavFromQuery, isLoading } = useIsFavorite(itemType, itemId, {
+    enabled: isFavoriteOverride === undefined,
+  });
+  const isFav = isFavoriteOverride !== undefined ? isFavoriteOverride : isFavFromQuery;
   const toggleMutation = useToggleFavorite();
 
   const handleToggle = async (e: React.MouseEvent) => {

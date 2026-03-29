@@ -206,7 +206,7 @@ pub struct AppState {
     pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
     /// Content DBs keyed by BCP 47 language tag (e.g. "pt-BR").
     /// Populated on startup (scan for content-*.db) and after each content sync.
-    pub content_dbs: Arc<Mutex<HashMap<String, Pool<SqliteConnectionManager>>>>,
+    pub content_dbs: Arc<RwLock<HashMap<String, Pool<SqliteConnectionManager>>>>,
     pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub pack_sync: Mutex<PackSyncRuntimeState>,

@@ -13,6 +13,8 @@ export function useBibleVersions() {
   return useQuery({
     queryKey: queryKeys.bible.versions,
     queryFn: () => getBibleVersions(),
+    staleTime: Infinity,
+    gcTime: Infinity, // small dataset, always needed while app is open
   });
 }
 
@@ -21,6 +23,8 @@ export function useBooks(versionId: number) {
     queryKey: queryKeys.bible.books(versionId),
     queryFn: () => getBooks(versionId),
     enabled: versionId > 0,
+    staleTime: Infinity,
+    gcTime: 60_000,
   });
 }
 

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useImageSrc } from "../../hooks/use-image-src";
@@ -14,10 +14,12 @@ export const CoverImage = memo(function CoverImage({ path, title, className, fal
   const src = useImageSrc(path);
   const [failed, setFailed] = useState(false);
 
-  // Reset error state when the path changes
-  useEffect(() => {
+  // Reset error state synchronously when the path changes (avoids double-render)
+  const prevPathRef = useRef(path);
+  if (prevPathRef.current !== path) {
+    prevPathRef.current = path;
     setFailed(false);
-  }, [path]);
+  }
 
   const initials = useMemo(() => {
     const words = title

@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { catcher } from "../../lib/catcher";
 import { useServiceEditor } from "../../hooks/use-service";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useShallow } from "zustand/react/shallow";
 import { setSlideContext } from "../../lib/tauri";
 import { projectSlideWithType } from "../../lib/projection-playback";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
@@ -73,7 +74,15 @@ function ServiceEditor() {
     activeServiceItemIndex,
     setPlayingService,
     setActiveServiceItemIndex,
-  } = usePresentationStore();
+  } = usePresentationStore(
+    useShallow((s) => ({
+      setActiveService: s.setActiveService,
+      isPlayingService: s.isPlayingService,
+      activeServiceItemIndex: s.activeServiceItemIndex,
+      setPlayingService: s.setPlayingService,
+      setActiveServiceItemIndex: s.setActiveServiceItemIndex,
+    }))
+  );
 
   // Set active service for cross-module integration
   useEffect(() => {

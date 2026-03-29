@@ -94,6 +94,14 @@ async searchCollections(query: string) : Promise<Result<CollectionSearchResult[]
     else return { status: "error", error: e  as any };
 }
 },
+async searchCollectionsContent(query: string) : Promise<Result<CollectionSearchResult[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_collections_content", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getCollection(id: number) : Promise<Result<CollectionWithSongs, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_collection", { id }) };
@@ -303,6 +311,14 @@ async getFavoriteCollections(query: string | null) : Promise<Result<Collection[]
 async isFavorite(itemType: string, itemId: number) : Promise<Result<boolean, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("is_favorite", { itemType, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getAllFavoriteIds(itemType: string) : Promise<Result<number[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_all_favorite_ids", { itemType }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

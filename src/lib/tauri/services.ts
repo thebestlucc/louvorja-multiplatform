@@ -36,6 +36,10 @@ export async function isFavorite(itemType: string, itemId: number): Promise<bool
   return tauriInvoke<boolean>("is_favorite", { itemType, itemId });
 }
 
+export async function getAllFavoriteIds(itemType: string): Promise<number[]> {
+  return tauriInvoke<number[]>("get_all_favorite_ids", { itemType });
+}
+
 // Liturgy
 export async function getServices(): Promise<Service[]> {
   return tauriInvoke<Service[]>("get_services");

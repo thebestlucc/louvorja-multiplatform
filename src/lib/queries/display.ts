@@ -17,6 +17,8 @@ export function useMonitorConfigs() {
   return useQuery({
     queryKey: queryKeys.monitors.configs,
     queryFn: () => getMonitorConfigs(),
+    staleTime: Infinity,
+    gcTime: Infinity, // monitor role assignments persist for the session
   });
 }
 

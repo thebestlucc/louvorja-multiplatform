@@ -475,7 +475,7 @@ pub fn execute_pack_sync(
 
         // Step 1: Remove old pool from state (releases file handles on Windows)
         {
-            let mut content_dbs = state.content_dbs.lock().unwrap();
+            let mut content_dbs = state.content_dbs.write().unwrap();
             content_dbs.remove(lang);
         }
 
@@ -505,7 +505,7 @@ pub fn execute_pack_sync(
                 }
                 // Step 4: Hot-swap in AppState
                 {
-                    let mut content_dbs = state.content_dbs.lock().unwrap();
+                    let mut content_dbs = state.content_dbs.write().unwrap();
                     content_dbs.insert(lang.clone(), new_pool);
                 }
                 // Record the DB version so the planner knows it's current

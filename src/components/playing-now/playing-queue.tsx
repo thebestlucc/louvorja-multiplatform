@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
@@ -57,7 +58,14 @@ export function PlayingQueueView({ items, currentIndex, onItemClick, onRemoveIte
 
 export function PlayingQueue() {
   const { t } = useTranslation();
-  const { items, currentIndex, setCurrentIndex, removeFromQueue } = useQueueStore();
+  const { items, currentIndex, setCurrentIndex, removeFromQueue } = useQueueStore(
+    useShallow((s) => ({
+      items: s.items,
+      currentIndex: s.currentIndex,
+      setCurrentIndex: s.setCurrentIndex,
+      removeFromQueue: s.removeFromQueue,
+    }))
+  );
   
   return (
     <PlayingQueueView 

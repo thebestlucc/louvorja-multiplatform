@@ -27,6 +27,7 @@ export const queryKeys = {
   favorites: {
     all: (itemType: string, query?: string) => ["favorites", itemType, query || ""] as const,
     isFavorite: (itemType: string, itemId: number) => ["favorites", itemType, itemId, "check"] as const,
+    allIds: (itemType: string) => ["favorites", itemType, "allIds"] as const,
   },
   presentations: {
     all: ["presentations"] as const,

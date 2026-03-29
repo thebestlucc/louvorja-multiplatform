@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import { getVideoServerStatus, startVideoServer } from "../lib/tauri/video-server";
 
 /** Projection windows only have read-only permissions — never auto-start from them. */
@@ -22,10 +23,25 @@ export function useVideoSource(path: string | null | undefined): string | null {
   const { data: serverInfo } = useQuery({
     queryKey: ["video-server-status"],
     queryFn: getVideoServerStatus,
-    staleTime: isReadOnlyWindow ? 2_000 : Infinity,
-    refetchInterval: isReadOnlyWindow && !!path && path.trim().length > 0 ? 2_000 : false,
+    staleTime: isReadOnlyWindow ? 10_000 : Infinity,
+    // Fallback polling at 10s for the startup race (server may start before listener registers).
+    // Primary notification comes via the "video-server-started" event listener below.
+    refetchInterval: isReadOnlyWindow && !!path && path.trim().length > 0 ? 10_000 : false,
     gcTime: Infinity,
   });
+
+  // On read-only windows (projector/return), listen for the Tauri event emitted by
+  // start_video_server to immediately invalidate and re-fetch server status instead
+  // of relying solely on the polling interval.
+  useEffect(() => {
+    if (!isReadOnlyWindow) return;
+    const unlistenPromise = listen("video-server-started", () => {
+      queryClient.invalidateQueries({ queryKey: ["video-server-status"] });
+    });
+    return () => {
+      unlistenPromise.then((fn) => fn());
+    };
+  }, [isReadOnlyWindow, queryClient]);
 
   const needsServer = !isReadOnlyWindow && !!path && path.trim().length > 0 && !serverInfo?.isRunning;
 

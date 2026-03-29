@@ -55,7 +55,6 @@ pub async fn get_video_metadata(
     let (_, ffprobe_path) = load_ffprobe_settings(&state)?;
 
     let resolved_path_clone = resolved_path.clone();
-    let format_clone = format.clone();
     let parsed = tokio::task::spawn_blocking(move || -> Result<Option<crate::video::metadata::ParsedVideoMetadata>, AppError> {
         match video::parse_video_metadata(&resolved_path_clone) {
             Ok(parsed) => Ok(Some(parsed)),

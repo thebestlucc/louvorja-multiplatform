@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback } from "react";
 import { useQueueStore } from "../stores/queue-store";
 import { useAudioStore } from "../stores/audio-store";
 import { useDisplayStore } from "../stores/display-store";
@@ -9,6 +9,23 @@ import { catcher } from "../lib/catcher";
 import { projectSlideIndex } from "../lib/projection-playback";
 import { hymnToSlides } from "./use-hymn-playback";
 import type { HymnMediaItem } from "../types/media";
+import type { QueueItem } from "../stores/queue-store";
+
+// Module-level state — survives component remounts so we can distinguish
+// "remount with same queue" from "new content queued".
+let _lastPlayedIndex: number | null = null;
+let _lastItemsRef: QueueItem[] | null = null;
+
+/**
+ * Reset coordinator tracking. Called by clearActivePlayback() so that
+ * after external content (bible, presentation, video) takes over,
+ * the coordinator can re-start playback if the user returns to the queue.
+ */
+export function resetCoordinatorPlaybackState() {
+  _lastPlayedIndex = null;
+  _lastItemsRef = null;
+}
+
 
 /**
  * Centralized hook to coordinate playback and projection based on the queue store.
@@ -27,15 +44,20 @@ export function usePlaybackCoordinator() {
   const playAudioVariants = useAudioStore((s) => s.playVariants);
   const stopAudio = useAudioStore((s) => s.stop);
 
-  const lastPlayedIndexRef = useRef<number | null>(null);
-
   const playItem = useCallback(async (index: number) => {
     const item = items[index];
     if (!item) return;
 
-    // Guard: Don't re-trigger if we've already started this item
-    if (lastPlayedIndexRef.current === index) return;
-    lastPlayedIndexRef.current = index;
+    // When items array reference changes (new queue), reset tracking
+    if (_lastItemsRef !== items) {
+      _lastPlayedIndex = null;
+      _lastItemsRef = items;
+    }
+
+    // Already started this exact item in this queue — skip (handles remount)
+    if (_lastPlayedIndex === index) return;
+
+    _lastPlayedIndex = index;
 
     const hymnId = item.hymn?.id;
     const variantPaths = resolvePlaybackVariantPaths(
@@ -49,6 +71,13 @@ export function usePlaybackCoordinator() {
         : item.hymn?.audioPath; // "audio" = Cantado = sung version
 
     await catcher(async () => {
+      // 0. Stop any active video playback from previous content
+      const { useVideoPlayerStore } = await import("../stores/video-player-store");
+      const videoState = useVideoPlayerStore.getState();
+      if (videoState.videoId || videoState.videoSrc) {
+        videoState.resetVideoState();
+      }
+
       // 1. Resolve sync points
       let effectiveSyncPoints: import("../lib/bindings").SyncPoint[] = [];
       if (hymnId) {
@@ -122,21 +151,16 @@ export function usePlaybackCoordinator() {
     if (currentIndex >= 0 && currentIndex < items.length) {
       void playItem(currentIndex);
     } else if (currentIndex === -1) {
-      lastPlayedIndexRef.current = null;
+      _lastPlayedIndex = null;
     }
   }, [currentIndex, items.length, playItem]);
-
-  // Effect: Reset lastPlayedIndexRef when items list changes significantly (e.g. queue cleared/replaced)
-  useEffect(() => {
-    lastPlayedIndexRef.current = null;
-  }, [items]);
 
   // Effect: Register Auto-Next callback
   useEffect(() => {
     setOnFinished(() => {
       next();
     });
-    
+
     return () => {
       setOnFinished(null);
     };

@@ -738,10 +738,21 @@ pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), Ap
 
 /// Opens an r2d2 pool for a content DB file.
 pub fn open_content_db_pool(path: &Path) -> Result<Pool<SqliteConnectionManager>, AppError> {
-    let manager = SqliteConnectionManager::file(path);
+    let manager = SqliteConnectionManager::file(path).with_init(|c| {
+        c.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA synchronous=NORMAL;
+             PRAGMA temp_store=MEMORY;
+             PRAGMA mmap_size=134217728;
+             PRAGMA cache_size=-4000;
+             PRAGMA busy_timeout=5000;",
+        )
+        .map_err(Into::into)
+    });
     Pool::builder()
-        .min_idle(Some(1))
-        .max_size(3)
+        .min_idle(Some(0))
+        .max_size(2)
+        .connection_timeout(std::time::Duration::from_secs(5))
         .build(manager)
         .map_err(|e| AppError::Internal(format!("Content DB pool error: {}", e)))
 }

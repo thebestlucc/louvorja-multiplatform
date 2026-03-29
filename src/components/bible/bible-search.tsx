@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchBibleGlobal } from "../../lib/queries";
 import { Input } from "../ui/input";
@@ -12,15 +12,7 @@ import {
   resolveBookIndex,
 } from "./book-catalog";
 import { HighlightedSnippet } from "../ui/highlighted-snippet";
-
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-}
+import { useDebouncedValue } from "../../hooks/use-debounced-value";
 
 interface ParsedReference {
   bookName: string;
@@ -75,8 +67,6 @@ interface BibleSearchProps {
 export function BibleSearch({
   query,
   onQueryChange,
-  versionId,
-  versionAbbr,
   onNavigate,
   availableBooks,
 }: BibleSearchProps) {

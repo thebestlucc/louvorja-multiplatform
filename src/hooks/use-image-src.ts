@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { appDataDir } from "@tauri-apps/api/path";
 import { catcher } from "../lib/catcher";
 
 // Cache the app data directory — it never changes and resolving it is an IPC call.
@@ -9,6 +9,11 @@ let appDataDirCache: Promise<string> | null = null;
 function getCachedAppDataDir(): Promise<string> {
   if (!appDataDirCache) appDataDirCache = appDataDir();
   return appDataDirCache;
+}
+
+function joinPath(base: string, relative: string): string {
+  const sep = base.endsWith("/") || base.endsWith("\\") ? "" : "/";
+  return `${base}${sep}${relative}`;
 }
 
 function isCdnRelativePath(path: string): boolean {
@@ -31,16 +36,10 @@ function isAbsolutePath(path: string): boolean {
  *   the tauri.conf.json asset scope covers $HOME, $DESKTOP, $DOCUMENT, $PICTURE, etc.
  */
 export function useImageSrc(path: string | null | undefined): string | null {
-  const [src, setSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveSrc() {
-      if (!path || path.trim().length === 0) {
-        if (!cancelled) setSrc(null);
-        return;
-      }
+  const { data: src = null } = useQuery({
+    queryKey: ["image-src", path ?? ""],
+    queryFn: async () => {
+      if (!path || path.trim().length === 0) return null;
 
       const normalized = path.trim().replace(/\\/g, "/");
 
@@ -51,8 +50,7 @@ export function useImageSrc(path: string | null | undefined): string | null {
         normalized.startsWith("data:") ||
         normalized.startsWith("blob:")
       ) {
-        if (!cancelled) setSrc(null);
-        return;
+        return null;
       }
 
       // CDN-relative paths like /covers/foo.jpg
@@ -60,24 +58,21 @@ export function useImageSrc(path: string | null | undefined): string | null {
         const [absolute, error] = await catcher(
           async () => {
             const appDir = await getCachedAppDataDir();
-            return await join(appDir, normalized.slice(1));
+            return joinPath(appDir, normalized.slice(1));
           },
           { notify: false },
         );
-        if (!error && absolute && !cancelled) {
-          setSrc(convertFileSrc(absolute));
-        } else if (!cancelled) {
-          setSrc(null);
+        if (!error && absolute) {
+          return convertFileSrc(absolute);
         }
-        return;
+        return null;
       }
 
       // Absolute OS paths — use asset protocol directly. The tauri.conf.json asset
       // scope covers $HOME, $DESKTOP, $DOCUMENT, $DOWNLOAD, $PICTURE, $VIDEO, etc.,
       // so user-picked files from file dialogs are served without needing the streaming server.
       if (isAbsolutePath(normalized)) {
-        if (!cancelled) setSrc(convertFileSrc(normalized));
-        return;
+        return convertFileSrc(normalized);
       }
 
       // Managed relative paths like media/covers/...
@@ -85,27 +80,20 @@ export function useImageSrc(path: string | null | undefined): string | null {
         const [absolute, error] = await catcher(
           async () => {
             const appDir = await getCachedAppDataDir();
-            return await join(appDir, normalized);
+            return joinPath(appDir, normalized);
           },
           { notify: false },
         );
-        if (error) {
-          if (!cancelled) setSrc(null);
-          return;
-        }
-        if (!cancelled) setSrc(convertFileSrc(absolute!));
-        return;
+        if (error) return null;
+        return convertFileSrc(absolute!);
       }
 
       // Unknown format
-      if (!cancelled) setSrc(null);
-    }
-
-    void resolveSrc();
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
+      return null;
+    },
+    enabled: Boolean(path) && (path ?? "").trim().length > 0,
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+  });
   return src;
 }

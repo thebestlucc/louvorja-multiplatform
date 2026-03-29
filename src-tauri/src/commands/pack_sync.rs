@@ -24,8 +24,9 @@ fn load_cached_manifest(app: &AppHandle) -> Option<ContentManifest> {
 
 fn save_manifest_cache(app: &AppHandle, manifest: &ContentManifest) {
     if let Ok(path) = manifest_cache_path(app) {
-        if let Ok(json) = serde_json::to_vec(manifest) {
-            let _ = std::fs::write(path, json);
+        let mut buf = Vec::with_capacity(4096);
+        if serde_json::to_writer(&mut buf, manifest).is_ok() {
+            let _ = std::fs::write(path, buf);
         }
     }
 }
@@ -49,16 +50,12 @@ pub async fn plan_pack_sync(
         });
     }
 
-    let conn = tokio::task::block_in_place(|| {
-        state.db.get().map_err(|e| AppError::Internal(e.to_string()))
-    })?;
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let stored_version = tokio::task::block_in_place(|| {
-        crate::db::queries::settings::get_setting(&conn, "pack_sync.manifest_version")
-            .ok()
-            .and_then(|s| s.value.parse::<i64>().ok())
-            .unwrap_or(0)
-    });
+    let stored_version = crate::db::queries::settings::get_setting(&conn, "pack_sync.manifest_version")
+        .ok()
+        .and_then(|s| s.value.parse::<i64>().ok())
+        .unwrap_or(0);
 
     let preview = preview_languages.as_deref();
     let force = force_refresh == Some(true);
@@ -73,9 +70,7 @@ pub async fn plan_pack_sync(
     // If already fetched this session (and not forced), reuse the file cache.
     if !force && already_fetched {
         if let Some(cached) = load_cached_manifest(&app) {
-            return tokio::task::block_in_place(|| {
-                pack_sync::planner::build_plan(&conn, &cached, stored_version, preview)
-            });
+            return pack_sync::planner::build_plan(&conn, &cached, stored_version, preview);
         }
         // Cache file missing — fall through to a fresh fetch below.
     }
@@ -114,9 +109,7 @@ pub async fn plan_pack_sync(
         }
     };
 
-    tokio::task::block_in_place(|| {
-        pack_sync::planner::build_plan(&conn, &manifest, stored_version, preview)
-    })
+    pack_sync::planner::build_plan(&conn, &manifest, stored_version, preview)
 }
 
 #[tauri::command]

@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::state::VideoServerState;
 use crate::video_server::VideoServerInfo;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[tauri::command]
 #[specta::specta]
@@ -20,7 +20,9 @@ pub fn start_video_server(
         .map_err(|e| AppError::Internal(format!("Lock poisoned: {e}")))?;
 
     server.set_media_root(app_data_dir);
-    server.start().map_err(AppError::Internal)
+    let info = server.start().map_err(AppError::Internal)?;
+    app.emit("video-server-started", ()).ok();
+    Ok(info)
 }
 
 #[tauri::command]

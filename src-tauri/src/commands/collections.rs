@@ -23,7 +23,7 @@ fn get_content_db_conn(
 )> {
     let langs = crate::db::queries::content_sync::get_selected_languages(conn);
     let lang = langs.into_iter().next()?;
-    let map = state.content_dbs.lock().ok()?;
+    let map = state.content_dbs.read().ok()?;
     let pool = map.get(&lang)?.clone(); // clone pool before dropping lock
     drop(map); // release lock before .get()
     let pooled = pool.get().ok()?;
@@ -116,6 +116,56 @@ pub fn search_collections(
 ) -> Result<Vec<CollectionSearchResult>, AppError> {
     let conn = state.db.get()?;
     crate::db::queries::collections::search_collections(&conn, &query, 8)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn search_collections_content(
+    query: String,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<CollectionSearchResult>, AppError> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let dbs = state
+        .content_dbs
+        .read()
+        .map_err(|e| AppError::Internal(format!("content_dbs lock poisoned: {e}")))?;
+    let mut results = Vec::new();
+    for (lang, pool) in dbs.iter() {
+        let remaining = 8_usize.saturating_sub(results.len());
+        if remaining == 0 {
+            break;
+        }
+        let content_conn = match pool.get() {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let content_results = match crate::db::queries::music::search_collections_content_db(
+            &content_conn, &query, lang, remaining,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[search_collections_content] content DB '{lang}' search failed: {e}");
+                continue;
+            }
+        };
+        for mut r in content_results {
+            if let Some(ref p) = r.cover_path {
+                r.cover_path = Some(
+                    app_data
+                        .join(p.trim_start_matches('/'))
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+            results.push(r);
+        }
+    }
+    results.truncate(8);
+    Ok(results)
 }
 
 #[tauri::command]
