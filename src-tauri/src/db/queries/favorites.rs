@@ -185,6 +185,17 @@ pub fn is_favorite(conn: &Connection, item_type: &str, item_id: i64) -> Result<b
     Ok(exists)
 }
 
+pub fn get_all_favorite_ids(conn: &Connection, item_type: &str) -> Result<Vec<i64>, AppError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT item_id FROM favorites WHERE item_type = ?1",
+    )?;
+    let ids = stmt
+        .query_map(params![item_type], |row| row.get(0))?
+        .collect::<Result<Vec<i64>, _>>()
+        .map_err(AppError::Database)?;
+    Ok(ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

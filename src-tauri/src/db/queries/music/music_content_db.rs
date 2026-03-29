@@ -392,7 +392,7 @@ pub fn get_collections_from_content_db(
     let lang_short = bcp47_to_lang_code(lang_bcp47);
 
     let mut stmt = content_db
-        .prepare(
+        .prepare_cached(
             "SELECT
                 a.id_album                                   AS id,
                 a.name                                       AS name,
@@ -451,7 +451,7 @@ pub fn get_collection_by_id_from_content_db(
     album_id: i64,
 ) -> Result<Option<crate::db::models::Collection>, AppError> {
     let mut stmt = content_db
-        .prepare(
+        .prepare_cached(
             "SELECT
                 a.id_album                                   AS id,
                 a.name                                       AS name,
@@ -631,7 +631,7 @@ pub fn get_albums_from_content_db(
 ) -> Result<Vec<crate::db::models::Album>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let mut stmt = content_db.prepare(
+    let mut stmt = content_db.prepare_cached(
         "SELECT a.name AS album, COUNT(am.id_music) AS hymn_count
          FROM albums a
          LEFT JOIN albums_musics am ON am.id_album = a.id_album
@@ -694,6 +694,152 @@ pub fn get_hymns_by_album_from_content_db(
         .query_map(rusqlite::params![album, lang_short], super::music_app::map_hymn_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
+}
+
+/// Search content DB albums and their hymns/lyrics, returning `CollectionSearchResult`s.
+///
+/// Two search strategies:
+/// 1. Album name LIKE match → kind = "collection"
+/// 2. musics_fts match (song name / lyrics) → kind = "song", with album info
+pub fn search_collections_content_db(
+    content_db: &rusqlite::Connection,
+    query: &str,
+    lang_bcp47: &str,
+    limit: usize,
+) -> Result<Vec<crate::db::models::CollectionSearchResult>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let safe_limit = limit.max(1) as i64;
+    let mut results: Vec<crate::db::models::CollectionSearchResult> = Vec::new();
+
+    // Check if albums table exists in this content DB
+    let albums_exist: bool = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='albums'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    if !albums_exist {
+        return Ok(vec![]);
+    }
+
+    // 1) Album name LIKE search
+    let like_pattern = format!("%{}%", trimmed);
+    {
+        let mut stmt = content_db
+            .prepare(
+                "SELECT
+                    a.id_album       AS id,
+                    a.name           AS album_name,
+                    f.dir || '/' || f.name AS cover_path
+                 FROM albums a
+                 LEFT JOIN files f ON f.id_file = a.id_file_image
+                 WHERE a.id_language = ?1
+                   AND a.name LIKE ?2
+                 ORDER BY a.name
+                 LIMIT ?3",
+            )
+            .map_err(AppError::Database)?;
+
+        let rows = stmt
+            .query_map(rusqlite::params![lang_short, like_pattern, safe_limit], |row| {
+                let album_name: String = row.get("album_name")?;
+                Ok(crate::db::models::CollectionSearchResult {
+                    kind: "collection".to_string(),
+                    collection_id: row.get("id")?,
+                    song_id: None,
+                    collection_name: album_name.clone(),
+                    title: album_name,
+                    cover_path: row.get("cover_path")?,
+                    snippet: String::new(),
+                })
+            })
+            .map_err(AppError::Database)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::Database)?;
+
+        results.extend(rows);
+    }
+
+    // 2) FTS search on musics_fts for song matches
+    let fts_exists: bool = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    if fts_exists {
+        let sanitized: String = trimmed
+            .chars()
+            .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+            .collect::<String>();
+        let fts_query: String = sanitized
+            .split_whitespace()
+            .map(|t| format!("{}*", t))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if !fts_query.is_empty() {
+            let remaining = (safe_limit - results.len() as i64).max(0);
+            if remaining > 0 {
+                let mut stmt = content_db
+                    .prepare(
+                        "SELECT
+                            a.id_album                    AS collection_id,
+                            m.id_music                    AS song_id,
+                            a.name                        AS album_name,
+                            m.name                        AS song_name,
+                            fi.dir || '/' || fi.name      AS cover_path,
+                            snippet(musics_fts, 1, '<mark>', '</mark>', ' ... ', 24) AS snippet
+                         FROM musics_fts
+                         JOIN musics m ON musics_fts.rowid = m.id_music
+                         LEFT JOIN albums_musics am ON am.id_music = m.id_music
+                         LEFT JOIN albums        a  ON a.id_album  = am.id_album
+                         LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+                         WHERE musics_fts MATCH ?1
+                           AND m.id_language = ?2
+                         ORDER BY rank
+                         LIMIT ?3",
+                    )
+                    .map_err(AppError::Database)?;
+
+                let song_rows = stmt
+                    .query_map(rusqlite::params![fts_query, lang_short, remaining], |row| {
+                        Ok(crate::db::models::CollectionSearchResult {
+                            kind: "song".to_string(),
+                            collection_id: row.get::<_, Option<i64>>("collection_id")?.unwrap_or(0),
+                            song_id: row.get("song_id")?,
+                            collection_name: row
+                                .get::<_, Option<String>>("album_name")?
+                                .unwrap_or_default(),
+                            title: row.get("song_name")?,
+                            cover_path: row.get("cover_path")?,
+                            snippet: row
+                                .get::<_, Option<String>>("snippet")?
+                                .unwrap_or_default(),
+                        })
+                    })
+                    .map_err(AppError::Database)?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(AppError::Database)?;
+
+                results.extend(song_rows);
+            }
+        }
+    }
+
+    Ok(results)
 }
 
 #[cfg(test)]

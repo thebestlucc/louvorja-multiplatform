@@ -7,10 +7,12 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { catcher } from "../../lib/catcher";
 import { downloadOnlineVideo, cancelDownload, setCurrentSlide, setSlideOnProjector, setSlideOnReturn } from "../../lib/tauri";
+import { clearActivePlayback } from "../../lib/projection-playback";
 import { getPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { useDownloadStore } from "../../stores/download-store";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useQueueStore } from "../../stores/queue-store";
 
 interface VideoCardProps {
   video: OnlineVideo;
@@ -100,16 +102,28 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
   };
 
   const handleProject = async (target: "all" | "projector" | "return") => {
+    if (target === "projector" || target === "return") {
+      // Single-screen projection: send directly without affecting queue
+      const fn = target === "projector" ? setSlideOnProjector : setSlideOnReturn;
+      const [, err] = await catcher(fn(buildVideoSlidePayload(video)), { notify: true });
+      if (!err) {
+        usePresentationStore.getState().setCurrentVideoProjectionId(video.videoId);
+        const { useDisplayStore } = await import("../../stores/display-store");
+        useDisplayStore.getState().setCurrentProjectionType("presentation");
+      }
+      return;
+    }
+
+    // "all" target: stop current playback, clear queue, project video
+    await clearActivePlayback();
+    useQueueStore.getState().clearQueue();
+
     const payload = buildVideoSlidePayload(video);
-    const fn =
-      target === "projector"
-        ? setSlideOnProjector
-        : target === "return"
-          ? setSlideOnReturn
-          : setCurrentSlide;
-    const [, err] = await catcher(fn(payload), { notify: true });
+    const [, err] = await catcher(setCurrentSlide(payload), { notify: true });
     if (!err) {
       usePresentationStore.getState().setCurrentVideoProjectionId(video.videoId);
+      const { useDisplayStore } = await import("../../stores/display-store");
+      useDisplayStore.getState().setCurrentProjectionType("presentation");
       void navigate({ to: "/playing-now" });
     }
   };

@@ -171,6 +171,7 @@ export function PersistentVideoPlayer() {
   const seekingRef = useRef(false);
   const playSessionIdRef = useRef(0);
   const [activeSlide, setActiveSlide] = useState<SlideContent | null>(null);
+  const activeSlideRef = useRef<SlideContent | null>(null);
   const [playSessionId, setPlaySessionId] = useState(0);
 
   // Helper: broadcast current player state to all windows + update Zustand store.
@@ -199,6 +200,7 @@ export function PersistentVideoPlayer() {
         playSessionIdRef.current += 1;
         setPlaySessionId(playSessionIdRef.current);
         setActiveSlide(slide);
+        activeSlideRef.current = slide;
 
         // Bridge to media-player-store so Playing Now shows video preview
         const mpState = useMediaPlayerStore.getState();
@@ -220,9 +222,23 @@ export function PersistentVideoPlayer() {
           };
           mpState.load(item);
         }
-      } else {
-        // Non-video slide projected: pause but keep player alive
-        ytPlayerRef.current?.pauseVideo();
+      } else if (activeSlideRef.current) {
+        // Non-video slide replaced the video: fully stop and clean up
+        clearInterval(pollTimerRef.current ?? undefined);
+        pollTimerRef.current = null;
+
+        if (ytPlayerRef.current) {
+          try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
+          ytPlayerRef.current = null;
+        }
+
+        useVideoPlayerStore.getState().resetVideoState();
+        setActiveSlide(null);
+        activeSlideRef.current = null;
+        const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
+        for (const target of ["main", "projector", "return"]) {
+          void emitTo(target, "video-state", resetSnap).catch(() => {});
+        }
       }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
@@ -231,7 +247,7 @@ export function PersistentVideoPlayer() {
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
-      if (!activeSlide) return;
+      if (!activeSlideRef.current) return;
 
       clearInterval(pollTimerRef.current ?? undefined);
       pollTimerRef.current = null;
@@ -244,13 +260,14 @@ export function PersistentVideoPlayer() {
       // For local video: clearing activeSlide unmounts LocalVideoMaster
       useVideoPlayerStore.getState().resetVideoState();
       setActiveSlide(null);
+      activeSlideRef.current = null;
       const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
       for (const target of ["main", "projector", "return"]) {
         void emitTo(target, "video-state", resetSnap).catch(() => {});
       }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
-  }, [activeSlide]);
+  }, []);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
   useEffect(() => {

@@ -11,10 +11,36 @@ import { useDisplayStore } from "../stores/display-store";
 import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useMediaPlayerStore } from "../stores/media-player-store";
+import { catcher } from "./catcher";
 import type { SlideContent, SlideContext } from "./bindings";
 import { resolveSlideTimingWindow } from "./audio-sync";
 import { resolveProjectionMonitorIndexes } from "./monitor-resolution";
-import { catcher } from "./catcher";
+
+/**
+ * Stop any active playback (audio + video) and reset coordinator tracking.
+ * Call this before starting new projected content so the previous
+ * content (hymn, video, etc.) is cleanly released.
+ * Type-agnostic: every new content source calls this before projecting.
+ */
+export async function clearActivePlayback(): Promise<void> {
+  // Reset coordinator tracking (dynamic import avoids circular dep)
+  const { resetCoordinatorPlaybackState } = await import("../hooks/use-playback-coordinator");
+  resetCoordinatorPlaybackState();
+
+  // Stop rodio audio and reset sync state
+  const audioState = useAudioStore.getState();
+  if (audioState.status !== "idle") {
+    await catcher(audioState.stop(), { notify: false });
+  }
+  audioState.setSyncPoints([]);
+
+  // Stop video playback
+  const { useVideoPlayerStore } = await import("../stores/video-player-store");
+  const videoState = useVideoPlayerStore.getState();
+  if (videoState.videoId || videoState.videoSrc) {
+    videoState.resetVideoState();
+  }
+}
 
 let ensureProjectionPromise: Promise<void> | null = null;
 

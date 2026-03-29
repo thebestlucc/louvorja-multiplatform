@@ -110,9 +110,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => {
     useMediaPlayerStore.getState().setActiveSlideIndex(slideIndex);
 
     const displayState = useDisplayStore.getState();
-    if (
-      displayState.currentProjectionType !== null
-    ) {
+    if (displayState.currentProjectionType === "hymn") {
       queueProjectedSlide(slideIndex);
     }
   };
@@ -307,7 +305,8 @@ export const useAudioStore = create<AudioStoreState>((set, get) => {
     await audioResume();
   },
   stop: async () => {
-    await audioStop();
+    // audioStop may fail if audio was never initialized (e.g. video-only playback)
+    await catcher(audioStop(), { notify: false });
     get().stopStatusSubscription();
     set({ status: "idle", positionMs: 0 });
   },

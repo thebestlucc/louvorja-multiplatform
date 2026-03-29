@@ -10,6 +10,7 @@ import { useDisplayStore } from "../stores/display-store";
 import type { UtilityProjectionPayload, UtilityProjectionKind } from "../types/utilities";
 import type { SlideContent, SlideContext } from "../lib/bindings";
 import { catcher } from "../lib/catcher";
+import { clearActivePlayback } from "../lib/projection-playback";
 
 export function useUtilityProjection(_kind: UtilityProjectionKind) {
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
@@ -27,6 +28,7 @@ export function useUtilityProjection(_kind: UtilityProjectionKind) {
   const project = useCallback(
     async (payload: UtilityProjectionPayload) => {
       if (!isProjecting) {
+        await clearActivePlayback();
         const [slide, context] = await Promise.all([
           getCurrentSlide(),
           getSlideContext(),

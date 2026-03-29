@@ -206,7 +206,7 @@ pub fn clear_database(
     {
         let mut map = state
             .content_dbs
-            .lock()
+            .write()
             .unwrap_or_else(|e| e.into_inner());
         map.clear();
     }

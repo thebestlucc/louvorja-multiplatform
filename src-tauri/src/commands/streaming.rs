@@ -6,7 +6,7 @@ use crate::utils::catcher::catcher;
 use serde::Deserialize;
 use specta::Type;
 use std::path::Path;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Convert an absolute or ambiguous media path to a relative path suitable
 /// for the streaming server's `/media/` route.
@@ -358,18 +358,23 @@ pub fn start_streaming_server(
         slide_context,
         Some(&app_data_dir),
     );
+    app.emit("streaming-status-changed", ()).ok();
     Ok(info)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn stop_streaming_server(state: tauri::State<'_, StreamingState>) -> Result<(), AppError> {
+pub fn stop_streaming_server(
+    app: AppHandle,
+    state: tauri::State<'_, StreamingState>,
+) -> Result<(), AppError> {
     let (server, err) = catcher(state.server.lock());
     if let Some(e) = err {
         return Err(e);
     }
     let mut server = server.unwrap();
     server.stop();
+    app.emit("streaming-status-changed", ()).ok();
     Ok(())
 }
 

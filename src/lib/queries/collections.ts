@@ -22,7 +22,7 @@ export function useCollections(query?: string, options?: { enabled?: boolean }) 
     queryKey: queryKeys.collections.all(query),
     queryFn: () => getCollections(query),
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 }
 
@@ -31,6 +31,7 @@ export function useCollection(id: number) {
     queryKey: queryKeys.collections.detail(id),
     queryFn: () => getCollection(id),
     enabled: id > 0,
+    staleTime: 60_000,
   });
 }
 
@@ -142,6 +143,7 @@ export function useCollectionHymns(collectionId: number) {
     queryKey: queryKeys.collections.hymns(collectionId),
     queryFn: () => getCollectionHymns(collectionId),
     enabled: collectionId > 0,
+    staleTime: 60_000,
   });
 }
 

@@ -29,6 +29,7 @@ export function useAllHymns(query: string) {
   return useQuery({
     queryKey: ["hymns", "search-all", query],
     queryFn: () => searchAllHymns(query),
+    staleTime: 30_000,
   });
 }
 
@@ -36,6 +37,8 @@ export function useHymnAudioPath(hymnId: number) {
   return useQuery({
     queryKey: queryKeys.hymns.audioPath(hymnId),
     queryFn: () => getHymnAudioPath(hymnId),
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
   });
 }
 
@@ -44,6 +47,8 @@ export function useHymn(id: number) {
     queryKey: queryKeys.hymns.detail(id),
     queryFn: () => getHymn(id),
     enabled: id > 0,
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
   });
 }
 
@@ -51,6 +56,8 @@ export function useAlbums() {
   return useQuery({
     queryKey: queryKeys.albums.all,
     queryFn: () => getAlbums(),
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }
 
@@ -59,6 +66,8 @@ export function useHymnsByAlbum(album: string) {
     queryKey: queryKeys.hymns.byAlbum(album),
     queryFn: () => getHymnsByAlbum(album),
     enabled: album.length > 0,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
   });
 }
 
@@ -66,9 +75,14 @@ export function useUpdateHymn() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: number; input: HymnWriteInput }) => updateHymn(vars.id, vars.input),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(vars.id) });
+    onSuccess: (updatedHymn, vars) => {
+      // Update detail cache directly — no IPC round-trip needed
+      queryClient.setQueryData(queryKeys.hymns.detail(vars.id), updatedHymn);
+      // Invalidate active search results only — not the entire hymns namespace
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.hymns.search(""),
+        exact: false, // matches all search variants
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
     },
   });
@@ -79,8 +93,13 @@ export function useDeleteHymn() {
   return useMutation({
     mutationFn: (id: number) => deleteHymn(id),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.detail(id) });
+      // Remove stale detail cache for deleted hymn
+      queryClient.removeQueries({ queryKey: queryKeys.hymns.detail(id) });
+      // Invalidate active search results only — not the entire hymns namespace
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.hymns.search(""),
+        exact: false, // matches all search variants
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
     },
   });
@@ -90,6 +109,8 @@ export function useMonitors() {
   return useQuery({
     queryKey: queryKeys.monitors.all,
     queryFn: () => getAvailableMonitors(),
+    staleTime: Infinity,
+    gcTime: Infinity, // monitor list never changes without app restart
   });
 }
 
@@ -104,6 +125,8 @@ export function useSyncPoints(hymnId: number) {
     queryKey: queryKeys.syncPoints.byHymn(hymnId),
     queryFn: () => getSyncPoints(hymnId),
     enabled: hymnId > 0,
+    staleTime: Infinity,
+    gcTime: 30 * 60_000, // 30 min — keep recently edited sync data
   });
 }
 

@@ -58,7 +58,7 @@ function forwardVideoStateToStreaming(state: VideoPlayerData, action: string) {
   invoke("broadcast_video_state_to_streaming", { payload }).catch(() => {});
 }
 
-useVideoPlayerStore.subscribe((state, prev) => {
+const _unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
   // Skip if no video is active
   if (!state.videoSource) return;
 
@@ -103,3 +103,13 @@ useVideoPlayerStore.subscribe((state, prev) => {
   _lastStreamingAction = action;
   forwardVideoStateToStreaming(state, action);
 });
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    _unsubStreaming();
+    if (_streamingThrottleTimer) {
+      clearTimeout(_streamingThrottleTimer);
+      _streamingThrottleTimer = null;
+    }
+  });
+}

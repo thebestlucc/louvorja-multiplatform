@@ -35,7 +35,7 @@ import { AspectRatioSelector } from "../../components/slides/aspect-ratio-select
 import { TransitionSelector } from "../../components/slides/transition-selector";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
 import type { SlideContent } from "../../lib/bindings";
-import { projectSlideIndex } from "../../lib/projection-playback";
+import { projectSlideIndex, clearActivePlayback } from "../../lib/projection-playback";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { cn } from "../../lib/utils";
 
@@ -99,6 +99,7 @@ function PresentationDetail() {
     }
 
     await catcher(async () => {
+      await clearActivePlayback();
       setCurrentPresentation(id);
       setPresentationSlides(slideContents);
       setPresentationActiveSlideIndex(0);

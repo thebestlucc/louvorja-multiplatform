@@ -78,6 +78,7 @@ mod macos {
         // PopUpMenu level (101) floats above fullscreen app content.
         panel.set_level(PanelLevel::PopUpMenu.value());
 
+
         // CanJoinAllSpaces: visible on every Space including fullscreen/Split View.
         // FullScreenAuxiliary: allowed inside a fullscreen Space.
         // Transient: macOS treats this as ephemeral UI — won't switch Spaces for it.
@@ -97,8 +98,9 @@ mod macos {
                 .into(),
         );
 
-        // Register windowDidResignKey → auto-hide.
-        // The panel clone is Send+Sync (Arc<dyn Panel>) so it can be moved into the closure.
+        // Hide panel when it loses key (user clicked elsewhere or space switch).
+        // Space switches also trigger this, but the user can re-invoke the shortcut
+        // to bring it back — the shortcut preserves search state on re-show.
         let panel_for_hide = panel.clone();
         let handler = SpotlightEventHandler::new();
         handler.window_did_resign_key(move |_notification| {

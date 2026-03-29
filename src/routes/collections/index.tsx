@@ -156,19 +156,22 @@ function CollectionsIndex() {
       const allSlides: any[] = [];
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
-        for (const hymn of hymns) {
-          const slides = (await bindHymnToPlaybackQueue(hymn, 0))?.generatedSlides || [];
-          allSlides.push(...slides);
+        const results = await Promise.all(
+          hymns.map((hymn) => catcher(bindHymnToPlaybackQueue(hymn, 0)))
+        );
+        for (const [result] of results) {
+          allSlides.push(...(result?.generatedSlides ?? []));
         }
       } else {
         const detail = await getCollection(collection.id);
-        for (const song of detail.songs) {
-          if (song.cachePresentationId) {
-            const rows = await getSlides(song.cachePresentationId);
-            const contents = rows.map((r) => parseSlideRow(r).content);
-            allSlides.push(...contents);
-          }
-        }
+        const songsWithCache = detail.songs.filter((s) => s.cachePresentationId);
+        const slideArrays = await Promise.all(
+          songsWithCache.map(async (song) => {
+            const [rows] = await catcher(getSlides(song.cachePresentationId!));
+            return (rows ?? []).map((r) => parseSlideRow(r).content);
+          })
+        );
+        for (const contents of slideArrays) allSlides.push(...contents);
       }
       
       if (allSlides.length > 0) {

@@ -57,7 +57,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     let trimmed = query.trim();
 
     if trimmed.is_empty() {
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
              FROM hymns h
              WHERE h.category = 'hymnal'
@@ -72,7 +72,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     // If numeric prefix, search by number using LIKE
     if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
         let number_prefix = format!("{}%", trimmed);
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
              FROM hymns h
              WHERE CAST(h.number AS TEXT) LIKE ?1
@@ -90,7 +90,7 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
         return Ok(vec![]);
     };
 
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
          FROM hymns h
          JOIN hymns_fts ON hymns_fts.rowid = h.id
@@ -108,7 +108,7 @@ pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, App
     let trimmed = query.trim();
 
     if trimmed.is_empty() {
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
              FROM hymns
              WHERE category = 'hymnal'
@@ -124,7 +124,7 @@ pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, App
     // If numeric prefix, search by number using LIKE
     if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
         let number_prefix = format!("{}%", trimmed);
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
              FROM hymns h
              WHERE CAST(h.number AS TEXT) LIKE ?1
@@ -143,7 +143,7 @@ pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, App
         return Ok(vec![]);
     };
 
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
          FROM hymns h
          JOIN hymns_fts ON hymns_fts.rowid = h.id
@@ -182,7 +182,7 @@ pub fn get_hymn_by_id(conn: &Connection, id: i64) -> Result<Hymn, AppError> {
 }
 
 pub fn get_albums(conn: &Connection) -> Result<Vec<Album>, AppError> {
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT h.album, COUNT(*) as hymn_count
          FROM hymns h
          WHERE h.album IS NOT NULL AND h.album != ''
@@ -202,7 +202,7 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<Album>, AppError> {
 }
 
 pub fn get_hymns_by_album(conn: &Connection, album: &str) -> Result<Vec<Hymn>, AppError> {
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
          FROM hymns h
          WHERE h.album = ?1
@@ -295,7 +295,7 @@ pub fn update_hymn(
 
     if fts_exists {
         let mut stmt =
-            conn.prepare("SELECT collection_id FROM collection_hymns WHERE hymn_id = ?1")?;
+            conn.prepare_cached("SELECT collection_id FROM collection_hymns WHERE hymn_id = ?1")?;
         let collection_ids = stmt
             .query_map(params![id], |row| row.get::<_, i64>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -313,7 +313,7 @@ pub fn update_hymn(
             )?;
 
             // Insert updated entry
-            let mut h_stmt = conn.prepare(
+            let mut h_stmt = conn.prepare_cached(
                 "SELECT h.title,
                         COALESCE(h.lyrics, '') AS lyrics,
                         COALESCE(h.author, '') AS author,

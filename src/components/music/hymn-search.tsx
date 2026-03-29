@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, LayoutGrid, List as ListIcon, Star } from "lucide-react";
 import { Input } from "../ui/input";
@@ -6,20 +6,17 @@ import { Button } from "../ui/button";
 import { useHymns, useFavoriteHymns } from "../../lib/queries";
 import { HymnCard } from "./hymn-card";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useMedia } from "react-use";
+import { useWindowSize } from "react-use";
 import { cn } from "../../lib/utils";
+import { useDebouncedValue } from "../../hooks/use-debounced-value";
 
 export function HymnSearch() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [view, setView] = useState<"list" | "grid">("list");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
+  const debouncedQuery = useDebouncedValue(query, 300);
 
   const { data: searchResults, isLoading: isSearchLoading } = useHymns(debouncedQuery, { enabled: !showFavoritesOnly });
   const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(debouncedQuery, { enabled: showFavoritesOnly });
@@ -31,12 +28,16 @@ export function HymnSearch() {
     ? favoriteHymns
     : searchResults;
 
-  // Responsive columns for grid view
-  const isXl = useMedia("(min-width: 1280px)", false);
-  const isLg = useMedia("(min-width: 1024px)", false);
-  const isMd = useMedia("(min-width: 768px)", false);
-  const isSm = useMedia("(min-width: 640px)", false);
-  const columns = view === "list" ? 1 : isXl ? 6 : isLg ? 5 : isMd ? 4 : isSm ? 3 : 2;
+  // Responsive columns for grid view — single resize listener via useWindowSize
+  const { width = 1280 } = useWindowSize();
+  const columns = useMemo(() => {
+    if (view === "list") return 1;
+    if (width >= 1280) return 6;
+    if (width >= 1024) return 5;
+    if (width >= 768) return 4;
+    if (width >= 640) return 3;
+    return 2;
+  }, [view, width]);
 
   const items = hymns || [];
   const rowCount = Math.ceil(items.length / columns);

@@ -15,6 +15,7 @@ import {
   isFavorite,
   getFavoriteHymns,
   getFavoriteCollections,
+  getAllFavoriteIds,
 } from "../tauri";
 import { queryKeys } from "./keys";
 
@@ -22,6 +23,7 @@ export function useServices() {
   return useQuery({
     queryKey: queryKeys.services.all,
     queryFn: () => getServices(),
+    staleTime: 30_000,
   });
 }
 
@@ -30,6 +32,7 @@ export function useService(id: number) {
     queryKey: queryKeys.services.detail(id),
     queryFn: () => getService(id),
     enabled: id > 0,
+    staleTime: 0,
   });
 }
 
@@ -124,6 +127,7 @@ export function useFavorites(itemType: string) {
   return useQuery({
     queryKey: queryKeys.favorites.all(itemType),
     queryFn: () => getFavorites(itemType),
+    staleTime: 60_000,
   });
 }
 
@@ -145,11 +149,12 @@ export function useFavoriteCollections(query?: string, options?: { enabled?: boo
   });
 }
 
-export function useIsFavorite(itemType: string, itemId: number) {
+export function useIsFavorite(itemType: string, itemId: number, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.favorites.isFavorite(itemType, itemId),
     queryFn: () => isFavorite(itemType, itemId),
-    enabled: itemId > 0,
+    enabled: (options?.enabled ?? true) && itemId > 0,
+    staleTime: 60_000,
   });
 }
 
@@ -163,6 +168,16 @@ export function useToggleFavorite() {
       // regardless of the active search term
       queryClient.invalidateQueries({ queryKey: ["favorites", itemType] });
       queryClient.invalidateQueries({ queryKey: queryKeys.favorites.isFavorite(itemType, itemId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.favorites.allIds(itemType) });
     },
+  });
+}
+
+export function useFavoriteIds(itemType: string) {
+  return useQuery({
+    queryKey: queryKeys.favorites.allIds(itemType),
+    queryFn: () => getAllFavoriteIds(itemType),
+    staleTime: 30_000,
+    select: (ids) => new Set(ids),
   });
 }

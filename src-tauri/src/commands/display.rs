@@ -653,7 +653,7 @@ const IDENTIFY_H: f64 = 200.0;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
+pub fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
     let (monitors, err) = catcher(app.available_monitors());
     if let Some(e) = err {
         return Err(e);

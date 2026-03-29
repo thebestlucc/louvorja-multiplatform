@@ -40,3 +40,4 @@ src-tauri/resources/bible.db
 .env
 legacy-app
 legacy-reference
+docs/

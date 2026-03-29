@@ -63,7 +63,6 @@ function RootLayout() {
   const previousMonitorIdsRef = useRef<string[] | null>(null);
   const previousPrimaryMonitorIdRef = useRef<string | null>(null);
   const syncingMonitorAssignmentsRef = useRef(false);
-  useThemeStore((state) => state.theme);
   useTimerAlerts(!isBareRoute);
 
   useEffect(() => {
@@ -112,9 +111,22 @@ function RootLayout() {
 
   useEffect(() => {
     const unlistenPromise = listen("data-changed", () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.hymns.all });
+      // Invalidate search results and album listings (content changed)
+      // Avoid invalidating ["hymns"] prefix which would also refetch per-hymn detail/audioPath queries
+      queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
+    }).catch(() => () => {});
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    const unlistenPromise = listen("streaming-status-changed", () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
     }).catch(() => () => {});
 
     return () => {

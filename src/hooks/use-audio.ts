@@ -5,12 +5,13 @@ export function useAudio() {
   const store = useAudioStore();
 
   const togglePlayPause = useCallback(async () => {
-    if (store.status === "playing") {
-      await store.pause();
-    } else if (store.status === "paused") {
-      await store.resume();
+    const { status, pause, resume } = useAudioStore.getState();
+    if (status === "playing") {
+      await pause();
+    } else if (status === "paused") {
+      await resume();
     }
-  }, [store]);
+  }, []);
 
   return {
     play: store.play,

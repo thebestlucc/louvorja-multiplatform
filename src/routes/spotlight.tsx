@@ -38,6 +38,7 @@ import {
   searchAllHymns,
   searchBible,
   searchCollections,
+  searchCollectionsContent,
   searchMediaLibraryItems,
   getHymn,
   setCurrentSlide,
@@ -119,7 +120,6 @@ function SpotlightWindow() {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const setTheme = useThemeStore((state) => state.setTheme);
-  useThemeStore((state) => state.theme);
   const [query, setQuery] = useState("");
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [bibleResults, setBibleResults] = useState<BibleSearchResult[]>([]);
@@ -204,16 +204,19 @@ function SpotlightWindow() {
       const long = query.trim().length >= 2;
       // Run searches independently so a broken FTS index for one domain
       // does not suppress results from the other two.
-      const [[h], [b], [c], [l]] = await Promise.all([
+      const [[h], [b], [c], [cc], [l]] = await Promise.all([
         catcher(searchAllHymns(query), { notify: false }),
         long ? catcher(searchBible(query, null), { notify: false }) : Promise.resolve([[], null] as const),
         long ? catcher(searchCollections(query), { notify: false }) : Promise.resolve([[], null] as const),
+        long ? catcher(searchCollectionsContent(query), { notify: false }) : Promise.resolve([[], null] as const),
         long ? catcher(searchMediaLibraryItems(query), { notify: false }) : Promise.resolve([[], null] as const),
       ]);
 
       setHymns((h ?? []).slice(0, 5));
       setBibleResults((b ?? []).slice(0, 5));
-      setCollectionResults((c ?? []).slice(0, 5));
+      // Merge main DB + content DB collection results
+      const allCollections = [...(c ?? []), ...(cc ?? [])];
+      setCollectionResults(allCollections.slice(0, 5));
       setLibraryResults((l ?? []).slice(0, 5));
       setSearching(false);
     }, 300);
