@@ -1,3 +1,4 @@
+import { memo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
@@ -8,7 +9,6 @@ import { useAddServiceItem } from "../../lib/queries";
 import type { Hymn } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 import { LyricsModal } from "./lyrics-modal";
-import { useState } from "react";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { FavoriteButton } from "./favorite-button";
 
@@ -17,7 +17,7 @@ interface HymnCardProps {
   view?: "grid" | "list";
 }
 
-export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
+export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
   const { t } = useTranslation();
   const activeServiceId = usePresentationStore((s) => s.activeServiceId);
   const addItemMutation = useAddServiceItem();
@@ -245,4 +245,4 @@ export function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
       <LyricsModal hymn={hymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />
     </div>
   );
-}
+});

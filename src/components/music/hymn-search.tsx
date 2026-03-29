@@ -21,8 +21,8 @@ export function HymnSearch() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const { data: searchResults, isLoading: isSearchLoading } = useHymns(debouncedQuery);
-  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(debouncedQuery);
+  const { data: searchResults, isLoading: isSearchLoading } = useHymns(debouncedQuery, { enabled: !showFavoritesOnly });
+  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(debouncedQuery, { enabled: showFavoritesOnly });
 
   const isLoading = showFavoritesOnly ? isFavoritesLoading : isSearchLoading;
 

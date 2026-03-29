@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Music } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "../ui/card";
 import type { Album } from "../../lib/bindings";
@@ -7,7 +8,7 @@ interface AlbumCardProps {
   onClick: (albumName: string) => void;
 }
 
-export function AlbumCard({ album, onClick }: AlbumCardProps) {
+export const AlbumCard = memo(function AlbumCard({ album, onClick }: AlbumCardProps) {
   return (
     <Card
       className="cursor-pointer transition-colors hover:bg-surface-hover"
@@ -28,4 +29,4 @@ export function AlbumCard({ album, onClick }: AlbumCardProps) {
       </CardHeader>
     </Card>
   );
-}
+});

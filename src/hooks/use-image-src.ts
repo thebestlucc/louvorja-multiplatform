@@ -3,6 +3,14 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { catcher } from "../lib/catcher";
 
+// Cache the app data directory — it never changes and resolving it is an IPC call.
+// Without this, every CoverImage mount triggers a separate Tauri IPC round-trip.
+let appDataDirCache: Promise<string> | null = null;
+function getCachedAppDataDir(): Promise<string> {
+  if (!appDataDirCache) appDataDirCache = appDataDir();
+  return appDataDirCache;
+}
+
 function isCdnRelativePath(path: string): boolean {
   if (!path.startsWith("/")) return false;
   const cdnPrefixes = ["/covers/", "/musics/", "/images/", "/videos/"];
@@ -51,7 +59,7 @@ export function useImageSrc(path: string | null | undefined): string | null {
       if (isCdnRelativePath(normalized)) {
         const [absolute, error] = await catcher(
           async () => {
-            const appDir = await appDataDir();
+            const appDir = await getCachedAppDataDir();
             return await join(appDir, normalized.slice(1));
           },
           { notify: false },
@@ -76,7 +84,7 @@ export function useImageSrc(path: string | null | undefined): string | null {
       if (normalized.startsWith("media/")) {
         const [absolute, error] = await catcher(
           async () => {
-            const appDir = await appDataDir();
+            const appDir = await getCachedAppDataDir();
             return await join(appDir, normalized);
           },
           { notify: false },

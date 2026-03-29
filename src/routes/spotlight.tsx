@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Command } from "cmdk";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Home,
@@ -46,6 +46,7 @@ import type { Hymn, BibleSearchResult, CollectionSearchResult, MediaLibraryItem 
 import { CoverImage } from "../components/media/cover-image";
 import { useThemeStore } from "../stores/theme-store";
 import { HighlightedSnippet } from "../components/ui/highlighted-snippet";
+import { findBookIndexByQuery, getLocalizedBookNameByIndex } from "../components/bible/book-catalog";
 
 export const Route = createFileRoute("/spotlight")({
   component: SpotlightWindow,
@@ -115,7 +116,8 @@ async function projectHymnFirstStanza(hymn: Hymn) {
 }
 
 function SpotlightWindow() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const setTheme = useThemeStore((state) => state.setTheme);
   useThemeStore((state) => state.theme);
   const [query, setQuery] = useState("");
@@ -272,13 +274,30 @@ function SpotlightWindow() {
     ? actionItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
     : actionItems;
 
+  const parsedRef = useMemo(() => {
+    const q = query.trim();
+    if (!q) return null;
+    const match = q.match(
+      /^(\d?\s*[a-zA-Z\u00C0-\u017F]+(?:\s+[a-zA-Z\u00C0-\u017F]+)*)\s+(\d+)(?:[:\s]+(\d+))?$/,
+    );
+    if (!match) return null;
+    const bookQuery = match[1].replace(/\s+/g, " ").trim();
+    const chapter = parseInt(match[2], 10);
+    const verse = match[3] ? parseInt(match[3], 10) : undefined;
+    const bookIndex = findBookIndexByQuery(bookQuery, language);
+    if (bookIndex === null) return null;
+    const bookName = getLocalizedBookNameByIndex(bookIndex, language);
+    return { bookName, chapter, verse };
+  }, [query, language]);
+
   const hasResults =
     filteredNav.length > 0 ||
     filteredActions.length > 0 ||
     hymns.length > 0 ||
     bibleResults.length > 0 ||
     collectionResults.length > 0 ||
-    libraryResults.length > 0;
+    libraryResults.length > 0 ||
+    parsedRef !== null;
 
   const groupHeadingClass =
     "*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-muted-foreground *:[[cmdk-group-heading]]:select-none";
@@ -325,6 +344,31 @@ function SpotlightWindow() {
             <Command.Empty className="py-10 text-center text-sm text-muted-foreground">
               {t("commandPalette.noResults")}
             </Command.Empty>
+
+            {/* ── Bible reference (e.g. "Genesis 1:3" or "Gn 1 3") ── */}
+            {parsedRef && (
+              <Command.Group
+                heading={t("commandPalette.bibleReference", "Referência")}
+                className={groupHeadingClass}
+              >
+                <Command.Item
+                  value={`ref-${parsedRef.bookName}-${parsedRef.chapter}-${parsedRef.verse ?? 1}`}
+                  onSelect={() =>
+                    void spotlightSelect(
+                      "navigate",
+                      `/bible?book=${encodeURIComponent(parsedRef.bookName)}&chapter=${parsedRef.chapter}&verse=${parsedRef.verse ?? 1}`,
+                    )
+                  }
+                  className={itemClass}
+                >
+                  <BookOpen className={itemIconClass} />
+                  <span>
+                    {parsedRef.bookName} {parsedRef.chapter}
+                    {parsedRef.verse ? `:${parsedRef.verse}` : ""}
+                  </span>
+                </Command.Item>
+              </Command.Group>
+            )}
 
             {/* ── Navigation ── */}
             {filteredNav.length > 0 && (
