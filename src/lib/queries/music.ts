@@ -16,10 +16,12 @@ import {
 import type { HymnWriteInput, SyncPoint, SlideContent } from "../bindings";
 import { queryKeys } from "./keys";
 
-export function useHymns(query: string) {
+export function useHymns(query: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.hymns.search(query),
     queryFn: () => searchHymns(query),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
   });
 }
 

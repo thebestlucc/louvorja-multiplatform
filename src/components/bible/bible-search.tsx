@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useBibleSearch } from "../../lib/queries";
+import { useSearchBibleGlobal } from "../../lib/queries";
 import { Input } from "../ui/input";
 import { Search, X, BookOpen, ArrowRight } from "lucide-react";
 import type { BibleSearchResult } from "../../types/bible";
@@ -42,7 +42,7 @@ function parseReference(query: string, language: string, availableBooksByIndex: 
 
   // Match patterns like "Gn 1:3", "Genesis 1", "1 Sm 3:5", "Song of Solomon 2:1"
   const match = trimmed.match(
-    /^(\d?\s*[a-zA-Z\u00C0-\u017F]+(?:\s+[a-zA-Z\u00C0-\u017F]+)*)\s+(\d+)(?::(\d+))?$/,
+    /^(\d?\s*[a-zA-Z\u00C0-\u017F]+(?:\s+[a-zA-Z\u00C0-\u017F]+)*)\s+(\d+)(?:[:\s]+(\d+))?$/,
   );
   if (!match) return null;
 
@@ -95,7 +95,7 @@ export function BibleSearch({
 
   // Debounce the text query for backend search (300ms)
   const debouncedQuery = useDebouncedValue(query, 300);
-  const { data: textResults, isLoading } = useBibleSearch(debouncedQuery, versionId);
+  const { data: textResults, isLoading } = useSearchBibleGlobal(debouncedQuery);
 
   // Local: instant book name / abbreviation matching
   const bookMatches = useMemo(() => {
@@ -128,7 +128,7 @@ export function BibleSearch({
 
     const groups = new Map<string, { key: string; label: string; items: BibleSearchResult[] }>();
     for (const result of textResults) {
-      const key = `${result.verse.book}::${result.verse.chapter}`;
+      const key = `${result.verse.book}::${result.verse.chapter}::${result.versionAbbreviation}`;
       const existing = groups.get(key);
       if (existing) {
         existing.items.push(result);
@@ -139,7 +139,7 @@ export function BibleSearch({
       const displayBook = bookIndex === null ? result.verse.book : getLocalizedBookNameByIndex(bookIndex, language);
       groups.set(key, {
         key,
-        label: `${displayBook} ${result.verse.chapter}`,
+        label: `${displayBook} ${result.verse.chapter} · ${result.versionAbbreviation}`,
         items: [result],
       });
     }
@@ -226,7 +226,7 @@ export function BibleSearch({
               {grouped.map((group) => (
                 <div key={group.key}>
                   <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {group.label}{versionAbbr ? ` · ${versionAbbr}` : ""}
+                    {group.label}
                   </p>
                   {group.items.map((result) => (
                     <button

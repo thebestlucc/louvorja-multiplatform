@@ -228,8 +228,9 @@ pub fn search_hymns_content_db(
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
 
-    // If query is a pure number, search by track number directly (FTS5 doesn't index integers).
-    if let Ok(num) = trimmed.parse::<i64>() {
+    // If query is a pure number prefix, search by track number using LIKE (FTS5 doesn't index integers).
+    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
+        let number_prefix = format!("{}%", trimmed);
         let lyrics_col = lyrics_subquery(content_db, "?2");
         let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
         let (cat_join, cat_where) = hymnal_category_filter(content_db);
@@ -252,14 +253,14 @@ pub fn search_hymns_content_db(
              LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
              LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
              LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
-             WHERE am.track = ?1
+             WHERE CAST(am.track AS TEXT) LIKE ?1
                AND m.id_language = ?2
                {cat_where}
-             ORDER BY a.name, am.track"
+             ORDER BY am.track"
         );
         let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
         let hymns = stmt
-            .query_map(params![num, lang_short], |row| {
+            .query_map(params![number_prefix, lang_short], |row| {
                 Ok(crate::db::models::Hymn {
                     id: row.get("id")?,
                     number: row.get("number")?,

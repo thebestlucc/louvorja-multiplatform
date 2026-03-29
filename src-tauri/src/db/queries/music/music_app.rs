@@ -69,17 +69,18 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
         return Ok(hymns);
     }
 
-    // If numeric, search by number
-    if let Ok(num) = trimmed.parse::<i64>() {
+    // If numeric prefix, search by number using LIKE
+    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
+        let number_prefix = format!("{}%", trimmed);
         let mut stmt = conn.prepare(
             "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
              FROM hymns h
-             WHERE h.number = ?1
+             WHERE CAST(h.number AS TEXT) LIKE ?1
              AND h.category = 'hymnal'
-             ORDER BY h.title"
+             ORDER BY h.number"
         )?;
         let hymns = stmt
-            .query_map(params![num], map_hymn_row)?
+            .query_map(params![number_prefix], map_hymn_row)?
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(hymns);
     }
@@ -120,18 +121,19 @@ pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, App
         return Ok(hymns);
     }
 
-    // If numeric, search by number
-    if let Ok(num) = trimmed.parse::<i64>() {
+    // If numeric prefix, search by number using LIKE
+    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
+        let number_prefix = format!("{}%", trimmed);
         let mut stmt = conn.prepare(
             "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
              FROM hymns h
-             WHERE h.number = ?1
+             WHERE CAST(h.number AS TEXT) LIKE ?1
              AND h.category = 'hymnal'
-             ORDER BY h.title
+             ORDER BY h.number
              LIMIT 100"
         )?;
         let hymns = stmt
-            .query_map(params![num], map_hymn_row)?
+            .query_map(params![number_prefix], map_hymn_row)?
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(hymns);
     }

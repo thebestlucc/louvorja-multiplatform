@@ -17,10 +17,12 @@ import {
 import type { CollectionSongSyncStatus } from "../bindings";
 import { queryKeys } from "./keys";
 
-export function useCollections(query?: string) {
+export function useCollections(query?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.collections.all(query),
     queryFn: () => getCollections(query),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
   });
 }
 

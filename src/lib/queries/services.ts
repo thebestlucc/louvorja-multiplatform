@@ -127,17 +127,21 @@ export function useFavorites(itemType: string) {
   });
 }
 
-export function useFavoriteHymns(query?: string) {
+export function useFavoriteHymns(query?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.favorites.all("hymn", query),
     queryFn: () => getFavoriteHymns(query),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
   });
 }
 
-export function useFavoriteCollections(query?: string) {
+export function useFavoriteCollections(query?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.favorites.all("collection", query),
     queryFn: () => getFavoriteCollections(query),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
   });
 }
 
@@ -155,7 +159,9 @@ export function useToggleFavorite() {
     mutationFn: ({ itemType, itemId }: { itemType: string; itemId: number }) =>
       toggleFavorite(itemType, itemId),
     onSuccess: (_, { itemType, itemId }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.favorites.all(itemType) });
+      // Use ["favorites", itemType] prefix to invalidate ALL favorite list queries
+      // regardless of the active search term
+      queryClient.invalidateQueries({ queryKey: ["favorites", itemType] });
       queryClient.invalidateQueries({ queryKey: queryKeys.favorites.isFavorite(itemType, itemId) });
     },
   });

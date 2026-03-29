@@ -59,9 +59,10 @@ function CollectionsIndex() {
   // All hooks must be unconditional — no early returns before this block
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  const { data, isLoading: isAllLoading } = useCollections(deferredSearch);
-  const { data: favoriteCollections, isLoading: isFavoritesLoading } = useFavoriteCollections(deferredSearch);
+  const { data, isLoading: isAllLoading } = useCollections(deferredSearch, { enabled: !showFavoritesOnly });
+  const { data: favoriteCollections, isLoading: isFavoritesLoading } = useFavoriteCollections(deferredSearch, { enabled: showFavoritesOnly });
   const createMutation = useCreateCollection();
   const deleteMutation = useDeleteCollection();
   const importSongMutation = useImportCollectionSong();
@@ -73,7 +74,6 @@ function CollectionsIndex() {
 
   const [tab, setTab] = useState<"albums" | "custom">("albums");
   const [view, setView] = useState<"list" | "grid">("grid");
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -657,7 +657,7 @@ function CollectionsIndex() {
                               </Button>
                             </div>
                           </div>
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-300">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                                 <Button size="icon" variant="outline" className="h-7 w-7 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md">

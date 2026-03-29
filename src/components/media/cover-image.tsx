@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useImageSrc } from "../../hooks/use-image-src";
@@ -10,7 +10,7 @@ interface CoverImageProps {
   fallback?: ReactNode;
 }
 
-export function CoverImage({ path, title, className, fallback }: CoverImageProps) {
+export const CoverImage = memo(function CoverImage({ path, title, className, fallback }: CoverImageProps) {
   const src = useImageSrc(path);
   const [failed, setFailed] = useState(false);
 
@@ -56,4 +56,4 @@ export function CoverImage({ path, title, className, fallback }: CoverImageProps
       onError={() => setFailed(true)}
     />
   );
-}
+});
