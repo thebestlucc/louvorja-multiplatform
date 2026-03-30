@@ -733,6 +733,12 @@ pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), Ap
         )
         .map_err(AppError::Database)?;
     stmt.execute([lang_short]).map_err(AppError::Database)?;
+    // Merge FTS segments for optimal query performance after bulk insert
+    conn.execute(
+        "INSERT INTO musics_fts(musics_fts) VALUES('optimize')",
+        [],
+    )
+    .map_err(AppError::Database)?;
     Ok(())
 }
 
@@ -743,7 +749,7 @@ pub fn open_content_db_pool(path: &Path) -> Result<Pool<SqliteConnectionManager>
             "PRAGMA journal_mode=WAL;
              PRAGMA synchronous=NORMAL;
              PRAGMA temp_store=MEMORY;
-             PRAGMA mmap_size=134217728;
+             PRAGMA mmap_size=67108864;
              PRAGMA cache_size=-4000;
              PRAGMA busy_timeout=5000;",
         )

@@ -35,6 +35,23 @@ fn validate_https_url(url: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Creates a file with FILE_FLAG_SEQUENTIAL_SCAN on Windows for optimized cache behavior.
+#[cfg(target_os = "windows")]
+fn create_file_sequential(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .custom_flags(0x08000000) // FILE_FLAG_SEQUENTIAL_SCAN
+        .open(path)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_file_sequential(path: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::File::create(path)
+}
+
 /// Internal download function — assumes URL has already been validated.
 /// Public callers must use `download_file_http` which enforces HTTPS.
 async fn download_bytes_to_path(
@@ -89,7 +106,8 @@ async fn download_bytes_to_path(
             }
         }
 
-        let mut file = std::fs::File::create(&temp_path).map_err(AppError::Io)?;
+        let file = create_file_sequential(&temp_path).map_err(AppError::Io)?;
+        let mut writer = std::io::BufWriter::with_capacity(256 * 1024, file);
         let mut total_written: u64 = 0;
         while let Some(chunk) = response
             .chunk()
@@ -103,8 +121,9 @@ async fn download_bytes_to_path(
                     MAX_DOWNLOAD_BYTES / 1024 / 1024
                 )));
             }
-            file.write_all(&chunk).map_err(AppError::Io)?;
+            writer.write_all(&chunk).map_err(AppError::Io)?;
         }
+        writer.flush().map_err(AppError::Io)?;
         Ok(())
     }
     .await;
@@ -153,6 +172,12 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| AppError::Internal(format!("ZIP open failed: {}", e)))?;
 
+    let mut buf = vec![0u8; 256 * 1024];
+    // Throttle: yield every 5 MB written to prevent I/O queue saturation on
+    // eMMC/SSD devices (Windows reports 100% disk util on any sustained queue depth).
+    let mut bytes_since_yield: u64 = 0;
+    const YIELD_EVERY_BYTES: u64 = 5 * 1024 * 1024;
+
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -186,8 +211,22 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
             continue;
         }
 
-        let mut out = std::fs::File::create(&dest_path).map_err(AppError::Io)?;
-        std::io::copy(&mut entry, &mut out).map_err(AppError::Io)?;
+        let out = create_file_sequential(&dest_path).map_err(AppError::Io)?;
+        let mut writer = std::io::BufWriter::with_capacity(256 * 1024, out);
+        loop {
+            let n = std::io::Read::read(&mut entry, &mut buf).map_err(AppError::Io)?;
+            if n == 0 {
+                break;
+            }
+            writer.write_all(&buf[..n]).map_err(AppError::Io)?;
+            bytes_since_yield += n as u64;
+            if bytes_since_yield >= YIELD_EVERY_BYTES {
+                bytes_since_yield = 0;
+                writer.flush().map_err(AppError::Io)?;
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+        writer.flush().map_err(AppError::Io)?;
     }
 
     Ok(())
@@ -196,7 +235,6 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write as _;
     use tempfile::tempdir;
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
