@@ -4,14 +4,14 @@ use crate::state::AppState;
 use crate::utils::catcher::catcher;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
-const MAX_CONCURRENT_DOWNLOADS: usize = 10;
+const MAX_CONCURRENT_DOWNLOADS: usize = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +31,34 @@ pub fn new_run_id() -> String {
     Uuid::new_v4().to_string()
 }
 
+/// Sets the current thread to Windows background mode, lowering both CPU and I/O priority.
+/// This prevents pack sync from saturating disk on low-end devices (HDD/eMMC).
+#[cfg(target_os = "windows")]
+fn set_background_io_priority() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
+    };
+    unsafe {
+        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN as i32);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn clear_background_io_priority() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_END,
+    };
+    unsafe {
+        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END as i32);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_background_io_priority() {}
+
+#[cfg(not(target_os = "windows"))]
+fn clear_background_io_priority() {}
+
 pub fn execute_pack_sync(
     app: AppHandle,
     run_id: String,
@@ -39,6 +67,8 @@ pub fn execute_pack_sync(
     // When None, fetch the manifest and build the full plan.
     preset_items: Option<Vec<super::planner::PackSyncPlanItem>>,
 ) {
+    set_background_io_priority();
+
     // Emit helper — snapshots current statuses into every event.
     let emit = {
         let app = app.clone();
@@ -162,8 +192,102 @@ pub fn execute_pack_sync(
         .collect();
 
     let download_total = items_to_download.len();
-    let downloaded_ok: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let completed_count = Arc::new(AtomicUsize::new(0));
+
+    // ── Pipeline: extraction thread ──────────────────────────────────────────
+    // Download tasks send ZIP pack-ids on `ready_tx` when verified.
+    // The extraction thread extracts packs as they arrive, overlapping with
+    // subsequent downloads. When block_on returns (all tasks done, all task-cloned
+    // senders dropped), we drop the original sender → channel disconnects →
+    // thread exits its loop cleanly.
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<String>();
+
+    let zip_version_lookup: HashMap<String, u32> = items_to_download
+        .iter()
+        .filter(|i| !i.pack_id.starts_with("content-db-"))
+        .map(|i| (i.pack_id.clone(), i.pack_version))
+        .collect();
+
+    let app_extract = app.clone();
+    let run_id_extract = run_id.clone();
+    let app_data_extract = app_data_dir.clone();
+    let pack_statuses_extract = pack_statuses.clone();
+    let cancel_extract = cancel_flag.clone();
+
+    let extract_thread = std::thread::spawn(move || -> Vec<(String, u32)> {
+        let mut extracted_versions: Vec<(String, u32)> = Vec::new();
+        let mut extracted_count: usize = 0;
+        let zip_total = zip_version_lookup.len();
+
+        loop {
+            match ready_rx.recv_timeout(std::time::Duration::from_millis(200)) {
+                Ok(pack_id) => {
+                    if cancel_extract.load(Ordering::Relaxed) {
+                        // Drain remaining without extracting.
+                        while ready_rx.try_recv().is_ok() {}
+                        break;
+                    }
+
+                    let Some(&pack_version) = zip_version_lookup.get(&pack_id) else {
+                        continue;
+                    };
+
+                    let zip_path = app_data_extract.join(format!("pack_{}.zip.tmp", pack_id));
+
+                    pack_statuses_extract
+                        .lock()
+                        .unwrap()
+                        .insert(pack_id.clone(), "extracting".to_string());
+
+                    let extract_pct =
+                        70.0 + (extracted_count as f64 / zip_total.max(1) as f64) * 30.0;
+                    let _ = app_extract.emit(
+                        "pack-sync-progress",
+                        PackSyncProgress {
+                            run_id: run_id_extract.clone(),
+                            status: "running".into(),
+                            percent: extract_pct,
+                            message: Some(format!("Extraindo {}…", pack_id)),
+                            packs_total: zip_total,
+                            packs_processed: extracted_count,
+                            pack_statuses: pack_statuses_extract.lock().unwrap().clone(),
+                        },
+                    );
+
+                    match crate::http_sync::downloader::extract_zip_to(
+                        &zip_path,
+                        &app_data_extract,
+                    ) {
+                        Ok(_) => {
+                            let _ = std::fs::remove_file(&zip_path);
+                            pack_statuses_extract
+                                .lock()
+                                .unwrap()
+                                .insert(pack_id.clone(), "done".to_string());
+                            extracted_versions.push((pack_id, pack_version));
+                        }
+                        Err(e) => {
+                            let _ = std::fs::remove_file(&zip_path);
+                            eprintln!("[pack-sync] Extract failed for {}: {}", pack_id, e);
+                            pack_statuses_extract
+                                .lock()
+                                .unwrap()
+                                .insert(pack_id.clone(), "failed".to_string());
+                        }
+                    }
+                    extracted_count += 1;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    if cancel_extract.load(Ordering::Relaxed) {
+                        break;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        extracted_versions
+    });
 
     tauri::async_runtime::block_on(async {
         use tokio::sync::Semaphore;
@@ -179,7 +303,7 @@ pub fn execute_pack_sync(
             let client = client.clone();
             let app_data = app_data_dir.clone();
             let statuses = pack_statuses.clone();
-            let ok_set = downloaded_ok.clone();
+            let ready = ready_tx.clone();
             let count = completed_count.clone();
             let app_clone = app.clone();
             let run_id_clone = run_id.clone();
@@ -301,7 +425,11 @@ pub fn execute_pack_sync(
                                         .lock()
                                         .unwrap()
                                         .insert(item.pack_id.clone(), "ready".to_string());
-                                    ok_set.lock().unwrap().insert(item.pack_id.clone());
+                                    // Signal extraction thread for ZIP packs.
+                                    // Content-DB packs are handled in Phase 3 (no extraction).
+                                    if !is_content_db {
+                                        let _ = ready.send(item.pack_id.clone());
+                                    }
                                     succeeded = true;
                                     break;
                                 }
@@ -350,108 +478,33 @@ pub fn execute_pack_sync(
             handles.push(handle);
         }
 
+        // Drop the original sender before awaiting handles.
+        // Task-cloned senders are dropped when each task completes.
+        // Once all handles are awaited, all senders are gone → channel disconnects
+        // → extraction thread exits its recv loop.
+        drop(ready_tx);
+
         for handle in handles {
             let _ = handle.await;
         }
     });
 
-    // ── Phase 2: Sequential extract ─────────────────────────────────────────
+    // ── Phase 2: Wait for pipelined extraction to finish ────────────────────
+    // Extraction ran concurrently with downloads; joining here ensures all ZIPs
+    // are fully extracted before we write version records and hot-swap DBs.
+    let extracted_zip_versions = extract_thread.join().unwrap_or_default();
 
-    let ok_set = downloaded_ok.lock().unwrap().clone();
-
-    // Collect successfully extracted ZIP packs; version writes are batched in Phase 2b.
-    let mut extracted_zip_versions: Vec<(String, u32)> = Vec::new();
-
-    for (index, item) in plan_items.iter().enumerate() {
-        if cancel_flag.load(Ordering::Relaxed) {
-            emit(
-                "cancelled",
-                70.0 + (index as f64 / total as f64) * 30.0,
-                "Sincronização cancelada.",
-                index,
-                total,
-                snapshot(),
-            );
-            return;
-        }
-
-        let extract_percent = 70.0 + ((index + 1) as f64 / total as f64) * 30.0;
-
-        let is_content_db = item.pack_id.starts_with("content-db-");
-
-        if item.needs_download {
-            if ok_set.contains(&item.pack_id) {
-                // Content DB items are not ZIPs — skip extraction (handled in Phase 3).
-                // Version tracking for content-db packs is done via settings in Phase 3
-                // after the .db.tmp file is renamed and hot-swapped.
-                if is_content_db {
-                    pack_statuses
-                        .lock()
-                        .unwrap()
-                        .insert(item.pack_id.clone(), "ready".to_string());
-                } else {
-                    let zip_path =
-                        app_data_dir.join(format!("pack_{}.zip.tmp", item.pack_id));
-
-                    pack_statuses
-                        .lock()
-                        .unwrap()
-                        .insert(item.pack_id.clone(), "extracting".to_string());
-                    emit(
-                        "running",
-                        extract_percent,
-                        &format!("Extraindo {}…", item.pack_id),
-                        index,
-                        total,
-                        snapshot(),
-                    );
-
-                    match crate::http_sync::downloader::extract_zip_to(
-                        &zip_path,
-                        &app_data_dir,
-                    ) {
-                        Ok(_) => {
-                            let _ = std::fs::remove_file(&zip_path);
-                            extracted_zip_versions.push((item.pack_id.clone(), item.pack_version));
-                        }
-                        Err(e) => {
-                            let _ = std::fs::remove_file(&zip_path);
-                            eprintln!("[pack-sync] Extract failed for {}: {}", item.pack_id, e);
-                            pack_statuses
-                                .lock()
-                                .unwrap()
-                                .insert(item.pack_id.clone(), "failed".to_string());
-                            emit(
-                                "running",
-                                extract_percent,
-                                &format!("Extração falhou para {}: {}", item.pack_id, e),
-                                index + 1,
-                                total,
-                                snapshot(),
-                            );
-                            continue;
-                        }
-                    }
-                }
-            } else {
-                // Download failed — already marked, skip.
-                continue;
-            }
-        }
-
-        pack_statuses
-            .lock()
-            .unwrap()
-            .insert(item.pack_id.clone(), "done".to_string());
-
+    if cancel_flag.load(Ordering::Relaxed) {
+        clear_background_io_priority();
         emit(
-            "running",
-            extract_percent,
-            "",
-            index + 1,
+            "cancelled",
+            100.0,
+            "Sincronização cancelada.",
+            total,
             total,
             snapshot(),
         );
+        return;
     }
 
     // ── Phase 2b: Batch DB version writes for successfully extracted ZIP packs ─
@@ -548,6 +601,8 @@ pub fn execute_pack_sync(
     if let Ok(data_dir) = app.path().app_data_dir() {
         let _ = std::fs::remove_file(data_dir.join("manifest_cache.json"));
     }
+
+    clear_background_io_priority();
 
     let final_statuses = snapshot();
     let failed_count = final_statuses.values().filter(|s| s.as_str() == "failed").count();

@@ -18,6 +18,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
+          "$APPDATA/com.louvorja/**",
           "$APPDATA/media/**",
           "$APPLOCALDATA/media/**",
           "$APPDATA/images/**",

@@ -57,7 +57,7 @@ export function useImageSrc(path: string | null | undefined): string | null {
       if (isCdnRelativePath(normalized)) {
         const [absolute, error] = await catcher(
           async () => {
-            const appDir = await getCachedAppDataDir();
+            const appDir = (await getCachedAppDataDir()).replace(/\\/g, "/");
             return joinPath(appDir, normalized.slice(1));
           },
           { notify: false },
@@ -79,7 +79,7 @@ export function useImageSrc(path: string | null | undefined): string | null {
       if (normalized.startsWith("media/")) {
         const [absolute, error] = await catcher(
           async () => {
-            const appDir = await getCachedAppDataDir();
+            const appDir = (await getCachedAppDataDir()).replace(/\\/g, "/");
             return joinPath(appDir, normalized);
           },
           { notify: false },

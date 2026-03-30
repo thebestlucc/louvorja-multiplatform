@@ -2902,6 +2902,7 @@ dependencies = [
  "wait-timeout",
  "walkdir",
  "which",
+ "windows-sys 0.59.0",
  "wiremock",
  "zip 2.4.2",
 ]

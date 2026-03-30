@@ -40,7 +40,7 @@ fn resolve_hymn_paths(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
                     .to_string_lossy()
-                    .into_owned(),
+                    .replace('\\', "/"),
             );
         }
         if let Some(ref p) = h.playback_path {
@@ -48,7 +48,7 @@ fn resolve_hymn_paths(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
                     .to_string_lossy()
-                    .into_owned(),
+                    .replace('\\', "/"),
             );
         }
         if let Some(ref p) = h.cover_path {
@@ -56,7 +56,7 @@ fn resolve_hymn_paths(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
                     .to_string_lossy()
-                    .into_owned(),
+                    .replace('\\', "/"),
             );
         }
     }
@@ -73,7 +73,7 @@ fn resolve_collection_paths(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
                     .to_string_lossy()
-                    .into_owned(),
+                    .replace('\\', "/"),
             );
         }
     }
@@ -158,7 +158,7 @@ pub fn search_collections_content(
                     app_data
                         .join(p.trim_start_matches('/'))
                         .to_string_lossy()
-                        .into_owned(),
+                        .replace('\\', "/"),
                 );
             }
             results.push(r);
