@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, LayoutGrid, List as ListIcon, Star } from "lucide-react";
 import { Input } from "../ui/input";
@@ -9,12 +9,24 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWindowSize } from "react-use";
 import { cn } from "../../lib/utils";
 import { useDebouncedValue } from "../../hooks/use-debounced-value";
+import { getPreference, setPreference } from "../../lib/store";
+
+const VIEW_PREF_KEY = "hymnal.viewType";
 
 export function HymnSearch() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"list" | "grid">("list");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  useEffect(() => {
+    void getPreference<"list" | "grid">(VIEW_PREF_KEY, "list").then(setView);
+  }, []);
+
+  const handleSetView = (v: "list" | "grid") => {
+    setView(v);
+    void setPreference(VIEW_PREF_KEY, v);
+  };
 
   const debouncedQuery = useDebouncedValue(query, 300);
 
@@ -85,7 +97,7 @@ export function HymnSearch() {
               "h-8 w-8 transition-all",
               view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setView("list")}
+            onClick={() => handleSetView("list")}
             title="List view"
           >
             <ListIcon className="h-4 w-4" />
@@ -97,7 +109,7 @@ export function HymnSearch() {
               "h-8 w-8 transition-all",
               view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setView("grid")}
+            onClick={() => handleSetView("grid")}
             title="Grid view"
           >
             <LayoutGrid className="h-4 w-4" />

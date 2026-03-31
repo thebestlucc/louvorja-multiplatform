@@ -1,4 +1,4 @@
-import { DragEvent, FormEvent, useDeferredValue, useMemo, useState, useRef } from "react";
+import { DragEvent, FormEvent, useDeferredValue, useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, useRouter, getRouteApi } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { OnlineVideosTab } from "../../components/online-videos/online-videos-tab";
@@ -19,6 +19,7 @@ import {
 } from "../../lib/queries";
 import type { Collection } from "../../lib/bindings";
 import { getCollection, getCollectionHymns, getSlides } from "../../lib/tauri";
+import { getPreference, setPreference } from "../../lib/store";
 import { parseSlideRow } from "../../types/presentation";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
@@ -74,6 +75,15 @@ function CollectionsIndex() {
 
   const [tab, setTab] = useState<"albums" | "custom">("albums");
   const [view, setView] = useState<"list" | "grid">("grid");
+
+  useEffect(() => {
+    void getPreference<"list" | "grid">("collections.viewType", "grid").then(setView);
+  }, []);
+
+  const handleSetView = (v: "list" | "grid") => {
+    setView(v);
+    void setPreference("collections.viewType", v);
+  };
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -461,13 +471,13 @@ function CollectionsIndex() {
             <Button variant="ghost" size="icon" className={cn(
               "h-8 w-8 transition-all",
               view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )} onClick={() => setView("list")} title="List view">
+            )} onClick={() => handleSetView("list")} title="List view">
               <ListIcon className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" className={cn(
               "h-8 w-8 transition-all",
               view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )} onClick={() => setView("grid")} title="Grid view">
+            )} onClick={() => handleSetView("grid")} title="Grid view">
               <LayoutGrid className="h-4 w-4" />
             </Button>
           </div>
