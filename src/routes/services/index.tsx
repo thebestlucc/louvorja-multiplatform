@@ -1,29 +1,117 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { CalendarPlus, MoreVertical, Trash2, Copy, ListChecks, Search } from "lucide-react";
-import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import {
+  CalendarPlus, MoreVertical, Trash2, Copy, ListChecks, Search,
+  Calendar, Star, LayoutGrid, List, ListFilter, ChevronDown, Music, Sun,
+} from "lucide-react";
+import { useState, useMemo, useEffect, useCallback, type MouseEvent } from "react";
 import { useServices, useCreateService, useDeleteService, useDuplicateService } from "../../lib/queries";
 import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Badge } from "../../components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
-import { CategoryBadge } from "../../components/services/category-picker";
+import { useCategoryStore } from "../../components/services/category-picker";
 import { cn } from "../../lib/utils";
+import { catcher } from "../../lib/catcher";
+import { getPreference, setPreference } from "../../lib/store";
 import type { Service } from "../../types/service";
 
-export const Route = createFileRoute("/services/")({
-  component: ServicesIndex,
-});
+// ─── helpers ─────────────────────────────────────────────
 
 function formatShortDate(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
-  const date = new Date(dateStr + "T00:00:00");
   return new Intl.DateTimeFormat("default", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(date);
+  }).format(new Date(dateStr + "T00:00:00"));
 }
+
+type PillColor = { bg: string; text: string; border: string; dot: string };
+
+function getCategoryColor(category: string | null): PillColor {
+  const lower = (category ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (lower.includes("louvor"))
+    return { bg: "bg-green-500/10", text: "text-green-400", border: "border-green-500/20", dot: "bg-green-400" };
+  if (lower.includes("prega"))
+    return { bg: "bg-purple-500/10", text: "text-purple-400", border: "border-purple-500/20", dot: "bg-purple-400" };
+  if (lower.includes("evangelis"))
+    return { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20", dot: "bg-amber-400" };
+  if (lower.includes("joven"))
+    return { bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/20", dot: "bg-red-400" };
+  if (lower.includes("especial"))
+    return { bg: "bg-sky-500/10", text: "text-sky-400", border: "border-sky-500/20", dot: "bg-sky-400" };
+  return { bg: "bg-primary/10", text: "text-primary", border: "border-primary/20", dot: "bg-primary" };
+}
+
+// ─── favorites store ──────────────────────────────────────
+
+function useServiceFavorites() {
+  const [favorites, setFavoritesState] = useState<number[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [data] = await catcher(getPreference<number[]>("service_favorites", []));
+      if (!cancelled && data !== null) setFavoritesState(data);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggleFavorite = useCallback((serviceId: number, e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFavoritesState((prev) => {
+      if (prev.includes(serviceId)) {
+        const next = prev.filter((id) => id !== serviceId);
+        void catcher(setPreference("service_favorites", next));
+        return next;
+      }
+      if (prev.length >= 7) {
+        return prev; // caller checks isFull and shows toast
+      }
+      const next = [...prev, serviceId];
+      void catcher(setPreference("service_favorites", next));
+      return next;
+    });
+  }, []);
+
+  const isFull = favorites.length >= 7;
+
+  const isFavorite = useCallback((serviceId: number) => favorites.includes(serviceId), [favorites]);
+
+  return { favorites, toggleFavorite, isFavorite, isFull };
+}
+
+// ─── view preference ──────────────────────────────────────
+
+function useViewPreference() {
+  const [view, setViewState] = useState<"grid" | "list">("grid");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [data] = await catcher(getPreference<string>("service_view_pref", "grid"));
+      if (!cancelled && (data === "grid" || data === "list")) setViewState(data);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const setView = useCallback((v: "grid" | "list") => {
+    setViewState(v);
+    void catcher(setPreference("service_view_pref", v));
+  }, []);
+
+  return { view, setView };
+}
+
+// ─── route ────────────────────────────────────────────────
+
+export const Route = createFileRoute("/services/")({
+  component: ServicesIndex,
+});
 
 function ServicesIndex() {
   const { t } = useTranslation();
@@ -33,8 +121,16 @@ function ServicesIndex() {
   const deleteMutation = useDeleteService();
   const duplicateMutation = useDuplicateService();
   const [searchQuery, setSearchQuery] = useState("");
+  const { toggleFavorite, isFavorite, isFull } = useServiceFavorites();
+  const { view, setView } = useViewPreference();
+  const { getCategory, loaded: categoriesLoaded } = useCategoryStore();
 
-  // Sort by date descending (most recent first), then filter
+  const todayWeekDay = new Date().getDay();
+  const todayService = useMemo(
+    () => (services ?? []).find((s) => s.weekDay === todayWeekDay) ?? null,
+    [services, todayWeekDay],
+  );
+
   const sorted = useMemo(() => {
     const all = services ?? [];
     return [...all].sort((a, b) => {
@@ -45,9 +141,22 @@ function ServicesIndex() {
     });
   }, [services]);
 
-  const filtered = sorted.filter((s) =>
-    s.title.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filtered = useMemo(
+    () => sorted.filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase())),
+    [sorted, searchQuery],
   );
+
+  const favServices = useMemo(
+    () => filtered.filter((s) => isFavorite(s.id)).slice(0, 7),
+    [filtered, isFavorite],
+  );
+
+  const otherServices = useMemo(
+    () => filtered.filter((s) => !isFavorite(s.id)),
+    [filtered, isFavorite],
+  );
+
+  const total = (services ?? []).length;
 
   const handleCreate = async () => {
     const result = await createMutation.mutateAsync({
@@ -58,178 +167,382 @@ function ServicesIndex() {
     navigate({ to: "/services/$serviceId", params: { serviceId: String(result.id) } });
   };
 
-  const handleDelete = (id: number) => {
-    deleteMutation.mutate(id);
-  };
-
-  const handleDuplicate = (id: number) => {
-    duplicateMutation.mutate(id);
-  };
+  const handleDelete = (id: number) => deleteMutation.mutate(id);
+  const handleDuplicate = (id: number) => duplicateMutation.mutate(id);
 
   return (
-    <div className="flex flex-col gap-6 p-1">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex flex-1 flex-col gap-1">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight">{t("nav.services")}</h1>
-            {(services ?? []).length > 0 && (
-              <Badge variant="secondary" className="tabular-nums">
-                {(services ?? []).length}
-              </Badge>
+    <div className="flex flex-col gap-4 p-1">
+      {/* Header: title left, "Nova Liturgia" right */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">{t("nav.services")}</h1>
+            {total > 0 && (
+              <span className="rounded-full bg-white/9 px-2 py-0.5 text-[11px] text-muted-foreground">
+                {total}
+              </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">{t("dashboard.descriptions.services")}</p>
+          <p className="text-xs text-muted-foreground">{t("dashboard.descriptions.services")}</p>
         </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <Button onClick={handleCreate} className="shadow-sm">
-          <CalendarPlus className="mr-2 h-4 w-4" />
+        <Button onClick={handleCreate} size="sm" className="flex-shrink-0">
+          <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
           {t("services.new")}
         </Button>
-        <div className="relative ml-auto w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-9"
+      </div>
+
+      {/* Sub-toolbar: search | divider | sort | grid/list toggle */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex flex-1 items-center">
+          <Search className="absolute left-3 h-3.5 w-3.5 text-muted-foreground/60" />
+          <input
+            className="h-[30px] w-full rounded-md border border-border bg-white/4 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
             placeholder={t("services.searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        <div className="h-[18px] w-px flex-shrink-0 bg-border" />
+        <button className="flex h-[30px] flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-white/5 px-2.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+          <ListFilter className="h-3 w-3" />
+          {t("services.sortByDate")}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+        <div className="flex flex-shrink-0 overflow-hidden rounded-md border border-border">
+          <button
+            onClick={() => setView("grid")}
+            className={cn(
+              "flex h-[30px] w-[30px] items-center justify-center transition-colors",
+              view === "grid"
+                ? "bg-white/12 text-foreground"
+                : "bg-white/4 text-muted-foreground hover:bg-white/8 hover:text-foreground",
+            )}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setView("list")}
+            className={cn(
+              "flex h-[30px] w-[30px] items-center justify-center border-l border-border transition-colors",
+              view === "list"
+                ? "bg-white/12 text-foreground"
+                : "bg-white/4 text-muted-foreground hover:bg-white/8 hover:text-foreground",
+            )}
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* List */}
+      {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2.5">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-[120px] animate-pulse rounded-xl border border-border bg-surface"
-            />
+            <div key={i} className="h-[140px] animate-pulse rounded-xl border border-border bg-card" />
           ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-border/60 bg-surface/50 py-16">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/5">
-            <ListChecks className="h-8 w-8 text-primary/30" />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-medium text-foreground">{t("services.empty")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {searchQuery ? t("services.searchPlaceholder") : t("dashboard.descriptions.services")}
-            </p>
-          </div>
-          {!searchQuery && (
-            <Button onClick={handleCreate} className="mt-2 shadow-sm">
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              {t("services.new")}
-            </Button>
-          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((service) => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              onDuplicate={() => handleDuplicate(service.id)}
-              onDelete={() => handleDelete(service.id)}
-            />
-          ))}
-        </div>
+        <>
+          <TodayServiceSection
+            todayService={todayService}
+            view={view}
+            isFavorite={todayService ? isFavorite(todayService.id) : false}
+            isFull={isFull}
+            category={todayService && categoriesLoaded ? getCategory(todayService.id) : null}
+            onToggleFavorite={toggleFavorite}
+            onDuplicate={todayService ? () => handleDuplicate(todayService.id) : () => {}}
+            onDelete={todayService ? () => handleDelete(todayService.id) : () => {}}
+            onCreate={handleCreate}
+          />
+
+          {filtered.length === 0 ? (
+            <EmptyState hasSearch={!!searchQuery} onCreate={handleCreate} />
+          ) : (
+            <>
+              {favServices.length > 0 && (
+                <section className="flex flex-col gap-2.5">
+                  <SectionHeader
+                    icon={<Star className="h-3 w-3 fill-amber-400 text-amber-400" />}
+                    label={t("services.favorites").toUpperCase()}
+                    count={`${favServices.length} ${t("services.ofTotal")} 7`}
+                  />
+                  <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
+                    {favServices.map((s) => (
+                      <ServiceCard
+                        key={s.id}
+                        service={s}
+                        view={view}
+                        isFavorite={true}
+                        isFull={isFull}
+                        category={categoriesLoaded ? getCategory(s.id) : null}
+                        onToggleFavorite={toggleFavorite}
+                        onDuplicate={() => handleDuplicate(s.id)}
+                        onDelete={() => handleDelete(s.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {otherServices.length > 0 && (
+                <section className="flex flex-col gap-2.5">
+                  <SectionHeader
+                    icon={<Calendar className="h-3 w-3 text-muted-foreground" />}
+                    label={t("services.otherServices").toUpperCase()}
+                    count={String(otherServices.length)}
+                  />
+                  <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
+                    {otherServices.map((s) => (
+                      <ServiceCard
+                        key={s.id}
+                        service={s}
+                        view={view}
+                        isFavorite={false}
+                        isFull={isFull}
+                        category={categoriesLoaded ? getCategory(s.id) : null}
+                        onToggleFavorite={toggleFavorite}
+                        onDuplicate={() => handleDuplicate(s.id)}
+                        onDelete={() => handleDelete(s.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function ServiceCard({
-  service,
-  onDuplicate,
-  onDelete,
-}: {
+// ─── section header ───────────────────────────────────────
+
+function SectionHeader({ icon, label, count }: { icon: React.ReactNode; label: string; count: string }) {
+  return (
+    <div className="flex items-center gap-1.5 border-b border-border pb-2">
+      {icon}
+      <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/80">{label}</span>
+      <span className="text-[10.5px] text-muted-foreground/45">{count}</span>
+    </div>
+  );
+}
+
+// ─── service card ─────────────────────────────────────────
+
+interface ServiceCardProps {
   service: Service;
+  view: "grid" | "list";
+  isFavorite: boolean;
+  isFull: boolean;
+  category: string | null;
+  onToggleFavorite: (id: number, e: MouseEvent) => void;
   onDuplicate: () => void;
   onDelete: () => void;
-}) {
+  isToday?: boolean;
+}
+
+function ServiceCard({ service, view, isFavorite, isFull, category, onToggleFavorite, onDuplicate, onDelete, isToday }: ServiceCardProps) {
   const { t } = useTranslation();
   const shortDate = formatShortDate(service.date);
-  const itemCount = (service as Service & { itemCount?: number }).itemCount ?? 0;
+  const hymnCount = service.hymnCount ?? 0;
+  const itemCount = Math.max(0, (service.itemCount ?? 0) - hymnCount);
+  const pillColor = getCategoryColor(category);
 
+  const datePill = (
+    <span className="inline-flex items-center gap-1 rounded border border-border bg-white/6 px-1.5 py-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
+      <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
+      {shortDate ?? "—"}
+    </span>
+  );
+
+  const starBtn = (
+    <button
+      onClick={(e) => {
+        if (!isFavorite && isFull) {
+          e.preventDefault();
+          e.stopPropagation();
+          toast.error(t("services.favoritesLimitReached"));
+          return;
+        }
+        onToggleFavorite(service.id, e);
+      }}
+      className={cn("flex-shrink-0 p-0.5 transition-opacity", isFavorite ? "opacity-100" : isFull ? "opacity-20 cursor-not-allowed" : "opacity-25 hover:opacity-65")}
+    >
+      <Star className={cn("h-3.5 w-3.5", isFavorite ? "fill-amber-400 text-amber-400" : "text-foreground")} />
+    </button>
+  );
+
+  const menuBtn = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex-shrink-0 p-0.5 opacity-25 transition-opacity hover:opacity-60" onClick={(e) => e.preventDefault()}>
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(); }}>
+          <Copy className="mr-2 h-4 w-4" />
+          {t("services.duplicate")}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          {t("actions.delete")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const categoryPill = category ? (
+    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", pillColor.bg, pillColor.text, pillColor.border)}>
+      <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full opacity-75", pillColor.dot)} />
+      {category}
+    </span>
+  ) : null;
+
+  const footerStats = (
+    <>
+      <span className="flex items-center gap-1">
+        <Music className="h-3 w-3" />
+        {t("services.hymnCount", { count: hymnCount })}
+      </span>
+      <span className="flex items-center gap-1">
+        <ListChecks className="h-3 w-3" />
+        {t("services.itemCount", { count: itemCount })}
+      </span>
+    </>
+  );
+
+  if (view === "list") {
+    return (
+      <Link
+        to="/services/$serviceId"
+        params={{ serviceId: String(service.id) }}
+        className={cn(
+          "flex min-w-0 items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2",
+          "transition-colors hover:bg-card/70",
+          isFavorite && "border-amber-500/15 bg-amber-500/5",
+          isToday && "border-l-4 border-l-amber-400/70 bg-amber-500/5 hover:bg-amber-500/8",
+        )}
+      >
+        <div className="w-[120px] flex-shrink-0">{datePill}</div>
+        {starBtn}
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{service.title}</span>
+        {categoryPill && <div className="flex-shrink-0">{categoryPill}</div>}
+        <div className="ml-auto flex flex-shrink-0 items-center gap-2.5 border-l border-border pl-2.5 text-[11px] text-muted-foreground">
+          {footerStats}
+        </div>
+        {menuBtn}
+      </Link>
+    );
+  }
+
+  // Grid card
   return (
     <Link
       to="/services/$serviceId"
       params={{ serviceId: String(service.id) }}
       className={cn(
-        "group relative flex cursor-pointer overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-all duration-150",
-        "hover:border-primary/50 hover:shadow-md",
+        "group flex min-h-[140px] min-w-0 cursor-pointer flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5",
+        "transition-all duration-200 hover:-translate-y-0.5 hover:border-border/80 hover:bg-accent/40 hover:shadow-md",
+        isFavorite && "border-amber-500/15 bg-amber-500/5",
+        isToday && "border-l-4 border-l-amber-400/70 bg-amber-500/5 hover:bg-amber-500/8",
       )}
     >
-      {/* Left accent stripe */}
-      <div className="w-1 shrink-0 bg-primary/50 group-hover:bg-primary/70" />
-
-      <div className="flex flex-1 flex-col p-4">
-        {/* Top row: date + category */}
-        <div className="mb-2 flex items-center gap-2">
-          {shortDate && (
-            <span className="font-mono text-[11px] tracking-tight text-muted-foreground">
-              {shortDate}
-            </span>
-          )}
-          <CategoryBadge serviceId={service.id} />
-        </div>
-
-        {/* Title */}
-        <h3 className="text-sm font-semibold leading-snug tracking-tight text-foreground">
-          {service.title}
-        </h3>
-
-        {/* Notes preview (1 line) */}
-        {service.notes && (
-          <p className="mt-1.5 line-clamp-1 text-xs leading-relaxed text-muted-foreground/70 italic">
-            {service.notes}
-          </p>
-        )}
-
-        {/* Footer */}
-        <div className="mt-auto flex items-center justify-between pt-3">
-          {itemCount > 0 ? (
-            <div className="flex items-center gap-1.5">
-              <ListChecks className="h-3 w-3 text-muted-foreground/50" />
-              <span className="text-[11px] tabular-nums text-muted-foreground/60">
-                {t("services.itemCount", { count: itemCount })}
-              </span>
-            </div>
-          ) : (
-            <span />
-          )}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-all duration-150 hover:bg-surface-hover hover:text-foreground group-hover:opacity-100"
-                onClick={(e) => e.preventDefault()}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(); }}>
-                <Copy className="mr-2 h-4 w-4" />
-                {t("services.duplicate")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {t("actions.delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* Top: date + actions */}
+      <div className="flex items-start justify-between gap-1.5">
+        {datePill}
+        <div className="flex items-center gap-0.5">
+          {starBtn}
+          {menuBtn}
         </div>
       </div>
+
+      {/* Body: title + category — flex-1 pushes footer to bottom */}
+      <div className="flex flex-1 flex-col gap-1.5">
+        <span className="text-[13.5px] font-medium leading-snug text-foreground transition-colors duration-200 group-hover:text-foreground/90">{service.title}</span>
+        {categoryPill && <div className="flex flex-wrap gap-1">{categoryPill}</div>}
+      </div>
+
+      {/* Footer: item count */}
+      <div className="flex items-center gap-2.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
+        {footerStats}
+      </div>
     </Link>
+  );
+}
+
+// ─── today's service section ─────────────────────────────
+
+interface TodayServiceSectionProps extends Omit<ServiceCardProps, "service"> {
+  todayService: Service | null;
+  onCreate: () => void;
+}
+
+function TodayServiceSection({ todayService, view, isFavorite, isFull, category, onToggleFavorite, onDuplicate, onDelete, onCreate }: TodayServiceSectionProps) {
+  const { t } = useTranslation();
+  const todayName = new Intl.DateTimeFormat("default", { weekday: "long" }).format(new Date());
+
+  return (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-1.5 border-b border-amber-500/20 pb-2">
+        <Sun className="h-3 w-3 text-amber-400" />
+        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-400/90">
+          {t("services.todayService")}
+        </span>
+        <span className="text-[10.5px] text-amber-400/50">{todayName}</span>
+      </div>
+      {todayService ? (
+        <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
+          <ServiceCard
+            service={todayService}
+            view={view}
+            isFavorite={isFavorite}
+            isFull={isFull}
+            category={category}
+            onToggleFavorite={onToggleFavorite}
+            onDuplicate={onDuplicate}
+            onDelete={onDelete}
+            isToday={true}
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-amber-500/20 bg-amber-500/5 px-4 py-3">
+          <Sun className="h-4 w-4 flex-shrink-0 text-amber-400/40" />
+          <p className="flex-1 text-xs text-amber-400/60">{t("services.todayServiceEmpty")}</p>
+          <button
+            onClick={onCreate}
+            className="flex-shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/20"
+          >
+            {t("services.new")}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── empty state ──────────────────────────────────────────
+
+function EmptyState({ hasSearch, onCreate }: { hasSearch: boolean; onCreate: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 bg-card/50 py-14">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
+        <ListChecks className="h-7 w-7 text-primary/30" />
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-medium text-foreground">{t("services.empty")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {hasSearch ? t("services.searchPlaceholder") : t("dashboard.descriptions.services")}
+        </p>
+      </div>
+      {!hasSearch && (
+        <Button onClick={onCreate} size="sm" className="mt-1">
+          <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
+          {t("services.new")}
+        </Button>
+      )}
+    </div>
   );
 }

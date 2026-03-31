@@ -165,3 +165,18 @@ pub fn update_service_item(
     let conn = conn.unwrap();
     crate::db::queries::liturgy::update_service_item(&conn, id, &title, notes.as_deref())
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_service_week_day(
+    id: i64,
+    week_day: Option<i32>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::liturgy::set_service_week_day(&conn, id, week_day)
+}

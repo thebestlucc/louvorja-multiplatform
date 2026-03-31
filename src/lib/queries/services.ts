@@ -16,6 +16,7 @@ import {
   getFavoriteHymns,
   getFavoriteCollections,
   getAllFavoriteIds,
+  setServiceWeekDay,
 } from "../tauri";
 import { queryKeys } from "./keys";
 
@@ -107,6 +108,18 @@ export function useReorderServiceItems() {
       reorderServiceItems(vars.serviceId, vars.itemIds),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+export function useSetServiceWeekDay() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; weekDay: number | null }) =>
+      setServiceWeekDay(vars.id, vars.weekDay),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.id) });
     },
   });
 }

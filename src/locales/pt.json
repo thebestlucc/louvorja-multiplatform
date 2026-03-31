@@ -194,10 +194,10 @@
     "greetingAfternoon": "Boa tarde",
     "greetingEvening": "Boa noite",
     "whatToDo": "O que vamos preparar hoje?",
-    "activeService": "Culto em andamento",
+    "activeService": "Liturgia em andamento",
     "subtitle": "Selecione uma opção no menu lateral para começar",
     "hints": {
-      "services": "Planeje e conduza o culto",
+      "services": "Planeje e conduza a liturgia",
       "hymnal": "Encontre hinos e músicas",
       "bible": "Versículos e passagens",
       "presentations": "Slides e apresentações",
@@ -208,7 +208,7 @@
       "collections": "Gerencie coletâneas de músicas fora do hinário",
       "hymnal": "Pesquise e navegue pelos hinos",
       "presentations": "Crie e edite slides",
-      "services": "Planeje a ordem do culto"
+      "services": "Planeje a ordem da liturgia"
     },
     "shortcuts": {
       "title": "Atalhos rápidos",
@@ -217,7 +217,7 @@
       "help": "Atalhos"
     },
     "descriptions": {
-      "services": "Planeje e conduza o culto com itens agendados, notas e projeção integrada.",
+      "services": "Planeje e conduza a liturgia com itens agendados, notas e projeção integrada.",
       "hymnal": "Encontre hinos por número, título ou letra, e projete diretamente do hinário.",
       "bible": "Acesse versículos bíblicos para leitura e projeção rápida.",
       "presentations": "Crie slides personalizados para momentos de louvor, leitura ou anúncios.",
@@ -262,7 +262,7 @@
       "restart": "Reiniciar tour guiado",
       "steps": {
         "library": {
-          "description": "Use a barra lateral para navegar entre hinário, Bíblia, apresentações, cultos e utilidades.",
+          "description": "Use a barra lateral para navegar entre hinário, Bíblia, apresentações, liturgias e utilidades.",
           "title": "Navegação de biblioteca"
         },
         "projection": {
@@ -363,7 +363,7 @@
     "onlineVideos": "Vídeos Online",
     "playingNow": "Tocando agora",
     "presentations": "Apresentações",
-    "services": "Cultos",
+    "services": "Liturgia",
     "settings": "Configurações",
     "utilities": "Utilidades"
   },
@@ -532,15 +532,15 @@
     "tryDifferentSearch": "Tente um termo de pesquisa diferente."
   },
   "services": {
-    "activeService": "Culto Ativo",
+    "activeService": "Liturgia Ativa",
     "addItem": "Adicionar Item",
-    "addToService": "Adicionar ao Culto",
+    "addToService": "Adicionar à Liturgia",
     "browse": "Procurar",
     "date": "Data",
     "duplicate": "Duplicar",
     "editItem": "Editar",
     "editNotes": "Editar Notas",
-    "empty": "Nenhum culto ainda",
+    "empty": "Nenhuma liturgia ainda",
     "filePlaceholder": "Selecione um arquivo...",
     "fileTabs": {
       "library": "Itens Agendados",
@@ -558,26 +558,46 @@
       "url": "URL"
     },
     "items": "Itens",
-    "new": "Novo Culto",
+    "new": "Nova Liturgia",
     "noItems": "Sem itens. Clique em \"Adicionar Item\" para começar.",
     "notes": "Notas",
-    "playService": "Iniciar Culto",
+    "playService": "Iniciar Liturgia",
     "projectItem": "Projetar",
-    "searchPlaceholder": "Pesquisar cultos...",
-    "serviceNotes": "Notas do Culto",
+    "searchPlaceholder": "Pesquisar liturgias...",
+    "serviceNotes": "Notas da Liturgia",
     "stopService": "Parar",
     "timeline": "Linha do Tempo",
     "title": "Título",
-    "untitled": "Culto sem título",
+    "untitled": "Liturgia sem título",
     "urlTitlePlaceholder": "Título do link...",
     "itemCount": "{{count}} itens",
+    "hymnCount": "{{count}} músicas",
     "liveIndicator": "AO VIVO",
     "progressOf": "{{current}} / {{total}} itens",
     "category": "Categoria",
     "categoryPlaceholder": "Definir categoria...",
     "categorySuggestions": "Sugestões",
     "categoryRecent": "Recentes",
-    "activeServiceIndicator": "Culto ativo",
+    "createCategory": "Criar '{{name}}'",
+    "categories": "Categorias",
+    "noCategory": "Sem categoria",
+    "activeServiceIndicator": "Liturgia ativa",
+    "favorites": "Favoritos",
+    "otherServices": "Demais liturgias",
+    "viewGrid": "Grade",
+    "viewList": "Lista",
+    "sortByDate": "Data",
+    "ofTotal": "de",
+    "favoritesLimitReached": "Limite de favoritos atingido (máx. 7)",
+    "todayService": "Liturgia de Hoje",
+    "todayServiceEmpty": "Nenhuma liturgia atribuída para hoje. Crie uma ou abra uma liturgia e atribua-a a este dia da semana.",
+    "weekDayAssign": "Atribuir dia da semana",
+    "weekDayTaken": "Outra liturgia já está atribuída a este dia",
+    "weekDayTakenBy": "\"{{title}}\" está atribuído a este dia",
+    "weekDayOverrideTitle": "Substituir atribuição do dia?",
+    "weekDayOverrideDesc": "\"{{title}}\" está atualmente atribuído a {{day}}. Atribuir esta liturgia removerá essa atribuição.",
+    "weekDayOverrideConfirm": "Substituir",
+    "weekDayAssigned": "Atribuído a {{day}}",
     "calendar": {
       "prevMonth": "Mês anterior",
       "nextMonth": "Próximo mês",
@@ -592,13 +612,13 @@
       }
     },
     "defaultCategories": {
-      "sundayService": "Culto de Domingo",
+      "sundayService": "Liturgia de Domingo",
       "praiseReunion": "Reunião de Louvor",
-      "thursdayService": "Culto de Quinta",
+      "thursdayService": "Liturgia de Quinta",
       "retreat": "Retiro",
       "conference": "Conferência",
-      "youthService": "Culto Jovem",
-      "childrenService": "Culto Infantil"
+      "youthService": "Liturgia Jovem",
+      "childrenService": "Liturgia Infantil"
     }
   },
   "settings": {
@@ -701,9 +721,9 @@
       "clearDatabaseButton": "Redefinir App",
       "clearDatabaseCancelButton": "Cancelar",
       "clearDatabaseConfirmButton": "Sim, redefinir app",
-      "clearDatabaseConfirmDesc": "Esta ação não pode ser desfeita. Todos os seus hinos, apresentações, cultos e coleções serão permanentemente excluídos. Os dados da Bíblia serão preservados.",
+      "clearDatabaseConfirmDesc": "Esta ação não pode ser desfeita. Todos os seus hinos, apresentações, liturgias e coleções serão permanentemente excluídos. Os dados da Bíblia serão preservados.",
       "clearDatabaseConfirmTitle": "Redefinir app para o padrão?",
-      "clearDatabaseDesc": "Exclui todos os hinos, apresentações, cultos e coleções. Os dados da Bíblia e configurações serão preservados.",
+      "clearDatabaseDesc": "Exclui todos os hinos, apresentações, liturgias e coleções. Os dados da Bíblia e configurações serão preservados.",
       "clearDatabaseError": "Falha ao redefinir app: {{error}}",
       "clearDatabaseSuccess": "App redefinido com sucesso.",
       "title": "Zona de Perigo"
@@ -905,7 +925,7 @@
     "projectorDefaultSelectFile": "Selecionar arquivo",
     "projectorDefaultText": "Texto padrão",
     "projectorDefaultTextDesc": "Texto exibido quando o conteúdo padrão for Texto.",
-    "projectorDefaultTextPlaceholder": "O culto começará em instantes",
+    "projectorDefaultTextPlaceholder": "A liturgia começará em instantes",
     "projectorDefaultVideoPlaceholder": "Nenhum vídeo selecionado",
     "projectorLogoClear": "Limpar logo",
     "projectorLogoImagePlaceholder": "Nenhuma logo selecionada",
@@ -1064,7 +1084,7 @@
     "errorPermission": "Não foi possível instalar a atualização",
     "errorPermissionAction": "Tente executar como administrador ou entre em contato com o responsável de TI.",
     "errorPermissionWhy": "O aplicativo precisa de permissão para gravar arquivos.",
-    "guardActive": "Atualização disponível — será notificado após o culto",
+    "guardActive": "Atualização disponível — será notificado após a liturgia",
     "installing": "Instalando atualização. O aplicativo pode reiniciar.",
     "remindLater": "Lembrar depois",
     "skipVersion": "Ignorar esta versão",
@@ -1110,7 +1130,7 @@
     "mediaLibrary": {
       "addItem": "Adicionar Item",
       "showAllCategoryItems": "Ver todos os itens desta categoria",
-      "description": "Gerencie uma biblioteca de vídeos, imagens e PDFs para uso rápido no culto.",
+      "description": "Gerencie uma biblioteca de vídeos, imagens e PDFs para uso rápido na liturgia.",
       "editItem": "Editar Item",
       "filePathLabel": "Caminho do Arquivo",
       "filePathPlaceholder": "Selecione um arquivo...",
@@ -1140,7 +1160,7 @@
           "title": "Escalas de departamentos"
         }
       },
-      "description": "Abra uma utilidade para usar no fluxo do culto.",
+      "description": "Abra uma utilidade para usar no fluxo da liturgia.",
       "title": "Escolha uma ferramenta"
     },
     "projection": {
@@ -1169,7 +1189,7 @@
         "noParticipatingDepartments": "Salve pelo menos um departamento participante para começar as designações.",
         "openHint": "Abra um dia selecionado para revisar o departamento responsável e as designações.",
         "participatingDepartments": "Departamentos participantes",
-        "participatingDepartmentsHint": "Escolha quais departamentos devem aparecer neste dia de culto.",
+        "participatingDepartmentsHint": "Escolha quais departamentos devem aparecer neste dia de liturgia.",
         "peoplePerDay": "Pessoas neste dia",
         "removeDay": "Remover dia",
         "removeDayConfirm": "Remover este dia da escala do mês?",
@@ -1188,10 +1208,10 @@
       },
       "daySelection": {
         "description": "Os dias selecionados deste mês aparecerão aqui para designação e impressão.",
-        "empty": "Nenhum dia de culto foi selecionado para este mês ainda.",
+        "empty": "Nenhum dia de liturgia foi selecionado para este mês ainda.",
         "selectedDays": "{{count}} dia selecionado",
         "selectedDays_other": "{{count}} dias selecionados",
-        "title": "Dias de culto"
+        "title": "Dias de liturgia"
       },
       "departmentManagement": {
         "action": "Gerenciar departamentos",
@@ -1233,9 +1253,9 @@
         "system": "Sistema",
         "title": "Departamentos"
       },
-      "description": "Organize os dias de culto, departamentos e designações do mês selecionado.",
+      "description": "Organize os dias de liturgia, departamentos e designações do mês selecionado.",
       "emptyStates": {
-        "noDays": "Selecione dias de culto deste mês para começar a montar a escala.",
+        "noDays": "Selecione dias de liturgia deste mês para começar a montar a escala.",
         "noDepartments": "Adicione membros em pelo menos um departamento para gerar as designações."
       },
       "generate": {
@@ -1244,8 +1264,8 @@
         "overwriteManual": "Sobrescrever ajustes manuais",
         "preserveManual": "Preservar ajustes manuais",
         "success": "Escala gerada",
-        "successDescription": "{{count}} dia de culto atualizado em {{month}}.",
-        "successDescription_other": "{{count}} dias de culto atualizados em {{month}}.",
+        "successDescription": "{{count}} dia de liturgia atualizado em {{month}}.",
+        "successDescription_other": "{{count}} dias de liturgia atualizados em {{month}}.",
         "title": "Geração"
       },
       "loading": {
@@ -1272,8 +1292,8 @@
       "print": {
         "action": "Abrir visualização de impressão",
         "clear": "Limpar",
-        "departmentDays": "{{count}} dia de culto",
-        "departmentDays_other": "{{count}} dias de culto",
+        "departmentDays": "{{count}} dia de liturgia",
+        "departmentDays_other": "{{count}} dias de liturgia",
         "description": "Prepare uma saída compacta em A4 para um ou mais departamentos.",
         "dialogAction": "Imprimir / Salvar em PDF",
         "documentTitle": "Escala dos departamentos",
@@ -1292,7 +1312,7 @@
         "unassigned": "Sem designados"
       },
       "responsibleDepartment": {
-        "description": "Escolha qual departamento é responsável por cada dia de culto selecionado.",
+        "description": "Escolha qual departamento é responsável por cada dia de liturgia selecionado.",
         "label": "Departamento responsável",
         "none": "Não definido",
         "title": "Departamento responsável"
@@ -1386,8 +1406,8 @@
       "selectPlaylists": "Selecione as playlists que deseja adicionar:",
       "addSelected": "Adicionar {{count}} selecionadas",
       "singleVideo": "Este é um vídeo individual",
-      "singleVideoHint": "Vídeos individuais podem ser adicionados diretamente a um culto ou apresentação.",
-      "addToService": "Ir para Culto Ativo",
+      "singleVideoHint": "Vídeos individuais podem ser adicionados diretamente a uma liturgia ou apresentação.",
+      "addToService": "Ir para Liturgia Ativa",
       "noPlaylists": "Este canal não tem playlists públicas.",
       "alreadyAdded": "Já adicionada",
       "couldNotExtractId": "Não foi possível extrair o ID da playlist da URL"

@@ -4,9 +4,12 @@ use rusqlite::Connection;
 
 pub fn get_services(conn: &Connection) -> Result<Vec<Service>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, date, notes, created_at, updated_at
-         FROM services
-         ORDER BY date DESC, created_at DESC",
+        "SELECT s.id, s.title, s.date, s.notes, s.created_at, s.updated_at,
+                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id) AS item_count,
+                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id AND si.item_type = 'hymn') AS hymn_count,
+                s.week_day
+         FROM services s
+         ORDER BY s.date DESC, s.created_at DESC",
     )?;
 
     let services = stmt
@@ -18,6 +21,9 @@ pub fn get_services(conn: &Connection) -> Result<Vec<Service>, AppError> {
                 notes: row.get(3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
+                item_count: row.get(6)?,
+                hymn_count: row.get(7)?,
+                week_day: row.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -27,8 +33,11 @@ pub fn get_services(conn: &Connection) -> Result<Vec<Service>, AppError> {
 
 pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Service, AppError> {
     conn.query_row(
-        "SELECT id, title, date, notes, created_at, updated_at
-         FROM services WHERE id = ?1",
+        "SELECT s.id, s.title, s.date, s.notes, s.created_at, s.updated_at,
+                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id) AS item_count,
+                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id AND si.item_type = 'hymn') AS hymn_count,
+                s.week_day
+         FROM services s WHERE s.id = ?1",
         [id],
         |row| {
             Ok(Service {
@@ -38,6 +47,9 @@ pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Service, AppError
                 notes: row.get(3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
+                item_count: row.get(6)?,
+                hymn_count: row.get(7)?,
+                week_day: row.get(8)?,
             })
         },
     )
@@ -192,6 +204,31 @@ pub fn reorder_items(
     let mut stmt = conn.prepare("UPDATE service_items SET item_order = ?1 WHERE id = ?2")?;
     for (i, id) in item_ids.iter().enumerate() {
         stmt.execute(rusqlite::params![i as i64, id])?;
+    }
+    Ok(())
+}
+
+pub fn set_service_week_day(
+    conn: &Connection,
+    id: i64,
+    week_day: Option<i32>,
+) -> Result<(), AppError> {
+    if let Some(day) = week_day {
+        // Clear this day from any other service first (uniqueness by clearing)
+        conn.execute(
+            "UPDATE services SET week_day = NULL WHERE week_day = ?1 AND id != ?2",
+            rusqlite::params![day, id],
+        )?;
+    }
+    let affected = conn.execute(
+        "UPDATE services SET week_day = ?1, updated_at = datetime('now') WHERE id = ?2",
+        rusqlite::params![week_day, id],
+    )?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!(
+            "Service with id {} not found",
+            id
+        )));
     }
     Ok(())
 }

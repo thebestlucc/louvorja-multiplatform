@@ -17,8 +17,11 @@ import { DatePicker } from "../../components/services/date-picker";
 import { CategoryPicker } from "../../components/services/category-picker";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../../components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { cn } from "../../lib/utils";
-import type { ServiceItem, SlideContent } from "../../lib/bindings";
+import { useServices, useSetServiceWeekDay } from "../../lib/queries";
+import type { Service, ServiceItem, SlideContent } from "../../lib/bindings";
 
 export const Route = createFileRoute("/services/$serviceId")({
   component: ServiceEditor,
@@ -67,6 +70,8 @@ function ServiceEditor() {
     reorderItems,
     editItem,
   } = useServiceEditor({ serviceId: id });
+
+  const { data: allServices } = useServices();
 
   const {
     setActiveService,
@@ -377,6 +382,11 @@ function ServiceEditor() {
           />
           <CategoryPicker serviceId={id} />
           <DatePicker value={localDate} onChange={handleDateChange} />
+          <WeekDayPicker
+            serviceId={id}
+            currentWeekDay={service.weekDay ?? null}
+            allServices={allServices ?? []}
+          />
         </div>
 
         {!isPlayingService && (
@@ -477,5 +487,126 @@ function ServiceEditor() {
         onAdd={addItem}
       />
     </div>
+  );
+}
+
+// ─── weekday picker ──────────────────────────────────────
+
+interface WeekDayPickerProps {
+  serviceId: number;
+  currentWeekDay: number | null;
+  allServices: Service[];
+}
+
+function WeekDayPicker({ serviceId, currentWeekDay, allServices }: WeekDayPickerProps) {
+  const { t } = useTranslation();
+  const setWeekDay = useSetServiceWeekDay();
+  const [pendingDay, setPendingDay] = useState<number | null>(null);
+
+  const DAYS = [
+    { key: "sun", label: t("services.calendar.weekdays.sun"), value: 0 },
+    { key: "mon", label: t("services.calendar.weekdays.mon"), value: 1 },
+    { key: "tue", label: t("services.calendar.weekdays.tue"), value: 2 },
+    { key: "wed", label: t("services.calendar.weekdays.wed"), value: 3 },
+    { key: "thu", label: t("services.calendar.weekdays.thu"), value: 4 },
+    { key: "fri", label: t("services.calendar.weekdays.fri"), value: 5 },
+    { key: "sat", label: t("services.calendar.weekdays.sat"), value: 6 },
+  ];
+
+  // Map day value → the service that owns it (excluding current)
+  const takenByService = new Map<number, Service>(
+    allServices
+      .filter((s) => s.id !== serviceId && s.weekDay !== null)
+      .map((s) => [s.weekDay as number, s]),
+  );
+
+  const handleClick = (value: number) => {
+    // Toggle off: active day clicked → clear
+    if (currentWeekDay === value) {
+      setWeekDay.mutate({ id: serviceId, weekDay: null });
+      return;
+    }
+    // Taken by another service → open confirmation dialog
+    if (takenByService.has(value)) {
+      setPendingDay(value);
+      return;
+    }
+    // Free day → assign directly
+    setWeekDay.mutate({ id: serviceId, weekDay: value });
+  };
+
+  const handleConfirmOverride = () => {
+    if (pendingDay !== null) {
+      setWeekDay.mutate({ id: serviceId, weekDay: pendingDay });
+    }
+    setPendingDay(null);
+  };
+
+  const conflictingService = pendingDay !== null ? takenByService.get(pendingDay) : null;
+  const pendingDayLabel = pendingDay !== null ? DAYS.find((d) => d.value === pendingDay)?.label : null;
+
+  return (
+    <>
+      <div className="flex items-center gap-0.5 rounded-md border border-border bg-white/4 px-1.5 py-1">
+        {DAYS.map((day) => {
+          const isActive = currentWeekDay === day.value;
+          const takenBy = takenByService.get(day.value);
+          const isTaken = !!takenBy && !isActive;
+
+          const btn = (
+            <button
+              key={day.key}
+              onClick={() => handleClick(day.value)}
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10.5px] font-medium transition-all duration-150",
+                isActive
+                  ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/40"
+                  : isTaken
+                    ? "cursor-not-allowed text-muted-foreground/30"
+                    : "text-muted-foreground/60 hover:bg-white/8 hover:text-foreground",
+              )}
+            >
+              {day.label}
+            </button>
+          );
+
+          if (isTaken) {
+            return (
+              <Tooltip key={day.key} delayDuration={300}>
+                <TooltipTrigger asChild>{btn}</TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {t("services.weekDayTakenBy", { title: takenBy!.title })}
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+
+          return btn;
+        })}
+      </div>
+
+      {/* Override confirmation dialog */}
+      <Dialog open={pendingDay !== null} onOpenChange={(open) => { if (!open) setPendingDay(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("services.weekDayOverrideTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("services.weekDayOverrideDesc", {
+                day: pendingDayLabel,
+                title: conflictingService?.title ?? "",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setPendingDay(null)}>
+              {t("actions.cancel")}
+            </Button>
+            <Button size="sm" onClick={handleConfirmOverride}>
+              {t("services.weekDayOverrideConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -45,15 +45,26 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   online_video: "text-red-500",
 };
 
-const itemTypeBorders: Record<ServiceItemType, string> = {
-  hymn: "border-l-blue-500",
-  bible: "border-l-amber-600",
-  presentation: "border-l-purple-500",
-  annotation: "border-l-green-500",
-  url: "border-l-cyan-500",
-  file: "border-l-gray-500",
-  scheduled_category: "border-l-rose-500",
-  online_video: "border-l-red-500",
+const itemTypeDotColors: Record<ServiceItemType, string> = {
+  hymn: "bg-blue-500",
+  bible: "bg-amber-600",
+  presentation: "bg-purple-500",
+  annotation: "bg-green-500",
+  url: "bg-cyan-500",
+  file: "bg-gray-500",
+  scheduled_category: "bg-rose-500",
+  online_video: "bg-red-500",
+};
+
+const itemTypeIconBg: Record<ServiceItemType, string> = {
+  hymn: "bg-blue-500/10",
+  bible: "bg-amber-500/10",
+  presentation: "bg-purple-500/10",
+  annotation: "bg-green-500/10",
+  url: "bg-cyan-500/10",
+  file: "bg-gray-500/10",
+  scheduled_category: "bg-rose-500/10",
+  online_video: "bg-red-500/10",
 };
 
 interface ServiceItemListProps {
@@ -187,7 +198,8 @@ function SortableServiceItem({
 
   const Icon = (itemTypeIcons as Record<string, typeof Music>)[item.itemType] ?? CalendarClock;
   const colorClass = (itemTypeColors as Record<string, string>)[item.itemType] ?? "text-gray-500";
-  const borderClass = (itemTypeBorders as Record<string, string>)[item.itemType] ?? "border-l-gray-500";
+  const dotColor = (itemTypeDotColors as Record<string, string>)[item.itemType] ?? "bg-gray-500";
+  const iconBg = (itemTypeIconBg as Record<string, string>)[item.itemType] ?? "bg-gray-500/10";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
   const isScheduledCategory = item.itemType === "scheduled_category";
 
@@ -196,21 +208,23 @@ function SortableServiceItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group relative flex min-h-[60px] cursor-pointer items-center gap-3 rounded-lg border-l-4 bg-surface px-3 py-3 transition-all duration-150",
-        borderClass,
+        "group relative flex items-center gap-3 rounded-lg py-2.5 px-3 transition-colors",
         isActive
-          ? "bg-primary/8 shadow-sm ring-1 ring-primary/20"
-          : "hover:bg-surface-hover hover:shadow-sm",
+          ? "bg-primary/10 border border-primary/20"
+          : "hover:bg-muted/50",
       )}
     >
-      {/* Drag handle */}
+      {/* Drag handle — visible on hover */}
       <button
-        className="cursor-grab rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground group-hover:text-muted-foreground"
+        className="cursor-grab rounded p-0.5 text-muted-foreground/30 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-4 w-4" />
       </button>
+
+      {/* Colored type dot */}
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", dotColor)} />
 
       {/* Track number */}
       <span className={cn(
@@ -220,6 +234,11 @@ function SortableServiceItem({
           : "text-muted-foreground/50",
       )}>
         {index + 1}
+      </span>
+
+      {/* Type icon pill */}
+      <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", iconBg)}>
+        <Icon className={cn("h-4 w-4", colorClass)} />
       </span>
 
       {isEditing ? (
@@ -261,30 +280,24 @@ function SortableServiceItem({
         </div>
       ) : (
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {/* Type icon pill */}
-            <span className={cn("flex items-center gap-1 text-xs", colorClass)}>
-              <Icon className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-medium">{typeLabel}</span>
-            </span>
-            <p className={cn(
-              "truncate text-sm font-semibold",
-              isActive ? "text-primary" : "text-foreground",
-            )}>
-              {item.title}
-            </p>
-          </div>
+          <p className={cn(
+            "truncate text-sm font-medium",
+            isActive ? "text-primary" : "text-foreground",
+          )}>
+            {item.title}
+          </p>
+          <p className="text-xs text-muted-foreground">{typeLabel}</p>
           {isScheduledCategory ? (
             <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? null} />
           ) : item.notes ? (
-            <p className="mt-1 truncate text-xs italic text-muted-foreground/60">{item.notes}</p>
+            <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">{item.notes}</p>
           ) : null}
         </div>
       )}
 
-      {/* Action buttons - revealed on hover */}
+      {/* Action buttons — hover only */}
       {!isEditing && (
-        <div className="flex items-center gap-0.5 opacity-0 transition-all duration-150 group-hover:opacity-100">
+        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {onProject && (
             <button
               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
@@ -296,7 +309,7 @@ function SortableServiceItem({
           )}
           {onEditItem && (
             <button
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => setIsEditing(true)}
               title={t("services.editItem")}
             >

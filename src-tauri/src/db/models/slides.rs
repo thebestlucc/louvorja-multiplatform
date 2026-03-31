@@ -39,6 +39,9 @@ pub struct Service {
     pub notes: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub item_count: i64,
+    pub hymn_count: i64,
+    pub week_day: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
