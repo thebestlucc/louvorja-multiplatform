@@ -80,3 +80,7 @@ export async function duplicateService(id: number): Promise<Service> {
 export async function updateServiceItem(id: number, title: string, notes: string | null): Promise<void> {
   return tauriInvoke<void>("update_service_item", { id, title, notes });
 }
+
+export async function setServiceWeekDay(id: number, weekDay: number | null): Promise<void> {
+  return tauriInvoke<void>("set_service_week_day", { id, weekDay });
+}

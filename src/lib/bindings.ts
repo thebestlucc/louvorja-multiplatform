@@ -500,6 +500,14 @@ async updateServiceItem(id: number, title: string, notes: string | null) : Promi
     else return { status: "error", error: e  as any };
 }
 },
+async setServiceWeekDay(id: number, weekDay: number | null) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_service_week_day", { id, weekDay }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getMediaLibraryCategories(language: string) : Promise<Result<MediaLibraryCategory[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_media_library_categories", { language }) };
@@ -1506,7 +1514,7 @@ export type ScheduleDepartmentMember = { id: number; departmentId: number; name:
 export type ScheduleGenerationRequest = { year: number; month: number; overwriteManual: boolean }
 export type ScheduleMonth = { id: number; year: number; month: number; notes: string | null; createdAt: string; updatedAt: string }
 export type ScheduleMonthDetail = { month: ScheduleMonth; departments: ScheduleDepartment[]; days: ScheduleDay[] }
-export type Service = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string }
+export type Service = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string; itemCount: number; hymnCount: number; weekDay: number | null }
 export type ServiceItem = { id: number; serviceId: number; itemType: string; itemId: number; title: string; itemOrder: number; notes: string | null }
 export type ServiceWithItems = { service: Service; items: ServiceItem[] }
 export type Setting = { key: string; value: string }

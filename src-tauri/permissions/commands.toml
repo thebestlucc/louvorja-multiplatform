@@ -201,7 +201,8 @@ allow = [
     "plan_pack_sync",
     "start_pack_sync",
     "cancel_pack_sync",
-    "clear_manifest_cache"
+    "clear_manifest_cache",
+    "set_service_week_day"
 ]
 
 [[permission]]

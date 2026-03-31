@@ -31,14 +31,14 @@ interface AddItemModalProps {
   onAdd: (itemType: string, title: string, itemId: number | null, notes: string | null) => void;
 }
 
-const ITEM_TYPES: { type: ServiceItemType; icon: typeof Music; color: string }[] = [
-  { type: "hymn", icon: Music, color: "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20" },
-  { type: "bible", icon: BookOpen, color: "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20" },
-  { type: "presentation", icon: Presentation, color: "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20" },
-  { type: "annotation", icon: StickyNote, color: "bg-green-500/10 text-green-600 hover:bg-green-500/20" },
-  { type: "url", icon: Link2, color: "bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20" },
-  { type: "file", icon: FileIcon, color: "bg-gray-500/10 text-gray-600 hover:bg-gray-500/20" },
-  { type: "online_video", icon: Video, color: "bg-red-500/10 text-red-600 hover:bg-red-500/20" },
+const ITEM_TYPES: { type: ServiceItemType; icon: typeof Music; color: string; hoverBorder: string }[] = [
+  { type: "hymn", icon: Music, color: "bg-blue-500/15 text-blue-500 dark:text-blue-400", hoverBorder: "hover:border-blue-500/30" },
+  { type: "bible", icon: BookOpen, color: "bg-amber-500/15 text-amber-600 dark:text-amber-400", hoverBorder: "hover:border-amber-500/30" },
+  { type: "presentation", icon: Presentation, color: "bg-purple-500/15 text-purple-500 dark:text-purple-400", hoverBorder: "hover:border-purple-500/30" },
+  { type: "annotation", icon: StickyNote, color: "bg-green-500/15 text-green-500 dark:text-green-400", hoverBorder: "hover:border-green-500/30" },
+  { type: "url", icon: Link2, color: "bg-cyan-500/15 text-cyan-500 dark:text-cyan-400", hoverBorder: "hover:border-cyan-500/30" },
+  { type: "file", icon: FileIcon, color: "bg-slate-500/15 text-slate-500 dark:text-slate-400", hoverBorder: "hover:border-slate-500/30" },
+  { type: "online_video", icon: Video, color: "bg-red-500/15 text-red-500 dark:text-red-400", hoverBorder: "hover:border-red-500/30" },
 ];
 
 export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
@@ -57,7 +57,7 @@ export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md p-0">
+      <DialogContent className="max-w-md bg-card p-0">
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-border px-5 pt-5 pb-3 mb-6">
           {selectedType && (
@@ -68,7 +68,7 @@ export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
               <ChevronLeft className="h-4 w-4" />
             </button>
           )}
-          <DialogTitle className="text-base">
+          <DialogTitle className="text-base text-foreground">
             {selectedType
               ? t(`services.itemTypes.${selectedType}`)
               : t("services.addItem")}
@@ -80,13 +80,14 @@ export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
           {!selectedType ? (
             /* Step 1: Type picker grid */
             <div className="grid grid-cols-3 gap-2">
-              {ITEM_TYPES.map(({ type, icon: Icon, color }) => (
+              {ITEM_TYPES.map(({ type, icon: Icon, color, hoverBorder }) => (
                 <button
                   key={type}
                   onClick={() => setSelectedType(type)}
                   className={cn(
-                    "flex cursor-pointer flex-col items-center gap-2 rounded-lg p-4 transition-colors duration-150",
+                    "flex min-h-[80px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-transparent p-4 transition-all duration-150",
                     color,
+                    hoverBorder,
                   )}
                 >
                   <Icon className="h-6 w-6" />

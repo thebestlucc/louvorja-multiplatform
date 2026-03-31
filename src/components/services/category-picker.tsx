@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Tag, X } from "lucide-react";
+import { Tag, X, Plus } from "lucide-react";
 import { Popover, PopoverContent } from "../ui/popover";
 import { catcher } from "../../lib/catcher";
 import { getPreference, setPreference } from "../../lib/store";
@@ -81,6 +81,11 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
   const filteredSuggestions = inputValue
     ? allSuggestions.filter((s) => s.toLowerCase().includes(inputValue.toLowerCase()))
     : allSuggestions;
+
+  // Show "Create" option when typed value doesn't exactly match any suggestion
+  const trimmedInput = inputValue.trim();
+  const showCreateOption = trimmedInput.length > 0 &&
+    !allSuggestions.some((s) => s.toLowerCase() === trimmedInput.toLowerCase());
 
   const handleSelect = useCallback(
     (category: string) => {
@@ -174,10 +179,20 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : !showCreateOption ? (
               <p className="px-2 py-2 text-center text-xs text-muted-foreground/60">
                 {t("services.categorySuggestions")}
               </p>
+            ) : null}
+            {showCreateOption && (
+              <button
+                type="button"
+                onClick={() => handleSelect(trimmedInput)}
+                className="mt-1 flex w-full items-center gap-1.5 rounded-md border border-dashed border-primary/30 px-2 py-1.5 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                <Plus className="h-3 w-3" />
+                {t("services.createCategory", { name: trimmedInput })}
+              </button>
             )}
           </div>
         </PopoverContent>
@@ -194,7 +209,7 @@ export function CategoryBadge({ serviceId }: { serviceId: number }) {
   if (!loaded || !category) return null;
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-0.5 text-[10px] font-medium text-primary">
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
       <span className="h-1.5 w-1.5 rounded-full bg-primary/60" />
       {category}
     </span>

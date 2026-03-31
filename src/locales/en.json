@@ -194,10 +194,10 @@
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
     "whatToDo": "What shall we prepare today?",
-    "activeService": "Active service",
+    "activeService": "Active liturgy",
     "subtitle": "Select an option from the sidebar to get started",
     "hints": {
-      "services": "Plan and lead worship",
+      "services": "Plan and lead liturgy",
       "hymnal": "Find hymns and songs",
       "bible": "Verses and passages",
       "presentations": "Slides and presentations",
@@ -208,7 +208,7 @@
       "collections": "Manage song collections outside the hymnal",
       "hymnal": "Search and browse hymns",
       "presentations": "Create and edit slides",
-      "services": "Plan the worship order"
+      "services": "Plan the liturgy order"
     },
     "shortcuts": {
       "title": "Quick shortcuts",
@@ -217,7 +217,7 @@
       "help": "Shortcuts"
     },
     "descriptions": {
-      "services": "Plan and lead worship with scheduled items, notes, and integrated projection.",
+      "services": "Plan and lead liturgy with scheduled items, notes, and integrated projection.",
       "hymnal": "Find hymns by number, title, or lyrics, and project directly from the hymnal.",
       "bible": "Access Bible verses for quick reading and projection.",
       "presentations": "Create custom slides for moments of worship, reading, or announcements.",
@@ -262,7 +262,7 @@
       "restart": "Restart guided tour",
       "steps": {
         "library": {
-          "description": "Use the sidebar to move through hymnal, Bible, presentations, services, and utilities.",
+          "description": "Use the sidebar to move through hymnal, Bible, presentations, liturgies, and utilities.",
           "title": "Library navigation"
         },
         "projection": {
@@ -363,7 +363,7 @@
     "onlineVideos": "Online Videos",
     "playingNow": "Playing now",
     "presentations": "Presentations",
-    "services": "Services",
+    "services": "Liturgy",
     "settings": "Settings",
     "utilities": "Utilities"
   },
@@ -532,15 +532,15 @@
     "videoUnsupported": "Unsupported format. Convert to {{recommendation}} before importing."
   },
   "services": {
-    "activeService": "Active Service",
+    "activeService": "Active Liturgy",
     "addItem": "Add Item",
-    "addToService": "Add to Service",
+    "addToService": "Add to Liturgy",
     "browse": "Browse",
     "date": "Date",
     "duplicate": "Duplicate",
     "editItem": "Edit",
     "editNotes": "Edit Notes",
-    "empty": "No services yet",
+    "empty": "No liturgies yet",
     "filePlaceholder": "Select a file...",
     "fileTabs": {
       "library": "Scheduled Items",
@@ -558,26 +558,46 @@
       "url": "URL"
     },
     "items": "Items",
-    "new": "New Service",
+    "new": "New Liturgy",
     "noItems": "No items. Click \"Add Item\" to get started.",
     "notes": "Notes",
-    "playService": "Play Service",
+    "playService": "Play Liturgy",
     "projectItem": "Project",
-    "searchPlaceholder": "Search services...",
-    "serviceNotes": "Service Notes",
+    "searchPlaceholder": "Search liturgies...",
+    "serviceNotes": "Liturgy Notes",
     "stopService": "Stop",
     "timeline": "Timeline",
     "title": "Title",
-    "untitled": "Untitled Service",
+    "untitled": "Untitled Liturgy",
     "urlTitlePlaceholder": "Link title...",
     "itemCount": "{{count}} items",
+    "hymnCount": "{{count}} songs",
     "liveIndicator": "LIVE",
     "progressOf": "{{current}} / {{total}} items",
     "category": "Category",
     "categoryPlaceholder": "Set category...",
     "categorySuggestions": "Suggestions",
     "categoryRecent": "Recent",
-    "activeServiceIndicator": "Active service",
+    "createCategory": "Create '{{name}}'",
+    "categories": "Categories",
+    "noCategory": "No category",
+    "activeServiceIndicator": "Active liturgy",
+    "favorites": "Favorites",
+    "otherServices": "Other liturgies",
+    "viewGrid": "Grid",
+    "viewList": "List",
+    "sortByDate": "Date",
+    "ofTotal": "of",
+    "favoritesLimitReached": "Favorites limit reached (max 7)",
+    "todayService": "Today's Liturgy",
+    "todayServiceEmpty": "No liturgy assigned for today. Create one or open a liturgy and assign it to this weekday.",
+    "weekDayAssign": "Assign to day of week",
+    "weekDayTaken": "Another liturgy is already assigned to this day",
+    "weekDayTakenBy": "\"{{title}}\" is assigned to this day",
+    "weekDayOverrideTitle": "Replace day assignment?",
+    "weekDayOverrideDesc": "\"{{title}}\" is currently assigned to {{day}}. Assigning this liturgy will remove that assignment.",
+    "weekDayOverrideConfirm": "Replace",
+    "weekDayAssigned": "Assigned to {{day}}",
     "calendar": {
       "prevMonth": "Previous month",
       "nextMonth": "Next month",
@@ -592,13 +612,13 @@
       }
     },
     "defaultCategories": {
-      "sundayService": "Sunday Service",
+      "sundayService": "Sunday Liturgy",
       "praiseReunion": "Praise Reunion",
-      "thursdayService": "Thursday Service",
+      "thursdayService": "Thursday Liturgy",
       "retreat": "Retreat",
       "conference": "Conference",
-      "youthService": "Youth Service",
-      "childrenService": "Children's Service"
+      "youthService": "Youth Liturgy",
+      "childrenService": "Children's Liturgy"
     }
   },
   "settings": {
@@ -701,9 +721,9 @@
       "clearDatabaseButton": "Reset App",
       "clearDatabaseCancelButton": "Cancel",
       "clearDatabaseConfirmButton": "Yes, reset app",
-      "clearDatabaseConfirmDesc": "This action cannot be undone. All your hymns, presentations, services, and collections will be permanently deleted. Bible data will be preserved.",
+      "clearDatabaseConfirmDesc": "This action cannot be undone. All your hymns, presentations, liturgies, and collections will be permanently deleted. Bible data will be preserved.",
       "clearDatabaseConfirmTitle": "Reset app to default?",
-      "clearDatabaseDesc": "Delete all hymns, presentations, services, and collections. Bible data and settings will be preserved.",
+      "clearDatabaseDesc": "Delete all hymns, presentations, liturgies, and collections. Bible data and settings will be preserved.",
       "clearDatabaseError": "Failed to reset app: {{error}}",
       "clearDatabaseSuccess": "App reset successfully.",
       "title": "Danger Zone"
@@ -905,7 +925,7 @@
     "projectorDefaultSelectFile": "Select file",
     "projectorDefaultText": "Default text",
     "projectorDefaultTextDesc": "Text rendered when default content is set to Text.",
-    "projectorDefaultTextPlaceholder": "Service starts soon",
+    "projectorDefaultTextPlaceholder": "Liturgy starts soon",
     "projectorDefaultVideoPlaceholder": "No video selected",
     "projectorLogoClear": "Clear logo",
     "projectorLogoImagePlaceholder": "No logo selected",
@@ -1064,7 +1084,7 @@
     "errorPermission": "Could not install the update",
     "errorPermissionAction": "Try running as administrator, or contact your IT administrator.",
     "errorPermissionWhy": "The app needs permission to write files.",
-    "guardActive": "Update available — will notify after service",
+    "guardActive": "Update available — will notify after liturgy",
     "installing": "Installing update. The app may restart.",
     "remindLater": "Remind later",
     "skipVersion": "Skip this version",
@@ -1140,7 +1160,7 @@
           "title": "Department schedules"
         }
       },
-      "description": "Open a utility to run it in your service flow.",
+      "description": "Open a utility to run it in your liturgy flow.",
       "title": "Choose a tool"
     },
     "projection": {
@@ -1169,7 +1189,7 @@
         "noParticipatingDepartments": "Save at least one participating department to start assigning people.",
         "openHint": "Open a selected day to review the responsible department and assignments.",
         "participatingDepartments": "Participating departments",
-        "participatingDepartmentsHint": "Choose which departments should appear on this service day.",
+        "participatingDepartmentsHint": "Choose which departments should appear on this liturgy day.",
         "peoplePerDay": "People for this day",
         "removeDay": "Remove day",
         "removeDayConfirm": "Remove this day from the month schedule?",
@@ -1188,10 +1208,10 @@
       },
       "daySelection": {
         "description": "Selected days for this month will appear here for assignment and printing.",
-        "empty": "No service days selected for this month yet.",
+        "empty": "No liturgy days selected for this month yet.",
         "selectedDays": "{{count}} selected day",
         "selectedDays_other": "{{count}} selected days",
-        "title": "Service days"
+        "title": "Liturgy days"
       },
       "departmentManagement": {
         "action": "Manage departments",
@@ -1233,9 +1253,9 @@
         "system": "System",
         "title": "Departments"
       },
-      "description": "Organize service days, departments, and assignments for the selected month.",
+      "description": "Organize liturgy days, departments, and assignments for the selected month.",
       "emptyStates": {
-        "noDays": "Select service days for this month to start building the schedule.",
+        "noDays": "Select liturgy days for this month to start building the schedule.",
         "noDepartments": "Add members to at least one department to generate assignments."
       },
       "generate": {
@@ -1244,8 +1264,8 @@
         "overwriteManual": "Overwrite manual overrides",
         "preserveManual": "Preserve manual overrides",
         "success": "Schedule generated",
-        "successDescription": "{{count}} service day updated for {{month}}.",
-        "successDescription_other": "{{count}} service days updated for {{month}}.",
+        "successDescription": "{{count}} liturgy day updated for {{month}}.",
+        "successDescription_other": "{{count}} liturgy days updated for {{month}}.",
         "title": "Generation"
       },
       "loading": {
@@ -1272,8 +1292,8 @@
       "print": {
         "action": "Open print preview",
         "clear": "Clear",
-        "departmentDays": "{{count}} service day",
-        "departmentDays_other": "{{count}} service days",
+        "departmentDays": "{{count}} liturgy day",
+        "departmentDays_other": "{{count}} liturgy days",
         "description": "Prepare compact A4 output for one or more departments.",
         "dialogAction": "Print / Save as PDF",
         "documentTitle": "Department schedule",
@@ -1292,7 +1312,7 @@
         "unassigned": "No assignees"
       },
       "responsibleDepartment": {
-        "description": "Choose which department is responsible for each selected service day.",
+        "description": "Choose which department is responsible for each selected liturgy day.",
         "label": "Responsible department",
         "none": "Not assigned",
         "title": "Responsible department"
@@ -1386,8 +1406,8 @@
       "selectPlaylists": "Select the playlists you want to add:",
       "addSelected": "Add {{count}} selected",
       "singleVideo": "This is a single video",
-      "singleVideoHint": "Single videos can be added directly to a service or presentation.",
-      "addToService": "Go to Active Service",
+      "singleVideoHint": "Single videos can be added directly to a liturgy or presentation.",
+      "addToService": "Go to Active Liturgy",
       "noPlaylists": "This channel has no public playlists.",
       "alreadyAdded": "Already added",
       "couldNotExtractId": "Could not extract playlist ID from URL"
