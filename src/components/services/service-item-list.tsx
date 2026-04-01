@@ -140,7 +140,13 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     : new Set<number>();
 
   const sortableIds = allItems
-    .filter(i => !hiddenChildIds.has(i.id))
+    .filter(i => {
+      // Exclude children of the category currently being dragged
+      if (hiddenChildIds.has(i.id)) return false;
+      // Exclude children of collapsed categories (they are not visible)
+      if (i.parentId !== null && i.parentId !== undefined && collapsedCategories.has(i.parentId)) return false;
+      return true;
+    })
     .map(i => i.id);
 
   // Full flat ids for index lookups
