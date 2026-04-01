@@ -22,7 +22,7 @@ import {
 import { useUIStore } from "../../stores/ui-store";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useDisplayStore } from "../../stores/display-store";
-import { useService } from "../../lib/queries";
+import { useLiturgy } from "../../lib/queries";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
@@ -90,8 +90,8 @@ function isChildActive(
 export function Sidebar() {
   const { sidebarOpen, toggleSidebar, expandedNavItems, toggleNavItem, setNavItemExpanded } =
     useUIStore();
-  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
-  const { data: activeServiceData } = useService(activeServiceId ?? 0);
+  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
+  const { data: activeLiturgyData } = useLiturgy(activeLiturgyId ?? 0);
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
   const isProjectingAnything = currentProjectionType !== null;
   const { t } = useTranslation();
@@ -101,9 +101,9 @@ export function Sidebar() {
   const searchParams = location.search as Record<string, string | undefined>;
 
   const isOnActiveServiceRoute =
-    activeServiceId !== null &&
-    (pathname === `/services/${activeServiceId}` ||
-      pathname.startsWith(`/services/${activeServiceId}/`));
+    activeLiturgyId !== null &&
+    (pathname === `/services/${activeLiturgyId}` ||
+      pathname.startsWith(`/services/${activeLiturgyId}/`));
 
   // Hover popover state for collapsed sidebar
   const [hoverOpen, setHoverOpen] = useState<string | null>(null);
@@ -336,11 +336,11 @@ export function Sidebar() {
         })}
       </nav>
 
-      {activeServiceId && activeServiceData && !isOnActiveServiceRoute && (
+      {activeLiturgyId && activeLiturgyData && !isOnActiveServiceRoute && (
         <div className="border-t border-border px-2 py-2">
           <Link
             to="/services/$serviceId"
-            params={{ serviceId: String(activeServiceId) }}
+            params={{ serviceId: String(activeLiturgyId) }}
             className={cn(
               "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               "bg-primary/10 text-primary hover:bg-primary/20",
@@ -349,7 +349,7 @@ export function Sidebar() {
           >
             <ListChecks className="h-3.5 w-3.5 shrink-0" />
             {sidebarOpen && (
-              <span className="truncate">{activeServiceData.service.title}</span>
+              <span className="truncate">{activeLiturgyData.service.title}</span>
             )}
           </Link>
         </div>

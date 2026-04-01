@@ -551,11 +551,12 @@
       "annotation": "Anotación",
       "bible": "Biblia",
       "file": "Archivo",
-      "hymn": "Himno",
+      "hymn": "Música",
       "online_video": "Video en Línea",
       "presentation": "Presentación",
       "scheduled_category": "Ítem Agendado (Dinámico)",
-      "url": "URL"
+      "url": "URL",
+      "category": "Sección"
     },
     "items": "Elementos",
     "new": "Nueva Liturgia",
@@ -579,7 +580,26 @@
     "categorySuggestions": "Sugerencias",
     "categoryRecent": "Recientes",
     "createCategory": "Crear '{{name}}'",
-    "categories": "Categorias",
+    "categories": {
+      "predefined": {
+        "regencia": "Regencia",
+        "escola_sabatina": "Escuela Sabática",
+        "intervalo": "Intervalo entre momentos",
+        "doxologia": "Doxología",
+        "pregacao": "Predicación"
+      },
+      "customLabel": "Personalizado...",
+      "customPlaceholder": "Nombre de la sección...",
+      "addSection": "Agregar sección",
+      "collapse": "Contraer sección",
+      "expand": "Expandir sección",
+      "deleteTitle": "¿Eliminar sección \"{{title}}\"?",
+      "deleteDesc": "Elige qué debe suceder con los elementos dentro de esta sección.",
+      "deleteUngroup": "Desagrupar elementos",
+      "deleteUngroupDesc": "Elimina la sección y mantiene los elementos en la liturgia",
+      "deleteWithItems": "Eliminar todo",
+      "deleteWithItemsDesc": "Elimina la sección y todos sus {{count}} elementos"
+    },
     "noCategory": "Sin categoria",
     "activeServiceIndicator": "Liturgia activa",
     "favorites": "Favoritos",
@@ -589,8 +609,8 @@
     "sortByDate": "Fecha",
     "ofTotal": "de",
     "favoritesLimitReached": "Límite de favoritos alcanzado (máx. 7)",
-    "todayService": "Liturgia de Hoy",
-    "todayServiceEmpty": "No hay liturgia asignada para hoy. Crea una o abre una liturgia y asígnala a este día de la semana.",
+    "todayLiturgy": "Liturgia de Hoy",
+    "todayLiturgyEmpty": "No hay liturgia asignada para hoy. Crea una o abre una liturgia y asígnala a este día de la semana.",
     "weekDayAssign": "Asignar día de la semana",
     "weekDayTaken": "Otra liturgia ya está asignada a este día",
     "weekDayTakenBy": "\"{{title}}\" está asignado a este día",
@@ -619,7 +639,15 @@
       "conference": "Conferencia",
       "youthService": "Liturgia Joven",
       "childrenService": "Liturgia Infantil"
-    }
+    },
+    "saveChanges": "Guardar cambios",
+    "discardChanges": "Descartar",
+    "unsavedChanges": "Cambios no guardados",
+    "scheduleMode": {
+      "oneTime": "Puntual",
+      "recurring": "Recurrente"
+    },
+    "dropIntoSection": "Suelta para mover a la sección"
   },
   "settings": {
     "appearance": "Apariencia",

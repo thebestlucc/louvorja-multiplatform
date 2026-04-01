@@ -1,11 +1,11 @@
-use crate::db::models::{Service, ServiceItem, ServiceWithItems};
+use crate::db::models::{Liturgy, LiturgyItem, LiturgyWithItems};
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::catcher::catcher;
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_services(state: tauri::State<'_, AppState>) -> Result<Vec<Service>, AppError> {
+pub fn get_services(state: tauri::State<'_, AppState>) -> Result<Vec<Liturgy>, AppError> {
     let (conn, err) = catcher(state.db.get());
     if let Some(e) = err {
         return Err(e);
@@ -19,7 +19,7 @@ pub fn get_services(state: tauri::State<'_, AppState>) -> Result<Vec<Service>, A
 pub fn get_service(
     id: i64,
     state: tauri::State<'_, AppState>,
-) -> Result<ServiceWithItems, AppError> {
+) -> Result<LiturgyWithItems, AppError> {
     let (conn, err) = catcher(state.db.get());
     if let Some(e) = err {
         return Err(e);
@@ -27,7 +27,7 @@ pub fn get_service(
     let conn = conn.unwrap();
     let service = crate::db::queries::liturgy::get_service_by_id(&conn, id)?;
     let items = crate::db::queries::liturgy::get_service_items(&conn, id)?;
-    Ok(ServiceWithItems { service, items })
+    Ok(LiturgyWithItems { service, items })
 }
 
 #[tauri::command]
@@ -37,7 +37,7 @@ pub fn create_service(
     date: Option<String>,
     notes: Option<String>,
     state: tauri::State<'_, AppState>,
-) -> Result<Service, AppError> {
+) -> Result<Liturgy, AppError> {
     let (conn, err) = catcher(state.db.get());
     if let Some(e) = err {
         return Err(e);
@@ -94,8 +94,9 @@ pub fn add_service_item(
     title: String,
     item_id: Option<i64>,
     notes: Option<String>,
+    parent_id: Option<i64>,
     state: tauri::State<'_, AppState>,
-) -> Result<ServiceItem, AppError> {
+) -> Result<LiturgyItem, AppError> {
     let (conn, err) = catcher(state.db.get());
     if let Some(e) = err {
         return Err(e);
@@ -108,6 +109,7 @@ pub fn add_service_item(
         &title,
         item_id,
         notes.as_deref(),
+        parent_id,
     )?;
     crate::db::queries::liturgy::get_service_item_by_id(&conn, id)
 }
@@ -140,7 +142,7 @@ pub fn reorder_service_items(
 
 #[tauri::command]
 #[specta::specta]
-pub fn duplicate_service(id: i64, state: tauri::State<'_, AppState>) -> Result<Service, AppError> {
+pub fn duplicate_service(id: i64, state: tauri::State<'_, AppState>) -> Result<Liturgy, AppError> {
     let (conn, err) = catcher(state.db.get());
     if let Some(e) = err {
         return Err(e);
@@ -179,4 +181,19 @@ pub fn set_service_week_day(
     }
     let conn = conn.unwrap();
     crate::db::queries::liturgy::set_service_week_day(&conn, id, week_day)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn move_service_item_to_parent(
+    id: i64,
+    parent_id: Option<i64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::liturgy::move_service_item_to_parent(&conn, id, parent_id)
 }

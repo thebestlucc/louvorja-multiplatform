@@ -68,6 +68,7 @@ pub fn run() {
             commands::music::get_hymn,
             commands::music::search_hymns,
             commands::music::search_all_hymns,
+            commands::music::search_all_music,
             commands::music::get_albums,
             commands::music::get_hymns_by_album,
             commands::music::create_hymn,
@@ -132,6 +133,7 @@ pub fn run() {
             commands::liturgy::duplicate_service,
             commands::liturgy::update_service_item,
             commands::liturgy::set_service_week_day,
+            commands::liturgy::move_service_item_to_parent,
             // Media Library
             commands::media_library::get_media_library_categories,
             commands::media_library::upsert_media_library_category,

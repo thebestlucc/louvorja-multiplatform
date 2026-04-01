@@ -5,7 +5,7 @@ import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { useAddServiceItem, useFavoriteIds } from "../../lib/queries";
+import { useAddLiturgyItem, useFavoriteIds } from "../../lib/queries";
 import type { Hymn } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 import { LyricsModal } from "./lyrics-modal";
@@ -19,8 +19,8 @@ interface HymnCardProps {
 
 export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
   const { t } = useTranslation();
-  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
-  const addItemMutation = useAddServiceItem();
+  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
+  const addItemMutation = useAddLiturgyItem();
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
   const { data: favoriteIds } = useFavoriteIds("hymn");
@@ -33,9 +33,9 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
   const handleAddToService = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (activeServiceId) {
+    if (activeLiturgyId) {
       addItemMutation.mutate({
-        serviceId: activeServiceId,
+        serviceId: activeLiturgyId,
         itemType: "hymn",
         title: hymn.title,
         itemId: hymn.id,
@@ -124,7 +124,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                   <BookOpen className="h-4 w-4" />
                 </Button>
               )}
-              {activeServiceId && (
+              {activeLiturgyId && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -214,7 +214,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                 <BookOpen className="h-4 w-4" />
               </Button>
             )}
-            {activeServiceId && (
+            {activeLiturgyId && (
               <Button
                 size="icon"
                 variant="outline"

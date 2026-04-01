@@ -8,6 +8,7 @@ allow = [
     "get_hymn",
     "search_hymns",
     "search_all_hymns",
+    "search_all_music",
     "get_albums",
     "get_hymns_by_album",
     "create_hymn",
@@ -202,7 +203,8 @@ allow = [
     "start_pack_sync",
     "cancel_pack_sync",
     "clear_manifest_cache",
-    "set_service_week_day"
+    "set_service_week_day",
+    "move_service_item_to_parent"
 ]
 
 [[permission]]

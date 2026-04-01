@@ -551,11 +551,12 @@
       "annotation": "Annotation",
       "bible": "Bible",
       "file": "File",
-      "hymn": "Hymn",
+      "hymn": "Music",
       "online_video": "Online Video",
       "presentation": "Presentation",
       "scheduled_category": "Scheduled Item (Dynamic)",
-      "url": "URL"
+      "url": "URL",
+      "category": "Section"
     },
     "items": "Items",
     "new": "New Liturgy",
@@ -579,7 +580,26 @@
     "categorySuggestions": "Suggestions",
     "categoryRecent": "Recent",
     "createCategory": "Create '{{name}}'",
-    "categories": "Categories",
+    "categories": {
+      "predefined": {
+        "regencia": "Worship Leadership",
+        "escola_sabatina": "Sabbath School",
+        "intervalo": "Break Between Moments",
+        "doxologia": "Doxology",
+        "pregacao": "Sermon"
+      },
+      "customLabel": "Custom...",
+      "customPlaceholder": "Section name...",
+      "addSection": "Add section",
+      "collapse": "Collapse section",
+      "expand": "Expand section",
+      "deleteTitle": "Delete section \"{{title}}\"?",
+      "deleteDesc": "Choose what should happen to the items inside this section.",
+      "deleteUngroup": "Ungroup items",
+      "deleteUngroupDesc": "Removes the section and keeps items in the liturgy",
+      "deleteWithItems": "Delete all",
+      "deleteWithItemsDesc": "Removes the section and all its {{count}} items"
+    },
     "noCategory": "No category",
     "activeServiceIndicator": "Active liturgy",
     "favorites": "Favorites",
@@ -589,8 +609,8 @@
     "sortByDate": "Date",
     "ofTotal": "of",
     "favoritesLimitReached": "Favorites limit reached (max 7)",
-    "todayService": "Today's Liturgy",
-    "todayServiceEmpty": "No liturgy assigned for today. Create one or open a liturgy and assign it to this weekday.",
+    "todayLiturgy": "Today's Liturgy",
+    "todayLiturgyEmpty": "No liturgy assigned for today. Create one or open a liturgy and assign it to this weekday.",
     "weekDayAssign": "Assign to day of week",
     "weekDayTaken": "Another liturgy is already assigned to this day",
     "weekDayTakenBy": "\"{{title}}\" is assigned to this day",
@@ -619,7 +639,15 @@
       "conference": "Conference",
       "youthService": "Youth Liturgy",
       "childrenService": "Children's Liturgy"
-    }
+    },
+    "saveChanges": "Save changes",
+    "discardChanges": "Discard",
+    "unsavedChanges": "Unsaved changes",
+    "scheduleMode": {
+      "oneTime": "One-time",
+      "recurring": "Recurring"
+    },
+    "dropIntoSection": "Drop to move into section"
   },
   "settings": {
     "appearance": "Appearance",

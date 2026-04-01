@@ -17,6 +17,10 @@ export async function searchAllHymns(query: string): Promise<Hymn[]> {
   return tauriInvoke<Hymn[]>("search_all_hymns", { query });
 }
 
+export async function searchAllMusic(query: string): Promise<Hymn[]> {
+  return tauriInvoke<Hymn[]>("search_all_music", { query });
+}
+
 export async function getHymn(id: number): Promise<Hymn> {
   return tauriInvoke<Hymn>("get_hymn", { id });
 }

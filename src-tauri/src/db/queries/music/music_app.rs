@@ -158,6 +158,55 @@ pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, App
     Ok(hymns)
 }
 
+pub fn search_all_music(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppError> {
+    let trimmed = query.trim();
+
+    if trimmed.is_empty() {
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, number, title, author, album, lyrics, chords, audio_path, playback_path, category, notes, cover_path, lyrics_sync, api_music_id, created_at, updated_at
+             FROM hymns
+             ORDER BY number NULLS LAST, title
+             LIMIT 100"
+        )?;
+        let hymns = stmt
+            .query_map([], map_hymn_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
+    if trimmed.chars().all(|c| c.is_ascii_digit()) {
+        let number_prefix = format!("{}%", trimmed);
+        let mut stmt = conn.prepare_cached(
+            "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
+             FROM hymns h
+             WHERE CAST(h.number AS TEXT) LIKE ?1
+             ORDER BY h.number
+             LIMIT 100"
+        )?;
+        let hymns = stmt
+            .query_map(params![number_prefix], map_hymn_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(hymns);
+    }
+
+    let Some(fts_query) = build_fts_prefix_query(trimmed) else {
+        return Ok(vec![]);
+    };
+
+    let mut stmt = conn.prepare_cached(
+        "SELECT h.id, h.number, h.title, h.author, h.album, h.lyrics, h.chords, h.audio_path, h.playback_path, h.category, h.notes, h.cover_path, h.lyrics_sync, h.api_music_id, h.created_at, h.updated_at
+         FROM hymns h
+         JOIN hymns_fts ON hymns_fts.rowid = h.id
+         WHERE hymns_fts MATCH ?1
+         ORDER BY rank
+         LIMIT 100"
+    )?;
+    let hymns = stmt
+        .query_map(params![fts_query], map_hymn_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(hymns)
+}
+
 pub fn rebuild_hymns_search_index(conn: &Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "INSERT INTO hymns_fts(hymns_fts) VALUES('delete-all');

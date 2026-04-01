@@ -33,7 +33,7 @@ export function UpdateNotification() {
   useEffect(() => {
     const computeGuard = () => {
       const s = usePresentationStore.getState();
-      return s.isProjectorOpen || s.isPlayingService || s.activeServiceId !== null;
+      return s.isProjectorOpen || s.isPlayingLiturgy || s.activeLiturgyId !== null;
     };
     setGuardActive(computeGuard());
     const unsub = usePresentationStore.subscribe(() => {

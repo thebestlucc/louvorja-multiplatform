@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useHymns } from "../../../lib/queries";
+import { useAllMusic } from "../../../lib/queries";
 import { Input } from "../../ui/input";
 import { ScrollArea } from "../../ui/scroll-area";
 import { CoverImage } from "../../media/cover-image";
@@ -10,7 +10,7 @@ import type { AddItemOnAdd } from "./types";
 export function HymnForm({ onAdd }: { onAdd: AddItemOnAdd }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const { data: hymns } = useHymns(query);
+  const { data: hymns } = useAllMusic(query);
 
   return (
     <div className="flex flex-col gap-3">
@@ -36,7 +36,7 @@ export function HymnForm({ onAdd }: { onAdd: AddItemOnAdd }) {
               <div className="flex flex-col min-w-0 flex-1">
                 <div className="flex items-center gap-2 overflow-hidden">
                   {hymn.number != null && (
-                    <span className="flex h-5 w-7 shrink-0 items-center justify-center rounded bg-blue-500/10 text-[10px] font-semibold tabular-nums text-blue-600">
+                    <span className="flex h-5 w-7 shrink-0 items-center justify-center rounded bg-blue-500/10 text-[10px] font-semibold tabular-nums text-blue-600 dark:text-blue-400">
                       #{hymn.number}
                     </span>
                   )}
