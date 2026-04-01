@@ -216,11 +216,10 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     }
 
     // Case 3: Regular item drag
-    // Only reparent when dropped directly onto a category header
+    // Only reparent when dropped directly onto a category header WITH overlap
     const overType = itemTypeMap?.get(overItemId);
     const overRect = over.rect;
-    if (!overRect) { return; }
-    if (overType === "category" && onReparent) {
+    if (overType === "category" && overRect && onReparent) {
       const translatedRect = active.rect.current.translated;
       const verticalOverlap =
         translatedRect !== null &&
@@ -233,8 +232,9 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
         if (currentParentId !== overItemId) {
           onReparent(activeItemId, overItemId);
         }
+        return; // reparented — don't also reorder
       }
-      return; // always stop here — don't also reorder
+      // No overlap: dragging past the category header, fall through to reorder
     }
 
     const oldIndex = ids.indexOf(activeItemId);
