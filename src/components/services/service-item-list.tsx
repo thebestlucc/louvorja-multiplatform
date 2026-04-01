@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+  type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -16,14 +18,16 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useRef, useEffect } from "react";
-import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock, Plus, Video } from "lucide-react";
+import { createPortal } from "react-dom";
+import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock, Plus, Video, ChevronDown, ChevronRight } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
+import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { cn } from "../../lib/utils";
 import { useScheduledMediaItem } from "../../lib/queries";
-import type { ServiceItem, ServiceItemType } from "../../types/service";
+import type { LiturgyItem, LiturgyItemType, CategoryGroup } from "../../types/liturgy";
 
-const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
+const itemTypeIcons: Record<LiturgyItemType, typeof Music> = {
   hymn: Music,
   bible: BookOpen,
   presentation: Presentation,
@@ -32,9 +36,10 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   file: FileIcon,
   scheduled_category: CalendarClock,
   online_video: Video,
+  category: CalendarClock,
 };
 
-const itemTypeColors: Record<ServiceItemType, string> = {
+const itemTypeColors: Record<LiturgyItemType, string> = {
   hymn: "text-blue-500",
   bible: "text-amber-600",
   presentation: "text-purple-500",
@@ -43,9 +48,10 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   file: "text-gray-500",
   scheduled_category: "text-rose-500",
   online_video: "text-red-500",
+  category: "text-amber-600",
 };
 
-const itemTypeDotColors: Record<ServiceItemType, string> = {
+const itemTypeDotColors: Record<LiturgyItemType, string> = {
   hymn: "bg-blue-500",
   bible: "bg-amber-600",
   presentation: "bg-purple-500",
@@ -54,9 +60,10 @@ const itemTypeDotColors: Record<ServiceItemType, string> = {
   file: "bg-gray-500",
   scheduled_category: "bg-rose-500",
   online_video: "bg-red-500",
+  category: "bg-amber-600",
 };
 
-const itemTypeIconBg: Record<ServiceItemType, string> = {
+const itemTypeIconBg: Record<LiturgyItemType, string> = {
   hymn: "bg-blue-500/10",
   bible: "bg-amber-500/10",
   presentation: "bg-purple-500/10",
@@ -65,39 +72,218 @@ const itemTypeIconBg: Record<ServiceItemType, string> = {
   file: "bg-gray-500/10",
   scheduled_category: "bg-rose-500/10",
   online_video: "bg-red-500/10",
+  category: "bg-amber-500/10",
 };
 
-interface ServiceItemListProps {
-  items: ServiceItem[];
+/** Shorten an absolute file path to `~/rest/of/path` or `.../parent/file.ext` */
+function getShortenedPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  // Replace home directory with ~
+  const homeRx = /^(\/Users\/[^/]+|\/home\/[^/]+|[A-Z]:\/Users\/[^/]+)\//i;
+  if (homeRx.test(normalized)) return normalized.replace(homeRx, "~/");
+  // Fallback: show last two segments
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length > 2) return "…/" + parts.slice(-2).join("/");
+  return normalized;
+}
+
+interface LiturgyItemListProps {
+  items: LiturgyItem[];
+  nestedItems?: CategoryGroup[];
   serviceDate?: string | null;
   activeItemIndex?: number;
   onRemove: (id: number) => void;
   onReorder: (from: number, to: number) => void;
-  onProject?: (item: ServiceItem) => void;
+  onProject?: (item: LiturgyItem) => void;
   onEditItem?: (id: number, title: string, notes: string | null) => void;
+  onReparent?: (itemId: number, parentId: number | null) => void;
+  onReorderByIds?: (newItemIds: number[]) => void;
 }
 
-export function ServiceItemList({ items, serviceDate, activeItemIndex = -1, onRemove, onReorder, onProject, onEditItem }: ServiceItemListProps) {
+export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemIndex = -1, onRemove, onReorder, onProject, onEditItem, onReparent, onReorderByIds }: LiturgyItemListProps) {
   const { t } = useTranslation();
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
+  const [activeId, setActiveId] = useState<number | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const ids = items.map((item) => item.id);
+  // Build a flat list of all items for SortableContext ids
+  const allItems = nestedItems
+    ? nestedItems.flatMap((group) => [
+        ...(group.category ? [group.category] : []),
+        ...group.items,
+      ])
+    : items;
+
+  // Lookup map for item types (used in drag-over detection)
+  const itemTypeMap = nestedItems
+    ? new Map(allItems.map((item) => [item.id, item.itemType]))
+    : null;
+
+  /** Returns the IDs of items that are actually displayed as children of a category.
+   * Uses nestedItems (display-order) rather than parentId alone, so "orphaned" items
+   * that have a parentId but appear before their category are NOT treated as children. */
+  const getDisplayChildIds = (catId: number): number[] => {
+    if (nestedItems) {
+      const group = nestedItems.find(g => g.category?.id === catId);
+      return group ? group.items.map(i => i.id) : [];
+    }
+    return items.filter(i => i.parentId === catId).map(i => i.id);
+  };
+
+  // When a category is being dragged, hide its children from the sortable context
+  const hiddenChildIds: Set<number> = activeId !== null && itemTypeMap?.get(activeId) === "category"
+    ? new Set(getDisplayChildIds(activeId))
+    : new Set<number>();
+
+  const sortableIds = allItems
+    .filter(i => !hiddenChildIds.has(i.id))
+    .map(i => i.id);
+
+  // Full flat ids for index lookups
+  const ids = allItems.map((item) => item.id);
+
+  const toggleCategory = (categoryId: number) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(Number(event.active.id));
+  };
+
+  /** Compute new flat order when a category (+ children) is dropped at a new position */
+  const computeCategoryGroupDrop = (activeCatId: number, overId: number): number[] => {
+    const childIds = getDisplayChildIds(activeCatId);
+    const withoutGroup = items.filter(i => i.id !== activeCatId && !childIds.includes(i.id));
+    const overIndexInWithout = withoutGroup.findIndex(i => i.id === overId);
+
+    const activeInFull = items.findIndex(i => i.id === activeCatId);
+    const overInFull = items.findIndex(i => i.id === overId);
+    const insertAfter = overInFull > activeInFull;
+
+    if (overIndexInWithout === -1) {
+      return items.map(i => i.id); // fallback: no change
+    }
+
+    if (insertAfter) {
+      return [
+        ...withoutGroup.slice(0, overIndexInWithout + 1).map(i => i.id),
+        activeCatId,
+        ...childIds,
+        ...withoutGroup.slice(overIndexInWithout + 1).map(i => i.id),
+      ];
+    }
+
+    return [
+      ...withoutGroup.slice(0, overIndexInWithout).map(i => i.id),
+      activeCatId,
+      ...childIds,
+      ...withoutGroup.slice(overIndexInWithout).map(i => i.id),
+    ];
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIndex = ids.indexOf(Number(active.id));
-      const newIndex = ids.indexOf(Number(over.id));
-      if (oldIndex !== -1 && newIndex !== -1) {
-        onReorder(oldIndex, newIndex);
+    setActiveId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const activeItemId = Number(active.id);
+    const overItemId = Number(over.id);
+    const activeType = itemTypeMap?.get(activeItemId);
+
+    // Case 2: Category drag (move category + all children as group)
+    if (activeType === "category") {
+      const newOrder = computeCategoryGroupDrop(activeItemId, overItemId);
+      onReorderByIds?.(newOrder);
+      return;
+    }
+
+    // Case 3: Regular item drag
+    // Only reparent when dropped directly onto a category header
+    const overType = itemTypeMap?.get(overItemId);
+    if (overType === "category" && onReparent) {
+      const activeItem = items.find(i => i.id === activeItemId);
+      const currentParentId = activeItem?.parentId ?? null;
+      if (currentParentId !== overItemId) {
+        onReparent(activeItemId, overItemId);
       }
+      return;
+    }
+
+    const oldIndex = ids.indexOf(activeItemId);
+    const newIndex = ids.indexOf(overItemId);
+    if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+      onReorder(oldIndex, newIndex);
     }
   };
 
-  if (items.length === 0) {
+  /** Render the drag overlay preview */
+  const renderDragOverlay = () => {
+    if (activeId === null) return null;
+
+    const activeItem = items.find(i => i.id === activeId);
+    if (!activeItem) return null;
+
+    // Category: show divider + children preview
+    if (activeItem.itemType === "category") {
+      const childIds = getDisplayChildIds(activeId);
+      const children = items.filter(i => childIds.includes(i.id));
+      return (
+        <div className="opacity-90 rounded-lg bg-surface shadow-lg border border-border p-2">
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <div className="h-px flex-1 bg-amber-300/50" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+              {activeItem.title}
+            </span>
+            <div className="h-px flex-1 bg-amber-300/50" />
+          </div>
+          {children.length > 0 && (
+            <div className="mt-1 space-y-0.5 pl-4">
+              {children.map((child) => {
+                const Icon = (itemTypeIcons as Record<string, typeof Music>)[child.itemType] ?? CalendarClock;
+                const colorClass = (itemTypeColors as Record<string, string>)[child.itemType] ?? "text-gray-500";
+                return (
+                  <div key={child.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm">
+                    <Icon className={cn("h-3.5 w-3.5", colorClass)} />
+                    <span className="truncate text-xs text-foreground">{child.title}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Regular item: simplified card
+    const Icon = (itemTypeIcons as Record<string, typeof Music>)[activeItem.itemType] ?? CalendarClock;
+    const colorClass = (itemTypeColors as Record<string, string>)[activeItem.itemType] ?? "text-gray-500";
+    const iconBg = (itemTypeIconBg as Record<string, string>)[activeItem.itemType] ?? "bg-gray-500/10";
+
+    return (
+      <div className="opacity-90 flex items-center gap-3 rounded-lg bg-surface shadow-lg border border-border py-2.5 px-3">
+        <GripVertical className="h-4 w-4 text-muted-foreground/30" />
+        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", iconBg)}>
+          <Icon className={cn("h-4 w-4", colorClass)} />
+        </span>
+        <span className="truncate text-sm font-medium text-foreground">{activeItem.title}</span>
+      </div>
+    );
+  };
+
+  if (items.length === 0 && (!nestedItems || nestedItems.length === 0)) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-12">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
@@ -110,35 +296,209 @@ export function ServiceItemList({ items, serviceDate, activeItemIndex = -1, onRe
     );
   }
 
+  // Compute a global index counter for nested rendering
+  let globalIndex = 0;
+
   return (
     <ScrollArea className="h-full">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-1.5 p-3">
-            {items.map((item, index) => (
-              <SortableServiceItem
-                key={item.id}
-                item={item}
-                serviceDate={serviceDate}
-                index={index}
-                isActive={index === activeItemIndex}
-                onRemove={() => onRemove(item.id)}
-                onProject={onProject ? () => onProject(item) : undefined}
-                onEditItem={onEditItem}
-              />
-            ))}
+            {nestedItems ? (
+              nestedItems.map((group, groupIndex) => {
+                const categoryId = group.category?.id ?? null;
+                const isCollapsed = categoryId !== null && collapsedCategories.has(categoryId);
+                const isCategoryBeingDragged = categoryId !== null && activeId === categoryId;
+
+                return (
+                  <div key={categoryId ?? `ungrouped-${groupIndex}`}>
+                    {/* Category section divider */}
+                    {group.category && (
+                      <CategoryDivider
+                        category={group.category}
+                        itemCount={group.items.length}
+                        isCollapsed={isCollapsed}
+                        onToggle={() => toggleCategory(categoryId!)}
+                        onRemove={() => onRemove(categoryId!)}
+                        onRemoveWithItems={() => {
+                          for (const item of group.items) onRemove(item.id);
+                          onRemove(categoryId!);
+                        }}
+                      />
+                    )}
+
+                    {/* Child items: hidden when collapsed OR when their parent category is being dragged */}
+                    {!isCollapsed && !isCategoryBeingDragged && group.items.map((item) => {
+                      // Skip hidden children (already excluded from sortable context)
+                      if (hiddenChildIds.has(item.id)) return null;
+                      const idx = globalIndex++;
+                      return (
+                        <SortableLiturgyItem
+                          key={item.id}
+                          item={item}
+                          serviceDate={serviceDate}
+                          index={idx}
+                          isActive={idx === activeItemIndex}
+                          onRemove={() => onRemove(item.id)}
+                          onProject={onProject ? () => onProject(item) : undefined}
+                          onEditItem={onEditItem}
+                        />
+                      );
+                    })}
+
+                    {/* Skip indices for collapsed or dragged-category items so activeItemIndex stays consistent */}
+                    {(isCollapsed || isCategoryBeingDragged) && (() => { globalIndex += group.items.length; return null; })()}
+                  </div>
+                );
+              })
+            ) : (
+              items.map((item, index) => (
+                <SortableLiturgyItem
+                  key={item.id}
+                  item={item}
+                  serviceDate={serviceDate}
+                  index={index}
+                  isActive={index === activeItemIndex}
+                  onRemove={() => onRemove(item.id)}
+                  onProject={onProject ? () => onProject(item) : undefined}
+                  onEditItem={onEditItem}
+                />
+              ))
+            )}
           </div>
         </SortableContext>
+
+        {createPortal(
+          <DragOverlay>
+            {activeId !== null && renderDragOverlay()}
+          </DragOverlay>,
+          document.body,
+        )}
       </DndContext>
     </ScrollArea>
   );
 }
 
-function SortableServiceItem({
+function CategoryDivider({
+  category,
+  itemCount,
+  isCollapsed,
+  onToggle,
+  onRemove,
+  onRemoveWithItems,
+}: {
+  category: LiturgyItem;
+  itemCount: number;
+  isCollapsed: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+  onRemoveWithItems: () => void;
+}) {
+  const { t } = useTranslation();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const ChevronIcon = isCollapsed ? ChevronRight : ChevronDown;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <>
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        className="group relative my-2 flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 transition-all select-none active:cursor-grabbing"
+      >
+        {/* Visual drag affordance — always present for discoverability */}
+        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/25 opacity-0 transition-opacity group-hover:opacity-100" />
+
+        {/* Left line */}
+        <div className="h-px flex-1 bg-amber-300/50" />
+
+        {/* Collapse toggle + title — stop pointer propagation so clicks don't trigger drag */}
+        <button
+          className="flex items-center gap-1.5 px-2 text-amber-600 transition-colors hover:text-amber-700"
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          title={isCollapsed ? t("services.categories.expand") : t("services.categories.collapse")}
+        >
+          <ChevronIcon className="h-3.5 w-3.5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">{category.title}</span>
+        </button>
+
+        {/* Right line */}
+        <div className="h-px flex-1 bg-amber-300/50" />
+
+        {/* Delete section */}
+        <button
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 text-muted-foreground/50 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+          onClick={(e) => { e.stopPropagation(); setConfirmOpen(true); }}
+          title={t("actions.delete")}
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm p-5">
+          <DialogTitle className="text-base font-semibold">
+            {t("services.categories.deleteTitle", { title: category.title })}
+          </DialogTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("services.categories.deleteDesc")}
+          </p>
+
+          <div className="mt-4 flex gap-2">
+            <button
+              className="flex flex-1 flex-col items-center gap-1 rounded-lg border border-border px-3 py-3 text-sm font-medium transition-colors hover:bg-muted"
+              onClick={() => { onRemove(); setConfirmOpen(false); }}
+            >
+              {t("services.categories.deleteUngroup")}
+              <span className="text-xs font-normal text-muted-foreground">
+                {t("services.categories.deleteUngroupDesc")}
+              </span>
+            </button>
+            <button
+              className="flex flex-1 flex-col items-center gap-1 rounded-lg bg-destructive px-3 py-3 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+              onClick={() => { onRemoveWithItems(); setConfirmOpen(false); }}
+            >
+              {t("services.categories.deleteWithItems")}
+              <span className="text-xs font-normal opacity-80">
+                {t("services.categories.deleteWithItemsDesc", { count: itemCount })}
+              </span>
+            </button>
+          </div>
+
+          <button
+            className="mt-2 w-full rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
+            onClick={() => setConfirmOpen(false)}
+          >
+            {t("actions.cancel")}
+          </button>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function SortableLiturgyItem({
   item,
   serviceDate,
   index,
@@ -147,7 +507,7 @@ function SortableServiceItem({
   onProject,
   onEditItem,
 }: {
-  item: ServiceItem;
+  item: LiturgyItem;
   serviceDate?: string | null;
   index: number;
   isActive: boolean;
@@ -202,6 +562,7 @@ function SortableServiceItem({
   const iconBg = (itemTypeIconBg as Record<string, string>)[item.itemType] ?? "bg-gray-500/10";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
   const isScheduledCategory = item.itemType === "scheduled_category";
+  const isChild = item.parentId !== null && item.parentId !== undefined;
 
   return (
     <div
@@ -209,6 +570,7 @@ function SortableServiceItem({
       style={style}
       className={cn(
         "group relative flex items-center gap-3 rounded-lg py-2.5 px-3 transition-colors",
+        isChild && "ml-4 border-l-2 border-amber-300/30 pl-3",
         isActive
           ? "bg-primary/10 border border-primary/20"
           : "hover:bg-muted/50",
@@ -242,19 +604,37 @@ function SortableServiceItem({
       </span>
 
       {isEditing ? (
-        <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="min-w-0 flex-1 space-y-1">
+          {/* Title row with inline save/cancel */}
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={inputRef}
+              className="min-w-0 flex-1 rounded border border-primary/40 bg-muted/30 px-2 py-1 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveEdit();
+                if (e.key === "Escape") handleCancelEdit();
+              }}
+            />
+            <button
+              className="shrink-0 rounded p-1 text-primary transition-colors hover:bg-primary/15"
+              onClick={handleSaveEdit}
+              title={t("actions.save")}
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="shrink-0 rounded p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+              onClick={handleCancelEdit}
+              title={t("actions.cancel")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {/* Notes row — lighter visual weight */}
           <input
-            ref={inputRef}
-            className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSaveEdit();
-              if (e.key === "Escape") handleCancelEdit();
-            }}
-          />
-          <input
-            className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded border border-border/40 bg-transparent px-2 py-0.5 text-xs text-muted-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/20"
             placeholder={t("services.notes")}
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
@@ -263,20 +643,6 @@ function SortableServiceItem({
               if (e.key === "Escape") handleCancelEdit();
             }}
           />
-          <div className="flex gap-1">
-            <button
-              className="rounded-md p-1 text-primary hover:bg-primary/10 transition-colors"
-              onClick={handleSaveEdit}
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
-            <button
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
-              onClick={handleCancelEdit}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
         </div>
       ) : (
         <div className="min-w-0 flex-1">
@@ -289,6 +655,10 @@ function SortableServiceItem({
           <p className="text-xs text-muted-foreground">{typeLabel}</p>
           {isScheduledCategory ? (
             <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? null} />
+          ) : item.itemType === "file" && item.notes ? (
+            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60" title={item.notes}>
+              {getShortenedPath(item.notes)}
+            </p>
           ) : item.notes ? (
             <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">{item.notes}</p>
           ) : null}
@@ -351,3 +721,6 @@ function ScheduledItemBadge({ categoryId, date }: { categoryId: number; date: st
     </div>
   );
 }
+
+/** @deprecated Use LiturgyItemList */
+export const ServiceItemList = LiturgyItemList;
