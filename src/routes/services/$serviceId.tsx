@@ -1,17 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Plus, Play, Square, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { ArrowLeft, Plus, Play, Square, ChevronLeft, ChevronRight, Save, Undo2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
 import { catcher } from "../../lib/catcher";
-import { useServiceEditor } from "../../hooks/use-service";
+import { useLiturgyEditor } from "../../hooks/use-liturgy";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useShallow } from "zustand/react/shallow";
 import { setSlideContext } from "../../lib/tauri";
 import { projectSlideWithType } from "../../lib/projection-playback";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { getPreference, setPreference, deletePreference } from "../../lib/store";
-import { ServiceItemList } from "../../components/services/service-item-list";
-import { ServiceTimeline } from "../../components/services/service-timeline";
+import { LiturgyItemList } from "../../components/services/service-item-list";
+import { LiturgyTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
 import { DatePicker } from "../../components/services/date-picker";
 import { CategoryPicker } from "../../components/services/category-picker";
@@ -20,11 +20,11 @@ import { Input } from "../../components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../../components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { cn } from "../../lib/utils";
-import { useServices, useSetServiceWeekDay } from "../../lib/queries";
-import type { Service, ServiceItem, SlideContent } from "../../lib/bindings";
+import { useLiturgies, useSetLiturgyWeekDay } from "../../lib/queries";
+import type { Liturgy, LiturgyItem as ServiceItem, SlideContent } from "../../lib/bindings";
 
 export const Route = createFileRoute("/services/$serviceId")({
-  component: ServiceEditor,
+  component: LiturgyEditor,
 });
 
 const EMPTY_SLIDE_PROPS = {
@@ -51,12 +51,12 @@ const EMPTY_SLIDE_PROPS = {
 const PLAY_STATE_KEY = "activePlayState";
 
 interface PersistedPlayState {
-  isPlayingService: boolean;
-  activeServiceId: number;
-  activeServiceItemIndex: number;
+  isPlayingLiturgy: boolean;
+  activeLiturgyId: number;
+  activeLiturgyItemIndex: number;
 }
 
-function ServiceEditor() {
+function LiturgyEditor() {
   const { serviceId } = Route.useParams();
   const { t } = useTranslation();
   const id = Number(serviceId);
@@ -64,39 +64,42 @@ function ServiceEditor() {
   const {
     service,
     items,
+    nestedItems,
     updateMeta,
     addItem,
     removeItem,
     reorderItems,
+    reorderByIds,
     editItem,
-  } = useServiceEditor({ serviceId: id });
+    reparentItem,
+  } = useLiturgyEditor({ serviceId: id });
 
-  const { data: allServices } = useServices();
+  const { data: allServices } = useLiturgies();
 
   const {
-    setActiveService,
-    isPlayingService,
-    activeServiceItemIndex,
-    setPlayingService,
-    setActiveServiceItemIndex,
+    setActiveLiturgy,
+    isPlayingLiturgy,
+    activeLiturgyItemIndex,
+    setPlayingLiturgy,
+    setActiveLiturgyItemIndex,
   } = usePresentationStore(
     useShallow((s) => ({
-      setActiveService: s.setActiveService,
-      isPlayingService: s.isPlayingService,
-      activeServiceItemIndex: s.activeServiceItemIndex,
-      setPlayingService: s.setPlayingService,
-      setActiveServiceItemIndex: s.setActiveServiceItemIndex,
+      setActiveLiturgy: s.setActiveLiturgy,
+      isPlayingLiturgy: s.isPlayingLiturgy,
+      activeLiturgyItemIndex: s.activeLiturgyItemIndex,
+      setPlayingLiturgy: s.setPlayingLiturgy,
+      setActiveLiturgyItemIndex: s.setActiveLiturgyItemIndex,
     }))
   );
 
-  // Set active service for cross-module integration
+  // Set active liturgy for cross-module integration
   useEffect(() => {
-    setActiveService(id);
+    setActiveLiturgy(id);
     return () => {
-      setActiveService(null);
-      setPlayingService(false);
+      setActiveLiturgy(null);
+      setPlayingLiturgy(false);
     };
-  }, [id, setActiveService, setPlayingService]);
+  }, [id, setActiveLiturgy, setPlayingLiturgy]);
 
   // Restore persisted play state on mount
   useEffect(() => {
@@ -108,85 +111,94 @@ function ServiceEditor() {
       if (cancelled || !saved) return;
       const state = usePresentationStore.getState();
       if (
-        saved.activeServiceId === id &&
-        saved.isPlayingService &&
-        !state.isPlayingService
+        saved.activeLiturgyId === id &&
+        saved.isPlayingLiturgy &&
+        !state.isPlayingLiturgy
       ) {
-        state.setPlayingService(true);
-        state.setActiveServiceItemIndex(saved.activeServiceItemIndex);
+        state.setPlayingLiturgy(true);
+        state.setActiveLiturgyItemIndex(saved.activeLiturgyItemIndex);
       }
     })();
     return () => { cancelled = true; };
   }, [id]);
 
-  // Local title state for responsive typing
+  const setWeekDay = useSetLiturgyWeekDay();
+
+  // Local form state
   const [localTitle, setLocalTitle] = useState("");
-  const titleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const titleDirtyRef = useRef(false);
-
-  // Local date state
   const [localDate, setLocalDate] = useState("");
-  const dateTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const dateDirtyRef = useRef(false);
-
-  // Local notes state
   const [localNotes, setLocalNotes] = useState("");
-  const notesTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const notesDirtyRef = useRef(false);
+  const [isDirty, setIsDirty] = useState(false);
 
-  // Sync local state when service data loads
+  // Schedule mode: "one-time" (date) vs "recurring" (weekday)
+  const [scheduleMode, setScheduleMode] = useState<"one-time" | "recurring">("one-time");
+  const [localWeekDay, setLocalWeekDay] = useState<number | null>(null);
+
+  // Sync local state when service data loads (only when not dirty)
   useEffect(() => {
-    if (service && !titleDirtyRef.current) {
+    if (service && !isDirty) {
       setLocalTitle(service.title);
-    }
-  }, [service]);
-
-  useEffect(() => {
-    if (service && !dateDirtyRef.current) {
       setLocalDate(service.date ?? "");
-    }
-  }, [service]);
-
-  useEffect(() => {
-    if (service && !notesDirtyRef.current) {
       setLocalNotes(service.notes ?? "");
+      setLocalWeekDay(service.weekDay ?? null);
+      setScheduleMode(service.weekDay != null ? "recurring" : "one-time");
     }
-  }, [service]);
+  }, [service, isDirty]);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [rightTab, setRightTab] = useState<"notes" | "timeline">("notes");
 
   const handleTitleChange = (title: string) => {
     setLocalTitle(title);
-    titleDirtyRef.current = true;
-    if (!service) return;
-    if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-    titleTimerRef.current = setTimeout(() => {
-      updateMeta(title, service.date, service.notes);
-      titleDirtyRef.current = false;
-    }, 800);
+    setIsDirty(true);
   };
 
   const handleDateChange = (date: string) => {
     setLocalDate(date);
-    dateDirtyRef.current = true;
-    if (!service) return;
-    if (dateTimerRef.current) clearTimeout(dateTimerRef.current);
-    dateTimerRef.current = setTimeout(() => {
-      updateMeta(service.title, date || null, service.notes);
-      dateDirtyRef.current = false;
-    }, 800);
+    setIsDirty(true);
   };
 
   const handleNotesChange = (notes: string) => {
     setLocalNotes(notes);
-    notesDirtyRef.current = true;
+    setIsDirty(true);
+  };
+
+  const handleScheduleModeChange = (mode: "one-time" | "recurring") => {
+    setScheduleMode(mode);
+    if (mode === "one-time") {
+      setLocalWeekDay(null);
+    } else {
+      setLocalDate("");
+    }
+    setIsDirty(true);
+  };
+
+  const handleWeekDayChange = (day: number | null) => {
+    setLocalWeekDay(day);
+    setIsDirty(true);
+  };
+
+  const handleSave = () => {
     if (!service) return;
-    if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
-    notesTimerRef.current = setTimeout(() => {
-      updateMeta(service.title, service.date, notes || null);
-      notesDirtyRef.current = false;
-    }, 800);
+    const dateToSave = scheduleMode === "one-time" ? (localDate || null) : null;
+    const weekDayToSave = scheduleMode === "recurring" ? localWeekDay : null;
+
+    updateMeta(localTitle, dateToSave, localNotes || null);
+    // Sync weekday separately (it uses its own mutation)
+    if (weekDayToSave !== service.weekDay) {
+      setWeekDay.mutate({ id, weekDay: weekDayToSave });
+    }
+    setIsDirty(false);
+  };
+
+  const handleDiscard = () => {
+    if (!service) return;
+    setLocalTitle(service.title);
+    setLocalDate(service.date ?? "");
+    setLocalNotes(service.notes ?? "");
+    setLocalWeekDay(service.weekDay ?? null);
+    setScheduleMode(service.weekDay != null ? "recurring" : "one-time");
+    setIsDirty(false);
   };
 
   // Project a single service item to the projector
@@ -244,63 +256,54 @@ function ServiceEditor() {
     }, { notify: true });
   }, [items]);
 
-  // Play Service: project the active item whenever the index changes
+  // Play Liturgy: project the active item whenever the index changes
   useEffect(() => {
-    if (isPlayingService && activeServiceItemIndex >= 0 && activeServiceItemIndex < items.length) {
-      projectItem(items[activeServiceItemIndex]);
+    if (isPlayingLiturgy && activeLiturgyItemIndex >= 0 && activeLiturgyItemIndex < items.length) {
+      projectItem(items[activeLiturgyItemIndex]);
     }
-  }, [isPlayingService, activeServiceItemIndex, items, projectItem]);
+  }, [isPlayingLiturgy, activeLiturgyItemIndex, items, projectItem]);
 
   // Persist play state changes
   useEffect(() => {
-    if (isPlayingService) {
+    if (isPlayingLiturgy) {
       void catcher(
         setPreference<PersistedPlayState>(PLAY_STATE_KEY, {
-          isPlayingService: true,
-          activeServiceId: id,
-          activeServiceItemIndex,
+          isPlayingLiturgy: true,
+          activeLiturgyId: id,
+          activeLiturgyItemIndex,
         }),
       );
     }
-  }, [isPlayingService, activeServiceItemIndex, id]);
+  }, [isPlayingLiturgy, activeLiturgyItemIndex, id]);
 
-  const handlePlayService = () => {
+  const handlePlayLiturgy = () => {
     if (items.length === 0) return;
-    setPlayingService(true);
+    setPlayingLiturgy(true);
     setRightTab("timeline");
   };
 
-  const handleStopService = () => {
-    setPlayingService(false);
+  const handleStopLiturgy = () => {
+    setPlayingLiturgy(false);
     void catcher(deletePreference(PLAY_STATE_KEY));
   };
 
   const handleNextItem = () => {
-    if (activeServiceItemIndex < items.length - 1) {
-      setActiveServiceItemIndex(activeServiceItemIndex + 1);
+    if (activeLiturgyItemIndex < items.length - 1) {
+      setActiveLiturgyItemIndex(activeLiturgyItemIndex + 1);
       return;
     }
 
-    // End of service timeline: stop playback and clear projection.
-    setPlayingService(false);
+    // End of liturgy timeline: stop playback and clear projection.
+    setPlayingLiturgy(false);
     void catcher(deletePreference(PLAY_STATE_KEY));
     void catcher(stopProjectionAndSongAudio(), { notify: true });
   };
 
   const handlePrevItem = () => {
-    if (activeServiceItemIndex > 0) {
-      setActiveServiceItemIndex(activeServiceItemIndex - 1);
+    if (activeLiturgyItemIndex > 0) {
+      setActiveLiturgyItemIndex(activeLiturgyItemIndex - 1);
     }
   };
-
-  // Cleanup timers
-  useEffect(() => {
-    return () => {
-      if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-      if (dateTimerRef.current) clearTimeout(dateTimerRef.current);
-      if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
-    };
-  }, []);
 
   if (!service) {
     return (
@@ -312,8 +315,8 @@ function ServiceEditor() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Play Service Banner */}
-      {isPlayingService && (
+      {/* Play Liturgy Banner */}
+      {isPlayingLiturgy && (
         <div className="flex items-center gap-3 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
@@ -329,7 +332,7 @@ function ServiceEditor() {
           </span>
           <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium tabular-nums">
             {t("services.progressOf", {
-              current: activeServiceItemIndex + 1,
+              current: activeLiturgyItemIndex + 1,
               total: items.length,
             })}
           </span>
@@ -340,7 +343,7 @@ function ServiceEditor() {
               variant="ghost"
               className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
               onClick={handlePrevItem}
-              disabled={activeServiceItemIndex <= 0}
+              disabled={activeLiturgyItemIndex <= 0}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -357,7 +360,7 @@ function ServiceEditor() {
               size="sm"
               variant="destructive"
               className="ml-2 h-7 px-3 text-xs"
-              onClick={handleStopService}
+              onClick={handleStopLiturgy}
             >
               <Square className="mr-1.5 h-3 w-3" />
               {t("services.stopService")}
@@ -381,46 +384,94 @@ function ServiceEditor() {
             onChange={(e) => handleTitleChange(e.target.value)}
           />
           <CategoryPicker serviceId={id} />
-          <DatePicker value={localDate} onChange={handleDateChange} />
-          <WeekDayPicker
-            serviceId={id}
-            currentWeekDay={service.weekDay ?? null}
-            allServices={allServices ?? []}
-          />
+
+          {/* Schedule mode toggle */}
+          <div className="flex items-center gap-0.5 rounded-md border border-border bg-white/4 px-1 py-0.5">
+            <button
+              className={cn(
+                "rounded px-2 py-1 text-[11px] font-medium transition-all duration-150",
+                scheduleMode === "one-time"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => handleScheduleModeChange("one-time")}
+            >
+              {t("services.scheduleMode.oneTime")}
+            </button>
+            <button
+              className={cn(
+                "rounded px-2 py-1 text-[11px] font-medium transition-all duration-150",
+                scheduleMode === "recurring"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => handleScheduleModeChange("recurring")}
+            >
+              {t("services.scheduleMode.recurring")}
+            </button>
+          </div>
+
+          {scheduleMode === "one-time" ? (
+            <DatePicker value={localDate} onChange={handleDateChange} />
+          ) : (
+            <WeekDayPicker
+              serviceId={id}
+              currentWeekDay={localWeekDay}
+              allServices={allServices ?? []}
+              onChange={handleWeekDayChange}
+            />
+          )}
         </div>
 
-        {!isPlayingService && (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="shadow-sm"
-              onClick={handlePlayService}
-              disabled={items.length === 0}
-            >
-              <Play className="mr-2 h-3.5 w-3.5" />
-              {t("services.playService")}
-            </Button>
-            <Button size="sm" className="shadow-sm" onClick={() => setAddModalOpen(true)}>
-              <Plus className="mr-2 h-3.5 w-3.5" />
-              {t("services.addItem")}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isDirty && (
+            <>
+              <Button size="sm" variant="ghost" className="shadow-sm" onClick={handleDiscard}>
+                <Undo2 className="mr-2 h-3.5 w-3.5" />
+                {t("services.discardChanges")}
+              </Button>
+              <Button size="sm" className="shadow-sm" onClick={handleSave}>
+                <Save className="mr-2 h-3.5 w-3.5" />
+                {t("services.saveChanges")}
+              </Button>
+            </>
+          )}
+          {!isPlayingLiturgy && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shadow-sm"
+                onClick={handlePlayLiturgy}
+                disabled={items.length === 0}
+              >
+                <Play className="mr-2 h-3.5 w-3.5" />
+                {t("services.playService")}
+              </Button>
+              <Button size="sm" className="shadow-sm" onClick={() => setAddModalOpen(true)}>
+                <Plus className="mr-2 h-3.5 w-3.5" />
+                {t("services.addItem")}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Two-panel layout */}
       <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-0">
         {/* Left panel -- Items list */}
         <div className="overflow-auto border-r border-border bg-surface">
-          <ServiceItemList
+          <LiturgyItemList
             items={items}
+            nestedItems={nestedItems}
             serviceDate={service?.date ?? null}
-            activeItemIndex={isPlayingService ? activeServiceItemIndex : -1}
+            activeItemIndex={isPlayingLiturgy ? activeLiturgyItemIndex : -1}
             onRemove={removeItem}
             onReorder={reorderItems}
+            onReorderByIds={reorderByIds}
             onProject={projectItem}
             onEditItem={editItem}
+            onReparent={reparentItem}
           />
         </div>
 
@@ -471,9 +522,9 @@ function ServiceEditor() {
               />
             </div>
           ) : (
-            <ServiceTimeline
+            <LiturgyTimeline
               items={items}
-              activeIndex={isPlayingService ? activeServiceItemIndex : -1}
+              activeIndex={isPlayingLiturgy ? activeLiturgyItemIndex : -1}
             />
           )}
         </div>
@@ -495,12 +546,12 @@ function ServiceEditor() {
 interface WeekDayPickerProps {
   serviceId: number;
   currentWeekDay: number | null;
-  allServices: Service[];
+  allServices: Liturgy[];
+  onChange: (day: number | null) => void;
 }
 
-function WeekDayPicker({ serviceId, currentWeekDay, allServices }: WeekDayPickerProps) {
+function WeekDayPicker({ serviceId, currentWeekDay, allServices, onChange }: WeekDayPickerProps) {
   const { t } = useTranslation();
-  const setWeekDay = useSetServiceWeekDay();
   const [pendingDay, setPendingDay] = useState<number | null>(null);
 
   const DAYS = [
@@ -513,8 +564,8 @@ function WeekDayPicker({ serviceId, currentWeekDay, allServices }: WeekDayPicker
     { key: "sat", label: t("services.calendar.weekdays.sat"), value: 6 },
   ];
 
-  // Map day value → the service that owns it (excluding current)
-  const takenByService = new Map<number, Service>(
+  // Map day value → the liturgy that owns it (excluding current)
+  const takenByService = new Map<number, Liturgy>(
     allServices
       .filter((s) => s.id !== serviceId && s.weekDay !== null)
       .map((s) => [s.weekDay as number, s]),
@@ -523,7 +574,7 @@ function WeekDayPicker({ serviceId, currentWeekDay, allServices }: WeekDayPicker
   const handleClick = (value: number) => {
     // Toggle off: active day clicked → clear
     if (currentWeekDay === value) {
-      setWeekDay.mutate({ id: serviceId, weekDay: null });
+      onChange(null);
       return;
     }
     // Taken by another service → open confirmation dialog
@@ -531,13 +582,13 @@ function WeekDayPicker({ serviceId, currentWeekDay, allServices }: WeekDayPicker
       setPendingDay(value);
       return;
     }
-    // Free day → assign directly
-    setWeekDay.mutate({ id: serviceId, weekDay: value });
+    // Free day → assign locally
+    onChange(value);
   };
 
   const handleConfirmOverride = () => {
     if (pendingDay !== null) {
-      setWeekDay.mutate({ id: serviceId, weekDay: pendingDay });
+      onChange(pendingDay);
     }
     setPendingDay(null);
   };

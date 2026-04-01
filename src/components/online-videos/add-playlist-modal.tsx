@@ -54,7 +54,7 @@ export function AddPlaylistModal({
   const [channelResult, setChannelResult] =
     useState<YoutubeChannelResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
+  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
   const { data: existingPlaylists } = useYoutubePlaylists();
   const existingIds = new Set(existingPlaylists?.map((p) => p.playlistId) ?? []);
 
@@ -187,10 +187,10 @@ export function AddPlaylistModal({
                 <p className="text-muted-foreground mt-1">
                   {t("onlineVideos.addModal.singleVideoHint")}
                 </p>
-                {activeServiceId && (
+                {activeLiturgyId && (
                   <Link
                     to="/services/$serviceId"
-                    params={{ serviceId: String(activeServiceId) }}
+                    params={{ serviceId: String(activeLiturgyId) }}
                   >
                     <Button variant="outline" size="sm" className="mt-2">
                       {t("onlineVideos.addModal.addToService")}

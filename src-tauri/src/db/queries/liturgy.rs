@@ -1,8 +1,8 @@
-use crate::db::models::{Service, ServiceItem};
+use crate::db::models::{Liturgy, LiturgyItem};
 use crate::error::AppError;
 use rusqlite::Connection;
 
-pub fn get_services(conn: &Connection) -> Result<Vec<Service>, AppError> {
+pub fn get_services(conn: &Connection) -> Result<Vec<Liturgy>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT s.id, s.title, s.date, s.notes, s.created_at, s.updated_at,
                 (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id) AS item_count,
@@ -14,7 +14,7 @@ pub fn get_services(conn: &Connection) -> Result<Vec<Service>, AppError> {
 
     let services = stmt
         .query_map([], |row| {
-            Ok(Service {
+            Ok(Liturgy {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 date: row.get(2)?,
@@ -31,7 +31,7 @@ pub fn get_services(conn: &Connection) -> Result<Vec<Service>, AppError> {
     Ok(services)
 }
 
-pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Service, AppError> {
+pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Liturgy, AppError> {
     conn.query_row(
         "SELECT s.id, s.title, s.date, s.notes, s.created_at, s.updated_at,
                 (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id) AS item_count,
@@ -40,7 +40,7 @@ pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Service, AppError
          FROM services s WHERE s.id = ?1",
         [id],
         |row| {
-            Ok(Service {
+            Ok(Liturgy {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 date: row.get(2)?,
@@ -55,7 +55,7 @@ pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Service, AppError
     )
     .map_err(|e| match e {
         rusqlite::Error::QueryReturnedNoRows => {
-            AppError::NotFound(format!("Service with id {} not found", id))
+            AppError::NotFound(format!("Liturgy with id {} not found", id))
         }
         _ => AppError::Database(e),
     })
@@ -99,9 +99,9 @@ pub fn delete_service(conn: &Connection, id: i64) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn get_service_items(conn: &Connection, service_id: i64) -> Result<Vec<ServiceItem>, AppError> {
+pub fn get_service_items(conn: &Connection, service_id: i64) -> Result<Vec<LiturgyItem>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT id, service_id, item_type, item_id, title, item_order, notes
+        "SELECT id, service_id, item_type, item_id, title, item_order, notes, parent_id
          FROM service_items
          WHERE service_id = ?1
          ORDER BY item_order",
@@ -109,7 +109,7 @@ pub fn get_service_items(conn: &Connection, service_id: i64) -> Result<Vec<Servi
 
     let items = stmt
         .query_map([service_id], |row| {
-            Ok(ServiceItem {
+            Ok(LiturgyItem {
                 id: row.get(0)?,
                 service_id: row.get(1)?,
                 item_type: row.get(2)?,
@@ -117,6 +117,7 @@ pub fn get_service_items(conn: &Connection, service_id: i64) -> Result<Vec<Servi
                 title: row.get(4)?,
                 item_order: row.get(5)?,
                 notes: row.get(6)?,
+                parent_id: row.get(7)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -131,6 +132,7 @@ pub fn insert_service_item(
     title: &str,
     item_id: Option<i64>,
     notes: Option<&str>,
+    parent_id: Option<i64>,
 ) -> Result<i64, AppError> {
     let next_order: i64 = conn
         .query_row(
@@ -141,19 +143,19 @@ pub fn insert_service_item(
         .unwrap_or(1);
 
     conn.execute(
-        "INSERT INTO service_items (service_id, item_type, title, item_id, item_order, notes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        rusqlite::params![service_id, item_type, title, item_id, next_order, notes],
+        "INSERT INTO service_items (service_id, item_type, title, item_id, item_order, notes, parent_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![service_id, item_type, title, item_id, next_order, notes, parent_id],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_service_item_by_id(conn: &Connection, id: i64) -> Result<ServiceItem, AppError> {
+pub fn get_service_item_by_id(conn: &Connection, id: i64) -> Result<LiturgyItem, AppError> {
     conn.query_row(
-        "SELECT id, service_id, item_type, item_id, title, item_order, notes
+        "SELECT id, service_id, item_type, item_id, title, item_order, notes, parent_id
          FROM service_items WHERE id = ?1",
         [id],
         |row| {
-            Ok(ServiceItem {
+            Ok(LiturgyItem {
                 id: row.get(0)?,
                 service_id: row.get(1)?,
                 item_type: row.get(2)?,
@@ -161,12 +163,13 @@ pub fn get_service_item_by_id(conn: &Connection, id: i64) -> Result<ServiceItem,
                 title: row.get(4)?,
                 item_order: row.get(5)?,
                 notes: row.get(6)?,
+                parent_id: row.get(7)?,
             })
         },
     )
     .map_err(|e| match e {
         rusqlite::Error::QueryReturnedNoRows => {
-            AppError::NotFound(format!("ServiceItem with id {} not found", id))
+            AppError::NotFound(format!("LiturgyItem with id {} not found", id))
         }
         _ => AppError::Database(e),
     })
@@ -247,10 +250,76 @@ pub fn duplicate_service_with_items(conn: &Connection, id: i64) -> Result<i64, A
 
     for item in items {
         conn.execute(
-            "INSERT INTO service_items (service_id, item_type, title, item_id, item_order, notes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![new_id, item.item_type, item.title, item.item_id, item.item_order, item.notes],
+            "INSERT INTO service_items (service_id, item_type, title, item_id, item_order, notes, parent_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![new_id, item.item_type, item.title, item.item_id, item.item_order, item.notes, item.parent_id],
         )?;
     }
 
     Ok(new_id)
+}
+
+pub fn move_service_item_to_parent(
+    conn: &Connection,
+    id: i64,
+    parent_id: Option<i64>,
+) -> Result<(), AppError> {
+    if let Some(pid) = parent_id {
+        // Self-reference guard
+        if pid == id {
+            return Err(AppError::Internal(
+                "Item cannot be its own parent".into(),
+            ));
+        }
+
+        // Fetch item's service_id + type
+        let (item_service_id, item_type): (i64, String) = conn
+            .query_row(
+                "SELECT service_id, item_type FROM service_items WHERE id = ?1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| AppError::NotFound(format!("ServiceItem with id {} not found", id)))?;
+
+        // Categories cannot be nested inside other categories
+        if item_type == "category" {
+            return Err(AppError::Internal(
+                "Category items cannot be nested inside another category".into(),
+            ));
+        }
+
+        // Fetch parent's service_id + type
+        let (parent_service_id, parent_type): (i64, String) = conn
+            .query_row(
+                "SELECT service_id, item_type FROM service_items WHERE id = ?1",
+                [pid],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| AppError::NotFound(format!("ServiceItem with id {} not found", pid)))?;
+
+        // Cross-service isolation
+        if item_service_id != parent_service_id {
+            return Err(AppError::Internal(
+                "Cannot reparent item to a different service".into(),
+            ));
+        }
+
+        // Parent must be a category
+        if parent_type != "category" {
+            return Err(AppError::Internal(
+                "Parent item must be of type 'category'".into(),
+            ));
+        }
+    }
+
+    let affected = conn.execute(
+        "UPDATE service_items SET parent_id = ?1 WHERE id = ?2",
+        rusqlite::params![parent_id, id],
+    )?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!(
+            "ServiceItem with id {} not found",
+            id
+        )));
+    }
+    Ok(())
 }

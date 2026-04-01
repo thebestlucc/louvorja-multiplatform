@@ -104,6 +104,16 @@ pub fn search_all_hymns(
 
 #[tauri::command]
 #[specta::specta]
+pub fn search_all_music(
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Hymn>, AppError> {
+    let conn = state.db.get()?;
+    crate::db::queries::music::search_all_music(&conn, &query)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn get_hymn(
     app: tauri::AppHandle,
     id: i64,

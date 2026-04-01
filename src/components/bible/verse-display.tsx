@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils";
 import type { Verse } from "../../types/bible";
 import { Copy, Plus, Columns2, Monitor } from "lucide-react";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { useAddServiceItem } from "../../lib/queries";
+import { useAddLiturgyItem } from "../../lib/queries";
 import { copyToClipboard } from "../../lib/clipboard";
 import { notify } from "../../lib/notifications";
 import { getLocalizedBookName } from "./book-catalog";
@@ -40,8 +40,8 @@ export function VerseDisplay({
   onProject,
 }: VerseDisplayProps) {
   const { t, i18n } = useTranslation();
-  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
-  const addItemMutation = useAddServiceItem();
+  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
+  const addItemMutation = useAddLiturgyItem();
   const verseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const displayBook = getLocalizedBookName(book, i18n.resolvedLanguage ?? i18n.language);
 
@@ -76,7 +76,7 @@ export function VerseDisplay({
   };
 
   const handleAddToService = () => {
-    if (!activeServiceId || selectedVerses.length === 0) return;
+    if (!activeLiturgyId || selectedVerses.length === 0) return;
     const sorted = [...selectedVerses].sort((a, b) => a - b);
     const verseRange =
       sorted.length === 1
@@ -84,7 +84,7 @@ export function VerseDisplay({
         : `${sorted[0]}-${sorted[sorted.length - 1]}`;
     const title = `${book} ${chapter}:${verseRange}${versionAbbr ? ` (${versionAbbr})` : ""}`;
     addItemMutation.mutate({
-      serviceId: activeServiceId,
+      serviceId: activeLiturgyId,
       itemType: "bible",
       title,
       itemId: null,
@@ -181,7 +181,7 @@ export function VerseDisplay({
                 {t("bible.project")}
               </Button>
             )}
-            {activeServiceId && (
+            {activeLiturgyId && (
               <Button
                 size="sm"
                 variant="outline"

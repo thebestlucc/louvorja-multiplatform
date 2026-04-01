@@ -2,10 +2,10 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
 import { Music, BookOpen, Presentation, StickyNote, CalendarClock, Check, Video } from "lucide-react";
 import { cn } from "../../lib/utils";
-import type { ServiceItem, ServiceItemType } from "../../types/service";
+import type { LiturgyItem, LiturgyItemType } from "../../types/liturgy";
 import { ScrollArea } from "../ui/scroll-area";
 
-const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
+const itemTypeIcons: Record<LiturgyItemType, typeof Music> = {
   hymn: Music,
   bible: BookOpen,
   presentation: Presentation,
@@ -14,9 +14,10 @@ const itemTypeIcons: Record<ServiceItemType, typeof Music> = {
   file: StickyNote,
   scheduled_category: CalendarClock,
   online_video: Video,
+  category: CalendarClock,
 };
 
-const itemTypeColors: Record<ServiceItemType, string> = {
+const itemTypeColors: Record<LiturgyItemType, string> = {
   hymn: "bg-blue-500",
   bible: "bg-amber-600",
   presentation: "bg-purple-500",
@@ -25,9 +26,10 @@ const itemTypeColors: Record<ServiceItemType, string> = {
   file: "bg-gray-500",
   scheduled_category: "bg-rose-500",
   online_video: "bg-red-500",
+  category: "bg-amber-500",
 };
 
-const itemTypeRingColors: Record<ServiceItemType, string> = {
+const itemTypeRingColors: Record<LiturgyItemType, string> = {
   hymn: "ring-blue-500/30",
   bible: "ring-amber-600/30",
   presentation: "ring-purple-500/30",
@@ -36,9 +38,10 @@ const itemTypeRingColors: Record<ServiceItemType, string> = {
   file: "ring-gray-500/30",
   scheduled_category: "ring-rose-500/30",
   online_video: "ring-red-500/30",
+  category: "ring-amber-500/30",
 };
 
-const itemTypeTextColors: Record<ServiceItemType, string> = {
+const itemTypeTextColors: Record<LiturgyItemType, string> = {
   hymn: "text-blue-500",
   bible: "text-amber-600",
   presentation: "text-purple-500",
@@ -47,14 +50,15 @@ const itemTypeTextColors: Record<ServiceItemType, string> = {
   file: "text-gray-500",
   scheduled_category: "text-rose-500",
   online_video: "text-red-500",
+  category: "text-amber-500",
 };
 
-interface ServiceTimelineProps {
-  items: ServiceItem[];
+interface LiturgyTimelineProps {
+  items: LiturgyItem[];
   activeIndex?: number;
 }
 
-export function ServiceTimeline({ items, activeIndex = -1 }: ServiceTimelineProps) {
+export function LiturgyTimeline({ items, activeIndex = -1 }: LiturgyTimelineProps) {
   const { t } = useTranslation();
   const activeRef = useRef<HTMLDivElement>(null);
 
@@ -83,10 +87,10 @@ export function ServiceTimeline({ items, activeIndex = -1 }: ServiceTimelineProp
           {items.map((item, index) => {
             const isActive = index === activeIndex;
             const isPast = activeIndex >= 0 && index < activeIndex;
-            const Icon = itemTypeIcons[item.itemType as ServiceItemType] ?? StickyNote;
-            const dotColor = itemTypeColors[item.itemType as ServiceItemType] ?? "bg-gray-500";
-            const ringColor = itemTypeRingColors[item.itemType as ServiceItemType] ?? "ring-gray-500/30";
-            const textColor = itemTypeTextColors[item.itemType as ServiceItemType] ?? "text-gray-500";
+            const Icon = itemTypeIcons[item.itemType as LiturgyItemType] ?? StickyNote;
+            const dotColor = itemTypeColors[item.itemType as LiturgyItemType] ?? "bg-gray-500";
+            const ringColor = itemTypeRingColors[item.itemType as LiturgyItemType] ?? "ring-gray-500/30";
+            const textColor = itemTypeTextColors[item.itemType as LiturgyItemType] ?? "text-gray-500";
 
             return (
               <div
@@ -164,3 +168,6 @@ export function ServiceTimeline({ items, activeIndex = -1 }: ServiceTimelineProp
     </ScrollArea>
   );
 }
+
+/** @deprecated Use LiturgyTimeline */
+export const ServiceTimeline = LiturgyTimeline;

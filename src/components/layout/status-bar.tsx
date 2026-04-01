@@ -7,7 +7,7 @@ import { ProjectorControls } from "../display/projector-controls";
 import { StatusBarUpdateIndicator } from "./status-bar-update-indicator";
 import { StreamingControls } from "../streaming/streaming-controls";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { useService, useStreamingStatus, useTimerState } from "../../lib/queries";
+import { useLiturgy, useStreamingStatus, useTimerState } from "../../lib/queries";
 import { formatUtilityTimer } from "../../types/utilities";
 import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useDownloadStore } from "../../stores/download-store";
@@ -37,10 +37,10 @@ export function StatusBar() {
   const downloadEntries = Object.values(downloads);
   const firstDownload = downloadEntries[0];
 
-  // Active service state
-  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
-  const { data: activeServiceData } = useService(activeServiceId ?? 0);
-  const activeServiceTitle = activeServiceData?.service?.title ?? null;
+  // Active liturgy state
+  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
+  const { data: activeLiturgyData } = useLiturgy(activeLiturgyId ?? 0);
+  const activeServiceTitle = activeLiturgyData?.service?.title ?? null;
 
   const isRunning = status?.isRunning ?? false;
   const hasTimerProgress = Boolean(
@@ -79,13 +79,13 @@ export function StatusBar() {
       </span>
 
       <div className="flex items-center gap-1">
-        {activeServiceId !== null && truncatedTitle && (
+        {activeLiturgyId !== null && truncatedTitle && (
           <>
             <button
               onClick={() =>
                 navigate({
                   to: "/services/$serviceId",
-                  params: { serviceId: String(activeServiceId) },
+                  params: { serviceId: String(activeLiturgyId) },
                 })
               }
               className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-surface-hover"

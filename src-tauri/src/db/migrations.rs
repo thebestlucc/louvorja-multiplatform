@@ -221,6 +221,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (38)", [])?;
     }
 
+    if current_version < 39 {
+        migrate_v39(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (39)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1405,6 +1410,16 @@ fn migrate_v38(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v39(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "service_items",
+        "parent_id",
+        "INTEGER REFERENCES service_items(id) ON DELETE SET NULL",
+    )?;
+    Ok(())
+}
+
 fn migrate_v36(conn: &Connection) -> Result<(), AppError> {
     // 1. Create languages table (may not exist on fresh installs)
     conn.execute_batch(
@@ -1664,6 +1679,7 @@ mod tests {
             (36, migrate_v36),
             (37, migrate_v37),
             (38, migrate_v38),
+            (39, migrate_v39),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));

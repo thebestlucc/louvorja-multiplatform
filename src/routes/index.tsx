@@ -11,7 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import { usePresentationStore } from "../stores/presentation-store";
-import { useService } from "../lib/queries";
+import { useLiturgy } from "../lib/queries";
 import { cn } from "../lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -36,8 +36,8 @@ const NAV_ITEMS = [
 
 function Dashboard() {
   const { t } = useTranslation();
-  const activeServiceId = usePresentationStore((s) => s.activeServiceId);
-  const { data: activeServiceData } = useService(activeServiceId ?? 0);
+  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
+  const { data: activeLiturgyData } = useLiturgy(activeLiturgyId ?? 0);
 
   const shortcuts = [
     { keys: "Ctrl+K", label: t("dashboard.shortcuts.search") },
@@ -55,11 +55,11 @@ function Dashboard() {
         </h1>
       </div>
 
-      {/* Active service */}
-      {activeServiceId && activeServiceData && (
+      {/* Active liturgy */}
+      {activeLiturgyId && activeLiturgyData && (
         <Link
           to="/services/$serviceId"
-          params={{ serviceId: String(activeServiceId) }}
+          params={{ serviceId: String(activeLiturgyId) }}
           className="group mb-5 block"
         >
           <div className="flex items-center gap-4 rounded-lg bg-primary px-5 py-4 text-primary-foreground transition-opacity hover:opacity-90">
@@ -69,7 +69,7 @@ function Dashboard() {
                 {t("dashboard.activeService")}
               </p>
               <p className="truncate text-sm font-medium">
-                {activeServiceData.service.title}
+                {activeLiturgyData.service.title}
               </p>
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 opacity-60 transition-transform group-hover:translate-x-1" />

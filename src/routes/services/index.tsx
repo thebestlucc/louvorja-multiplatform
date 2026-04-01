@@ -6,14 +6,14 @@ import {
   Calendar, Star, LayoutGrid, List, ListFilter, ChevronDown, Music, Sun,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, type MouseEvent } from "react";
-import { useServices, useCreateService, useDeleteService, useDuplicateService } from "../../lib/queries";
+import { useLiturgies, useCreateLiturgy, useDeleteLiturgy, useDuplicateLiturgy } from "../../lib/queries";
 import { Button } from "../../components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
 import { useCategoryStore } from "../../components/services/category-picker";
 import { cn } from "../../lib/utils";
 import { catcher } from "../../lib/catcher";
 import { getPreference, setPreference } from "../../lib/store";
-import type { Service } from "../../types/service";
+import type { Liturgy } from "../../types/liturgy";
 
 // ─── helpers ─────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ function getCategoryColor(category: string | null): PillColor {
 
 // ─── favorites store ──────────────────────────────────────
 
-function useServiceFavorites() {
+function useLiturgyFavorites() {
   const [favorites, setFavoritesState] = useState<number[]>([]);
 
   useEffect(() => {
@@ -110,23 +110,23 @@ function useViewPreference() {
 // ─── route ────────────────────────────────────────────────
 
 export const Route = createFileRoute("/services/")({
-  component: ServicesIndex,
+  component: LiturgiesIndex,
 });
 
-function ServicesIndex() {
+function LiturgiesIndex() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data: services, isLoading } = useServices();
-  const createMutation = useCreateService();
-  const deleteMutation = useDeleteService();
-  const duplicateMutation = useDuplicateService();
+  const { data: services, isLoading } = useLiturgies();
+  const createMutation = useCreateLiturgy();
+  const deleteMutation = useDeleteLiturgy();
+  const duplicateMutation = useDuplicateLiturgy();
   const [searchQuery, setSearchQuery] = useState("");
-  const { toggleFavorite, isFavorite, isFull } = useServiceFavorites();
+  const { toggleFavorite, isFavorite, isFull } = useLiturgyFavorites();
   const { view, setView } = useViewPreference();
   const { getCategory, loaded: categoriesLoaded } = useCategoryStore();
 
   const todayWeekDay = new Date().getDay();
-  const todayService = useMemo(
+  const todayLiturgy = useMemo(
     () => (services ?? []).find((s) => s.weekDay === todayWeekDay) ?? null,
     [services, todayWeekDay],
   );
@@ -243,15 +243,15 @@ function ServicesIndex() {
         </div>
       ) : (
         <>
-          <TodayServiceSection
-            todayService={todayService}
+          <TodayLiturgySection
+            todayLiturgy={todayLiturgy}
             view={view}
-            isFavorite={todayService ? isFavorite(todayService.id) : false}
+            isFavorite={todayLiturgy ? isFavorite(todayLiturgy.id) : false}
             isFull={isFull}
-            category={todayService && categoriesLoaded ? getCategory(todayService.id) : null}
+            category={todayLiturgy && categoriesLoaded ? getCategory(todayLiturgy.id) : null}
             onToggleFavorite={toggleFavorite}
-            onDuplicate={todayService ? () => handleDuplicate(todayService.id) : () => {}}
-            onDelete={todayService ? () => handleDelete(todayService.id) : () => {}}
+            onDuplicate={todayLiturgy ? () => handleDuplicate(todayLiturgy.id) : () => {}}
+            onDelete={todayLiturgy ? () => handleDelete(todayLiturgy.id) : () => {}}
             onCreate={handleCreate}
           />
 
@@ -268,7 +268,7 @@ function ServicesIndex() {
                   />
                   <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
                     {favServices.map((s) => (
-                      <ServiceCard
+                      <LiturgyCard
                         key={s.id}
                         service={s}
                         view={view}
@@ -293,7 +293,7 @@ function ServicesIndex() {
                   />
                   <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
                     {otherServices.map((s) => (
-                      <ServiceCard
+                      <LiturgyCard
                         key={s.id}
                         service={s}
                         view={view}
@@ -328,10 +328,10 @@ function SectionHeader({ icon, label, count }: { icon: React.ReactNode; label: s
   );
 }
 
-// ─── service card ─────────────────────────────────────────
+// ─── liturgy card ─────────────────────────────────────────
 
-interface ServiceCardProps {
-  service: Service;
+interface LiturgyCardProps {
+  service: Liturgy;
   view: "grid" | "list";
   isFavorite: boolean;
   isFull: boolean;
@@ -342,7 +342,7 @@ interface ServiceCardProps {
   isToday?: boolean;
 }
 
-function ServiceCard({ service, view, isFavorite, isFull, category, onToggleFavorite, onDuplicate, onDelete, isToday }: ServiceCardProps) {
+function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavorite, onDuplicate, onDelete, isToday }: LiturgyCardProps) {
   const { t } = useTranslation();
   const shortDate = formatShortDate(service.date);
   const hymnCount = service.hymnCount ?? 0;
@@ -472,14 +472,14 @@ function ServiceCard({ service, view, isFavorite, isFull, category, onToggleFavo
   );
 }
 
-// ─── today's service section ─────────────────────────────
+// ─── today's liturgy section ─────────────────────────────
 
-interface TodayServiceSectionProps extends Omit<ServiceCardProps, "service"> {
-  todayService: Service | null;
+interface TodayLiturgySection extends Omit<LiturgyCardProps, "service"> {
+  todayLiturgy: Liturgy | null;
   onCreate: () => void;
 }
 
-function TodayServiceSection({ todayService, view, isFavorite, isFull, category, onToggleFavorite, onDuplicate, onDelete, onCreate }: TodayServiceSectionProps) {
+function TodayLiturgySection({ todayLiturgy, view, isFavorite, isFull, category, onToggleFavorite, onDuplicate, onDelete, onCreate }: TodayLiturgySection) {
   const { t } = useTranslation();
   const todayName = new Intl.DateTimeFormat("default", { weekday: "long" }).format(new Date());
 
@@ -488,14 +488,14 @@ function TodayServiceSection({ todayService, view, isFavorite, isFull, category,
       <div className="flex items-center gap-1.5 border-b border-amber-500/20 pb-2">
         <Sun className="h-3 w-3 text-amber-400" />
         <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-400/90">
-          {t("services.todayService")}
+          {t("services.todayLiturgy")}
         </span>
         <span className="text-[10.5px] text-amber-400/50">{todayName}</span>
       </div>
-      {todayService ? (
+      {todayLiturgy ? (
         <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
-          <ServiceCard
-            service={todayService}
+          <LiturgyCard
+            service={todayLiturgy}
             view={view}
             isFavorite={isFavorite}
             isFull={isFull}
@@ -509,7 +509,7 @@ function TodayServiceSection({ todayService, view, isFavorite, isFull, category,
       ) : (
         <div className="flex items-center gap-3 rounded-lg border border-dashed border-amber-500/20 bg-amber-500/5 px-4 py-3">
           <Sun className="h-4 w-4 flex-shrink-0 text-amber-400/40" />
-          <p className="flex-1 text-xs text-amber-400/60">{t("services.todayServiceEmpty")}</p>
+          <p className="flex-1 text-xs text-amber-400/60">{t("services.todayLiturgyEmpty")}</p>
           <button
             onClick={onCreate}
             className="flex-shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/20"

@@ -31,7 +31,7 @@ pub struct Slide {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct Service {
+pub struct Liturgy {
     #[specta(type = i32)]
     pub id: i64,
     pub title: String,
@@ -46,24 +46,26 @@ pub struct Service {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct ServiceItem {
+pub struct LiturgyItem {
     #[specta(type = i32)]
     pub id: i64,
     #[specta(type = i32)]
     pub service_id: i64,
     pub item_type: String,
-    #[specta(type = i32)]
+    #[specta(type = Option<i32>)]
     pub item_id: Option<i64>,
     pub title: String,
     pub item_order: i32,
     pub notes: Option<String>,
+    #[specta(type = Option<i32>)]
+    pub parent_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct ServiceWithItems {
-    pub service: Service,
-    pub items: Vec<ServiceItem>,
+pub struct LiturgyWithItems {
+    pub service: Liturgy,
+    pub items: Vec<LiturgyItem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

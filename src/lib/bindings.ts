@@ -30,6 +30,14 @@ async searchAllHymns(query: string) : Promise<Result<Hymn[], AppErrorResponse>> 
     else return { status: "error", error: e  as any };
 }
 },
+async searchAllMusic(query: string) : Promise<Result<Hymn[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_all_music", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getAlbums() : Promise<Result<Album[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_albums") };
@@ -420,7 +428,7 @@ async exportSlja(presentationId: number, path: string) : Promise<Result<null, Ap
     else return { status: "error", error: e  as any };
 }
 },
-async getServices() : Promise<Result<Service[], AppErrorResponse>> {
+async getServices() : Promise<Result<Liturgy[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_services") };
 } catch (e) {
@@ -428,7 +436,7 @@ async getServices() : Promise<Result<Service[], AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getService(id: number) : Promise<Result<ServiceWithItems, AppErrorResponse>> {
+async getService(id: number) : Promise<Result<LiturgyWithItems, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_service", { id }) };
 } catch (e) {
@@ -436,7 +444,7 @@ async getService(id: number) : Promise<Result<ServiceWithItems, AppErrorResponse
     else return { status: "error", error: e  as any };
 }
 },
-async createService(title: string, date: string | null, notes: string | null) : Promise<Result<Service, AppErrorResponse>> {
+async createService(title: string, date: string | null, notes: string | null) : Promise<Result<Liturgy, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("create_service", { title, date, notes }) };
 } catch (e) {
@@ -460,9 +468,9 @@ async deleteService(id: number) : Promise<Result<null, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
-async addServiceItem(serviceId: number, itemType: string, title: string, itemId: number | null, notes: string | null) : Promise<Result<ServiceItem, AppErrorResponse>> {
+async addServiceItem(serviceId: number, itemType: string, title: string, itemId: number | null, notes: string | null, parentId: number | null) : Promise<Result<LiturgyItem, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("add_service_item", { serviceId, itemType, title, itemId, notes }) };
+    return { status: "ok", data: await TAURI_INVOKE("add_service_item", { serviceId, itemType, title, itemId, notes, parentId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -484,7 +492,7 @@ async reorderServiceItems(serviceId: number, itemIds: number[]) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
-async duplicateService(id: number) : Promise<Result<Service, AppErrorResponse>> {
+async duplicateService(id: number) : Promise<Result<Liturgy, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("duplicate_service", { id }) };
 } catch (e) {
@@ -503,6 +511,14 @@ async updateServiceItem(id: number, title: string, notes: string | null) : Promi
 async setServiceWeekDay(id: number, weekDay: number | null) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_service_week_day", { id, weekDay }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async moveServiceItemToParent(id: number, parentId: number | null) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("move_service_item_to_parent", { id, parentId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1472,6 +1488,9 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
+export type Liturgy = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string; itemCount: number; hymnCount: number; weekDay: number | null }
+export type LiturgyItem = { id: number; serviceId: number; itemType: string; itemId: number | null; title: string; itemOrder: number; notes: string | null; parentId: number | null }
+export type LiturgyWithItems = { service: Liturgy; items: LiturgyItem[] }
 export type MediaLibraryCategory = { id: number; name: string; sortOrder: number; idLanguage: string }
 export type MediaLibraryCategoryInput = { id: number | null; name: string; sortOrder: number; idLanguage: string }
 export type MediaLibraryItem = { id: number; categoryId: number; name: string; filePath: string; fileType: string; thumbnailPath: string | null; scheduledDate: string | null; sortOrder: number; createdAt: string }
@@ -1514,9 +1533,6 @@ export type ScheduleDepartmentMember = { id: number; departmentId: number; name:
 export type ScheduleGenerationRequest = { year: number; month: number; overwriteManual: boolean }
 export type ScheduleMonth = { id: number; year: number; month: number; notes: string | null; createdAt: string; updatedAt: string }
 export type ScheduleMonthDetail = { month: ScheduleMonth; departments: ScheduleDepartment[]; days: ScheduleDay[] }
-export type Service = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string; itemCount: number; hymnCount: number; weekDay: number | null }
-export type ServiceItem = { id: number; serviceId: number; itemType: string; itemId: number; title: string; itemOrder: number; notes: string | null }
-export type ServiceWithItems = { service: Service; items: ServiceItem[] }
 export type Setting = { key: string; value: string }
 export type Slide = { id: number; presentationId: number; slideIndex: number; slideType: string; content: string; notes: string | null; transition: string | null }
 export type SlideContent = { slideType: string; text: string | null; title: string | null; subtitle: string | null; label: string | null; videoPath: string | null; backgroundImage: string | null; backgroundColor: string | null; audioPath: string | null; autoPlay: boolean | null; loop: boolean | null; muted: boolean | null; mode: string | null; textColor: string | null; textSize: number | null; videoUrl: string | null; videoId: string | null; videoSource: string | null; videoTitle: string | null }

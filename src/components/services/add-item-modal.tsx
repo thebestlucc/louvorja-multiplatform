@@ -7,12 +7,12 @@ import {
   StickyNote,
   Link2,
   FileIcon,
-  ChevronLeft,
   Video,
+  Layers,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { cn } from "../../lib/utils";
-import type { ServiceItemType } from "../../types/service";
+import type { LiturgyItemType } from "../../types/liturgy";
 import {
   HymnForm,
   BibleForm,
@@ -22,6 +22,7 @@ import {
   FileForm,
   ScheduledCategoryForm,
   OnlineVideoForm,
+  CategoryForm,
 } from "./add-item-forms";
 
 interface AddItemModalProps {
@@ -31,23 +32,25 @@ interface AddItemModalProps {
   onAdd: (itemType: string, title: string, itemId: number | null, notes: string | null) => void;
 }
 
-const ITEM_TYPES: { type: ServiceItemType; icon: typeof Music; color: string; hoverBorder: string }[] = [
-  { type: "hymn", icon: Music, color: "bg-blue-500/15 text-blue-500 dark:text-blue-400", hoverBorder: "hover:border-blue-500/30" },
-  { type: "bible", icon: BookOpen, color: "bg-amber-500/15 text-amber-600 dark:text-amber-400", hoverBorder: "hover:border-amber-500/30" },
-  { type: "presentation", icon: Presentation, color: "bg-purple-500/15 text-purple-500 dark:text-purple-400", hoverBorder: "hover:border-purple-500/30" },
-  { type: "annotation", icon: StickyNote, color: "bg-green-500/15 text-green-500 dark:text-green-400", hoverBorder: "hover:border-green-500/30" },
-  { type: "url", icon: Link2, color: "bg-cyan-500/15 text-cyan-500 dark:text-cyan-400", hoverBorder: "hover:border-cyan-500/30" },
-  { type: "file", icon: FileIcon, color: "bg-slate-500/15 text-slate-500 dark:text-slate-400", hoverBorder: "hover:border-slate-500/30" },
-  { type: "online_video", icon: Video, color: "bg-red-500/15 text-red-500 dark:text-red-400", hoverBorder: "hover:border-red-500/30" },
+const TYPES: { type: LiturgyItemType; icon: typeof Music }[] = [
+  { type: "hymn", icon: Music },
+  { type: "bible", icon: BookOpen },
+  { type: "presentation", icon: Presentation },
+  { type: "category", icon: Layers },
+  { type: "annotation", icon: StickyNote },
+  { type: "url", icon: Link2 },
+  { type: "file", icon: FileIcon },
+  { type: "online_video", icon: Video },
 ];
+
+const DEFAULT_TYPE: LiturgyItemType = "hymn";
 
 export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
   const { t } = useTranslation();
-  const [selectedType, setSelectedType] = useState<ServiceItemType | null>(null);
+  const [activeType, setActiveType] = useState<LiturgyItemType>(DEFAULT_TYPE);
 
-  // Reset selection when dialog closes
   useEffect(() => {
-    if (!open) setSelectedType(null);
+    if (!open) setActiveType(DEFAULT_TYPE);
   }, [open]);
 
   const handleAdd = (itemType: string, title: string, itemId: number | null, notes: string | null) => {
@@ -57,59 +60,48 @@ export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-card p-0">
+      <DialogContent className="flex max-h-[75vh] max-w-2xl flex-col gap-0 overflow-hidden bg-card p-0">
         {/* Header */}
-        <div className="flex items-center gap-2 border-b border-border px-5 pt-5 pb-3 mb-6">
-          {selectedType && (
-            <button
-              onClick={() => setSelectedType(null)}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-          <DialogTitle className="text-base text-foreground">
-            {selectedType
-              ? t(`services.itemTypes.${selectedType}`)
-              : t("services.addItem")}
-          </DialogTitle>
-        </div>
+        <DialogTitle className="border-b border-border px-5 py-3.5 text-sm font-semibold text-foreground">
+          {t("services.addItem")}
+        </DialogTitle>
 
-        {/* Content */}
-        <div className="px-5 pb-5">
-          {!selectedType ? (
-            /* Step 1: Type picker grid */
-            <div className="grid grid-cols-3 gap-2">
-              {ITEM_TYPES.map(({ type, icon: Icon, color, hoverBorder }) => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedType(type)}
-                  className={cn(
-                    "flex min-h-[80px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-transparent p-4 transition-all duration-150",
-                    color,
-                    hoverBorder,
-                  )}
-                >
-                  <Icon className="h-6 w-6" />
-                  <span className="text-xs font-medium">
-                    {t(`services.itemTypes.${type}`)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            /* Step 2: Type-specific form */
-            <div className="pt-1">
-              {selectedType === "hymn" && <HymnForm onAdd={handleAdd} />}
-              {selectedType === "bible" && <BibleForm onAdd={handleAdd} />}
-              {selectedType === "presentation" && <PresentationForm onAdd={handleAdd} />}
-              {selectedType === "annotation" && <AnnotationForm onAdd={handleAdd} />}
-              {selectedType === "url" && <UrlForm onAdd={handleAdd} />}
-              {selectedType === "file" && <FileForm onAdd={handleAdd} />}
-              {selectedType === "scheduled_category" && <ScheduledCategoryForm onAdd={handleAdd} />}
-              {selectedType === "online_video" && <OnlineVideoForm onAdd={handleAdd} />}
-            </div>
-          )}
+        {/* Body: sidebar + content */}
+        <div className="flex min-h-0 flex-1">
+          {/* Left: type list */}
+          <nav className="flex w-40 flex-shrink-0 flex-col gap-0.5 border-r border-border p-2 overflow-y-auto">
+            {TYPES.map(({ type, icon: Icon }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setActiveType(type)}
+                className={cn(
+                  "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  activeType === type
+                    ? "bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                )}
+              >
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate text-xs">
+                  {t(`services.itemTypes.${type}`)}
+                </span>
+              </button>
+            ))}
+          </nav>
+
+          {/* Right: form */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {activeType === "hymn" && <HymnForm onAdd={handleAdd} />}
+            {activeType === "bible" && <BibleForm onAdd={handleAdd} />}
+            {activeType === "presentation" && <PresentationForm onAdd={handleAdd} />}
+            {activeType === "annotation" && <AnnotationForm onAdd={handleAdd} />}
+            {activeType === "url" && <UrlForm onAdd={handleAdd} />}
+            {activeType === "file" && <FileForm onAdd={handleAdd} />}
+            {activeType === "scheduled_category" && <ScheduledCategoryForm onAdd={handleAdd} />}
+            {activeType === "online_video" && <OnlineVideoForm onAdd={handleAdd} />}
+            {activeType === "category" && <CategoryForm onAdd={handleAdd} />}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

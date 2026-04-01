@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Favorite,
-  Service,
-  ServiceItem,
-  ServiceWithItems,
+  Liturgy as Service,
+  LiturgyItem as ServiceItem,
+  LiturgyWithItems as ServiceWithItems,
   Collection,
   Hymn,
 } from "../bindings";
@@ -61,8 +61,8 @@ export async function deleteService(id: number): Promise<void> {
   return tauriInvoke<void>("delete_service", { id });
 }
 
-export async function addServiceItem(serviceId: number, itemType: string, title: string, itemId: number | null, notes: string | null): Promise<ServiceItem> {
-  return tauriInvoke<ServiceItem>("add_service_item", { serviceId, itemType, title, itemId, notes });
+export async function addServiceItem(serviceId: number, itemType: string, title: string, itemId: number | null, notes: string | null, parentId: number | null = null): Promise<ServiceItem> {
+  return tauriInvoke<ServiceItem>("add_service_item", { serviceId, itemType, title, itemId, notes, parentId });
 }
 
 export async function removeServiceItem(id: number): Promise<void> {
@@ -79,6 +79,10 @@ export async function duplicateService(id: number): Promise<Service> {
 
 export async function updateServiceItem(id: number, title: string, notes: string | null): Promise<void> {
   return tauriInvoke<void>("update_service_item", { id, title, notes });
+}
+
+export async function moveServiceItemToParent(id: number, parentId: number | null): Promise<void> {
+  return tauriInvoke<void>("move_service_item_to_parent", { id, parentId });
 }
 
 export async function setServiceWeekDay(id: number, weekDay: number | null): Promise<void> {

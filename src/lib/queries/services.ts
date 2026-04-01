@@ -17,10 +17,11 @@ import {
   getFavoriteCollections,
   getAllFavoriteIds,
   setServiceWeekDay,
+  moveServiceItemToParent,
 } from "../tauri";
 import { queryKeys } from "./keys";
 
-export function useServices() {
+export function useLiturgies() {
   return useQuery({
     queryKey: queryKeys.services.all,
     queryFn: () => getServices(),
@@ -28,7 +29,7 @@ export function useServices() {
   });
 }
 
-export function useService(id: number) {
+export function useLiturgy(id: number) {
   return useQuery({
     queryKey: queryKeys.services.detail(id),
     queryFn: () => getService(id),
@@ -37,7 +38,7 @@ export function useService(id: number) {
   });
 }
 
-export function useCreateService() {
+export function useCreateLiturgy() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { title: string; date: string | null; notes: string | null }) =>
@@ -48,7 +49,7 @@ export function useCreateService() {
   });
 }
 
-export function useUpdateService() {
+export function useUpdateLiturgy() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: number; title: string; date: string | null; notes: string | null }) =>
@@ -60,7 +61,7 @@ export function useUpdateService() {
   });
 }
 
-export function useDeleteService() {
+export function useDeleteLiturgy() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteService(id),
@@ -70,7 +71,7 @@ export function useDeleteService() {
   });
 }
 
-export function useDuplicateService() {
+export function useDuplicateLiturgy() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => duplicateService(id),
@@ -80,18 +81,18 @@ export function useDuplicateService() {
   });
 }
 
-export function useAddServiceItem() {
+export function useAddLiturgyItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { serviceId: number; itemType: string; title: string; itemId: number | null; notes: string | null }) =>
-      addServiceItem(vars.serviceId, vars.itemType, vars.title, vars.itemId, vars.notes),
+    mutationFn: (vars: { serviceId: number; itemType: string; title: string; itemId: number | null; notes: string | null; parentId?: number | null }) =>
+      addServiceItem(vars.serviceId, vars.itemType, vars.title, vars.itemId, vars.notes, vars.parentId ?? null),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
     },
   });
 }
 
-export function useRemoveServiceItem() {
+export function useRemoveLiturgyItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: number; serviceId: number }) => removeServiceItem(vars.id),
@@ -101,7 +102,7 @@ export function useRemoveServiceItem() {
   });
 }
 
-export function useReorderServiceItems() {
+export function useReorderLiturgyItems() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { serviceId: number; itemIds: number[] }) =>
@@ -112,7 +113,7 @@ export function useReorderServiceItems() {
   });
 }
 
-export function useSetServiceWeekDay() {
+export function useSetLiturgyWeekDay() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: number; weekDay: number | null }) =>
@@ -124,7 +125,21 @@ export function useSetServiceWeekDay() {
   });
 }
 
-export function useUpdateServiceItem() {
+export function useMoveLiturgyItemToParent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; serviceId: number; parentId: number | null }) =>
+      moveServiceItemToParent(vars.id, vars.parentId),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.detail(vars.serviceId) });
+    },
+  });
+}
+
+/** @deprecated Use useMoveLiturgyItemToParent */
+export const useMoveServiceItemToParent = useMoveLiturgyItemToParent;
+
+export function useUpdateLiturgyItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: number; serviceId: number; title: string; notes: string | null }) =>
@@ -134,6 +149,30 @@ export function useUpdateServiceItem() {
     },
   });
 }
+
+// Backward-compatible aliases (deprecated)
+/** @deprecated Use useLiturgies */
+export const useServices = useLiturgies;
+/** @deprecated Use useLiturgy */
+export const useService = useLiturgy;
+/** @deprecated Use useCreateLiturgy */
+export const useCreateService = useCreateLiturgy;
+/** @deprecated Use useUpdateLiturgy */
+export const useUpdateService = useUpdateLiturgy;
+/** @deprecated Use useDeleteLiturgy */
+export const useDeleteService = useDeleteLiturgy;
+/** @deprecated Use useDuplicateLiturgy */
+export const useDuplicateService = useDuplicateLiturgy;
+/** @deprecated Use useAddLiturgyItem */
+export const useAddServiceItem = useAddLiturgyItem;
+/** @deprecated Use useRemoveLiturgyItem */
+export const useRemoveServiceItem = useRemoveLiturgyItem;
+/** @deprecated Use useReorderLiturgyItems */
+export const useReorderServiceItems = useReorderLiturgyItems;
+/** @deprecated Use useSetLiturgyWeekDay */
+export const useSetServiceWeekDay = useSetLiturgyWeekDay;
+/** @deprecated Use useUpdateLiturgyItem */
+export const useUpdateServiceItem = useUpdateLiturgyItem;
 
 // Favorites
 export function useFavorites(itemType: string) {

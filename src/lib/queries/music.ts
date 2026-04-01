@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   searchHymns,
   searchAllHymns,
+  searchAllMusic,
   getHymn,
   getAlbums,
   getHymnsByAlbum,
@@ -29,6 +30,14 @@ export function useAllHymns(query: string) {
   return useQuery({
     queryKey: ["hymns", "search-all", query],
     queryFn: () => searchAllHymns(query),
+    staleTime: 30_000,
+  });
+}
+
+export function useAllMusic(query: string) {
+  return useQuery({
+    queryKey: ["music", "all", query],
+    queryFn: () => searchAllMusic(query),
     staleTime: 30_000,
   });
 }
