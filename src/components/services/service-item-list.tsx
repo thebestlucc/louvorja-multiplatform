@@ -176,17 +176,17 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     const groupIdSet = new Set(groupIds);
 
     // All items except the group being moved
-    const rest = items.filter(i => !groupIdSet.has(i.id));
+    const rest = allItems.filter(i => !groupIdSet.has(i.id));
     const overIndexInRest = rest.findIndex(i => i.id === overId);
 
     if (overIndexInRest === -1) {
       // overId is part of the group itself or not found — no change
-      return items.map(i => i.id);
+      return allItems.map(i => i.id);
     }
 
     // Determine insert direction using original full-array positions
-    const activeIndexInFull = items.findIndex(i => i.id === activeCatId);
-    const overIndexInFull = items.findIndex(i => i.id === overId);
+    const activeIndexInFull = allItems.findIndex(i => i.id === activeCatId);
+    const overIndexInFull = allItems.findIndex(i => i.id === overId);
     const insertAfter = overIndexInFull > activeIndexInFull;
 
     const insertAt = insertAfter ? overIndexInRest + 1 : overIndexInRest;
@@ -218,9 +218,10 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     // Case 3: Regular item drag
     // Only reparent when dropped directly onto a category header
     const overType = itemTypeMap?.get(overItemId);
+    const overRect = over.rect;
+    if (!overRect) { return; }
     if (overType === "category" && onReparent) {
       const translatedRect = active.rect.current.translated;
-      const overRect = over.rect;
       const verticalOverlap =
         translatedRect !== null &&
         translatedRect.bottom > overRect.top &&
