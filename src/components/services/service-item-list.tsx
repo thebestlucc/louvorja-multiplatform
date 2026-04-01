@@ -10,6 +10,7 @@ import {
   MeasuringStrategy,
   type DragStartEvent,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -105,6 +106,9 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
   const { t } = useTranslation();
   const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
   const [activeId, setActiveId] = useState<number | null>(null);
+  // Hover-intent: only reparent after user holds over a category for 300ms
+  const [pendingParentId, setPendingParentId] = useState<number | null>(null);
+  const reparentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -167,6 +171,26 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(Number(event.active.id));
+    setPendingParentId(null);
+    if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const overId = event.over ? Number(event.over.id) : null;
+    const overType = overId !== null ? itemTypeMap?.get(overId) : undefined;
+
+    // Cancel any pending reparent timer
+    if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
+
+    if (overType === "category" && overId !== null) {
+      // Start 300ms hover-intent timer — only commit if user holds over the section
+      reparentTimerRef.current = setTimeout(() => {
+        setPendingParentId(overId);
+      }, 300);
+    } else {
+      // Moved away from category — cancel pending reparent
+      setPendingParentId(null);
+    }
   };
 
   /** Compute new flat order when a category (+ children) is dropped at a new position */
@@ -200,7 +224,12 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+
+    // Capture and clear hover-intent state before any returns
+    if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
+    const committedParentId = pendingParentId;
     setActiveId(null);
+    setPendingParentId(null);
 
     if (!over || active.id === over.id) return;
 
@@ -208,35 +237,24 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     const overItemId = Number(over.id);
     const activeType = itemTypeMap?.get(activeItemId);
 
-    // Case 2: Category drag (move category + all children as group)
+    // Case: Category drag — move category + all children as group
     if (activeType === "category") {
       const newOrder = computeCategoryGroupDrop(activeItemId, overItemId);
       onReorderByIds?.(newOrder);
       return;
     }
 
-    // Case 3: Regular item drag
-    // Only reparent when dropped directly onto a category header WITH overlap
-    const overType = itemTypeMap?.get(overItemId);
-    const overRect = over.rect;
-    if (overType === "category" && overRect && onReparent) {
-      const translatedRect = active.rect.current.translated;
-      const verticalOverlap =
-        translatedRect !== null &&
-        translatedRect.bottom > overRect.top &&
-        translatedRect.top < overRect.bottom;
-
-      if (verticalOverlap) {
-        const activeItem = items.find(i => i.id === activeItemId);
-        const currentParentId = activeItem?.parentId ?? null;
-        if (currentParentId !== overItemId) {
-          onReparent(activeItemId, overItemId);
-        }
-        return; // reparented — don't also reorder
+    // Case: Regular item drag — reparent only if hover-intent timer completed
+    if (committedParentId !== null && onReparent) {
+      const activeItem = items.find(i => i.id === activeItemId);
+      const currentParentId = activeItem?.parentId ?? null;
+      if (currentParentId !== committedParentId) {
+        onReparent(activeItemId, committedParentId);
       }
-      // No overlap: dragging past the category header, fall through to reorder
+      return;
     }
 
+    // Default: reorder in place
     const oldIndex = ids.indexOf(activeItemId);
     const newIndex = ids.indexOf(overItemId);
     if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
@@ -321,6 +339,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
         collisionDetection={closestCenter}
         measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
@@ -339,6 +358,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
                         category={group.category}
                         itemCount={group.items.length}
                         isCollapsed={isCollapsed}
+                        isPendingDrop={pendingParentId === categoryId}
                         onToggle={() => toggleCategory(categoryId!)}
                         onRemove={() => onRemove(categoryId!)}
                         onRemoveWithItems={() => {
@@ -404,6 +424,7 @@ function CategoryDivider({
   category,
   itemCount,
   isCollapsed,
+  isPendingDrop = false,
   onToggle,
   onRemove,
   onRemoveWithItems,
@@ -411,6 +432,7 @@ function CategoryDivider({
   category: LiturgyItem;
   itemCount: number;
   isCollapsed: boolean;
+  isPendingDrop?: boolean;
   onToggle: () => void;
   onRemove: () => void;
   onRemoveWithItems: () => void;
@@ -441,7 +463,10 @@ function CategoryDivider({
         style={style}
         {...attributes}
         {...listeners}
-        className="group relative my-2 flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 transition-all select-none active:cursor-grabbing"
+        className={cn(
+          "group relative my-2 flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 transition-all select-none active:cursor-grabbing",
+          isPendingDrop && "bg-amber-500/10 ring-1 ring-amber-400/50",
+        )}
       >
         {/* Visual drag affordance — always present for discoverability */}
         <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/25 opacity-0 transition-opacity group-hover:opacity-100" />
