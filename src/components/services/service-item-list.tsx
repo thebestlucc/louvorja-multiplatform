@@ -7,6 +7,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  MeasuringStrategy,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -171,31 +172,29 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
   /** Compute new flat order when a category (+ children) is dropped at a new position */
   const computeCategoryGroupDrop = (activeCatId: number, overId: number): number[] => {
     const childIds = getDisplayChildIds(activeCatId);
-    const withoutGroup = items.filter(i => i.id !== activeCatId && !childIds.includes(i.id));
-    const overIndexInWithout = withoutGroup.findIndex(i => i.id === overId);
+    const groupIds = [activeCatId, ...childIds];
+    const groupIdSet = new Set(groupIds);
 
-    const activeInFull = items.findIndex(i => i.id === activeCatId);
-    const overInFull = items.findIndex(i => i.id === overId);
-    const insertAfter = overInFull > activeInFull;
+    // All items except the group being moved
+    const rest = items.filter(i => !groupIdSet.has(i.id));
+    const overIndexInRest = rest.findIndex(i => i.id === overId);
 
-    if (overIndexInWithout === -1) {
-      return items.map(i => i.id); // fallback: no change
+    if (overIndexInRest === -1) {
+      // overId is part of the group itself or not found — no change
+      return items.map(i => i.id);
     }
 
-    if (insertAfter) {
-      return [
-        ...withoutGroup.slice(0, overIndexInWithout + 1).map(i => i.id),
-        activeCatId,
-        ...childIds,
-        ...withoutGroup.slice(overIndexInWithout + 1).map(i => i.id),
-      ];
-    }
+    // Determine insert direction using original full-array positions
+    const activeIndexInFull = items.findIndex(i => i.id === activeCatId);
+    const overIndexInFull = items.findIndex(i => i.id === overId);
+    const insertAfter = overIndexInFull > activeIndexInFull;
+
+    const insertAt = insertAfter ? overIndexInRest + 1 : overIndexInRest;
 
     return [
-      ...withoutGroup.slice(0, overIndexInWithout).map(i => i.id),
-      activeCatId,
-      ...childIds,
-      ...withoutGroup.slice(overIndexInWithout).map(i => i.id),
+      ...rest.slice(0, insertAt).map(i => i.id),
+      ...groupIds,
+      ...rest.slice(insertAt).map(i => i.id),
     ];
   };
 
@@ -220,12 +219,21 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     // Only reparent when dropped directly onto a category header
     const overType = itemTypeMap?.get(overItemId);
     if (overType === "category" && onReparent) {
-      const activeItem = items.find(i => i.id === activeItemId);
-      const currentParentId = activeItem?.parentId ?? null;
-      if (currentParentId !== overItemId) {
-        onReparent(activeItemId, overItemId);
+      const translatedRect = active.rect.current.translated;
+      const overRect = over.rect;
+      const verticalOverlap =
+        translatedRect !== null &&
+        translatedRect.bottom > overRect.top &&
+        translatedRect.top < overRect.bottom;
+
+      if (verticalOverlap) {
+        const activeItem = items.find(i => i.id === activeItemId);
+        const currentParentId = activeItem?.parentId ?? null;
+        if (currentParentId !== overItemId) {
+          onReparent(activeItemId, overItemId);
+        }
       }
-      return;
+      return; // always stop here — don't also reorder
     }
 
     const oldIndex = ids.indexOf(activeItemId);
@@ -310,6 +318,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
