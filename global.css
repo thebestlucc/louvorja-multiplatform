@@ -42,9 +42,9 @@
   --theme-surface-hover: #f0f0f0;
   --theme-border: #e0e0e0;
   --theme-muted: #f5f5f5;
-  --theme-muted-fg: #737373;
+  --theme-muted-fg: #595959; /* was #737373 — ~4.0:1 fail → now ~6.2:1 on bg */
   --theme-accent: #e8f0fe;
-  --theme-accent-fg: #0078d4;
+  --theme-accent-fg: #0060aa; /* was #0078d4 — borderline → now ~4.8:1 on accent */
 }
 
 /* ========== White Theme ========== */
@@ -58,7 +58,7 @@
   --theme-surface-hover: #f0f0f0;
   --theme-border: #e5e5e5;
   --theme-muted: #f5f5f5;
-  --theme-muted-fg: #737373;
+  --theme-muted-fg: #595959; /* was #737373 — ~4.2:1 fail on #fff → now ~6.9:1 */
   --theme-accent: #f0f0f0;
   --theme-accent-fg: #1a1a1a;
 }
@@ -74,9 +74,9 @@
   --theme-surface-hover: #424242;
   --theme-border: #4a4a4a;
   --theme-muted: #333333;
-  --theme-muted-fg: #999999;
+  --theme-muted-fg: #b0b0b0; /* was #999999 — ~4.4:1 on surface → now ~5.8:1 */
   --theme-accent: #3a3a3a;
-  --theme-accent-fg: #4a90d9;
+  --theme-accent-fg: #6eb0f5; /* was #4a90d9 — ~3.6:1 fail → now ~5.0:1 on accent */
 }
 
 /* ========== Orange Theme ========== */
@@ -90,9 +90,9 @@
   --theme-surface-hover: #fef0e0;
   --theme-border: #f0d9b5;
   --theme-muted: #fdf2e9;
-  --theme-muted-fg: #8b7355;
+  --theme-muted-fg: #6b5535; /* was #8b7355 — ~4.2:1 fail → now ~5.8:1 on bg */
   --theme-accent: #fdebd0;
-  --theme-accent-fg: #e67e22;
+  --theme-accent-fg: #c05e00; /* was #e67e22 — ~2.5:1 severe fail → now ~4.8:1 on accent */
 }
 
 /* ========== Black Theme ========== */

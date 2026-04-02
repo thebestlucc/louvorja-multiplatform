@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { catcherSync } from "../../lib/catcher";
 import {
   DndContext,
   DragOverlay,
@@ -19,14 +20,15 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, Check, X, CalendarClock, Plus, Video, ChevronDown, ChevronRight } from "lucide-react";
+import { GripVertical, Trash2, Music, BookOpen, Presentation, StickyNote, Monitor, Link2, FileIcon, Pencil, CalendarClock, Plus, Video, ChevronDown, ChevronRight } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { cn } from "../../lib/utils";
 import { useScheduledMediaItem } from "../../lib/queries";
+import { AddItemModal } from "./add-item-modal";
 import type { LiturgyItem, LiturgyItemType, CategoryGroup } from "../../types/liturgy";
 
 const itemTypeIcons: Record<LiturgyItemType, typeof Music> = {
@@ -53,18 +55,6 @@ const itemTypeColors: Record<LiturgyItemType, string> = {
   category: "text-amber-600",
 };
 
-const itemTypeDotColors: Record<LiturgyItemType, string> = {
-  hymn: "bg-blue-500",
-  bible: "bg-amber-600",
-  presentation: "bg-purple-500",
-  annotation: "bg-green-500",
-  url: "bg-cyan-500",
-  file: "bg-gray-500",
-  scheduled_category: "bg-rose-500",
-  online_video: "bg-red-500",
-  category: "bg-amber-600",
-};
-
 const itemTypeIconBg: Record<LiturgyItemType, string> = {
   hymn: "bg-blue-500/10",
   bible: "bg-amber-500/10",
@@ -76,6 +66,14 @@ const itemTypeIconBg: Record<LiturgyItemType, string> = {
   online_video: "bg-red-500/10",
   category: "bg-amber-500/10",
 };
+
+/** Parse online_video notes JSON and return a display string (e.g. "Channel · 4:33"). */
+function getVideoSubtitle(notes: string): string | null {
+  const [d] = catcherSync(() => JSON.parse(notes) as { channelName?: string; duration?: string });
+  if (!d) return null;
+  const parts = [d.channelName, d.duration].filter((v): v is string => !!v);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
 
 /** Shorten an absolute file path to `~/rest/of/path` or `.../parent/file.ext` */
 function getShortenedPath(path: string): string {
@@ -92,28 +90,35 @@ function getShortenedPath(path: string): string {
 interface LiturgyItemListProps {
   items: LiturgyItem[];
   nestedItems?: CategoryGroup[];
+  serviceId: number;
   serviceDate?: string | null;
   activeItemIndex?: number;
   onRemove: (id: number) => void;
-  onReorder: (from: number, to: number) => void;
   onProject?: (item: LiturgyItem) => void;
   onEditItem?: (id: number, title: string, notes: string | null) => void;
-  onReparent?: (itemId: number, parentId: number | null) => void;
-  onReorderByIds?: (newItemIds: number[]) => void;
+  /** Single drop handler: receives the item id, its new parentId (null = top-level), and the full new flat order */
+  onDrop?: (itemId: number, newParentId: number | null, newOrderIds: number[]) => void;
 }
 
-export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemIndex = -1, onRemove, onReorder, onProject, onEditItem, onReparent, onReorderByIds }: LiturgyItemListProps) {
+export function LiturgyItemList({ items, nestedItems, serviceId, serviceDate, activeItemIndex = -1, onRemove, onProject, onEditItem, onDrop }: LiturgyItemListProps) {
   const { t } = useTranslation();
+  const [editingItem, setEditingItem] = useState<LiturgyItem | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
   const [activeId, setActiveId] = useState<number | null>(null);
-  // Hover-intent: only reparent after user holds over a category for 300ms
+  // Hover-intent: reparent after user holds over a category for 400ms
   const [pendingParentId, setPendingParentId] = useState<number | null>(null);
   const reparentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const committedParentIdRef = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  // Gap slot helpers — virtual droppables inserted after each section
+  const GAP_PREFIX = "gap-";
+  const isGapId = (id: string | number): boolean => String(id).startsWith(GAP_PREFIX);
+  const catIdFromGap = (gapId: string) => parseInt(gapId.slice(GAP_PREFIX.length), 10);
 
   // Build a flat list of all items for SortableContext ids
   const allItems = nestedItems
@@ -128,9 +133,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     ? new Map(allItems.map((item) => [item.id, item.itemType]))
     : null;
 
-  /** Returns the IDs of items that are actually displayed as children of a category.
-   * Uses nestedItems (display-order) rather than parentId alone, so "orphaned" items
-   * that have a parentId but appear before their category are NOT treated as children. */
+  /** Returns the IDs of items that are actually displayed as children of a category. */
   const getDisplayChildIds = (catId: number): number[] => {
     if (nestedItems) {
       const group = nestedItems.find(g => g.category?.id === catId);
@@ -144,18 +147,35 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
     ? new Set(getDisplayChildIds(activeId))
     : new Set<number>();
 
-  const sortableIds = allItems
-    .filter(i => {
-      // Exclude children of the category currently being dragged
-      if (hiddenChildIds.has(i.id)) return false;
-      // Exclude children of collapsed categories (they are not visible)
-      if (i.parentId !== null && i.parentId !== undefined && collapsedCategories.has(i.parentId)) return false;
-      return true;
-    })
-    .map(i => i.id);
+  // Build sortable IDs including gap slots after each section
+  const sortableIds: (number | string)[] = [];
+  if (nestedItems) {
+    for (const group of nestedItems) {
+      const catId = group.category?.id ?? null;
+      if (catId !== null) {
+        if (!hiddenChildIds.has(catId)) {
+          sortableIds.push(catId);
+          if (!collapsedCategories.has(catId) && activeId !== catId) {
+            for (const item of group.items) {
+              if (!hiddenChildIds.has(item.id)) sortableIds.push(item.id);
+            }
+          }
+          // Gap slot after the section — gives a droppable target for "insert after section"
+          if (activeId !== catId) sortableIds.push(`${GAP_PREFIX}${catId}`);
+        }
+      } else {
+        for (const item of group.items) {
+          if (!hiddenChildIds.has(item.id) &&
+              !(item.parentId != null && collapsedCategories.has(item.parentId))) {
+            sortableIds.push(item.id);
+          }
+        }
+      }
+    }
+  } else {
+    sortableIds.push(...allItems.map(i => i.id));
+  }
 
-  // Full flat ids for index lookups
-  const ids = allItems.map((item) => item.id);
 
   const toggleCategory = (categoryId: number) => {
     setCollapsedCategories((prev) => {
@@ -172,24 +192,48 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(Number(event.active.id));
     setPendingParentId(null);
+    committedParentIdRef.current = null;
     if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    const overId = event.over ? Number(event.over.id) : null;
+    const rawOverId = event.over?.id;
+    const overId = rawOverId != null && !isGapId(rawOverId) ? Number(rawOverId) : null;
     const overType = overId !== null ? itemTypeMap?.get(overId) : undefined;
 
-    // Cancel any pending reparent timer
-    if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
+    // Resolve the target category: either the hovered category header itself,
+    // or the parent category of the hovered child item (so intent triggers over the whole section area).
+    const overItem = overId !== null ? allItems.find(i => i.id === overId) : null;
+    const targetCategoryId: number | null =
+      overType === "category" ? overId :
+      (overItem?.parentId ?? null);
 
-    if (overType === "category" && overId !== null) {
-      // Start 300ms hover-intent timer — only commit if user holds over the section
-      reparentTimerRef.current = setTimeout(() => {
-        setPendingParentId(overId);
-      }, 300);
-    } else {
-      // Moved away from category — cancel pending reparent
+    // Skip hover-intent if the dragged item is already in this category (reorder, not reparent)
+    const activeItem = activeId !== null ? allItems.find(i => i.id === activeId) : null;
+    const alreadyInSection = targetCategoryId !== null && activeItem?.parentId === targetCategoryId;
+
+    if (targetCategoryId !== null && !alreadyInSection) {
+      // Cancel any previous timer (different category or restart)
+      if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
+      // Already committed to THIS category — nothing to do
+      if (pendingParentId === targetCategoryId) return;
+      // Moving to a different/new category — reset and start new timer
       setPendingParentId(null);
+      const captured = targetCategoryId;
+      reparentTimerRef.current = setTimeout(() => {
+        setPendingParentId(captured);           // visual
+        committedParentIdRef.current = captured; // for handleDragEnd (always fresh)
+        reparentTimerRef.current = null;
+      }, 150);
+    } else {
+      // Moved outside any section (or into own section) — cancel pending intent
+      if (reparentTimerRef.current !== null) {
+        clearTimeout(reparentTimerRef.current);
+        reparentTimerRef.current = null;
+        committedParentIdRef.current = null;
+        setPendingParentId(null);
+      }
+      // If ref is already null, timer already fired and intent is committed — keep pendingParentId
     }
   };
 
@@ -225,41 +269,106 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    // Capture and clear hover-intent state before any returns
     if (reparentTimerRef.current) clearTimeout(reparentTimerRef.current);
-    const committedParentId = pendingParentId;
+    const committedParentId = committedParentIdRef.current; // ref: always fresh, not stale closure
+    committedParentIdRef.current = null;
     setActiveId(null);
     setPendingParentId(null);
 
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id || !onDrop) return;
 
     const activeItemId = Number(active.id);
-    const overItemId = Number(over.id);
     const activeType = itemTypeMap?.get(activeItemId);
+    const activeItem = items.find(i => i.id === activeItemId);
 
-    // Case: Category drag — move category + all children as group
-    if (activeType === "category") {
-      const newOrder = computeCategoryGroupDrop(activeItemId, overItemId);
-      onReorderByIds?.(newOrder);
-      return;
-    }
+    // Helper: splice flat items array to produce new order ids
+    const reorderedIds = (targetId: number): number[] | null => {
+      const oldIndex = allItems.findIndex(i => i.id === activeItemId);
+      const newIndex = allItems.findIndex(i => i.id === targetId);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return null;
+      const next = allItems.map(i => i.id);
+      const [moved] = next.splice(oldIndex, 1);
+      next.splice(newIndex, 0, moved);
+      return next;
+    };
 
-    // Case: Regular item drag — reparent only if hover-intent timer completed
-    if (committedParentId !== null && onReparent) {
-      const activeItem = items.find(i => i.id === activeItemId);
-      const currentParentId = activeItem?.parentId ?? null;
-      if (currentParentId !== committedParentId) {
-        onReparent(activeItemId, committedParentId);
+    // Case: gap drop → place after section, unparent
+    if (isGapId(over.id)) {
+      const catId = catIdFromGap(String(over.id));
+      const group = nestedItems?.find(g => g.category?.id === catId);
+      // Use the last child as anchor, but if that IS the item being dragged
+      // (i.e. it's the only/last item in the section), fall back to the category header.
+      const lastChild = group && group.items.length > 0 ? group.items[group.items.length - 1] : null;
+      const anchorId = (lastChild && lastChild.id !== activeItemId) ? lastChild.id : catId;
+
+      if (activeType === "category") {
+        onDrop(activeItemId, activeItem?.parentId ?? null, computeCategoryGroupDrop(activeItemId, anchorId));
+        return;
+      }
+
+      const withoutActive = allItems.filter(i => i.id !== activeItemId);
+      const anchorIndex = withoutActive.findIndex(i => i.id === anchorId);
+      if (anchorIndex !== -1) {
+        const newOrder = [
+          ...withoutActive.slice(0, anchorIndex + 1).map(i => i.id),
+          activeItemId,
+          ...withoutActive.slice(anchorIndex + 1).map(i => i.id),
+        ];
+        onDrop(activeItemId, null, newOrder);
       }
       return;
     }
 
-    // Default: reorder in place
-    const oldIndex = ids.indexOf(activeItemId);
-    const newIndex = ids.indexOf(overItemId);
-    if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-      onReorder(oldIndex, newIndex);
+    const overItemId = Number(over.id);
+
+    // Case: category group drag
+    if (activeType === "category") {
+      onDrop(activeItemId, activeItem?.parentId ?? null, computeCategoryGroupDrop(activeItemId, overItemId));
+      return;
     }
+
+    // Case: hover-intent reparent → insert at the visual drop position within the section
+    if (committedParentId !== null) {
+      const currentParentId = activeItem?.parentId ?? null;
+      if (currentParentId !== committedParentId) {
+        // Use reorderedIds to honour the exact position where the user dropped
+        const newOrder = reorderedIds(overItemId);
+        if (newOrder) onDrop(activeItemId, committedParentId, newOrder);
+      }
+      return;
+    }
+
+    // Dropped on a category header without hover-intent → place the item before the section (unparented)
+    const overType = itemTypeMap?.get(overItemId);
+    if (overType === "category") {
+      const withoutActive = allItems.filter(i => i.id !== activeItemId);
+      const catIndex = withoutActive.findIndex(i => i.id === overItemId);
+      if (catIndex !== -1 && onDrop) {
+        const newOrder = [
+          ...withoutActive.slice(0, catIndex).map(i => i.id),
+          activeItemId,
+          ...withoutActive.slice(catIndex).map(i => i.id),
+        ];
+        onDrop(activeItemId, null, newOrder);
+      }
+      return;
+    }
+
+    // Determine new parent:
+    //   - dropped onto a top-level item → unparent (drag out of section)
+    //   - dropped onto a child of a DIFFERENT section → reparent to that section
+    //   - otherwise → keep current parent (same-section reorder)
+    const overItem = allItems.find(i => i.id === overItemId);
+    const newParentId: number | null = (() => {
+      if (activeItem?.parentId == null) return null; // was already top-level
+      if (overItem?.parentId == null) return null;   // over a top-level item → unparent
+      if (activeItem.parentId !== overItem.parentId) return overItem.parentId; // cross-section
+      return activeItem.parentId; // same-section reorder
+    })();
+
+    // Default: reorder (includes cross-section reorder)
+    const newOrder = reorderedIds(overItemId);
+    if (newOrder) onDrop(activeItemId, newParentId, newOrder);
   };
 
   /** Render the drag overlay preview */
@@ -274,13 +383,12 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
       const childIds = getDisplayChildIds(activeId);
       const children = items.filter(i => childIds.includes(i.id));
       return (
-        <div className="opacity-90 rounded-lg bg-surface shadow-lg border border-border p-2">
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            <div className="h-px flex-1 bg-amber-300/50" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+        <div className="opacity-90 rounded-lg bg-card shadow-lg border border-border p-2">
+          <div className="flex items-center gap-1.5 rounded-md bg-muted/30 px-2 py-1.5">
+            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
               {activeItem.title}
             </span>
-            <div className="h-px flex-1 bg-amber-300/50" />
           </div>
           {children.length > 0 && (
             <div className="mt-1 space-y-0.5 pl-4">
@@ -339,6 +447,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
         collisionDetection={closestCenter}
         measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
+
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
@@ -351,7 +460,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
                 const isCategoryBeingDragged = categoryId !== null && activeId === categoryId;
 
                 return (
-                  <div key={categoryId ?? `ungrouped-${groupIndex}`}>
+                  <div key={categoryId ?? `ungrouped-${groupIndex}`} className={group.category ? "mt-3 mb-1" : undefined}>
                     {/* Category section divider */}
                     {group.category && (
                       <CategoryDivider
@@ -359,6 +468,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
                         itemCount={group.items.length}
                         isCollapsed={isCollapsed}
                         isPendingDrop={pendingParentId === categoryId}
+                        suppressTransform={activeId !== null && itemTypeMap?.get(activeId) !== "category"}
                         onToggle={() => toggleCategory(categoryId!)}
                         onRemove={() => onRemove(categoryId!)}
                         onRemoveWithItems={() => {
@@ -382,13 +492,18 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
                           isActive={idx === activeItemIndex}
                           onRemove={() => onRemove(item.id)}
                           onProject={onProject ? () => onProject(item) : undefined}
-                          onEditItem={onEditItem}
+                          onOpenEdit={onEditItem ? () => setEditingItem(item) : undefined}
                         />
                       );
                     })}
 
                     {/* Skip indices for collapsed or dragged-category items so activeItemIndex stays consistent */}
                     {(isCollapsed || isCategoryBeingDragged) && (() => { globalIndex += group.items.length; return null; })()}
+
+                    {/* Gap slot: droppable area after the section, allows placing items after it */}
+                    {categoryId !== null && !isCategoryBeingDragged && (
+                      <SortableGap id={`${GAP_PREFIX}${categoryId}`} isDragging={activeId !== null} />
+                    )}
                   </div>
                 );
               })
@@ -402,7 +517,7 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
                   isActive={index === activeItemIndex}
                   onRemove={() => onRemove(item.id)}
                   onProject={onProject ? () => onProject(item) : undefined}
-                  onEditItem={onEditItem}
+                  onOpenEdit={onEditItem ? () => setEditingItem(item) : undefined}
                 />
               ))
             )}
@@ -416,7 +531,33 @@ export function LiturgyItemList({ items, nestedItems, serviceDate, activeItemInd
           document.body,
         )}
       </DndContext>
+
+      {editingItem && (
+        <AddItemModal
+          open={editingItem !== null}
+          onOpenChange={(o) => { if (!o) setEditingItem(null); }}
+          serviceId={serviceId}
+          onAdd={() => {}}
+          editItem={editingItem}
+          onEdit={(id, title, notes) => {
+            onEditItem?.(id, title, notes);
+            setEditingItem(null);
+          }}
+        />
+      )}
     </ScrollArea>
+  );
+}
+
+/** Droppable gap rendered after each section — gives a clear drop target for "insert after section" */
+function SortableGap({ id, isDragging }: { id: string; isDragging: boolean }) {
+  const { setNodeRef, isOver } = useSortable({ id });
+  return (
+    <div ref={setNodeRef} className="h-2 mx-2">
+      {isDragging && isOver && (
+        <div className="h-0.5 w-full rounded-full bg-primary/60" />
+      )}
+    </div>
   );
 }
 
@@ -425,6 +566,7 @@ function CategoryDivider({
   itemCount,
   isCollapsed,
   isPendingDrop = false,
+  suppressTransform = false,
   onToggle,
   onRemove,
   onRemoveWithItems,
@@ -433,6 +575,7 @@ function CategoryDivider({
   itemCount: number;
   isCollapsed: boolean;
   isPendingDrop?: boolean;
+  suppressTransform?: boolean;
   onToggle: () => void;
   onRemove: () => void;
   onRemoveWithItems: () => void;
@@ -451,8 +594,8 @@ function CategoryDivider({
   } = useSortable({ id: category.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: suppressTransform ? undefined : CSS.Transform.toString(transform),
+    transition: suppressTransform ? undefined : transition,
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -464,30 +607,39 @@ function CategoryDivider({
         {...attributes}
         {...listeners}
         className={cn(
-          "group relative my-2 flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 transition-all select-none active:cursor-grabbing",
-          isPendingDrop && "bg-amber-500/10 ring-1 ring-amber-400/50",
+          "group relative flex cursor-grab items-center gap-2 rounded-lg pl-3 pr-2 py-2 transition-all select-none active:cursor-grabbing",
+          isPendingDrop
+            ? "bg-primary/8 ring-1 ring-primary/30"
+            : "bg-muted/40 hover:bg-muted/60",
         )}
       >
-        {/* Visual drag affordance — always present for discoverability */}
+        {/* Left accent bar */}
+        <div className={cn(
+          "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-colors",
+          isPendingDrop ? "bg-primary/60" : "bg-foreground/15 group-hover:bg-foreground/25",
+        )} />
+
+        {/* Drag handle */}
         <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/25 opacity-0 transition-opacity group-hover:opacity-100" />
 
-        {/* Left line */}
-        <div className="h-px flex-1 bg-amber-300/50" />
-
-        {/* Collapse toggle + title — stop pointer propagation so clicks don't trigger drag */}
+        {/* Collapse toggle + title */}
         <button
-          className="flex items-center gap-1.5 px-2 text-amber-600 transition-colors hover:text-amber-700"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground/70 transition-colors hover:text-foreground"
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
           title={isCollapsed ? t("services.categories.expand") : t("services.categories.collapse")}
         >
-          <ChevronIcon className="h-3.5 w-3.5" />
-          <span className="text-xs font-semibold uppercase tracking-wide">{category.title}</span>
+          <ChevronIcon className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate text-xs font-semibold uppercase tracking-wider">{category.title}</span>
         </button>
 
-        {/* Right line */}
-        <div className="h-px flex-1 bg-amber-300/50" />
+        {/* Item count badge */}
+        {itemCount > 0 && (
+          <span className="shrink-0 rounded-full bg-foreground/8 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground/70">
+            {itemCount}
+          </span>
+        )}
 
-        {/* Delete section */}
+        {/* Delete */}
         <button
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 text-muted-foreground/50 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
           onClick={(e) => { e.stopPropagation(); setConfirmOpen(true); }}
@@ -546,7 +698,7 @@ function SortableLiturgyItem({
   isActive,
   onRemove,
   onProject,
-  onEditItem,
+  onOpenEdit,
 }: {
   item: LiturgyItem;
   serviceDate?: string | null;
@@ -554,33 +706,9 @@ function SortableLiturgyItem({
   isActive: boolean;
   onRemove: () => void;
   onProject?: () => void;
-  onEditItem?: (id: number, title: string, notes: string | null) => void;
+  onOpenEdit?: () => void;
 }) {
   const { t } = useTranslation();
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(item.title);
-  const [editNotes, setEditNotes] = useState(item.notes ?? "");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  const handleSaveEdit = () => {
-    if (editTitle.trim() && onEditItem) {
-      onEditItem(item.id, editTitle.trim(), editNotes.trim() || null);
-    }
-    setIsEditing(false);
-  };
-
-  const handleCancelEdit = () => {
-    setEditTitle(item.title);
-    setEditNotes(item.notes ?? "");
-    setIsEditing(false);
-  };
 
   const {
     attributes,
@@ -599,7 +727,6 @@ function SortableLiturgyItem({
 
   const Icon = (itemTypeIcons as Record<string, typeof Music>)[item.itemType] ?? CalendarClock;
   const colorClass = (itemTypeColors as Record<string, string>)[item.itemType] ?? "text-gray-500";
-  const dotColor = (itemTypeDotColors as Record<string, string>)[item.itemType] ?? "bg-gray-500";
   const iconBg = (itemTypeIconBg as Record<string, string>)[item.itemType] ?? "bg-gray-500/10";
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
   const isScheduledCategory = item.itemType === "scheduled_category";
@@ -611,12 +738,19 @@ function SortableLiturgyItem({
       style={style}
       className={cn(
         "group relative flex items-center gap-3 rounded-lg py-2.5 px-3 transition-colors",
-        isChild && "ml-4 border-l-2 border-amber-300/30 pl-3",
+        isChild && "ml-5 pl-3",
         isActive
           ? "bg-primary/10 border border-primary/20"
           : "hover:bg-muted/50",
       )}
     >
+      {/* Left indent connector for child items */}
+      {isChild && (
+        <div className="pointer-events-none absolute -left-5 top-0 bottom-0 flex items-stretch">
+          <div className="w-[2px] self-stretch bg-border/50" />
+        </div>
+      )}
+
       {/* Drag handle — visible on hover */}
       <button
         className="cursor-grab rounded p-0.5 text-muted-foreground/30 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
@@ -625,9 +759,6 @@ function SortableLiturgyItem({
       >
         <GripVertical className="h-4 w-4" />
       </button>
-
-      {/* Colored type dot */}
-      <span className={cn("h-2 w-2 shrink-0 rounded-full", dotColor)} />
 
       {/* Track number */}
       <span className={cn(
@@ -644,49 +775,7 @@ function SortableLiturgyItem({
         <Icon className={cn("h-4 w-4", colorClass)} />
       </span>
 
-      {isEditing ? (
-        <div className="min-w-0 flex-1 space-y-1">
-          {/* Title row with inline save/cancel */}
-          <div className="flex items-center gap-1.5">
-            <input
-              ref={inputRef}
-              className="min-w-0 flex-1 rounded border border-primary/40 bg-muted/30 px-2 py-1 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveEdit();
-                if (e.key === "Escape") handleCancelEdit();
-              }}
-            />
-            <button
-              className="shrink-0 rounded p-1 text-primary transition-colors hover:bg-primary/15"
-              onClick={handleSaveEdit}
-              title={t("actions.save")}
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
-            <button
-              className="shrink-0 rounded p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-              onClick={handleCancelEdit}
-              title={t("actions.cancel")}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          {/* Notes row — lighter visual weight */}
-          <input
-            className="w-full rounded border border-border/40 bg-transparent px-2 py-0.5 text-xs text-muted-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/20"
-            placeholder={t("services.notes")}
-            value={editNotes}
-            onChange={(e) => setEditNotes(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSaveEdit();
-              if (e.key === "Escape") handleCancelEdit();
-            }}
-          />
-        </div>
-      ) : (
-        <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1">
           <p className={cn(
             "truncate text-sm font-medium",
             isActive ? "text-primary" : "text-foreground",
@@ -700,14 +789,20 @@ function SortableLiturgyItem({
             <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60" title={item.notes}>
               {getShortenedPath(item.notes)}
             </p>
-          ) : item.notes ? (
+          ) : item.itemType === "online_video" && item.notes ? (
+            (() => {
+              const sub = getVideoSubtitle(item.notes);
+              return sub ? (
+                <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60">{sub}</p>
+              ) : null;
+            })()
+          ) : item.itemType !== "online_video" && item.notes ? (
             <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">{item.notes}</p>
           ) : null}
-        </div>
-      )}
+      </div>
 
       {/* Action buttons — hover only */}
-      {!isEditing && (
+      {(
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {onProject && (
             <button
@@ -718,10 +813,10 @@ function SortableLiturgyItem({
               <Monitor className="h-4 w-4" />
             </button>
           )}
-          {onEditItem && (
+          {onOpenEdit && (
             <button
               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              onClick={() => setIsEditing(true)}
+              onClick={onOpenEdit}
               title={t("services.editItem")}
             >
               <Pencil className="h-4 w-4" />

@@ -410,3 +410,13 @@ pub fn search_online_playlists(
     let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::online_videos::search_online_playlists(&conn, &query, 8)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn find_online_video_by_yt_id(
+    yt_video_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<OnlineVideo>, AppError> {
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::online_videos::find_video_by_yt_id(&conn, &yt_video_id)
+}

@@ -61,3 +61,7 @@ export async function deleteVideoLocalFile(videoId: string): Promise<void> {
 export async function searchOnlinePlaylists(query: string): Promise<OnlinePlaylistSearchResult[]> {
   return tauriInvoke<OnlinePlaylistSearchResult[]>("search_online_playlists", { query });
 }
+
+export async function findOnlineVideoByYtId(ytVideoId: string): Promise<OnlineVideo | null> {
+  return tauriInvoke<OnlineVideo | null>("find_online_video_by_yt_id", { ytVideoId });
+}

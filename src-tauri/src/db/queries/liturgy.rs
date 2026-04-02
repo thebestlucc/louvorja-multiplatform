@@ -5,7 +5,7 @@ use rusqlite::Connection;
 pub fn get_services(conn: &Connection) -> Result<Vec<Liturgy>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT s.id, s.title, s.date, s.notes, s.created_at, s.updated_at,
-                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id) AS item_count,
+                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id AND si.item_type NOT IN ('hymn', 'category')) AS item_count,
                 (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id AND si.item_type = 'hymn') AS hymn_count,
                 s.week_day
          FROM services s
@@ -34,7 +34,7 @@ pub fn get_services(conn: &Connection) -> Result<Vec<Liturgy>, AppError> {
 pub fn get_service_by_id(conn: &Connection, id: i64) -> Result<Liturgy, AppError> {
     conn.query_row(
         "SELECT s.id, s.title, s.date, s.notes, s.created_at, s.updated_at,
-                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id) AS item_count,
+                (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id AND si.item_type NOT IN ('hymn', 'category')) AS item_count,
                 (SELECT COUNT(*) FROM service_items si WHERE si.service_id = s.id AND si.item_type = 'hymn') AS hymn_count,
                 s.week_day
          FROM services s WHERE s.id = ?1",

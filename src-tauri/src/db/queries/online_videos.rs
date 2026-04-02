@@ -260,6 +260,31 @@ fn build_fts_prefix_query(query: &str) -> Option<String> {
     )
 }
 
+/// Returns the first online_video row matching the given YouTube video_id, if any.
+pub fn find_video_by_yt_id(conn: &Connection, yt_video_id: &str) -> Result<Option<OnlineVideo>, AppError> {
+    use rusqlite::OptionalExtension;
+    conn.query_row(
+        "SELECT id, id_playlist, video_id, sequence, title, description, images, status, error, local_path, duration_seconds
+         FROM online_videos WHERE video_id = ?1 LIMIT 1",
+        params![yt_video_id],
+        |row| Ok(OnlineVideo {
+            id: row.get("id")?,
+            id_playlist: row.get("id_playlist")?,
+            video_id: row.get("video_id")?,
+            sequence: row.get("sequence")?,
+            title: row.get("title")?,
+            description: row.get("description")?,
+            images: row.get("images")?,
+            status: row.get("status")?,
+            error: row.get("error")?,
+            local_path: row.get("local_path")?,
+            duration_seconds: row.get("duration_seconds")?,
+        }),
+    )
+    .optional()
+    .map_err(AppError::Database)
+}
+
 pub fn search_online_playlists(
     conn: &Connection,
     query: &str,

@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Plus, Play, Square, ChevronLeft, ChevronRight, Save, Undo2 } from "lucide-react";
+import { ArrowLeft, Plus, Play, Save, Undo2 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { catcher } from "../../lib/catcher";
 import { useLiturgyEditor } from "../../hooks/use-liturgy";
@@ -8,8 +8,7 @@ import { usePresentationStore } from "../../stores/presentation-store";
 import { useShallow } from "zustand/react/shallow";
 import { setSlideContext } from "../../lib/tauri";
 import { projectSlideWithType } from "../../lib/projection-playback";
-import { stopProjectionAndSongAudio } from "../../lib/projection-control";
-import { getPreference, setPreference, deletePreference } from "../../lib/store";
+import { getPreference, setPreference } from "../../lib/store";
 import { LiturgyItemList } from "../../components/services/service-item-list";
 import { LiturgyTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
@@ -59,6 +58,7 @@ interface PersistedPlayState {
 function LiturgyEditor() {
   const { serviceId } = Route.useParams();
   const { t } = useTranslation();
+  const router = useRouter();
   const id = Number(serviceId);
 
   const {
@@ -68,10 +68,8 @@ function LiturgyEditor() {
     updateMeta,
     addItem,
     removeItem,
-    reorderItems,
-    reorderByIds,
     editItem,
-    reparentItem,
+    dropItem,
   } = useLiturgyEditor({ serviceId: id });
 
   const { data: allServices } = useLiturgies();
@@ -81,14 +79,12 @@ function LiturgyEditor() {
     isPlayingLiturgy,
     activeLiturgyItemIndex,
     setPlayingLiturgy,
-    setActiveLiturgyItemIndex,
   } = usePresentationStore(
     useShallow((s) => ({
       setActiveLiturgy: s.setActiveLiturgy,
       isPlayingLiturgy: s.isPlayingLiturgy,
       activeLiturgyItemIndex: s.activeLiturgyItemIndex,
       setPlayingLiturgy: s.setPlayingLiturgy,
-      setActiveLiturgyItemIndex: s.setActiveLiturgyItemIndex,
     }))
   );
 
@@ -96,10 +92,11 @@ function LiturgyEditor() {
   useEffect(() => {
     setActiveLiturgy(id);
     return () => {
-      setActiveLiturgy(null);
-      setPlayingLiturgy(false);
+      if (!usePresentationStore.getState().isPlayingLiturgy) {
+        setActiveLiturgy(null);
+      }
     };
-  }, [id, setActiveLiturgy, setPlayingLiturgy]);
+  }, [id, setActiveLiturgy]);
 
   // Restore persisted play state on mount
   useEffect(() => {
@@ -256,13 +253,6 @@ function LiturgyEditor() {
     }, { notify: true });
   }, [items]);
 
-  // Play Liturgy: project the active item whenever the index changes
-  useEffect(() => {
-    if (isPlayingLiturgy && activeLiturgyItemIndex >= 0 && activeLiturgyItemIndex < items.length) {
-      projectItem(items[activeLiturgyItemIndex]);
-    }
-  }, [isPlayingLiturgy, activeLiturgyItemIndex, items, projectItem]);
-
   // Persist play state changes
   useEffect(() => {
     if (isPlayingLiturgy) {
@@ -280,29 +270,7 @@ function LiturgyEditor() {
     if (items.length === 0) return;
     setPlayingLiturgy(true);
     setRightTab("timeline");
-  };
-
-  const handleStopLiturgy = () => {
-    setPlayingLiturgy(false);
-    void catcher(deletePreference(PLAY_STATE_KEY));
-  };
-
-  const handleNextItem = () => {
-    if (activeLiturgyItemIndex < items.length - 1) {
-      setActiveLiturgyItemIndex(activeLiturgyItemIndex + 1);
-      return;
-    }
-
-    // End of liturgy timeline: stop playback and clear projection.
-    setPlayingLiturgy(false);
-    void catcher(deletePreference(PLAY_STATE_KEY));
-    void catcher(stopProjectionAndSongAudio(), { notify: true });
-  };
-
-  const handlePrevItem = () => {
-    if (activeLiturgyItemIndex > 0) {
-      setActiveLiturgyItemIndex(activeLiturgyItemIndex - 1);
-    }
+    void router.navigate({ to: "/playing-now" });
   };
 
   if (!service) {
@@ -315,60 +283,6 @@ function LiturgyEditor() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Play Liturgy Banner */}
-      {isPlayingLiturgy && (
-        <div className="flex items-center gap-3 bg-primary px-4 py-2.5 text-primary-foreground">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
-            </span>
-            <span className="text-xs font-bold uppercase tracking-wider">
-              {t("services.liveIndicator")}
-            </span>
-          </div>
-          <span className="text-sm font-semibold">
-            {t("services.playService")}
-          </span>
-          <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium tabular-nums">
-            {t("services.progressOf", {
-              current: activeLiturgyItemIndex + 1,
-              total: items.length,
-            })}
-          </span>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
-              onClick={handlePrevItem}
-              disabled={activeLiturgyItemIndex <= 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
-              onClick={handleNextItem}
-              disabled={items.length === 0}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              className="ml-2 h-7 px-3 text-xs"
-              onClick={handleStopLiturgy}
-            >
-              <Square className="mr-1.5 h-3 w-3" />
-              {t("services.stopService")}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
         <Link to="/services">
@@ -386,7 +300,7 @@ function LiturgyEditor() {
           <CategoryPicker serviceId={id} />
 
           {/* Schedule mode toggle */}
-          <div className="flex items-center gap-0.5 rounded-md border border-border bg-white/4 px-1 py-0.5">
+          <div className="flex items-center gap-0.5 rounded-md border border-border bg-muted px-1 py-0.5">
             <button
               className={cn(
                 "rounded px-2 py-1 text-[11px] font-medium transition-all duration-150",
@@ -464,14 +378,13 @@ function LiturgyEditor() {
           <LiturgyItemList
             items={items}
             nestedItems={nestedItems}
+            serviceId={id}
             serviceDate={service?.date ?? null}
             activeItemIndex={isPlayingLiturgy ? activeLiturgyItemIndex : -1}
             onRemove={removeItem}
-            onReorder={reorderItems}
-            onReorderByIds={reorderByIds}
+            onDrop={dropItem}
             onProject={projectItem}
             onEditItem={editItem}
-            onReparent={reparentItem}
           />
         </div>
 
@@ -598,7 +511,7 @@ function WeekDayPicker({ serviceId, currentWeekDay, allServices, onChange }: Wee
 
   return (
     <>
-      <div className="flex items-center gap-0.5 rounded-md border border-border bg-white/4 px-1.5 py-1">
+      <div className="flex items-center gap-0.5 rounded-md border border-border bg-muted px-1.5 py-1">
         {DAYS.map((day) => {
           const isActive = currentWeekDay === day.value;
           const takenBy = takenByService.get(day.value);
@@ -611,10 +524,10 @@ function WeekDayPicker({ serviceId, currentWeekDay, allServices, onChange }: Wee
               className={cn(
                 "rounded px-1.5 py-0.5 text-[10.5px] font-medium transition-all duration-150",
                 isActive
-                  ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/40"
+                  ? "bg-primary/15 text-primary ring-1 ring-primary/30"
                   : isTaken
                     ? "cursor-not-allowed text-muted-foreground/30"
-                    : "text-muted-foreground/60 hover:bg-white/8 hover:text-foreground",
+                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
               )}
             >
               {day.label}

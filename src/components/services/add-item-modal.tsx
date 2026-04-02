@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useLiturgy } from "../../lib/queries/services";
 import {
   Music,
   BookOpen,
@@ -7,12 +8,12 @@ import {
   StickyNote,
   Link2,
   FileIcon,
-  Video,
   Layers,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { cn } from "../../lib/utils";
-import type { LiturgyItemType } from "../../types/liturgy";
+import type { LiturgyItemType, LiturgyItem } from "../../types/liturgy";
+import { downloadOnlineVideo } from "../../lib/tauri/youtube";
 import {
   HymnForm,
   BibleForm,
@@ -21,7 +22,6 @@ import {
   UrlForm,
   FileForm,
   ScheduledCategoryForm,
-  OnlineVideoForm,
   CategoryForm,
 } from "./add-item-forms";
 
@@ -29,7 +29,9 @@ interface AddItemModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   serviceId: number;
-  onAdd: (itemType: string, title: string, itemId: number | null, notes: string | null) => void;
+  onAdd: (itemType: string, title: string, itemId: number | null, notes: string | null) => Promise<unknown> | void;
+  editItem?: LiturgyItem;
+  onEdit?: (id: number, title: string, notes: string | null) => void;
 }
 
 const TYPES: { type: LiturgyItemType; icon: typeof Music }[] = [
@@ -40,67 +42,115 @@ const TYPES: { type: LiturgyItemType; icon: typeof Music }[] = [
   { type: "annotation", icon: StickyNote },
   { type: "url", icon: Link2 },
   { type: "file", icon: FileIcon },
-  { type: "online_video", icon: Video },
 ];
 
 const DEFAULT_TYPE: LiturgyItemType = "hymn";
 
-export function AddItemModal({ open, onOpenChange, onAdd }: AddItemModalProps) {
+export function AddItemModal({ open, onOpenChange, serviceId, onAdd, editItem, onEdit }: AddItemModalProps) {
   const { t } = useTranslation();
+  const isEditMode = !!editItem;
   const [activeType, setActiveType] = useState<LiturgyItemType>(DEFAULT_TYPE);
+  const { data: liturgyData } = useLiturgy(serviceId);
+  const liturgyItems = liturgyData?.items ?? [];
 
   useEffect(() => {
-    if (!open) setActiveType(DEFAULT_TYPE);
-  }, [open]);
+    if (open && editItem) {
+      // Map online_video back to "url" tab since that's where the URL form lives
+      setActiveType(editItem.itemType === "online_video" ? "url" : editItem.itemType as LiturgyItemType);
+    } else if (!open) {
+      setActiveType(DEFAULT_TYPE);
+    }
+  }, [open, editItem]);
 
-  const handleAdd = (itemType: string, title: string, itemId: number | null, notes: string | null) => {
-    onAdd(itemType, title, itemId, notes);
+  const handleAdd = async (itemType: string, title: string, itemId: number | null, notes: string | null) => {
+    if (isEditMode && editItem && onEdit) {
+      onEdit(editItem.id, title, notes);
+      onOpenChange(false);
+      return;
+    }
+
+    await onAdd(itemType, title, itemId, notes);
     onOpenChange(false);
+
+    // Trigger background download if requested
+    if (itemType === "online_video" && notes) {
+      try {
+        const parsed = JSON.parse(notes) as { videoId?: string; downloadForOffline?: boolean };
+        if (parsed.downloadForOffline && parsed.videoId) {
+          void downloadOnlineVideo(parsed.videoId, "standalone", "720").catch(() => {});
+        }
+      } catch {
+        /* invalid JSON, ignore */
+      }
+    }
   };
+
+  // Extract initial values for forms in edit mode
+  const editInitialUrl = (() => {
+    if (!editItem?.notes) return undefined;
+    if (editItem.itemType === "online_video") {
+      try {
+        const parsed = JSON.parse(editItem.notes) as { videoUrl?: string };
+        return parsed.videoUrl ?? undefined;
+      } catch { return undefined; }
+    }
+    if (editItem.itemType === "url") return editItem.notes;
+    return undefined;
+  })();
+
+  const editInitialFilePath = editItem?.itemType === "file" ? (editItem.notes ?? undefined) : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[75vh] max-w-2xl flex-col gap-0 overflow-hidden bg-card p-0">
+      <DialogContent className="flex max-h-[90vh] max-w-[900px] flex-col gap-0 overflow-hidden bg-surface p-0">
         {/* Header */}
-        <DialogTitle className="border-b border-border px-5 py-3.5 text-sm font-semibold text-foreground">
-          {t("services.addItem")}
+        <DialogTitle className="border-b border-border px-6 py-4 text-base font-semibold text-foreground">
+          {isEditMode ? t("services.editItem") : t("services.addItem")}
         </DialogTitle>
 
         {/* Body: sidebar + content */}
         <div className="flex min-h-0 flex-1">
           {/* Left: type list */}
-          <nav className="flex w-40 flex-shrink-0 flex-col gap-0.5 border-r border-border p-2 overflow-y-auto">
-            {TYPES.map(({ type, icon: Icon }) => (
+          <nav className="flex w-52 flex-shrink-0 flex-col gap-0.5 border-r border-border p-3 overflow-y-auto">
+            {TYPES.map(({ type, icon: Icon }) => {
+              // In edit mode, map online_video to url tab for matching
+              const editMappedType = editItem?.itemType === "online_video" ? "url" : editItem?.itemType;
+              const isDisabled = isEditMode && type !== editMappedType;
+              return (
               <button
                 key={type}
                 type="button"
-                onClick={() => setActiveType(type)}
+                onClick={() => !isDisabled && setActiveType(type)}
+                disabled={isDisabled}
                 className={cn(
-                  "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  "flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  isDisabled
+                    ? "opacity-40 cursor-not-allowed"
+                    : "cursor-pointer",
                   activeType === type
-                    ? "bg-primary/10 font-medium text-primary"
+                    ? "bg-primary/10 font-semibold text-primary"
                     : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                 )}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate text-xs">
+                <span className="truncate text-sm">
                   {t(`services.itemTypes.${type}`)}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </nav>
 
           {/* Right: form */}
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            {activeType === "hymn" && <HymnForm onAdd={handleAdd} />}
-            {activeType === "bible" && <BibleForm onAdd={handleAdd} />}
-            {activeType === "presentation" && <PresentationForm onAdd={handleAdd} />}
-            {activeType === "annotation" && <AnnotationForm onAdd={handleAdd} />}
-            {activeType === "url" && <UrlForm onAdd={handleAdd} />}
-            {activeType === "file" && <FileForm onAdd={handleAdd} />}
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            {activeType === "hymn" && <HymnForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
+            {activeType === "bible" && <BibleForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
+            {activeType === "presentation" && <PresentationForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
+            {activeType === "annotation" && <AnnotationForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} initialNotes={isEditMode ? editItem?.notes : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
+            {activeType === "url" && <UrlForm onAdd={handleAdd} items={liturgyItems} initialUrl={editInitialUrl} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
+            {activeType === "file" && <FileForm onAdd={handleAdd} initialFilePath={editInitialFilePath} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
             {activeType === "scheduled_category" && <ScheduledCategoryForm onAdd={handleAdd} />}
-            {activeType === "online_video" && <OnlineVideoForm onAdd={handleAdd} />}
-            {activeType === "category" && <CategoryForm onAdd={handleAdd} />}
+            {activeType === "category" && <CategoryForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} isEditMode={isEditMode} submitLabel={isEditMode ? t("actions.save") : undefined} />}
           </div>
         </div>
       </DialogContent>

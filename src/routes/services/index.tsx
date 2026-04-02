@@ -346,13 +346,29 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
   const { t } = useTranslation();
   const shortDate = formatShortDate(service.date);
   const hymnCount = service.hymnCount ?? 0;
-  const itemCount = Math.max(0, (service.itemCount ?? 0) - hymnCount);
+  const itemCount = service.itemCount ?? 0;
   const pillColor = getCategoryColor(category);
 
-  const datePill = (
+  const weekDayName = service.weekDay != null
+    ? new Intl.DateTimeFormat("default", { weekday: "long" }).format(
+        new Date(2024, 0, service.weekDay === 0 ? 7 : service.weekDay) // Mon=1…Sun=0→7
+      )
+    : null;
+
+  const datePill = shortDate ? (
     <span className="inline-flex items-center gap-1 rounded border border-border bg-white/6 px-1.5 py-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
       <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
-      {shortDate ?? "—"}
+      {shortDate}
+    </span>
+  ) : weekDayName ? (
+    <span className="inline-flex items-center gap-1 rounded border border-border bg-white/6 px-1.5 py-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
+      <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
+      {t("services.everyWeekDay", { day: weekDayName })}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded border border-dashed border-border/50 px-1.5 py-0.5 text-[11px] text-muted-foreground/40 whitespace-nowrap">
+      <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
+      {t("services.noDate")}
     </span>
   );
 
@@ -421,8 +437,8 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
         className={cn(
           "flex min-w-0 items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2",
           "transition-colors hover:bg-card/70",
-          isFavorite && "border-amber-500/15 bg-amber-500/5",
-          isToday && "border-l-4 border-l-amber-400/70 bg-amber-500/5 hover:bg-amber-500/8",
+          isFavorite && "border-primary/15 bg-primary/5 hover:bg-primary/8",
+          isToday && "border-l-4 border-l-primary/70 bg-primary/5 hover:bg-primary/8",
         )}
       >
         <div className="w-[120px] flex-shrink-0">{datePill}</div>
@@ -445,8 +461,8 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
       className={cn(
         "group flex min-h-[140px] min-w-0 cursor-pointer flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5",
         "transition-all duration-200 hover:-translate-y-0.5 hover:border-border/80 hover:bg-accent/40 hover:shadow-md",
-        isFavorite && "border-amber-500/15 bg-amber-500/5",
-        isToday && "border-l-4 border-l-amber-400/70 bg-amber-500/5 hover:bg-amber-500/8",
+        isFavorite && "border-primary/15 bg-primary/5 hover:bg-primary/8",
+        isToday && "border-l-4 border-l-primary/70 bg-primary/5 hover:bg-primary/8",
       )}
     >
       {/* Top: date + actions */}
@@ -485,12 +501,12 @@ function TodayLiturgySection({ todayLiturgy, view, isFavorite, isFull, category,
 
   return (
     <section className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-1.5 border-b border-amber-500/20 pb-2">
-        <Sun className="h-3 w-3 text-amber-400" />
-        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-400/90">
+      <div className="flex items-center gap-1.5 border-b border-primary/20 pb-2">
+        <Sun className="h-3 w-3 text-primary" />
+        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-primary/90">
           {t("services.todayLiturgy")}
         </span>
-        <span className="text-[10.5px] text-amber-400/50">{todayName}</span>
+        <span className="text-[10.5px] text-primary/50">{todayName}</span>
       </div>
       {todayLiturgy ? (
         <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
@@ -507,12 +523,12 @@ function TodayLiturgySection({ todayLiturgy, view, isFavorite, isFull, category,
           />
         </div>
       ) : (
-        <div className="flex items-center gap-3 rounded-lg border border-dashed border-amber-500/20 bg-amber-500/5 px-4 py-3">
-          <Sun className="h-4 w-4 flex-shrink-0 text-amber-400/40" />
-          <p className="flex-1 text-xs text-amber-400/60">{t("services.todayLiturgyEmpty")}</p>
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-primary/20 bg-primary/5 px-4 py-3">
+          <Sun className="h-4 w-4 flex-shrink-0 text-primary/40" />
+          <p className="flex-1 text-xs text-primary/60">{t("services.todayLiturgyEmpty")}</p>
           <button
             onClick={onCreate}
-            className="flex-shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/20"
+            className="flex-shrink-0 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
           >
             {t("services.new")}
           </button>

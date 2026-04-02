@@ -98,7 +98,7 @@ interface BuildProjectorDefaultSlideArgs {
   };
 }
 
-const EMPTY_SLIDE_PROPS = {
+export const EMPTY_SLIDE_PROPS = {
   text: null,
   title: null,
   subtitle: null,
