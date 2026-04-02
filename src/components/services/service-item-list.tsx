@@ -543,6 +543,7 @@ export function LiturgyItemList({ items, nestedItems, serviceId, serviceDate, ac
             onEditItem?.(id, title, notes);
             setEditingItem(null);
           }}
+          onRemoveItem={onRemove}
         />
       )}
     </ScrollArea>
@@ -642,7 +643,7 @@ function CategoryDivider({
         {/* Delete */}
         <button
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 text-muted-foreground/50 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-          onClick={(e) => { e.stopPropagation(); setConfirmOpen(true); }}
+          onClick={(e) => { e.stopPropagation(); if (itemCount === 0) { onRemove(); } else { setConfirmOpen(true); } }}
           title={t("actions.delete")}
         >
           <Trash2 className="h-3 w-3" />

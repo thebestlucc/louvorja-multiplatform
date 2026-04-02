@@ -8,6 +8,14 @@ import type {
   Hymn,
 } from "../bindings";
 
+export async function countCategoryUsages(title: string): Promise<number> {
+  return tauriInvoke<number>("count_category_usages", { title });
+}
+
+export async function deleteCategoriesByTitle(title: string, keepItems: boolean): Promise<void> {
+  return tauriInvoke<void>("delete_categories_by_title", { title, keepItems });
+}
+
 async function tauriInvoke<T>(
   command: string,
   args?: Record<string, unknown>,

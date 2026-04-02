@@ -7,6 +7,7 @@ import { getPreference, setPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 
 const STORE_KEY = "serviceCategories";
+const RECENT_KEY = "serviceCategoriesRecent";
 
 interface CategoryPickerProps {
   serviceId: number;
@@ -15,14 +16,17 @@ interface CategoryPickerProps {
 
 export function useCategoryStore() {
   const [categories, setCategories] = useState<Record<number, string>>({});
+  const [recentNames, setRecentNames] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const [data] = await catcher(getPreference<Record<number, string>>(STORE_KEY, {}));
-      if (!cancelled && data !== null) {
-        setCategories(data);
+      const [recent] = await catcher(getPreference<string[]>(RECENT_KEY, []));
+      if (!cancelled) {
+        if (data !== null) setCategories(data);
+        if (recent !== null) setRecentNames(recent);
         setLoaded(true);
       }
     })();
@@ -40,6 +44,22 @@ export function useCategoryStore() {
       void catcher(setPreference(STORE_KEY, next));
       return next;
     });
+    if (category) {
+      setRecentNames((prev) => {
+        const filtered = prev.filter((n) => n !== category);
+        const next = [...filtered, category].slice(-20);
+        void catcher(setPreference(RECENT_KEY, next));
+        return next;
+      });
+    }
+  }, []);
+
+  const removeRecentCategory = useCallback((name: string) => {
+    setRecentNames((prev) => {
+      const next = prev.filter((n) => n !== name);
+      void catcher(setPreference(RECENT_KEY, next));
+      return next;
+    });
   }, []);
 
   const getCategory = useCallback(
@@ -48,12 +68,10 @@ export function useCategoryStore() {
   );
 
   const getRecentCategories = useCallback((): string[] => {
-    const vals = Object.values(categories).filter(Boolean);
-    // Deduplicate, most recently added last
-    return [...new Set(vals)].slice(-10);
-  }, [categories]);
+    return [...recentNames].reverse().slice(0, 10);
+  }, [recentNames]);
 
-  return { categories, loaded, setCategory, getCategory, getRecentCategories };
+  return { categories, loaded, setCategory, getCategory, getRecentCategories, removeRecentCategory };
 }
 
 export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
@@ -61,31 +79,19 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const { getCategory, setCategory, getRecentCategories } = useCategoryStore();
+  const { getCategory, setCategory, getRecentCategories, removeRecentCategory } = useCategoryStore();
 
   const currentCategory = getCategory(serviceId);
   const recentCategories = getRecentCategories();
 
-  const defaultSuggestions = [
-    t("services.defaultCategories.sundayService"),
-    t("services.defaultCategories.praiseReunion"),
-    t("services.defaultCategories.thursdayService"),
-    t("services.defaultCategories.retreat"),
-    t("services.defaultCategories.conference"),
-    t("services.defaultCategories.youthService"),
-    t("services.defaultCategories.childrenService"),
-  ];
-
-  // All suggestions: recent first, then defaults (deduped)
-  const allSuggestions = [...new Set([...recentCategories, ...defaultSuggestions])];
   const filteredSuggestions = inputValue
-    ? allSuggestions.filter((s) => s.toLowerCase().includes(inputValue.toLowerCase()))
-    : allSuggestions;
+    ? recentCategories.filter((s) => s.toLowerCase().includes(inputValue.toLowerCase()))
+    : recentCategories;
 
   // Show "Create" option when typed value doesn't exactly match any suggestion
   const trimmedInput = inputValue.trim();
   const showCreateOption = trimmedInput.length > 0 &&
-    !allSuggestions.some((s) => s.toLowerCase() === trimmedInput.toLowerCase());
+    !recentCategories.some((s) => s.toLowerCase() === trimmedInput.toLowerCase());
 
   const handleSelect = useCallback(
     (category: string) => {
@@ -164,19 +170,33 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
             {filteredSuggestions.length > 0 ? (
               <div className="flex flex-col gap-0.5">
                 {filteredSuggestions.map((suggestion) => (
-                  <button
+                  <div
                     key={suggestion}
-                    type="button"
-                    onClick={() => handleSelect(suggestion)}
-                    className={cn(
-                      "w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-hover",
-                      suggestion === currentCategory
-                        ? "font-semibold text-primary"
-                        : "text-foreground",
-                    )}
+                    className="group flex items-center gap-1"
                   >
-                    {suggestion}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelect(suggestion)}
+                      className={cn(
+                        "flex-1 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-hover",
+                        suggestion === currentCategory
+                          ? "font-semibold text-primary"
+                          : "text-foreground",
+                      )}
+                    >
+                      {suggestion}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeRecentCategory(suggestion);
+                      }}
+                      className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             ) : !showCreateOption ? (

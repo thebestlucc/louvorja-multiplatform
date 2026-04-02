@@ -134,6 +134,8 @@ pub fn run() {
             commands::liturgy::update_service_item,
             commands::liturgy::set_service_week_day,
             commands::liturgy::move_service_item_to_parent,
+            commands::liturgy::delete_categories_by_title,
+            commands::liturgy::count_category_usages,
             // Media Library
             commands::media_library::get_media_library_categories,
             commands::media_library::upsert_media_library_category,

@@ -32,6 +32,7 @@ interface AddItemModalProps {
   onAdd: (itemType: string, title: string, itemId: number | null, notes: string | null) => Promise<unknown> | void;
   editItem?: LiturgyItem;
   onEdit?: (id: number, title: string, notes: string | null) => void;
+  onRemoveItem?: (id: number) => void;
 }
 
 const TYPES: { type: LiturgyItemType; icon: typeof Music }[] = [
@@ -46,7 +47,7 @@ const TYPES: { type: LiturgyItemType; icon: typeof Music }[] = [
 
 const DEFAULT_TYPE: LiturgyItemType = "hymn";
 
-export function AddItemModal({ open, onOpenChange, serviceId, onAdd, editItem, onEdit }: AddItemModalProps) {
+export function AddItemModal({ open, onOpenChange, serviceId, onAdd, editItem, onEdit, onRemoveItem: _onRemoveItem }: AddItemModalProps) {
   const { t } = useTranslation();
   const isEditMode = !!editItem;
   const [activeType, setActiveType] = useState<LiturgyItemType>(DEFAULT_TYPE);
@@ -150,7 +151,7 @@ export function AddItemModal({ open, onOpenChange, serviceId, onAdd, editItem, o
             {activeType === "url" && <UrlForm onAdd={handleAdd} items={liturgyItems} initialUrl={editInitialUrl} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
             {activeType === "file" && <FileForm onAdd={handleAdd} initialFilePath={editInitialFilePath} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} />}
             {activeType === "scheduled_category" && <ScheduledCategoryForm onAdd={handleAdd} />}
-            {activeType === "category" && <CategoryForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} isEditMode={isEditMode} submitLabel={isEditMode ? t("actions.save") : undefined} />}
+            {activeType === "category" && <CategoryForm onAdd={handleAdd} initialTitle={isEditMode ? editItem?.title : undefined} submitLabel={isEditMode ? t("actions.save") : undefined} existingCategories={!isEditMode ? liturgyItems.filter(i => i.itemType === "category").map(i => ({ id: i.id, title: i.title })) : undefined} />}
           </div>
         </div>
       </DialogContent>
