@@ -9,6 +9,7 @@ interface PresentationState {
   activeLiturgyId: number | null;
   isPlayingLiturgy: boolean;
   activeLiturgyItemIndex: number;
+  liturgyItemsCount: number;
   currentVideoProjectionId: string | null;
   setCurrentPresentation: (id: number | null) => void;
   setActiveSlideIndex: (index: number) => void;
@@ -17,6 +18,7 @@ interface PresentationState {
   setActiveLiturgy: (id: number | null) => void;
   setPlayingLiturgy: (playing: boolean) => void;
   setActiveLiturgyItemIndex: (index: number) => void;
+  setLiturgyItemsCount: (count: number) => void;
   setCurrentVideoProjectionId: (id: string | null) => void;
 
   // Backward-compatible aliases (deprecated)
@@ -54,6 +56,7 @@ export const usePresentationStore = create<PresentationState>((set) => {
     activeLiturgyId: null,
     isPlayingLiturgy: false,
     activeLiturgyItemIndex: -1,
+    liturgyItemsCount: 0,
     currentVideoProjectionId: null,
     setCurrentPresentation: (id) => set({ currentPresentationId: id }),
     setActiveLiturgy,
@@ -62,6 +65,7 @@ export const usePresentationStore = create<PresentationState>((set) => {
     setActiveSlideIndex: (index) => set({ activeSlideIndex: index }),
     setProjectorOpen: (open) => set({ isProjectorOpen: open }),
     setSlides: (slides) => set({ slides, activeSlideIndex: 0 }),
+    setLiturgyItemsCount: (count) => set({ liturgyItemsCount: count }),
     setCurrentVideoProjectionId: (id) => set({ currentVideoProjectionId: id }),
 
     // Backward-compatible aliases

@@ -1440,6 +1440,14 @@ async searchOnlinePlaylists(query: string) : Promise<Result<OnlinePlaylistSearch
     else return { status: "error", error: e  as any };
 }
 },
+async findOnlineVideoByYtId(ytVideoId: string) : Promise<Result<OnlineVideo | null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("find_online_video_by_yt_id", { ytVideoId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async startVideoServer() : Promise<Result<VideoServerInfo, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("start_video_server") };

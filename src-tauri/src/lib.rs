@@ -259,6 +259,7 @@ pub fn run() {
             commands::youtube::cancel_download,
             // Online Playlists search
             commands::youtube::search_online_playlists,
+            commands::youtube::find_online_video_by_yt_id,
             // Video Server
             commands::video_server::start_video_server,
             commands::video_server::get_video_server_status,

@@ -70,7 +70,7 @@ export function useLiturgyEditor({ serviceId }: UseLiturgyEditorOptions) {
 
   const addItem = useCallback(
     (itemType: string, title: string, itemId: number | null, notes: string | null, parentId?: number | null) => {
-      addItemMutation.mutate({ serviceId, itemType, title, itemId, notes, parentId });
+      return addItemMutation.mutateAsync({ serviceId, itemType, title, itemId, notes, parentId });
     },
     [serviceId, addItemMutation],
   );
@@ -80,6 +80,26 @@ export function useLiturgyEditor({ serviceId }: UseLiturgyEditorOptions) {
       reparentItemMutation.mutate({ id: itemId, serviceId, parentId });
     },
     [serviceId, reparentItemMutation],
+  );
+
+  /**
+   * Single drag-drop handler: updates parentId (if changed) then reorders.
+   * Reparent runs first; reorder fires in onSuccess to avoid racing on the same query.
+   */
+  const dropItem = useCallback(
+    (itemId: number, newParentId: number | null, newOrderIds: number[]) => {
+      const currentItem = items.find(i => i.id === itemId);
+      const parentChanged = (currentItem?.parentId ?? null) !== newParentId;
+      if (parentChanged) {
+        reparentItemMutation.mutate(
+          { id: itemId, serviceId, parentId: newParentId },
+          { onSuccess: () => reorderMutation.mutate({ serviceId, itemIds: newOrderIds }) },
+        );
+      } else {
+        reorderMutation.mutate({ serviceId, itemIds: newOrderIds });
+      }
+    },
+    [items, serviceId, reparentItemMutation, reorderMutation],
   );
 
   const removeItem = useCallback(
@@ -125,6 +145,7 @@ export function useLiturgyEditor({ serviceId }: UseLiturgyEditorOptions) {
     reorderByIds,
     editItem,
     reparentItem,
+    dropItem,
   };
 }
 

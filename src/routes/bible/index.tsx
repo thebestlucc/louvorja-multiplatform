@@ -11,7 +11,7 @@ import {
   ProjectionSettings,
   useProjectionSettings,
 } from "../../components/bible/projection-settings";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
+import { BibleVersionCombobox } from "../../components/bible/bible-version-combobox";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Link } from "@tanstack/react-router";
@@ -465,21 +465,12 @@ function BibleIndex() {
         <div className="flex items-center gap-2 flex-1 justify-end">
           {/* Version Selector */}
           {bible.versions.length > 0 && (
-            <Select
-              value={String(bible.currentVersionId)}
-              onValueChange={(val) => bible.setVersion(Number(val))}
-            >
-              <SelectTrigger className="w-48 sm:w-60 h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {bible.versions.map((v) => (
-                  <SelectItem key={v.id} value={String(v.id)}>
-                    {v.abbreviation} -- {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <BibleVersionCombobox
+              versions={bible.versions}
+              value={bible.currentVersionId ?? 0}
+              onValueChange={(id) => bible.setVersion(id)}
+              triggerClassName="w-48 sm:w-64 h-8 text-sm"
+            />
           )}
 
           {/* Projection settings toggle */}

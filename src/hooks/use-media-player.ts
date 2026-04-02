@@ -124,8 +124,15 @@ export function useMediaPlayer() {
     }
     void useAudioStore.getState().stop();
     void clearCurrentSlide();
-    store.getState().stop();
 
+    const pStore = usePresentationStore.getState();
+    if (pStore.isPlayingLiturgy) {
+      pStore.setPlayingLiturgy(false);
+      store.getState().unload();
+      return;
+    }
+
+    store.getState().stop();
     const queueState = useQueueStore.getState();
     if (queueState.items.length <= 1) {
       queueState.clearQueue();
@@ -207,11 +214,28 @@ export function useMediaPlayer() {
   }, [goToSlide]);
 
   const nextItem = useCallback(() => {
+    const pStore = usePresentationStore.getState();
+    if (pStore.isPlayingLiturgy) {
+      if (pStore.activeLiturgyItemIndex < pStore.liturgyItemsCount - 1) {
+        pStore.setActiveLiturgyItemIndex(pStore.activeLiturgyItemIndex + 1);
+      } else {
+        pStore.setPlayingLiturgy(false);
+        store.getState().unload();
+      }
+      return;
+    }
     useQueueStore.getState().next();
   }, []);
 
   const prevItem = useCallback(() => {
-    useQueueStore.getState().prev();
+    const pStore = usePresentationStore.getState();
+    if (pStore.isPlayingLiturgy && pStore.activeLiturgyItemIndex > 0) {
+      pStore.setActiveLiturgyItemIndex(pStore.activeLiturgyItemIndex - 1);
+      return;
+    }
+    if (!pStore.isPlayingLiturgy) {
+      useQueueStore.getState().prev();
+    }
   }, []);
 
   const switchMode = useCallback(async (mode: "sung" | "karaoke" | "silent") => {

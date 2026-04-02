@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft } from "lucide-react";
 import { useBibleVersions, useBooks, useVerses } from "../../../lib/queries";
 import { Button } from "../../ui/button";
 import { ScrollArea } from "../../ui/scroll-area";
+import { BibleVersionCombobox } from "../../bible/bible-version-combobox";
 import { cn } from "../../../lib/utils";
 import type { BibleVersion, Book, Verse } from "../../../lib/bindings";
 import type { AddItemOnAdd } from "./types";
 
-export function BibleForm({ onAdd }: { onAdd: AddItemOnAdd }) {
+export function BibleForm({ onAdd, initialTitle: _initialTitle, submitLabel }: { onAdd: AddItemOnAdd; initialTitle?: string; submitLabel?: string }) {
   const { t } = useTranslation();
   const [versionId, setVersionId] = useState(0);
   const [book, setBook] = useState("");
@@ -47,110 +47,184 @@ export function BibleForm({ onAdd }: { onAdd: AddItemOnAdd }) {
     onAdd("bible", title, null, verseTexts || null);
   };
 
-  const handleBack = () => {
-    if (chapter > 0) { setChapter(0); setSelectedVerses([]); }
-    else if (book) { setBook(""); }
+  const handleBookSelect = (b: string) => {
+    setBook(b);
+    setChapter(0);
+    setSelectedVerses([]);
   };
+
+  const handleVersionSelect = (id: number) => {
+    setVersionId(id);
+    setBook("");
+    setChapter(0);
+    setSelectedVerses([]);
+  };
+
+  const handleChapterSelect = (ch: number) => {
+    setChapter(ch);
+    setSelectedVerses([]);
+  };
+
+  const selectedVerseSet = new Set(selectedVerses);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Version buttons */}
+      {/* Version selector */}
       {versions && versions.length > 1 && (
-        <div className="flex gap-1.5">
-          {versions.map((v: BibleVersion) => (
-            <Button
-              key={v.id}
-              variant={v.id === versionId ? "default" : "outline"}
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => { setVersionId(v.id); setBook(""); setChapter(0); setSelectedVerses([]); }}
-            >
-              {v.abbreviation}
-            </Button>
-          ))}
+        <div className="flex items-center gap-2">
+          <label className="shrink-0 text-xs font-medium text-muted-foreground">
+            {t("bible.version", "Versão")}
+          </label>
+          <BibleVersionCombobox
+            versions={versions}
+            value={versionId}
+            onValueChange={handleVersionSelect}
+            triggerClassName="flex-1 h-8 text-xs"
+          />
         </div>
       )}
 
-      {/* Breadcrumb */}
-      {book && (
-        <div className="flex items-center gap-1.5 text-xs">
-          <button onClick={handleBack} className="cursor-pointer rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <span className="font-medium">{book}</span>
-          {chapter > 0 && <span className="text-muted-foreground">{chapter}</span>}
-          {selectedVerses.length > 0 && (
-            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-              {selectedVerses.length} {t("bible.verses").toLowerCase()}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Three-column navigator */}
+      <div className="flex h-[380px] overflow-hidden rounded-lg border border-border">
 
-      {/* Book list */}
-      {!book && (
-        <ScrollArea className="h-56">
-          <div className="grid grid-cols-3 gap-1">
-            {(books ?? []).map((b: Book) => (
-              <button
-                key={b.name}
-                className="cursor-pointer truncate rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-hover"
-                onClick={() => setBook(b.name)}
-              >
-                {b.name}
-              </button>
-            ))}
+        {/* Column 1: Book list */}
+        <div className="flex w-44 flex-shrink-0 flex-col border-r border-border">
+
+          {/* Column header */}
+          <div className="shrink-0 border-b border-border px-3 py-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("bible.book", "Livro")}
+            </p>
           </div>
-        </ScrollArea>
-      )}
 
-      {/* Chapter grid */}
-      {book && chapter === 0 && currentBook && (
-        <ScrollArea className="h-56">
-          <div className="grid grid-cols-8 gap-1.5">
-            {Array.from({ length: currentBook.chapterCount }, (_, i) => i + 1).map((ch) => (
-              <button
-                key={ch}
-                className="flex h-8 cursor-pointer items-center justify-center rounded-md border border-border text-xs font-medium transition-colors hover:bg-surface-hover"
-                onClick={() => setChapter(ch)}
-              >
-                {ch}
-              </button>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-
-      {/* Verse picker */}
-      {book && chapter > 0 && (
-        <>
-          <ScrollArea className="h-44">
-            {(() => {
-              const selectedVerseSet = new Set(selectedVerses);
-              return (
-            <div className="grid grid-cols-8 gap-1.5">
-              {(verses ?? []).map((v: Verse) => (
+          <ScrollArea className="flex-1">
+            <div className="flex flex-col gap-px p-1.5">
+              {(books ?? []).map((b: Book) => (
                 <button
-                  key={v.verse}
+                  key={b.name}
+                  onClick={() => handleBookSelect(b.name)}
                   className={cn(
-                    "flex h-7 cursor-pointer items-center justify-center rounded-md text-xs font-medium transition-colors duration-150",
-                    selectedVerseSet.has(v.verse)
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-border hover:bg-surface-hover",
+                    "rounded px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                    book === b.name
+                      ? "bg-primary/10 text-primary"
+                      : "text-foreground hover:bg-surface-hover",
                   )}
-                  onClick={() => toggleVerse(v.verse)}
                 >
-                  {v.verse}
+                  {b.name}
                 </button>
               ))}
             </div>
-              );
-            })()}
           </ScrollArea>
-          <Button size="sm" disabled={selectedVerses.length === 0} onClick={handleAdd}>
-            {t("actions.add")}
-          </Button>
-        </>
+        </div>
+
+        {/* Column 2: Chapter grid */}
+        <div className={cn(
+          "flex w-36 flex-shrink-0 flex-col border-r border-border transition-opacity",
+          !book && "pointer-events-none opacity-40",
+        )}>
+          <div className="shrink-0 border-b border-border px-3 py-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("bible.chapter", "Capítulo")}
+            </p>
+          </div>
+
+          <ScrollArea className="flex-1">
+            {currentBook ? (
+              <div className="grid grid-cols-4 gap-1 p-2">
+                {Array.from({ length: currentBook.chapterCount }, (_, i) => i + 1).map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => handleChapterSelect(ch)}
+                    className={cn(
+                      "flex h-8 cursor-pointer items-center justify-center rounded text-xs font-medium transition-colors",
+                      chapter === ch
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border hover:bg-surface-hover",
+                    )}
+                  >
+                    {ch}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center p-4">
+                <p className="text-center text-xs text-muted-foreground">
+                  {t("bible.selectBook", "Selecione um livro")}
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+
+        {/* Column 3: Verse picker + Add footer */}
+        <div className={cn(
+          "flex flex-1 flex-col transition-opacity",
+          !chapter && "pointer-events-none opacity-40",
+        )}>
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("bible.verse", "Versículo")}
+            </p>
+            {selectedVerses.length > 0 && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                {selectedVerses.length}×
+              </span>
+            )}
+          </div>
+
+          <ScrollArea className="flex-1">
+            {chapter > 0 ? (
+              <div className="grid grid-cols-5 gap-1 p-2">
+                {(verses ?? []).map((v: Verse) => (
+                  <button
+                    key={v.verse}
+                    onClick={() => toggleVerse(v.verse)}
+                    className={cn(
+                      "flex h-8 cursor-pointer items-center justify-center rounded text-xs font-medium transition-colors duration-100",
+                      selectedVerseSet.has(v.verse)
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border hover:bg-surface-hover",
+                    )}
+                  >
+                    {v.verse}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center p-4">
+                <p className="text-center text-xs text-muted-foreground">
+                  {t("bible.selectChapter", "Selecione um capítulo")}
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+
+          {/* Add button pinned to bottom of column 3 */}
+          <div className="shrink-0 border-t border-border p-2">
+            <Button
+              className="w-full"
+              size="sm"
+              disabled={selectedVerses.length === 0}
+              onClick={handleAdd}
+            >
+              {selectedVerses.length > 0
+                ? `${submitLabel ?? t("actions.add")} (${book} ${chapter}:${(() => {
+                    const s = selectedVerses;
+                    return s.length === 1 ? s[0] : `${s[0]}–${s[s.length - 1]}`;
+                  })()})`
+                : (submitLabel ?? t("actions.add"))}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Selection summary */}
+      {selectedVerses.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{book} {chapter}:{selectedVerses.length === 1 ? selectedVerses[0] : `${selectedVerses[0]}–${selectedVerses[selectedVerses.length - 1]}`}</span>
+          {currentVersion && <span> ({currentVersion.abbreviation})</span>}
+          {" — "}{selectedVerses.length} {t("bible.verses").toLowerCase()}
+        </p>
       )}
     </div>
   );

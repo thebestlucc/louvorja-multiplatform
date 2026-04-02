@@ -7,9 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { LibraryBrowser } from "../../media/library-browser";
 import type { AddItemOnAdd } from "./types";
 
-export function FileForm({ onAdd }: { onAdd: AddItemOnAdd }) {
+export function FileForm({ onAdd, initialFilePath, initialTitle: _initialTitle, submitLabel }: { onAdd: AddItemOnAdd; initialFilePath?: string; initialTitle?: string; submitLabel?: string }) {
   const { t } = useTranslation();
-  const [filePath, setFilePath] = useState("");
+  const [filePath, setFilePath] = useState(initialFilePath ?? "");
 
   const handleBrowse = async () => {
     const selected = await openFileDialog({ multiple: false });
@@ -25,15 +25,15 @@ export function FileForm({ onAdd }: { onAdd: AddItemOnAdd }) {
         <TabsTrigger value="library">{t("services.fileTabs.library", "Library")}</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="upload" className="flex flex-col gap-3">
+      <TabsContent value="upload" className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <Input readOnly placeholder={t("services.filePlaceholder")} value={filePath} className="flex-1" />
-          <Button size="sm" variant="outline" onClick={handleBrowse}>
+          <Button variant="outline" onClick={handleBrowse}>
             {t("services.browse")}
           </Button>
         </div>
-        <Button size="sm" disabled={filePath.length === 0} onClick={() => onAdd("file", fileName, null, filePath)}>
-          {t("actions.add")}
+        <Button disabled={filePath.length === 0} onClick={() => onAdd("file", fileName, null, filePath)}>
+          {submitLabel ?? t("actions.add")}
         </Button>
       </TabsContent>
 

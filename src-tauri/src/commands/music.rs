@@ -105,10 +105,24 @@ pub fn search_all_hymns(
 #[tauri::command]
 #[specta::specta]
 pub fn search_all_music(
+    app: tauri::AppHandle,
     query: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Hymn>, AppError> {
+    use tauri::Manager;
     let conn = state.db.get()?;
+
+    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+        let hymns =
+            crate::db::queries::music::search_all_music_content_db(&content_conn, &query, &lang)?;
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        return Ok(resolve_hymn_paths(hymns, &app_data));
+    }
+
+    // Fallback to main DB
     crate::db::queries::music::search_all_music(&conn, &query)
 }
 

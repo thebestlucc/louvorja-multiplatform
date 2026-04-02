@@ -50,11 +50,12 @@ function PlayingNowScreen() {
   // (e.g. when projecting a standalone presentation without going through the queue)
   const presentationSlides = usePresentationStore((s) => s.slides);
   const presentationActiveIndex = usePresentationStore((s) => s.activeSlideIndex);
+  const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);
   const effectiveSlides = slides.length > 0 ? slides : presentationSlides;
   const effectiveActiveIndex = slides.length > 0 ? activeSlideIndex : presentationActiveIndex;
 
   const currentSlide = effectiveSlides[effectiveActiveIndex] ?? null;
-  const showSlides = currentItem ? mediaHasSlides(currentItem) : effectiveSlides.length > 0;
+  const showSlides = currentItem ? mediaHasSlides(currentItem) : effectiveSlides.length > 0 || isPlayingLiturgy;
   const currentMode = currentItem?.type === "hymn" ? currentItem.mode : undefined;
 
   return (
