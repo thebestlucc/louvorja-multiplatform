@@ -449,6 +449,7 @@ function LiturgyEditor() {
         onOpenChange={setAddModalOpen}
         serviceId={id}
         onAdd={addItem}
+        onRemoveItem={removeItem}
       />
     </div>
   );

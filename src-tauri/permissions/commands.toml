@@ -204,7 +204,9 @@ allow = [
     "cancel_pack_sync",
     "clear_manifest_cache",
     "set_service_week_day",
-    "move_service_item_to_parent"
+    "move_service_item_to_parent",
+    "count_category_usages",
+    "delete_categories_by_title"
 ]
 
 [[permission]]

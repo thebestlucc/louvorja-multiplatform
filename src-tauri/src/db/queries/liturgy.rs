@@ -323,3 +323,34 @@ pub fn move_service_item_to_parent(
     }
     Ok(())
 }
+
+/// Deletes all category items with matching title (case-insensitive) across all liturgies.
+/// If `keep_items` is true, child items are unparented (set parent_id = NULL).
+/// If `keep_items` is false, child items are deleted along with the category.
+pub fn delete_categories_by_title(conn: &Connection, title: &str, keep_items: bool) -> Result<(), AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM service_items WHERE item_type = 'category' AND LOWER(title) = LOWER(?1)"
+    )?;
+    let ids: Vec<i64> = stmt.query_map(rusqlite::params![title], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<i64>>>()?;
+
+    for id in ids {
+        if keep_items {
+            conn.execute("UPDATE service_items SET parent_id = NULL WHERE parent_id = ?1", rusqlite::params![id])?;
+        } else {
+            conn.execute("DELETE FROM service_items WHERE parent_id = ?1", rusqlite::params![id])?;
+        }
+        conn.execute("DELETE FROM service_items WHERE id = ?1", rusqlite::params![id])?;
+    }
+    Ok(())
+}
+
+/// Returns the number of liturgy items with item_type='category' and matching title (case-insensitive).
+pub fn count_category_usages(conn: &Connection, title: &str) -> Result<i64, AppError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM service_items WHERE item_type = 'category' AND LOWER(title) = LOWER(?1)",
+        rusqlite::params![title],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}

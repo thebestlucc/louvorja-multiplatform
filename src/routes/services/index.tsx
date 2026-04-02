@@ -438,7 +438,7 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
           "flex min-w-0 items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2",
           "transition-colors hover:bg-card/70",
           isFavorite && "border-primary/15 bg-primary/5 hover:bg-primary/8",
-          isToday && "border-l-4 border-l-primary/70 bg-primary/5 hover:bg-primary/8",
+          isToday && "border-primary/25 bg-gradient-to-r from-primary/8 to-transparent hover:from-primary/12",
         )}
       >
         <div className="w-[120px] flex-shrink-0">{datePill}</div>
@@ -462,9 +462,12 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
         "group flex min-h-[140px] min-w-0 cursor-pointer flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5",
         "transition-all duration-200 hover:-translate-y-0.5 hover:border-border/80 hover:bg-accent/40 hover:shadow-md",
         isFavorite && "border-primary/15 bg-primary/5 hover:bg-primary/8",
-        isToday && "border-l-4 border-l-primary/70 bg-primary/5 hover:bg-primary/8",
+        isToday && "relative overflow-hidden border-primary/25 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent shadow-sm hover:shadow-md hover:from-primary/14",
       )}
     >
+      {isToday && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary/80 via-primary/40 to-transparent" />
+      )}
       {/* Top: date + actions */}
       <div className="flex items-start justify-between gap-1.5">
         {datePill}

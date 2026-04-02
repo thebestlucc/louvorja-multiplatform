@@ -524,6 +524,22 @@ async moveServiceItemToParent(id: number, parentId: number | null) : Promise<Res
     else return { status: "error", error: e  as any };
 }
 },
+async deleteCategoriesByTitle(title: string, keepItems: boolean) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_categories_by_title", { title, keepItems }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async countCategoryUsages(title: string) : Promise<Result<number, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("count_category_usages", { title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getMediaLibraryCategories(language: string) : Promise<Result<MediaLibraryCategory[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_media_library_categories", { language }) };

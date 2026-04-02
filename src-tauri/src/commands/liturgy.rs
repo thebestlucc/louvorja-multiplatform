@@ -197,3 +197,32 @@ pub fn move_service_item_to_parent(
     let conn = conn.unwrap();
     crate::db::queries::liturgy::move_service_item_to_parent(&conn, id, parent_id)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn delete_categories_by_title(
+    title: String,
+    keep_items: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::liturgy::delete_categories_by_title(&conn, &title, keep_items)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn count_category_usages(
+    title: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<i64, AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::liturgy::count_category_usages(&conn, &title)
+}
