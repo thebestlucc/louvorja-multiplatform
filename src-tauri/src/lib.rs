@@ -121,6 +121,10 @@ pub fn run() {
             commands::slides::reorder_slides,
             commands::slides::import_slja,
             commands::slides::export_slja,
+            commands::slides::update_slide_notes,
+            commands::slides::update_slide_transition,
+            commands::slides::import_pptx,
+            commands::slides::export_pptx,
             // Liturgy
             commands::liturgy::get_services,
             commands::liturgy::get_service,
@@ -262,6 +266,8 @@ pub fn run() {
             // Online Playlists search
             commands::youtube::search_online_playlists,
             commands::youtube::find_online_video_by_yt_id,
+            commands::youtube::create_custom_playlist,
+            commands::youtube::update_online_playlist_cover,
             // Video Server
             commands::video_server::start_video_server,
             commands::video_server::get_video_server_status,

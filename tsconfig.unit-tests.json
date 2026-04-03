@@ -31,6 +31,7 @@
     "tests/stores/audio-store.test.ts",
     "tests/stores/video-player-store.test.ts",
     "tests/components/playing-queue.test.tsx",
+    "tests/asset-url.test.ts",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
@@ -50,6 +51,7 @@
     "src/stores/video-player-store.ts",
     "src/components/operator/playing-queue.tsx",
     "src/components/ui/button.tsx",
-    "src/lib/utils.ts"
+    "src/lib/utils.ts",
+    "src/lib/asset-url.ts"
   ]
 }

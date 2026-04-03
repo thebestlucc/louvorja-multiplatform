@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Plus, Upload, MoreVertical, Trash2, Download, Presentation as PresentationIcon, Search } from "lucide-react";
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { usePresentations, useCreatePresentation, useDeletePresentation, useImportSlja, useExportSlja } from "../../lib/queries";
+import { usePresentations, useCreatePresentation, useDeletePresentation, useImportSlja, useExportSlja, useImportPptx } from "../../lib/queries";
+import { notify } from "../../lib/notifications";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
@@ -29,6 +30,7 @@ function PresentationsIndex() {
   const createMutation = useCreatePresentation();
   const deleteMutation = useDeletePresentation();
   const importMutation = useImportSlja();
+  const importPptxMutation = useImportPptx();
   const exportMutation = useExportSlja();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -48,11 +50,19 @@ function PresentationsIndex() {
     const selected = await open({
       multiple: false,
       filters: [
-        { name: "Presentations", extensions: ["slja", "pptx"] },
+        { name: "Presentations", extensions: ["slja", "pptx", "ppt"] },
       ],
     });
     if (selected && !Array.isArray(selected)) {
-      const result = await importMutation.mutateAsync(selected);
+      const isPptx = /\.pptx?$/i.test(selected);
+      const mutation = isPptx ? importPptxMutation : importMutation;
+      const result = await mutation.mutateAsync(selected);
+      const filename = selected.split(/[\\/]/).pop() ?? selected;
+      notify.success(
+        isPptx
+          ? t("presentations.importSuccess", { count: 0, filename })
+          : t("presentations.importSuccess", { count: 0, filename }),
+      );
       navigate({ to: "/presentations/$presentationId", params: { presentationId: String(result.id) } });
     }
   };
@@ -86,9 +96,16 @@ function PresentationsIndex() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleImport}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleImport}
+            disabled={importMutation.isPending || importPptxMutation.isPending}
+          >
             <Upload className="mr-2 h-4 w-4" />
-            {t("presentations.import")}
+            {importMutation.isPending || importPptxMutation.isPending
+              ? t("presentations.importing")
+              : t("presentations.import")}
           </Button>
           <Button size="sm" onClick={handleCreate}>
             <Plus className="mr-2 h-4 w-4" />

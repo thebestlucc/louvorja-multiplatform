@@ -195,7 +195,7 @@ export function PersistentVideoPlayer() {
   useEffect(() => {
     const unsub = listen<SlideContent>("slide-changed", (e) => {
       const slide = e.payload;
-      if (slide.slideType === "online_video") {
+      if (slide.slideType === "onlineVideo") {
         // Increment session so YouTube player lifecycle effect re-runs even for same videoId
         playSessionIdRef.current += 1;
         setPlaySessionId(playSessionIdRef.current);
@@ -204,21 +204,21 @@ export function PersistentVideoPlayer() {
 
         // Bridge to media-player-store so Playing Now shows video preview
         const mpState = useMediaPlayerStore.getState();
-        if (slide.videoSource === "local" && slide.videoUrl) {
+        if (slide.source === "local" && slide.url) {
           const item: OfflineVideoMediaItem = {
             type: "offline_video",
-            videoPath: slide.videoUrl,
-            title: slide.videoTitle ?? "Video",
-            isManaged: slide.videoUrl.startsWith("media/"),
+            videoPath: slide.url,
+            title: slide.title ?? "Video",
+            isManaged: slide.url.startsWith("media/"),
           };
           // Always load to reset timelineSource to "video" (stop() sets it to "none")
           mpState.load(item);
-        } else if (slide.videoId) {
+        } else if (slide.video_id) {
           const item: OnlineVideoMediaItem = {
             type: "online_video",
-            videoId: slide.videoId,
+            videoId: slide.video_id,
             videoSource: "youtube",
-            title: slide.videoTitle ?? "Video",
+            title: slide.title ?? "Video",
           };
           mpState.load(item);
         }
@@ -306,8 +306,11 @@ export function PersistentVideoPlayer() {
 
   // ── YouTube player lifecycle ──────────────────────────────────────────────
 
+  const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source !== "local" ? activeSlide.video_id : undefined;
+  const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
+
   useEffect(() => {
-    const videoId = activeSlide?.videoSource !== "local" ? (activeSlide?.videoId ?? null) : null;
+    const videoId = activeVideoId ?? null;
     if (!videoId || !playerHostRef.current) return;
 
     let destroyed = false;
@@ -390,9 +393,10 @@ export function PersistentVideoPlayer() {
       ytPlayerRef.current = null;
       container.remove();
     };
-  }, [activeSlide?.videoId, activeSlide?.videoSource, broadcastState, playSessionId]);
+  }, [activeVideoId, activeVideoSource, broadcastState, playSessionId]);
 
-  const isLocalVideo = activeSlide?.videoSource === "local" && !!activeSlide?.videoUrl;
+  const isLocalVideo = activeSlide?.slideType === "onlineVideo" && activeSlide.source === "local" && !!activeSlide.url;
+  const localVideoUrl = activeSlide?.slideType === "onlineVideo" ? activeSlide.url : null;
 
   return (
     <div
@@ -400,9 +404,9 @@ export function PersistentVideoPlayer() {
       aria-hidden
       style={RESTING_STYLE}
     >
-      {isLocalVideo && activeSlide?.videoUrl && (
+      {isLocalVideo && localVideoUrl && (
         <LocalVideoMaster
-          videoPath={activeSlide.videoUrl}
+          videoPath={localVideoUrl}
           onBroadcast={broadcastLocalState}
         />
       )}

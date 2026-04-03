@@ -413,3 +413,81 @@ pub fn fetch_playlist_videos(
 
     Ok(all_videos)
 }
+
+#[derive(Deserialize)]
+struct VideoItem {
+    snippet: Option<VideoSnippet>,
+    #[serde(rename = "contentDetails")]
+    content_details: Option<VideoItemContentDetails>,
+}
+
+#[derive(Deserialize)]
+struct VideoSnippet {
+    title: Option<String>,
+    thumbnails: Option<Thumbnails>,
+}
+
+#[derive(Deserialize)]
+struct VideoItemContentDetails {
+    duration: Option<String>,
+}
+
+/// Parse ISO 8601 duration string (PT1H2M3S) into seconds.
+fn parse_iso_duration(s: &str) -> Option<i64> {
+    let s = s.strip_prefix("PT")?;
+    let mut secs: i64 = 0;
+    let mut buf = String::new();
+    for c in s.chars() {
+        if c.is_ascii_digit() {
+            buf.push(c);
+        } else {
+            let n: i64 = buf.parse().ok().unwrap_or(0);
+            buf.clear();
+            match c {
+                'H' => secs += n * 3600,
+                'M' => secs += n * 60,
+                'S' => secs += n,
+                _ => {}
+            }
+        }
+    }
+    Some(secs)
+}
+
+/// Fetch metadata for a single YouTube video. Must be called from a spawned thread.
+pub fn fetch_single_video_info(api_key: &str, video_id: &str) -> Result<YoutubeVideoInfo, AppError> {
+    let client = Client::new();
+    let resp = client
+        .get(format!("{}/videos", API_BASE))
+        .query(&[
+            ("part", "snippet,contentDetails"),
+            ("id", video_id),
+            ("key", api_key),
+        ])
+        .send()
+        .map_err(|e| AppError::Internal(format!("YouTube API request failed: {}", e)))?;
+
+    let body: ApiListResponse<VideoItem> = resp
+        .json()
+        .map_err(|e| AppError::Internal(format!("Failed to parse video info: {}", e)))?;
+
+    let item = body
+        .items
+        .and_then(|mut v| if v.is_empty() { None } else { Some(v.remove(0)) })
+        .ok_or_else(|| AppError::NotFound(format!("Video {} not found", video_id)))?;
+
+    let snippet = item.snippet.unwrap_or(VideoSnippet { title: None, thumbnails: None });
+    let duration_seconds = item
+        .content_details
+        .and_then(|cd| cd.duration)
+        .as_deref()
+        .and_then(parse_iso_duration);
+
+    Ok(YoutubeVideoInfo {
+        video_id: video_id.to_string(),
+        title: snippet.title.unwrap_or_else(|| video_id.to_string()),
+        thumbnail_url: snippet.thumbnails.map(|t| t.best_url()).unwrap_or_default(),
+        duration_seconds,
+        sequence: 1,
+    })
+}

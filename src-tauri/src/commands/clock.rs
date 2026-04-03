@@ -1,4 +1,5 @@
 use crate::db::models::{SlideContent, SlideContext};
+use crate::db::models::slides::BackgroundConfig;
 use crate::error::AppError;
 use crate::projection::{
     emit_utility_projection_event, new_projection_session_id,
@@ -41,30 +42,17 @@ fn project_clock_cover(
     use_24_hour: bool,
     show_date: bool,
 ) -> Result<(), AppError> {
-    let slide = SlideContent {
-        slide_type: "cover".to_string(),
-        text: None,
-        title: Some(format_clock_time(now_ms, use_24_hour)),
+    let slide = SlideContent::Cover {
+        title: format_clock_time(now_ms, use_24_hour),
         subtitle: Some(if show_date {
             format_clock_date(now_ms)
         } else {
             clock_title
         }),
         label: Some("clock".to_string()),
-        video_path: None,
-        background_image: None,
-        background_color: None,
-        audio_path: None,
-        auto_play: None,
-        r#loop: None,
-        muted: None,
-        mode: None,
+        background: BackgroundConfig::default(),
         text_color: None,
         text_size: None,
-        video_url: None,
-        video_id: None,
-        video_source: None,
-        video_title: None,
     };
 
     let context = SlideContext {

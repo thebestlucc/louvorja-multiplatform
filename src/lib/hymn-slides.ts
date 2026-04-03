@@ -1,4 +1,4 @@
-import type { SlideContent } from "./bindings";
+import type { SlideContent, BackgroundConfig } from "./bindings";
 
 type HymnSlidesInput = {
   title: string;
@@ -98,26 +98,15 @@ function buildLyricSequence(
   return parseLyricsTextSequence(lyrics);
 }
 
-function createBaseSlide(backgroundImage: string | null): Omit<SlideContent, "slideType"> {
+function createBackground(backgroundImage: string | null): BackgroundConfig {
   return {
-    text: null,
-    title: null,
-    subtitle: null,
-    label: null,
-    videoPath: null,
-    backgroundImage,
-    backgroundColor: null,
-    audioPath: null,
-    autoPlay: null,
-    loop: null,
-    muted: null,
-    mode: null,
-    textColor: null,
-    textSize: null,
-    videoUrl: null,
-    videoId: null,
-    videoSource: null,
-    videoTitle: null,
+    kind: backgroundImage ? "image" : "solid",
+    color: "#1a1a2e",
+    imagePath: backgroundImage,
+    gradientStart: null,
+    gradientEnd: null,
+    gradientAngle: null,
+    opacity: null,
   };
 }
 
@@ -143,18 +132,26 @@ export function buildHymnSlides({
   const visibleLyricCount = lyricSequence.filter((item) => item.text != null).length;
   let visibleLyricIndex = 0;
 
+  const bg = createBackground(backgroundImage);
+
   slides.push({
     slideType: "cover",
-    ...createBaseSlide(backgroundImage),
     title,
     subtitle: album ?? null,
+    label: null,
+    background: bg,
+    text_color: null,
+    text_size: null,
   });
 
   for (const item of lyricSequence) {
     if (item.isCoverOnly) {
       slides.push({
         slideType: "text",
-        ...createBaseSlide(backgroundImage),
+        content: "",
+        background: bg,
+        text_color: null,
+        text_size: null,
       });
       continue;
     }
@@ -162,16 +159,15 @@ export function buildHymnSlides({
     visibleLyricIndex += 1;
     slides.push({
       slideType: "lyrics",
-      ...createBaseSlide(backgroundImage),
-      text: item.text,
+      text: item.text ?? "",
       label: `${visibleLyricIndex}/${visibleLyricCount}`,
+      background: bg,
+      text_color: null,
+      text_size: null,
     });
   }
 
-  slides.push({
-    slideType: "pause",
-    ...createBaseSlide(null),
-  });
+  slides.push({ slideType: "pause" });
 
   return slides;
 }

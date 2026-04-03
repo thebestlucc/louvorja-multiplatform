@@ -380,17 +380,17 @@ async getSlides(presentationId: number) : Promise<Result<Slide[], AppErrorRespon
     else return { status: "error", error: e  as any };
 }
 },
-async createSlide(presentationId: number, contentJson: string, sortOrder: number) : Promise<Result<Slide, AppErrorResponse>> {
+async createSlide(presentationId: number, content: SlideContent) : Promise<Result<Slide, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("create_slide", { presentationId, contentJson, sortOrder }) };
+    return { status: "ok", data: await TAURI_INVOKE("create_slide", { presentationId, content }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async updateSlide(id: number, contentJson: string) : Promise<Result<null, AppErrorResponse>> {
+async updateSlide(id: number, content: SlideContent) : Promise<Result<null, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("update_slide", { id, contentJson }) };
+    return { status: "ok", data: await TAURI_INVOKE("update_slide", { id, content }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -423,6 +423,38 @@ async importSlja(path: string) : Promise<Result<Presentation, AppErrorResponse>>
 async exportSlja(presentationId: number, path: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("export_slja", { presentationId, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateSlideNotes(id: number, notes: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_slide_notes", { id, notes }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateSlideTransition(id: number, transition: TransitionConfig) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_slide_transition", { id, transition }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async importPptx(path: string) : Promise<Result<Presentation, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_pptx", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportPptx(presentationId: number, path: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_pptx", { presentationId, path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1464,6 +1496,22 @@ async findOnlineVideoByYtId(ytVideoId: string) : Promise<Result<OnlineVideo | nu
     else return { status: "error", error: e  as any };
 }
 },
+async createCustomPlaylist(input: CreateCustomPlaylistInput, apiKey: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_custom_playlist", { input, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateOnlinePlaylistCover(playlistId: string, coverPath: string | null) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_online_playlist_cover", { playlistId, coverPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async startVideoServer() : Promise<Result<VideoServerInfo, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("start_video_server") };
@@ -1500,6 +1548,9 @@ export type Album = { name: string; hymnCount: number }
 export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
 export type AppErrorResponse = { code: string; message: string; details: string | null }
 export type AudioStatusPayload = { positionMs: number; durationMs: number; isPlaying: boolean; isPaused: boolean; volume: number; currentFile: string | null }
+export type BackgroundConfig = { kind: BackgroundKind; color: string | null; imagePath: string | null; gradientStart: string | null; gradientEnd: string | null; gradientAngle: number | null; opacity: number | null }
+export type BackgroundKind = "solid" | "image" | "gradient"
+export type BibleMode = { alignment: TextAlignment; refPosition: RefPosition; textShadow: boolean; gradient: GradientOverlay | null }
 export type BibleSearchResult = { verse: Verse; bookName: string; snippet: string; versionAbbreviation: string }
 export type BibleVersion = { id: number; name: string; abbreviation: string; language: string; isBuiltin: boolean }
 export type Book = { name: string; chapterCount: number }
@@ -1509,9 +1560,15 @@ export type CollectionSearchResult = { kind: string; collectionId: number; songI
 export type CollectionSong = { id: number; collectionId: number; sourcePath: string; sourceFormat: string; sourceHash: string | null; sourceMtimeMs: number; cachePresentationId: number; syncStatus: CollectionSongSyncStatus; lastSyncAt: string | null; itemOrder: number; createdAt: string; updatedAt: string; cachePresentationTitle: string | null }
 export type CollectionSongSyncStatus = "inSync" | "stale" | "missingSource" | "error"
 export type CollectionWithSongs = { collection: Collection; songs: CollectionSong[] }
+/**
+ * Online Videos feature — input for creating a custom single-video collection.
+ */
+export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: string }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
+export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
+export type ImageFit = "contain" | "cover" | "fill"
 export type Liturgy = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string; itemCount: number; hymnCount: number; weekDay: number | null }
 export type LiturgyItem = { id: number; serviceId: number; itemType: string; itemId: number | null; title: string; itemOrder: number; notes: string | null; parentId: number | null }
 export type LiturgyWithItems = { service: Liturgy; items: LiturgyItem[] }
@@ -1540,12 +1597,13 @@ export type OnlineVideo = { id: number; idPlaylist: number; videoId: string; seq
  * `channel_title` comes from JOIN on `online_videos_channels`.
  * `video_count` is a computed COUNT(*) subquery.
  */
-export type OnlineVideoPlaylist = { id: number; idChannel: number | null; playlistId: string; title: string | null; description: string | null; images: string | null; status: string; error: string | null; coverPath: string | null; channelTitle: string | null; videoCount: number | null }
+export type OnlineVideoPlaylist = { id: number; idChannel: number | null; playlistId: string; title: string | null; description: string | null; images: string | null; status: string; error: string | null; coverPath: string | null; channelTitle: string | null; videoCount: number | null; isCustom: boolean }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
 export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
 export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; availableLanguages: string[]; selectedLanguages: string[] }
 export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[]; language: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
+export type RefPosition = "bottom" | "top" | "hidden"
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
 export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }
 export type ScheduleDay = { id: number; scheduleMonthId: number; serviceDate: string; label: string | null; sourceKind: string; responsibleDepartmentId: number | null; createdAt: string; updatedAt: string; responsibleDepartment: ScheduleDepartment | null; departments: ScheduleDayDepartment[] }
@@ -1559,17 +1617,22 @@ export type ScheduleMonth = { id: number; year: number; month: number; notes: st
 export type ScheduleMonthDetail = { month: ScheduleMonth; departments: ScheduleDepartment[]; days: ScheduleDay[] }
 export type Setting = { key: string; value: string }
 export type Slide = { id: number; presentationId: number; slideIndex: number; slideType: string; content: string; notes: string | null; transition: string | null }
-export type SlideContent = { slideType: string; text: string | null; title: string | null; subtitle: string | null; label: string | null; videoPath: string | null; backgroundImage: string | null; backgroundColor: string | null; audioPath: string | null; autoPlay: boolean | null; loop: boolean | null; muted: boolean | null; mode: string | null; textColor: string | null; textSize: number | null; videoUrl: string | null; videoId: string | null; videoSource: string | null; videoTitle: string | null }
+export type SlideContent = { slideType: "cover"; title: string; subtitle: string | null; label: string | null; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "lyrics"; text: string; label: string | null; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "text"; content: string; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "image"; path: string; caption: string | null; fit: ImageFit; background: BackgroundConfig } | { slideType: "video"; path: string; auto_play: boolean; loop_video: boolean; muted: boolean; mode: VideoMode; overlay_text: string | null; audio_path: string | null } | { slideType: "bible"; reference: string; text: string; mode: BibleMode; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null } | { slideType: "pause" }
 export type SlideContext = { next: SlideContent | null; index: number; total: number; title: string; currentSlideStartMs: number | null; nextSlideStartMs: number | null; audioDurationMs: number | null }
 export type StreamingInfo = { isRunning: boolean; ip: string | null; port: number; urls: StreamingUrls | null; connections: number; broadcastEnabled: boolean }
 export type StreamingUrls = { music: string; bible: string; returnMonitor: string }
 export type SyncPoint = { slideIndex: number; timestampMs: number; instrumentalTimestampMs?: number | null }
+export type TextAlignment = "left" | "center" | "right"
 export type TimerMode = "countdown" | "stopwatch"
 export type TimerStateData = { mode: TimerMode; isRunning: boolean; currentTimeMs: number; durationMs: number; laps: number[] }
+export type TransitionConfig = { kind: TransitionKind; durationMs: number }
+export type TransitionKind = "fade" | "slide" | "pop" | "none"
 export type UpdateInfo = { version: string; currentVersion: string; notes: string | null }
 export type Verse = { id: number; versionId: number; book: string; chapter: number; verse: number; text: string }
 export type VideoMetadata = { durationMs: number; width: number; height: number; fileSize: number; format: string }
+export type VideoMode = "fullscreen" | "background"
 export type VideoServerInfo = { isRunning: boolean; port: number; accessToken: string }
+export type VideoSource = "local" | "youtube"
 /**
  * Payload forwarded from the frontend video master to streaming SSE clients.
  * The `event_type` field distinguishes state snapshots from transient commands

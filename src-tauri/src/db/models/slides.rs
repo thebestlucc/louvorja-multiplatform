@@ -104,24 +104,282 @@ pub struct MonitorInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct SlideContent {
-    pub slide_type: String,
-    pub text: Option<String>,
-    pub title: Option<String>,
-    pub subtitle: Option<String>,
-    pub label: Option<String>,
-    pub video_path: Option<String>,
-    pub background_image: Option<String>,
-    pub background_color: Option<String>,
-    pub audio_path: Option<String>,
-    pub auto_play: Option<bool>,
-    pub r#loop: Option<bool>,
-    pub muted: Option<bool>,
-    pub mode: Option<String>,
-    pub text_color: Option<String>,
-    pub text_size: Option<i32>,
-    pub video_url: Option<String>,
-    pub video_id: Option<String>,
-    pub video_source: Option<String>,
-    pub video_title: Option<String>,
+pub struct BackgroundConfig {
+    pub kind: BackgroundKind,
+    pub color: Option<String>,
+    pub image_path: Option<String>,
+    pub gradient_start: Option<String>,
+    pub gradient_end: Option<String>,
+    pub gradient_angle: Option<i32>,
+    pub opacity: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundKind { #[default] Solid, Image, Gradient }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum VideoMode { #[default] Fullscreen, Background }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum VideoSource { #[default] Local, Youtube }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageFit { Contain, #[default] Cover, Fill }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAlignment { Left, #[default] Center, Right }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RefPosition { #[default] Bottom, Top, Hidden }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GradientOverlay {
+    pub angle: i32,
+    pub start_color: String,
+    pub end_color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BibleMode {
+    pub alignment: TextAlignment,
+    pub ref_position: RefPosition,
+    pub text_shadow: bool,
+    pub gradient: Option<GradientOverlay>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TransitionConfig {
+    pub kind: TransitionKind,
+    pub duration_ms: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionKind { #[default] Fade, Slide, Pop, None }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "slideType", rename_all = "camelCase")]
+pub enum SlideContent {
+    Cover {
+        title: String,
+        subtitle: Option<String>,
+        label: Option<String>,
+        background: BackgroundConfig,
+        text_color: Option<String>,
+        text_size: Option<i32>,
+    },
+    Lyrics {
+        text: String,
+        label: Option<String>,
+        background: BackgroundConfig,
+        text_color: Option<String>,
+        text_size: Option<i32>,
+    },
+    Text {
+        content: String,
+        background: BackgroundConfig,
+        text_color: Option<String>,
+        text_size: Option<i32>,
+    },
+    Image {
+        path: String,
+        caption: Option<String>,
+        fit: ImageFit,
+        background: BackgroundConfig,
+    },
+    Video {
+        path: String,
+        auto_play: bool,
+        loop_video: bool,
+        muted: bool,
+        mode: VideoMode,
+        overlay_text: Option<String>,
+        audio_path: Option<String>,
+    },
+    Bible {
+        reference: String,
+        text: String,
+        mode: BibleMode,
+        background: BackgroundConfig,
+        text_color: Option<String>,
+        text_size: Option<i32>,
+    },
+    OnlineVideo {
+        url: String,
+        video_id: String,
+        source: VideoSource,
+        title: Option<String>,
+    },
+    Pause,
+}
+
+impl SlideContent {
+    pub fn slide_type_str(&self) -> &'static str {
+        match self {
+            SlideContent::Cover { .. }        => "cover",
+            SlideContent::Lyrics { .. }       => "lyrics",
+            SlideContent::Text { .. }         => "text",
+            SlideContent::Image { .. }        => "image",
+            SlideContent::Video { .. }        => "video",
+            SlideContent::Bible { .. }        => "bible",
+            SlideContent::OnlineVideo { .. }  => "online_video",
+            SlideContent::Pause              => "pause",
+        }
+    }
+
+    pub fn default_background() -> BackgroundConfig {
+        BackgroundConfig {
+            kind: BackgroundKind::Solid,
+            color: Some("#1a1a2e".to_string()),
+            ..Default::default()
+        }
+    }
+
+    /// Return the slide type as a string for streaming/IPC compatibility.
+    pub fn slide_type(&self) -> &'static str {
+        self.slide_type_str()
+    }
+
+    /// Extract the primary text content for streaming/display.
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            SlideContent::Lyrics { text, .. } => Some(text.as_str()),
+            SlideContent::Text { content, .. } => Some(content.as_str()),
+            SlideContent::Bible { text, .. } => Some(text.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extract a title/reference for streaming/display.
+    pub fn title(&self) -> Option<&str> {
+        match self {
+            SlideContent::Cover { title, .. } => Some(title.as_str()),
+            SlideContent::Bible { reference, .. } => Some(reference.as_str()),
+            SlideContent::OnlineVideo { title, .. } => title.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract subtitle.
+    pub fn subtitle(&self) -> Option<&str> {
+        match self {
+            SlideContent::Cover { subtitle, .. } => subtitle.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract a label (used for cover utility slides: "timer", "clock").
+    pub fn label(&self) -> Option<&str> {
+        match self {
+            SlideContent::Cover { label, .. } => label.as_deref(),
+            SlideContent::Lyrics { label, .. } => label.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract the background image path.
+    pub fn background_image(&self) -> Option<&str> {
+        match self {
+            SlideContent::Cover { background, .. }
+            | SlideContent::Lyrics { background, .. }
+            | SlideContent::Text { background, .. }
+            | SlideContent::Image { background, .. }
+            | SlideContent::Bible { background, .. } => background.image_path.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract the background color.
+    pub fn background_color(&self) -> Option<&str> {
+        match self {
+            SlideContent::Cover { background, .. }
+            | SlideContent::Lyrics { background, .. }
+            | SlideContent::Text { background, .. }
+            | SlideContent::Image { background, .. }
+            | SlideContent::Bible { background, .. } => background.color.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract video/media path.
+    pub fn video_path(&self) -> Option<&str> {
+        match self {
+            SlideContent::Video { path, .. } => Some(path.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extract audio path.
+    pub fn audio_path(&self) -> Option<&str> {
+        match self {
+            SlideContent::Video { audio_path, .. } => audio_path.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract text color.
+    pub fn text_color(&self) -> Option<&str> {
+        match self {
+            SlideContent::Cover { text_color, .. }
+            | SlideContent::Lyrics { text_color, .. }
+            | SlideContent::Text { text_color, .. }
+            | SlideContent::Bible { text_color, .. } => text_color.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Extract text size.
+    pub fn text_size(&self) -> Option<i32> {
+        match self {
+            SlideContent::Cover { text_size, .. }
+            | SlideContent::Lyrics { text_size, .. }
+            | SlideContent::Text { text_size, .. }
+            | SlideContent::Bible { text_size, .. } => *text_size,
+            _ => None,
+        }
+    }
+
+    /// Extract online video URL.
+    pub fn video_url(&self) -> Option<&str> {
+        match self {
+            SlideContent::OnlineVideo { url, .. } => Some(url.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extract online video ID.
+    pub fn video_id(&self) -> Option<&str> {
+        match self {
+            SlideContent::OnlineVideo { video_id, .. } => Some(video_id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extract online video source as string.
+    pub fn video_source(&self) -> Option<&str> {
+        match self {
+            SlideContent::OnlineVideo { source, .. } => match source {
+                VideoSource::Youtube => Some("youtube"),
+                VideoSource::Local => Some("local"),
+            },
+            _ => None,
+        }
+    }
+
+    /// Extract online video title.
+    pub fn video_title(&self) -> Option<&str> {
+        match self {
+            SlideContent::OnlineVideo { title, .. } => title.as_deref(),
+            _ => None,
+        }
+    }
 }

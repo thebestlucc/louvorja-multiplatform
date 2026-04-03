@@ -10,15 +10,17 @@ type VideoCtrl = { action: "play" | "pause" | "seek" | "volume"; value?: number 
 
 export type VideoRenderMode = "projector" | "return-current" | "editor";
 
+type VideoSlideVariant = Extract<SlideContent, { slideType: "video" }>;
+
 interface VideoSlideProps {
-  slide: SlideContent;
+  slide: VideoSlideVariant;
   renderMode: VideoRenderMode;
   className?: string;
 }
 
 export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
   const { t } = useTranslation();
-  const srcUrl = useVideoSource(slide.videoPath ?? null);
+  const srcUrl = useVideoSource(slide.path ?? null);
   const projectorVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // In projector mode: listen for control events + emit state back to main window
@@ -54,8 +56,8 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
     if (renderMode === "editor") {
       return false;
     }
-    return slide.autoPlay ?? true;
-  }, [renderMode, slide.autoPlay]);
+    return slide.auto_play ?? true;
+  }, [renderMode, slide.auto_play]);
 
   const muted = renderMode === "return-current" ? true : (slide.muted ?? false);
 
@@ -63,7 +65,7 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
     return (
       <div className={cn("flex h-full w-full items-center justify-center bg-black text-white/60", className)}>
         <span className="px-4 text-center text-sm">
-          {slide.videoPath ? t("presentations.videoPreparing") : t("presentations.videoNoSource")}
+          {slide.path ? t("presentations.videoPreparing") : t("presentations.videoNoSource")}
         </span>
       </div>
     );
@@ -76,7 +78,7 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
       <VideoPlayer
         src={srcUrl}
         autoPlay={shouldAutoplay}
-        loop={slide.loop ?? false}
+        loop={slide.loop_video ?? false}
         muted={muted}
         controls={renderMode === "editor"}
         fit={fit}
@@ -88,17 +90,17 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
         onTimeUpdate={renderMode === "projector" ? () => emitVideoState() : undefined}
       />
 
-      {slide.mode === "background" && slide.text && (
+      {slide.mode === "background" && slide.overlay_text && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-10 text-center">
           <p
             className="whitespace-pre-line font-semibold"
             style={{
-              color: slide.textColor ?? "#ffffff",
-              fontSize: `${slide.textSize ?? 42}px`,
+              color: "#ffffff",
+              fontSize: `42px`,
               textShadow: "0 2px 10px rgba(0,0,0,0.8)",
             }}
           >
-            {slide.text}
+            {slide.overlay_text}
           </p>
         </div>
       )}

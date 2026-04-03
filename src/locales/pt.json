@@ -464,6 +464,11 @@
     "imagePath": "Caminho da imagem",
     "imagePathPlaceholder": "Caminho do arquivo de imagem",
     "import": "Importar",
+    "importPptx": "Importar PPTX",
+    "importing": "Importando...",
+    "importSuccess": "Importado com sucesso",
+    "exportPptx": "Exportar PPTX",
+    "exportSuccess": "Exportado com sucesso",
     "label": "Rótulo",
     "labelPlaceholder": "ex: Verso 1",
     "new": "Nova Apresentação",
@@ -525,6 +530,24 @@
     "videoTextColor": "Cor do texto",
     "videoTextSize": "Tamanho do texto",
     "videoUnsupported": "Formato não suportado. Converta para {{recommendation}} antes de importar.",
+    "speakerNotes": "Notas do Apresentador",
+    "notesPlaceholder": "Adicione notas para este slide...",
+    "editorTypography": "Tipografia",
+    "imageFit": "Ajuste",
+    "fitContain": "Conter",
+    "fitCover": "Cobrir",
+    "fitFill": "Preencher",
+    "bibleAlignment": "Alinhamento",
+    "bibleRefPosition": "Referência",
+    "bibleTextShadow": "Sombra do texto",
+    "bibleDisplayMode": "Modo de exibição",
+    "bibleReference": "Referência",
+    "alignLeft": "Esquerda",
+    "alignCenter": "Centro",
+    "alignRight": "Direita",
+    "refPosBottom": "Inferior",
+    "refPosTop": "Superior",
+    "refPosHidden": "Oculto",
     "design": "Design",
     "emptyDescription": "Crie sua primeira apresentação para começar.",
     "noResults": "Nenhuma apresentação encontrada",
@@ -554,7 +577,7 @@
       "hymn": "Música",
       "online_video": "Vídeo Online",
       "presentation": "Apresentação",
-      "scheduled_category": "Item Agendado (Dinâmico)",
+      "scheduled_category": "Itens Agendados",
       "url": "Link / Vídeo",
       "category": "Seção"
     },
@@ -1042,11 +1065,14 @@
     "categories": {
       "app": "Aplicativo",
       "display": "Controle de exibição",
+      "playback": "Reprodução",
       "slides": "Slides",
       "utilities": "Utilidades"
     },
     "items": {
       "clearProjection": "Limpar conteúdo projetado",
+      "mute": "Silenciar / Ativar Som",
+      "nextItem": "Próximo Item",
       "globalBlack": "Alternar tela preta (global)",
       "globalLogo": "Alternar tela logo (global)",
       "globalNextSlide": "Proximo slide (global)",
@@ -1054,6 +1080,8 @@
       "nextSlide": "Próximo slide",
       "openCommandPalette": "Abrir paleta de comandos",
       "openShortcutsHelp": "Abrir painel de atalhos",
+      "playPause": "Reproduzir / Pausar",
+      "prevItem": "Item Anterior",
       "previousSlide": "Slide anterior",
       "projectClock": "Projetar relógio nas utilidades",
       "projectLottery": "Projetar resultado do sorteio",
@@ -1189,6 +1217,9 @@
       "nameLabel": "Nome",
       "namePlaceholder": "Nome do item",
       "noItems": "Nenhum item nesta categoria",
+      "noCategories": "Nenhuma categoria agendada",
+      "noCategoriesHint": "Crie categorias na Biblioteca de Mídia primeiro.",
+      "resolvedByDate": "Resolvido pela data atual na reprodução",
       "noItemOnDate": "Sem item para esta data",
       "notScheduled": "Não agendado",
       "schedule": "Agenda",
@@ -1449,6 +1480,7 @@
     "refresh": "Atualizar",
     "delete": "Excluir",
     "adding": "Adicionando...",
+    "customCollection": "Personalizado",
     "addModal": {
       "title": "Adicionar Playlist do YouTube",
       "placeholder": "Cole uma URL de canal ou playlist do YouTube...",
@@ -1461,7 +1493,10 @@
       "addToService": "Ir para Liturgia Ativa",
       "noPlaylists": "Este canal não tem playlists públicas.",
       "alreadyAdded": "Já adicionada",
-      "couldNotExtractId": "Não foi possível extrair o ID da playlist da URL"
+      "couldNotExtractId": "Não foi possível extrair o ID da playlist da URL",
+      "collectionTitlePlaceholder": "Nome da coleção...",
+      "createCollection": "Criar Coleção",
+      "videoCollectionHint": "Este vídeo será adicionado a uma nova coleção personalizada"
     },
     "detail": {
       "backToPlaylists": "Voltar para playlists",
@@ -1479,7 +1514,10 @@
       "nowPlaying": "Em exibição",
       "projectAll": "Todas as telas",
       "projectProjector": "Somente projetor",
-      "projectReturn": "Retorno + streaming"
-    }
+      "projectReturn": "Retorno + streaming",
+      "editCover": "Editar capa",
+      "editCoverTitle": "Editar capa da playlist"
+    },
+    "coverUpdated": "Capa atualizada"
   }
 }

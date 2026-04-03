@@ -20,8 +20,11 @@ import { useMediaSource } from "../../hooks/use-media-source";
 import { AlertOverlay } from "../display/alert-overlay";
 
 function getSlideBackgroundImage(slide: SlideContent): string {
-  if (slide.slideType === "lyrics" || slide.slideType === "cover" || slide.slideType === "text") {
-    return slide.backgroundImage ?? "";
+  if (slide.slideType === "lyrics" || slide.slideType === "cover" || slide.slideType === "text" || slide.slideType === "bible") {
+    return slide.background.imagePath ?? "";
+  }
+  if (slide.slideType === "image") {
+    return slide.path;
   }
   return "";
 }
@@ -122,7 +125,7 @@ export function ProjectorView() {
 
   // Disable pointer events on body when projecting online video (hides YouTube iframe controls)
   useEffect(() => {
-    document.body.style.pointerEvents = slide?.slideType === "online_video" ? "none" : "";
+    document.body.style.pointerEvents = slide?.slideType === "onlineVideo" ? "none" : "";
     return () => { document.body.style.pointerEvents = ""; };
   }, [slide?.slideType]);
 
@@ -180,22 +183,10 @@ export function ProjectorView() {
       slideType: "cover",
       title: formatUtilityProjectionValue(utilityProjection, i18n.language),
       subtitle,
-      text: null,
       label: null,
-      videoPath: null,
-      backgroundImage: null,
-      backgroundColor: null,
-      audioPath: null,
-      autoPlay: null,
-      loop: null,
-      muted: null,
-      mode: null,
-      textColor: null,
-      textSize: null,
-      videoUrl: null,
-      videoId: null,
-      videoSource: null,
-      videoTitle: null,
+      background: { kind: "solid", color: "#1a1a2e", imagePath: null, gradientStart: null, gradientEnd: null, gradientAngle: null, opacity: null },
+      text_color: null,
+      text_size: null,
     } satisfies SlideContent;
   }, [defaultSlide, i18n.language, slide, t, utilityProjection]);
 

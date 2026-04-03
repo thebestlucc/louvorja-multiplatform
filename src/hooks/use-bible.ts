@@ -14,26 +14,27 @@ import {
   buildBibleSlideContent,
 } from "../components/bible/projection-settings";
 
-const EMPTY_SLIDE_PROPS = {
-  text: null,
-  title: null,
-  subtitle: null,
-  label: null,
-  videoPath: null,
-  backgroundImage: null,
-  backgroundColor: null,
-  audioPath: null,
-  autoPlay: null,
-  loop: null,
-  muted: null,
-  mode: null,
-  textColor: null,
-  textSize: null,
-  videoUrl: null,
-  videoId: null,
-  videoSource: null,
-  videoTitle: null,
+const DEFAULT_BG: import("../lib/bindings").BackgroundConfig = {
+  kind: "solid",
+  color: "#1a1a2e",
+  imagePath: null,
+  gradientStart: null,
+  gradientEnd: null,
+  gradientAngle: null,
+  opacity: null,
 };
+
+function makeBibleSlide(text: string, reference: string): SlideContent {
+  return {
+    slideType: "bible",
+    text,
+    reference,
+    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null },
+    background: DEFAULT_BG,
+    text_color: null,
+    text_size: null,
+  };
+}
 
 export function useBible(projectionSettings?: BibleProjectionSettings) {
   const [currentVersionId, setCurrentVersionId] = useState(0);
@@ -124,12 +125,9 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
             ps,
           ),
         )
-      : versesToProject.map((v) => ({
-          ...EMPTY_SLIDE_PROPS,
-          slideType: "bible" as const,
-          text: v.text,
-          label: `${currentBook} ${currentChapter}:${v.verse}`,
-        }));
+      : versesToProject.map((v) =>
+          makeBibleSlide(v.text, `${currentBook} ${currentChapter}:${v.verse}`),
+        );
 
     setCurrentPresentation(null);
     setPresentationSlides(slides);

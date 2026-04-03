@@ -466,6 +466,11 @@
     "imagePath": "Image path",
     "imagePathPlaceholder": "Path to image file",
     "import": "Import",
+    "importPptx": "Import PPTX",
+    "importing": "Importing...",
+    "importSuccess": "Imported successfully",
+    "exportPptx": "Export PPTX",
+    "exportSuccess": "Exported successfully",
     "label": "Label",
     "labelPlaceholder": "e.g. Verse 1",
     "new": "New Presentation",
@@ -529,7 +534,25 @@
     "videoResolution": "Resolution",
     "videoTextColor": "Text color",
     "videoTextSize": "Text size",
-    "videoUnsupported": "Unsupported format. Convert to {{recommendation}} before importing."
+    "videoUnsupported": "Unsupported format. Convert to {{recommendation}} before importing.",
+    "speakerNotes": "Speaker Notes",
+    "notesPlaceholder": "Add notes for this slide...",
+    "editorTypography": "Typography",
+    "imageFit": "Fit",
+    "fitContain": "Contain",
+    "fitCover": "Cover",
+    "fitFill": "Fill",
+    "bibleAlignment": "Alignment",
+    "bibleRefPosition": "Reference",
+    "bibleTextShadow": "Text shadow",
+    "bibleDisplayMode": "Display mode",
+    "bibleReference": "Reference",
+    "alignLeft": "Left",
+    "alignCenter": "Center",
+    "alignRight": "Right",
+    "refPosBottom": "Bottom",
+    "refPosTop": "Top",
+    "refPosHidden": "Hidden"
   },
   "services": {
     "activeService": "Active Liturgy",
@@ -554,7 +577,7 @@
       "hymn": "Music",
       "online_video": "Online Video",
       "presentation": "Presentation",
-      "scheduled_category": "Scheduled Item (Dynamic)",
+      "scheduled_category": "Scheduled Items",
       "url": "Link / Video",
       "category": "Section"
     },
@@ -1042,11 +1065,14 @@
     "categories": {
       "app": "App",
       "display": "Display Control",
+      "playback": "Playback",
       "slides": "Slides",
       "utilities": "Utilities"
     },
     "items": {
       "clearProjection": "Clear projected content",
+      "mute": "Mute / Unmute",
+      "nextItem": "Next Item",
       "globalBlack": "Toggle black screen (global)",
       "globalLogo": "Toggle logo screen (global)",
       "globalNextSlide": "Next slide (global)",
@@ -1054,6 +1080,8 @@
       "nextSlide": "Next slide",
       "openCommandPalette": "Open command palette",
       "openShortcutsHelp": "Open shortcuts panel",
+      "playPause": "Play / Pause",
+      "prevItem": "Previous Item",
       "previousSlide": "Previous slide",
       "projectClock": "Project clock from utilities",
       "projectLottery": "Project lottery result",
@@ -1189,6 +1217,9 @@
       "nameLabel": "Name",
       "namePlaceholder": "Item name",
       "noItems": "No items in this category",
+      "noCategories": "No scheduled categories",
+      "noCategoriesHint": "Create categories in the Media Library first.",
+      "resolvedByDate": "Resolved by today's date at playback",
       "noItemOnDate": "No item for this date",
       "notScheduled": "Not scheduled",
       "schedule": "Schedule",
@@ -1449,6 +1480,7 @@
     "refresh": "Refresh",
     "delete": "Delete",
     "adding": "Adding...",
+    "customCollection": "Custom",
     "addModal": {
       "title": "Add YouTube Playlist",
       "placeholder": "Paste a YouTube channel or playlist URL...",
@@ -1461,7 +1493,10 @@
       "addToService": "Go to Active Liturgy",
       "noPlaylists": "This channel has no public playlists.",
       "alreadyAdded": "Already added",
-      "couldNotExtractId": "Could not extract playlist ID from URL"
+      "couldNotExtractId": "Could not extract playlist ID from URL",
+      "collectionTitlePlaceholder": "Collection name...",
+      "createCollection": "Create Collection",
+      "videoCollectionHint": "This video will be added to a new custom collection"
     },
     "detail": {
       "backToPlaylists": "Back to playlists",
@@ -1479,7 +1514,10 @@
       "nowPlaying": "Now playing",
       "projectAll": "All screens",
       "projectProjector": "Projector only",
-      "projectReturn": "Return + streaming"
-    }
+      "projectReturn": "Return + streaming",
+      "editCover": "Edit cover",
+      "editCoverTitle": "Edit playlist cover"
+    },
+    "coverUpdated": "Cover updated"
   }
 }

@@ -1,7 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useSlides, useCreateSlide, useUpdateSlide, useDeleteSlide, useReorderSlides, useUpdatePresentation, usePresentation } from "../lib/queries";
-import { catcherSync } from "../lib/catcher";
+import {
+  useSlides,
+  useCreateSlideTyped,
+  useUpdateSlideContent,
+  useDeleteSlide,
+  useReorderSlides,
+  useUpdatePresentation,
+  usePresentation,
+} from "../lib/queries";
 import type { SlideContent, Slide } from "../lib/bindings";
+import { parseLegacySlideContent, defaultSlide } from "../types/presentation";
 
 interface UsePresentationOptions {
   presentationId: number;
@@ -12,34 +20,9 @@ interface SlideWithParsedContent extends Omit<Slide, "content"> {
 }
 
 function parseSlideRow(row: Slide): SlideWithParsedContent {
-  const [content, error] = catcherSync(
-    () => JSON.parse(row.content) as SlideContent,
-    { notify: false },
-  );
-
   return {
     ...row,
-    content: !error && content ? content : {
-      slideType: "text",
-      text: row.content,
-      title: null,
-      subtitle: null,
-      label: null,
-      videoPath: null,
-      backgroundImage: null,
-      backgroundColor: null,
-      audioPath: null,
-      autoPlay: null,
-      loop: null,
-      muted: null,
-      mode: null,
-      textColor: null,
-      textSize: null,
-      videoUrl: null,
-      videoId: null,
-      videoSource: null,
-      videoTitle: null,
-    },
+    content: parseLegacySlideContent(row.content),
   };
 }
 
@@ -53,8 +36,8 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
   // Local optimistic slide content overrides (keyed by slide id)
   const [localEdits, setLocalEdits] = useState<Record<number, SlideContent>>({});
 
-  const createSlideMutation = useCreateSlide();
-  const updateSlideMutation = useUpdateSlide();
+  const createSlideMutation = useCreateSlideTyped();
+  const updateSlideMutation = useUpdateSlideContent();
   const deleteSlideMutation = useDeleteSlide();
   const reorderMutation = useReorderSlides();
   const updatePresentationMutation = useUpdatePresentation();
@@ -129,7 +112,7 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
       timers[slide.id] = setTimeout(() => {
         updateSlideMutation.mutate({
           id: slide.id,
-          contentJson: JSON.stringify(content),
+          content,
           presentationId,
         });
         delete timers[slide.id];
@@ -140,30 +123,10 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
 
   const addSlide = useCallback(() => {
     const sortOrder = slides.length;
-    const content: SlideContent = {
-      slideType: "text",
-      text: "",
-      title: null,
-      subtitle: null,
-      label: null,
-      videoPath: null,
-      backgroundImage: null,
-      backgroundColor: null,
-      audioPath: null,
-      autoPlay: null,
-      loop: null,
-      muted: null,
-      mode: null,
-      textColor: null,
-      textSize: null,
-      videoUrl: null,
-      videoId: null,
-      videoSource: null,
-      videoTitle: null,
-    };
+    const content: SlideContent = defaultSlide("text");
     createSlideMutation.mutate({
       presentationId,
-      contentJson: JSON.stringify(content),
+      content,
       sortOrder,
     });
   }, [slides.length, presentationId, createSlideMutation]);
@@ -201,7 +164,7 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
       if (!slide) return;
       createSlideMutation.mutate({
         presentationId,
-        contentJson: JSON.stringify(slide.content),
+        content: slide.content,
         sortOrder: index + 1,
       });
     },

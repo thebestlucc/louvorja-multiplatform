@@ -1,20 +1,31 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, RefreshCw, Loader2, ListVideo } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, ListVideo, Pencil } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir } from "@tauri-apps/api/path";
 import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
 import { VideoCard } from "./video-card";
+import { CoverPicker } from "../media/cover-picker";
 import {
   useYoutubePlaylistVideos,
   useYoutubePlaylists,
   useRefreshYoutubePlaylist,
   useDeleteVideoLocalFile,
+  useUpdateOnlinePlaylistCover,
 } from "../../lib/queries";
 import { useYoutubeEvents } from "../../hooks/use-youtube-events";
 import { getPreference } from "../../lib/store";
 import { catcher } from "../../lib/catcher";
+import { buildAssetPath } from "../../lib/asset-url";
+import { notify } from "../../lib/notifications";
 
 interface PlaylistDetailProps {
   playlistId: string;
@@ -26,6 +37,8 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
 
   const [apiKey, setApiKey] = useState("");
   const [dataDirPath, setDataDirPath] = useState("");
+  const [editCoverOpen, setEditCoverOpen] = useState(false);
+  const [draftCoverPath, setDraftCoverPath] = useState<string | null>(null);
 
   // Register YouTube event listeners for query invalidation
   useYoutubeEvents();
@@ -45,12 +58,13 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
   const { data: videos, isLoading } = useYoutubePlaylistVideos(playlistId);
   const refreshMutation = useRefreshYoutubePlaylist();
   const deleteLocalMutation = useDeleteVideoLocalFile();
+  const updateCoverMutation = useUpdateOnlinePlaylistCover();
 
   const playlist = playlists?.find((p) => p.playlistId === playlistId);
 
   const coverUrl =
     playlist?.coverPath && dataDirPath
-      ? convertFileSrc(`${dataDirPath}/${playlist.coverPath}`)
+      ? convertFileSrc(buildAssetPath(dataDirPath, playlist.coverPath))
       : null;
 
   const handleBack = () => {
@@ -63,6 +77,22 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
   const handleRefresh = () => {
     if (!apiKey) return;
     refreshMutation.mutate({ playlistId, apiKey });
+  };
+
+  const handleOpenEditCover = () => {
+    setDraftCoverPath(playlist?.coverPath ?? null);
+    setEditCoverOpen(true);
+  };
+
+  const handleSaveCover = async () => {
+    const [, err] = await catcher(
+      updateCoverMutation.mutateAsync({ playlistId, coverPath: draftCoverPath }),
+      { notify: true },
+    );
+    if (!err) {
+      notify.success(t("onlineVideos.coverUpdated"));
+      setEditCoverOpen(false);
+    }
   };
 
   return (
@@ -80,8 +110,13 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
           {t("onlineVideos.detail.backToPlaylists")}
         </Button>
 
-        {/* Cover image */}
-        <div className="shrink-0 w-20 aspect-video rounded overflow-hidden bg-muted">
+        {/* Cover image (clickable to edit) */}
+        <button
+          type="button"
+          onClick={handleOpenEditCover}
+          className="shrink-0 w-20 aspect-video rounded overflow-hidden bg-muted relative group"
+          title={t("onlineVideos.detail.editCover")}
+        >
           {coverUrl ? (
             <img
               src={coverUrl}
@@ -93,7 +128,10 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
               <ListVideo className="h-6 w-6 text-muted-foreground/50" />
             </div>
           )}
-        </div>
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <Pencil className="h-4 w-4 text-white" />
+          </div>
+        </button>
 
         {/* Playlist info */}
         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -154,6 +192,28 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
           </div>
         )}
       </div>
+
+      {/* Edit cover dialog */}
+      <Dialog open={editCoverOpen} onOpenChange={setEditCoverOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("onlineVideos.detail.editCoverTitle")}</DialogTitle>
+          </DialogHeader>
+          <CoverPicker
+            value={draftCoverPath}
+            onChange={setDraftCoverPath}
+            title={playlist?.title ?? playlistId}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditCoverOpen(false)}>
+              {t("actions.cancel")}
+            </Button>
+            <Button onClick={handleSaveCover} disabled={updateCoverMutation.isPending}>
+              {t("actions.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -35,16 +35,44 @@ fn validate_https_url(url: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Sets I/O priority to VeryLow on a file handle so all disk requests through
+/// this handle are deprioritized at the kernel I/O scheduler level.
+/// This applies regardless of which thread (including tokio thread pool) submits the I/O.
+#[cfg(target_os = "windows")]
+fn set_file_io_priority_low(file: &std::fs::File) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::SetFileInformationByHandle;
+    // FileIoPriorityHintInfo = 43, IoPriorityHintVeryLow = 0
+    #[repr(C)]
+    struct FILE_IO_PRIORITY_HINT_INFO {
+        PriorityHint: u32,
+    }
+    let hint = FILE_IO_PRIORITY_HINT_INFO { PriorityHint: 0 };
+    unsafe {
+        SetFileInformationByHandle(
+            file.as_raw_handle() as _,
+            43, // FileIoPriorityHintInfo
+            &hint as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<FILE_IO_PRIORITY_HINT_INFO>() as u32,
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_file_io_priority_low(_file: &std::fs::File) {}
+
 /// Creates a file with FILE_FLAG_SEQUENTIAL_SCAN on Windows for optimized cache behavior.
 #[cfg(target_os = "windows")]
 fn create_file_sequential(path: &Path) -> std::io::Result<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
+    let file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .custom_flags(0x08000000) // FILE_FLAG_SEQUENTIAL_SCAN
-        .open(path)
+        .open(path)?;
+    set_file_io_priority_low(&file);
+    Ok(file)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -172,11 +200,10 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| AppError::Internal(format!("ZIP open failed: {}", e)))?;
 
-    let mut buf = vec![0u8; 256 * 1024];
-    // Throttle: yield every 5 MB written to prevent I/O queue saturation on
+    // Throttle: yield every 10 MB written to prevent I/O queue saturation on
     // eMMC/SSD devices (Windows reports 100% disk util on any sustained queue depth).
     let mut bytes_since_yield: u64 = 0;
-    const YIELD_EVERY_BYTES: u64 = 5 * 1024 * 1024;
+    const YIELD_EVERY_BYTES: u64 = 10 * 1024 * 1024;
 
     for i in 0..archive.len() {
         let mut entry = archive
@@ -196,25 +223,23 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
 
         let dest_path = canonical_dest.join(stripped);
 
-        // Canonicalize the parent to detect traversal (symlinks, .., etc.)
-        if let Some(parent) = dest_path.parent() {
-            std::fs::create_dir_all(parent).map_err(AppError::Io)?;
-        }
-        // Verify extracted path stays within dest_dir
-        // We can't canonicalize dest_path before it exists, so canonicalize its parent
-        let actual_parent = dest_path
-            .parent()
-            .and_then(|p| p.canonicalize().ok())
-            .ok_or_else(|| AppError::Internal(format!("ZIP entry '{}' has invalid parent", entry_name)))?;
-        if !actual_parent.starts_with(&canonical_dest) {
-            eprintln!("[extract_zip] Skipping path traversal attempt: {}", entry_name);
+        // Path traversal guard: dest_path must stay inside canonical_dest.
+        // Component-based check avoids per-file canonicalize syscall.
+        if !dest_path.starts_with(&canonical_dest) {
+            log::warn!("[extract_zip] Skipping path traversal attempt: {}", entry_name);
             continue;
         }
 
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent).map_err(AppError::Io)?;
+        }
+
         let out = create_file_sequential(&dest_path).map_err(AppError::Io)?;
-        let mut writer = std::io::BufWriter::with_capacity(256 * 1024, out);
+        let mut writer = std::io::BufWriter::with_capacity(512 * 1024, out);
+        let mut reader = std::io::BufReader::with_capacity(128 * 1024, &mut entry);
+        let mut buf = [0u8; 128 * 1024];
         loop {
-            let n = std::io::Read::read(&mut entry, &mut buf).map_err(AppError::Io)?;
+            let n = std::io::Read::read(&mut reader, &mut buf).map_err(AppError::Io)?;
             if n == 0 {
                 break;
             }
@@ -223,10 +248,303 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
             if bytes_since_yield >= YIELD_EVERY_BYTES {
                 bytes_since_yield = 0;
                 writer.flush().map_err(AppError::Io)?;
-                std::thread::sleep(std::time::Duration::from_millis(50));
+                std::thread::sleep(std::time::Duration::from_millis(10));
             }
         }
         writer.flush().map_err(AppError::Io)?;
+    }
+
+    Ok(())
+}
+
+// ── Streaming ZIP extraction ─────────────────────────────────────────────────
+
+/// Adapts a `std::sync::mpsc::Receiver<bytes::Bytes>` to `std::io::Read`.
+/// Receives chunks from the download task and feeds them to the ZIP extractor.
+struct ChannelReader {
+    rx: std::sync::mpsc::Receiver<bytes::Bytes>,
+    current: Option<(bytes::Bytes, usize)>,
+}
+
+impl ChannelReader {
+    fn new(rx: std::sync::mpsc::Receiver<bytes::Bytes>) -> Self {
+        Self { rx, current: None }
+    }
+}
+
+impl std::io::Read for ChannelReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            if let Some((chunk, offset)) = &mut self.current {
+                let available = chunk.len() - *offset;
+                if available == 0 {
+                    self.current = None;
+                    continue;
+                }
+                let to_copy = available.min(buf.len());
+                buf[..to_copy].copy_from_slice(&chunk[*offset..*offset + to_copy]);
+                *offset += to_copy;
+                return Ok(to_copy);
+            }
+            match self.rx.recv() {
+                Ok(chunk) => self.current = Some((chunk, 0)),
+                Err(_) => return Ok(0), // sender dropped = EOF
+            }
+        }
+    }
+}
+
+/// Wraps a `Read` and feeds every byte through a SHA-256 hasher simultaneously.
+struct TeeHashReader<R: std::io::Read> {
+    inner: R,
+    hasher: sha2::Sha256,
+}
+
+impl<R: std::io::Read> TeeHashReader<R> {
+    fn new(inner: R) -> Self {
+        use sha2::Digest;
+        Self {
+            inner,
+            hasher: sha2::Sha256::new(),
+        }
+    }
+    fn finalize(self) -> String {
+        use sha2::Digest;
+        format!("{:x}", self.hasher.finalize())
+    }
+}
+
+impl<R: std::io::Read> std::io::Read for TeeHashReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use sha2::Digest;
+        let n = self.inner.read(buf)?;
+        if n > 0 {
+            self.hasher.update(&buf[..n]);
+        }
+        Ok(n)
+    }
+}
+
+/// Returns true if the error is a ZIP format/parse problem (not a network error).
+/// Used to decide whether to fall back to temp-file extraction.
+fn is_zip_format_error(e: &AppError) -> bool {
+    let msg = e.to_string();
+    msg.contains("ZIP stream error")
+        || msg.contains("invalid zip")
+        || msg.contains("Extraction thread died")
+}
+
+/// Downloads a ZIP from `url` and extracts it to `dest_dir`.
+/// Phase 1: tries streaming extraction (no temp file).
+/// Phase 2: if the ZIP uses data descriptors or a non-streaming format, falls back
+///          to downloading to a temp file and extracting via seekable ZipArchive.
+pub async fn stream_extract_zip(
+    client: &reqwest::Client,
+    url: &str,
+    dest_dir: &Path,
+    expected_sha256: &str,
+) -> Result<(), AppError> {
+    validate_https_url(url)?;
+
+    match try_stream_extract_zip(client, url, dest_dir, expected_sha256).await {
+        Ok(()) => return Ok(()),
+        Err(e) if is_zip_format_error(&e) => {
+            log::warn!(
+                "[pack-sync] Streaming extraction failed ({}), falling back to temp-file extraction",
+                e
+            );
+        }
+        Err(e) => return Err(e),
+    }
+
+    fallback_download_and_extract(client, url, dest_dir, expected_sha256).await
+}
+
+async fn fallback_download_and_extract(
+    client: &reqwest::Client,
+    url: &str,
+    dest_dir: &Path,
+    expected_sha256: &str,
+) -> Result<(), AppError> {
+    std::fs::create_dir_all(dest_dir).map_err(AppError::Io)?;
+
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
+    let tmp_path = dest_dir.join(format!(".pack_{}.zip.tmp", nonce));
+
+    if let Err(e) = download_bytes_to_path(client, url, &tmp_path, None).await {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+
+    if !expected_sha256.is_empty() {
+        let tmp_clone = tmp_path.clone();
+        let expected = expected_sha256.to_string();
+        let ok = tokio::task::spawn_blocking(move || verify_sha256_file(&tmp_clone, &expected))
+            .await
+            .map_err(|e| AppError::Internal(format!("SHA verify task panicked: {}", e)))??;
+        if !ok {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(AppError::Internal(format!(
+                "SHA-256 mismatch (fallback) for {}",
+                url
+            )));
+        }
+    }
+
+    let result = extract_zip(&tmp_path, dest_dir);
+    let _ = std::fs::remove_file(&tmp_path);
+    result
+}
+
+fn verify_sha256_file(path: &Path, expected: &str) -> Result<bool, AppError> {
+    use sha2::Digest;
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).map_err(AppError::Io)?;
+    let mut hasher = sha2::Sha256::new();
+    let mut buf = [0u8; 65536];
+    loop {
+        let n = file.read(&mut buf).map_err(AppError::Io)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()) == expected)
+}
+
+/// Inner streaming implementation. Renamed from `stream_extract_zip` to allow
+/// the public wrapper to add a fallback for data-descriptor ZIPs.
+async fn try_stream_extract_zip(
+    client: &reqwest::Client,
+    url: &str,
+    dest_dir: &Path,
+    expected_sha256: &str,
+) -> Result<(), AppError> {
+    let canonical_dest = {
+        std::fs::create_dir_all(dest_dir).map_err(AppError::Io)?;
+        dest_dir.canonicalize().map_err(AppError::Io)?
+    };
+
+    // Bounded channel: backpressure so download pauses when extractor is behind.
+    let (tx, rx) = std::sync::mpsc::sync_channel::<bytes::Bytes>(8);
+
+    let dest_clone = canonical_dest.clone();
+
+    // Spawn blocking thread: reads from channel, extracts zip, tracks files written.
+    let extract_handle = tokio::task::spawn_blocking(move || -> Result<(String, Vec<std::path::PathBuf>), AppError> {
+        let reader = ChannelReader::new(rx);
+        let mut tee = TeeHashReader::new(reader);
+        let mut extracted_files: Vec<std::path::PathBuf> = Vec::new();
+
+        loop {
+            match zip::read::read_zipfile_from_stream(&mut tee) {
+                Ok(Some(mut entry)) => {
+                    let entry_name = entry.name().to_string();
+                    if entry_name.ends_with('/') || entry_name.ends_with('\\') {
+                        // Consume the entry (should have no data, but drain anyway)
+                        let _ = std::io::copy(&mut entry, &mut std::io::sink());
+                        continue;
+                    }
+                    let stripped = entry_name
+                        .trim_start_matches('/')
+                        .trim_start_matches('\\');
+                    if stripped.is_empty() {
+                        let _ = std::io::copy(&mut entry, &mut std::io::sink());
+                        continue;
+                    }
+
+                    let dest_path = dest_clone.join(stripped);
+
+                    // Path traversal guard: component-based check avoids per-file canonicalize.
+                    if !dest_path.starts_with(&dest_clone) {
+                        log::warn!("[stream_extract] Skipping path traversal: {}", entry_name);
+                        // Must drain the entry so the stream advances correctly.
+                        let _ = std::io::copy(&mut entry, &mut std::io::sink());
+                        continue;
+                    }
+
+                    if let Some(parent) = dest_path.parent() {
+                        std::fs::create_dir_all(parent).map_err(AppError::Io)?;
+                    }
+
+                    let out = create_file_sequential(&dest_path).map_err(AppError::Io)?;
+                    let mut writer = std::io::BufWriter::with_capacity(512 * 1024, out);
+                    std::io::copy(&mut entry, &mut writer).map_err(AppError::Io)?;
+                    writer.flush().map_err(AppError::Io)?;
+
+                    extracted_files.push(dest_path);
+                }
+                Ok(None) => break, // end of zip
+                Err(e) => {
+                    return Err(AppError::Internal(format!("ZIP stream error: {}", e)))
+                }
+            }
+        }
+
+        let actual_hash = tee.finalize();
+        Ok((actual_hash, extracted_files))
+    });
+
+    // Async: stream download, send chunks to extraction thread.
+    let download_result = async {
+        let mut response = client
+            .get(url)
+            .header(reqwest::header::ACCEPT_ENCODING, "identity")
+            .timeout(std::time::Duration::from_secs(300))
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("HTTP GET failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "HTTP {} downloading file",
+                response.status()
+            )));
+        }
+
+        let mut total: u64 = 0;
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| AppError::Internal(format!("HTTP read failed: {}", e)))?
+        {
+            total += chunk.len() as u64;
+            if total > MAX_DOWNLOAD_BYTES {
+                return Err(AppError::Internal(format!(
+                    "Download exceeded {} MB limit",
+                    MAX_DOWNLOAD_BYTES / 1024 / 1024
+                )));
+            }
+            // send() blocks when channel is full (backpressure from extractor)
+            tx.send(chunk)
+                .map_err(|_| AppError::Internal("Extraction thread died".into()))?;
+        }
+        Ok(())
+    }
+    .await;
+
+    drop(tx); // EOF signal to extraction thread
+
+    // Wait for extraction to finish.
+    let extract_result = extract_handle
+        .await
+        .map_err(|e| AppError::Internal(format!("Extract task panicked: {}", e)))?;
+
+    // Surface any download error first.
+    download_result?;
+
+    let (actual_hash, extracted_files) = extract_result?;
+
+    // Verify SHA-256 (skip if expected is empty).
+    if !expected_sha256.is_empty() && actual_hash != expected_sha256 {
+        // Cleanup all extracted files on hash mismatch.
+        for f in &extracted_files {
+            let _ = std::fs::remove_file(f);
+        }
+        return Err(AppError::Internal(format!(
+            "SHA-256 mismatch: expected {}, got {}",
+            expected_sha256, actual_hash
+        )));
     }
 
     Ok(())

@@ -1,4 +1,4 @@
-use crate::db::models::{Presentation, Slide};
+use crate::db::models::{Presentation, Slide, SlideContent, TransitionConfig};
 use crate::db::queries::collections::reindex_collection_song_documents_by_presentation;
 use crate::error::AppError;
 use rusqlite::{params, Connection};
@@ -214,6 +214,116 @@ pub fn update_slide(conn: &Connection, id: i64, content_json: &str) -> Result<()
     )?;
     reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
 
+    Ok(())
+}
+
+pub fn count_slides(conn: &Connection, presentation_id: i64) -> Result<i64, AppError> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM slides WHERE presentation_id = ?1",
+        params![presentation_id],
+        |row| row.get(0),
+    )
+    .map_err(AppError::Database)
+}
+
+pub fn create_slide(
+    conn: &Connection,
+    presentation_id: i64,
+    slide_index: i32,
+    content: &SlideContent,
+) -> Result<Slide, AppError> {
+    let content_json =
+        serde_json::to_string(content).map_err(|e| AppError::Internal(e.to_string()))?;
+    let slide_type = content.slide_type_str();
+
+    conn.execute(
+        "INSERT INTO slides (presentation_id, slide_index, slide_type, content) VALUES (?1, ?2, ?3, ?4)",
+        params![presentation_id, slide_index, slide_type, content_json],
+    )?;
+
+    let id = conn.last_insert_rowid();
+
+    conn.execute(
+        "UPDATE presentations SET updated_at = datetime('now') WHERE id = ?1",
+        params![presentation_id],
+    )?;
+    reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
+
+    conn.query_row(
+        "SELECT id, presentation_id, slide_index, slide_type, content, notes, transition FROM slides WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(Slide {
+                id: row.get("id")?,
+                presentation_id: row.get("presentation_id")?,
+                slide_index: row.get("slide_index")?,
+                slide_type: row.get("slide_type")?,
+                content: row.get("content")?,
+                notes: row.get("notes")?,
+                transition: row.get("transition")?,
+            })
+        },
+    )
+    .map_err(AppError::Database)
+}
+
+pub fn update_slide_content(conn: &Connection, id: i64, content: &SlideContent) -> Result<(), AppError> {
+    let content_json =
+        serde_json::to_string(content).map_err(|e| AppError::Internal(e.to_string()))?;
+    let slide_type = content.slide_type_str();
+
+    let presentation_id: i64 = conn
+        .query_row(
+            "SELECT presentation_id FROM slides WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::NotFound(format!("Slide with id {} not found", id))
+            }
+            other => AppError::Database(other),
+        })?;
+
+    let rows = conn.execute(
+        "UPDATE slides SET content = ?1, slide_type = ?2 WHERE id = ?3",
+        params![content_json, slide_type, id],
+    )?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!(
+            "Slide with id {} not found",
+            id
+        )));
+    }
+
+    conn.execute(
+        "UPDATE presentations SET updated_at = datetime('now') WHERE id = ?1",
+        params![presentation_id],
+    )?;
+    reindex_collection_song_documents_by_presentation(conn, presentation_id)?;
+
+    Ok(())
+}
+
+pub fn update_slide_notes(conn: &Connection, id: i64, notes: &str) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE slides SET notes = ?1 WHERE id = ?2",
+        params![notes, id],
+    )?;
+    Ok(())
+}
+
+pub fn update_slide_transition(
+    conn: &Connection,
+    id: i64,
+    transition: &TransitionConfig,
+) -> Result<(), AppError> {
+    let json =
+        serde_json::to_string(transition).map_err(|e| AppError::Internal(e.to_string()))?;
+    conn.execute(
+        "UPDATE slides SET transition = ?1 WHERE id = ?2",
+        params![json, id],
+    )?;
     Ok(())
 }
 

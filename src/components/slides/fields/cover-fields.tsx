@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { Input } from "../../ui/input";
 
-export function CoverFields({ title, subtitle, onChange }: {
+interface CoverFieldsProps {
   title: string;
-  subtitle?: string;
-  onChange: (title: string, subtitle?: string) => void;
-}) {
+  subtitle: string | null;
+  onChange: (title: string, subtitle: string | null) => void;
+}
+
+export function CoverFields({ title, subtitle, onChange }: CoverFieldsProps) {
   const { t } = useTranslation();
   return (
     <>
@@ -25,7 +27,7 @@ export function CoverFields({ title, subtitle, onChange }: {
         </label>
         <Input
           value={subtitle ?? ""}
-          onChange={(e) => onChange(title, e.target.value || undefined)}
+          onChange={(e) => onChange(title, e.target.value || null)}
           placeholder={t("presentations.subtitlePlaceholder")}
         />
       </div>

@@ -8,37 +8,40 @@ import { useQueueStore } from "../stores/queue-store";
 import { catcher } from "../lib/catcher";
 import { projectSlideWithType } from "../lib/projection-playback";
 import { setSlideContext } from "../lib/tauri";
-import { EMPTY_SLIDE_PROPS } from "../lib/projector-screen-defaults";
+import { findOnlineVideoByYtId } from "../lib/tauri/youtube";
+import { defaultBackground } from "../types/presentation";
+import { getFileExt, parseOnlineVideoNotes } from "../lib/utils";
 import type { LiturgyItem as ServiceItem, SlideContent } from "../lib/bindings";
 
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v", "ts"]);
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff"]);
 
-function getFileExt(filePath: string): string {
-  return filePath.replace(/\\/g, "/").split(".").pop()?.toLowerCase() ?? "";
-}
-
 function buildSlideData(item: ServiceItem): SlideContent {
+  const bg = defaultBackground();
   switch (item.itemType) {
     case "hymn":
-      return { ...EMPTY_SLIDE_PROPS, slideType: "lyrics", title: item.title, text: item.notes ?? "" };
+      return { slideType: "lyrics", text: item.notes ?? "", label: null, background: bg, text_color: null, text_size: null };
     case "bible":
-      return { ...EMPTY_SLIDE_PROPS, slideType: "bible", title: item.title, text: item.notes ?? "" };
+      return { slideType: "bible", text: item.notes ?? "", reference: item.title, mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null }, background: bg, text_color: null, text_size: null };
     case "annotation":
-      return { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
+      return { slideType: "text", content: item.notes ?? "", background: bg, text_color: null, text_size: null };
     case "file": {
       const filePath = item.notes ?? "";
       const ext = getFileExt(filePath);
       if (IMAGE_EXTS.has(ext)) {
-        return { ...EMPTY_SLIDE_PROPS, slideType: "image", label: item.title, backgroundImage: filePath };
+        return { slideType: "image", path: filePath, caption: item.title, fit: "contain", background: bg };
       } else if (VIDEO_EXTS.has(ext)) {
-        return { ...EMPTY_SLIDE_PROPS, slideType: "video", label: item.title, videoPath: filePath };
+        return { slideType: "video", path: filePath, auto_play: false, loop_video: false, muted: false, mode: "fullscreen", overlay_text: null, audio_path: null };
       } else {
-        return { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: filePath };
+        return { slideType: "text", content: filePath, background: bg, text_color: null, text_size: null };
       }
     }
+    case "online_video": {
+      const parsed = parseOnlineVideoNotes(item.notes);
+      return { slideType: "onlineVideo", url: "", video_id: parsed?.videoId ?? "", source: "youtube", title: item.title ?? null };
+    }
     default:
-      return { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
+      return { slideType: "text", content: item.notes ?? "", background: bg, text_color: null, text_size: null };
   }
 }
 
@@ -159,6 +162,30 @@ export function useLiturgyPlayback() {
           }, { notify: true });
           return;
         }
+      }
+
+      if (item.itemType === "online_video") {
+        const parsed = parseOnlineVideoNotes(item.notes);
+        const videoId = parsed?.videoId ?? "";
+        const dbRecord = videoId ? await findOnlineVideoByYtId(videoId) : null;
+        const localPath = dbRecord?.localPath ?? null;
+        const onlineSlide: SlideContent = {
+          slideType: "onlineVideo",
+          url: localPath ?? "",
+          video_id: localPath ? "" : videoId,
+          source: localPath ? "local" : "youtube",
+          title: item.title ?? null,
+        };
+        if (localPath) {
+          mediaStore.load({ type: "offline_video", videoPath: localPath, title: item.title ?? "", isManaged: true });
+        } else {
+          mediaStore.load({ type: "online_video", videoId, videoSource: "youtube", title: item.title ?? "" });
+        }
+        await catcher(async () => {
+          await projectSlideWithType(onlineSlide, "service");
+          await buildContext();
+        }, { notify: true });
+        return;
       }
 
       // annotation, url, and any other types

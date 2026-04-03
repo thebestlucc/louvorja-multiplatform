@@ -1,10 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { cn } from "../../../lib/utils";
 
-export function TextFields({ text, onChange }: {
-  text: string;
-  onChange: (text: string) => void;
-}) {
+interface TextFieldsProps {
+  content: string;
+  onChange: (content: string) => void;
+}
+
+export function TextFields({ content, onChange }: TextFieldsProps) {
   const { t } = useTranslation();
   return (
     <div className="flex gap-3">
@@ -17,7 +19,7 @@ export function TextFields({ text, onChange }: {
           "placeholder:text-muted-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         )}
-        value={text}
+        value={content}
         onChange={(e) => onChange(e.target.value)}
         placeholder={t("presentations.textPlaceholder")}
       />

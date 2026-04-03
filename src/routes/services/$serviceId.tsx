@@ -18,34 +18,41 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../../components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
-import { cn } from "../../lib/utils";
+import { toast } from "sonner";
+import { cn, getFileExt, parseOnlineVideoNotes } from "../../lib/utils";
+import { getScheduledMediaItem } from "../../lib/tauri/media-library";
+import { findOnlineVideoByYtId } from "../../lib/tauri/youtube";
 import { useLiturgies, useSetLiturgyWeekDay } from "../../lib/queries";
+import { defaultBackground } from "../../types/presentation";
 import type { Liturgy, LiturgyItem as ServiceItem, SlideContent } from "../../lib/bindings";
 
 export const Route = createFileRoute("/services/$serviceId")({
   component: LiturgyEditor,
 });
 
-const EMPTY_SLIDE_PROPS = {
-  text: null,
-  title: null,
-  subtitle: null,
-  label: null,
-  videoPath: null,
-  backgroundImage: null,
-  backgroundColor: null,
-  audioPath: null,
-  autoPlay: null,
-  loop: null,
-  muted: null,
-  mode: null,
-  textColor: null,
-  textSize: null,
-  videoUrl: null,
-  videoId: null,
-  videoSource: null,
-  videoTitle: null,
-};
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff", "ico"]);
+const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v", "ts"]);
+const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "flac", "aac", "m4a"]);
+
+function makeTextSlide(content: string): SlideContent {
+  return { slideType: "text", content, background: defaultBackground(), text_color: null, text_size: null };
+}
+
+function makeLyricsSlide(text: string): SlideContent {
+  return { slideType: "lyrics", text, label: null, background: defaultBackground(), text_color: null, text_size: null };
+}
+
+function makeBibleSlide(text: string, reference: string): SlideContent {
+  return { slideType: "bible", text, reference, mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null }, background: defaultBackground(), text_color: null, text_size: null };
+}
+
+function makeImageSlide(path: string): SlideContent {
+  return { slideType: "image", path, caption: null, fit: "contain", background: defaultBackground() };
+}
+
+function makeVideoSlide(path: string): SlideContent {
+  return { slideType: "video", path, auto_play: false, loop_video: false, muted: false, mode: "fullscreen", overlay_text: null, audio_path: null };
+}
 
 const PLAY_STATE_KEY = "activePlayState";
 
@@ -204,33 +211,62 @@ function LiturgyEditor() {
 
     switch (item.itemType) {
       case "hymn":
-        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "lyrics", title: item.title, text: item.notes ?? "" };
+        slideData = makeLyricsSlide(item.notes ?? "");
         break;
       case "bible":
-        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "bible", title: item.title, text: item.notes ?? "" };
+        slideData = makeBibleSlide(item.notes ?? "", item.title);
         break;
       case "presentation":
-        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: "" };
+        slideData = makeTextSlide("");
         break;
       case "annotation":
-        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
+        slideData = makeTextSlide(item.notes ?? "");
         break;
       case "file": {
         const filePath = item.notes ?? "";
-        const ext = filePath.replace(/\\/g, "/").split(".").pop()?.toLowerCase() ?? "";
-        const imageExts = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "tiff"]);
-        const videoExts = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v", "ts"]);
-        if (imageExts.has(ext)) {
-          slideData = { ...EMPTY_SLIDE_PROPS, slideType: "image", label: item.title, backgroundImage: filePath };
-        } else if (videoExts.has(ext)) {
-          slideData = { ...EMPTY_SLIDE_PROPS, slideType: "video", label: item.title, videoPath: filePath };
+        const ext = getFileExt(filePath);
+        if (IMAGE_EXTS.has(ext)) {
+          slideData = makeImageSlide(filePath);
+        } else if (VIDEO_EXTS.has(ext)) {
+          slideData = makeVideoSlide(filePath);
         } else {
-          slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: filePath };
+          slideData = makeTextSlide(filePath);
         }
         break;
       }
+      case "scheduled_category": {
+        const todayDate = new Date().toISOString().slice(0, 10);
+        const mediaItem = await getScheduledMediaItem(item.itemId ?? 0, todayDate);
+        if (!mediaItem) {
+          toast.error(t("mediaLibrary.noItemOnDate", "No item for this date"));
+          return;
+        }
+        const ft = mediaItem.fileType.toLowerCase();
+        if (IMAGE_EXTS.has(ft)) {
+          slideData = makeImageSlide(mediaItem.filePath);
+        } else if (VIDEO_EXTS.has(ft) || AUDIO_EXTS.has(ft)) {
+          slideData = { slideType: "video", path: mediaItem.filePath, auto_play: true, loop_video: false, muted: false, mode: "fullscreen", overlay_text: null, audio_path: null };
+        } else {
+          slideData = makeTextSlide(mediaItem.name);
+        }
+        break;
+      }
+      case "online_video": {
+        const parsed = parseOnlineVideoNotes(item.notes);
+        const videoId = parsed?.videoId ?? "";
+        const dbRecord = videoId ? await findOnlineVideoByYtId(videoId) : null;
+        const localPath = dbRecord?.localPath ?? null;
+        slideData = {
+          slideType: "onlineVideo",
+          url: localPath ?? "",
+          video_id: localPath ? "" : videoId,
+          source: localPath ? "local" : "youtube",
+          title: item.title ?? null,
+        };
+        break;
+      }
       default:
-        slideData = { ...EMPTY_SLIDE_PROPS, slideType: "text", title: item.title, text: item.notes ?? "" };
+        slideData = makeTextSlide(item.notes ?? "");
         break;
     }
 
@@ -240,9 +276,7 @@ function LiturgyEditor() {
       const itemIndex = items.findIndex((i) => i.id === item.id);
       const nextItem = itemIndex + 1 < items.length ? items[itemIndex + 1] : null;
       await setSlideContext({
-        next: nextItem
-          ? { ...EMPTY_SLIDE_PROPS, slideType: "text", title: nextItem.title, text: nextItem.notes ?? "" }
-          : null,
+        next: nextItem ? makeTextSlide(nextItem.notes ?? "") : null,
         index: itemIndex >= 0 ? itemIndex : 0,
         total: items.length,
         title: item.title,

@@ -48,51 +48,37 @@ fn to_streaming_path(path: &str, app_data_dir: Option<&Path>) -> String {
 
 pub(crate) fn streaming_slide_title(slide: &SlideContent) -> String {
     slide
-        .title
-        .clone()
-        .or_else(|| slide.label.clone())
+        .title()
+        .map(str::to_string)
+        .or_else(|| slide.label().map(str::to_string))
         .unwrap_or_default()
 }
 
 pub(crate) fn is_empty_hymn_gap_slide(slide: &SlideContent) -> bool {
-    matches!(slide.slide_type.as_str(), "text" | "lyrics")
-        && slide
-            .text
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .is_empty()
-        && slide
-            .title
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .is_empty()
-        && slide
-            .label
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .is_empty()
+    matches!(slide.slide_type(), "text" | "lyrics")
+        && slide.text().unwrap_or("").trim().is_empty()
+        && slide.title().unwrap_or("").trim().is_empty()
+        && slide.label().unwrap_or("").trim().is_empty()
 }
 
 pub(crate) fn streaming_slide_payload(
     slide: &SlideContent,
     app_data_dir: Option<&Path>,
 ) -> serde_json::Value {
-    let is_image = slide.slide_type == "image";
-    let text_value = slide.text.as_deref().unwrap_or("");
-    let video_path = to_streaming_path(slide.video_path.as_deref().unwrap_or(""), app_data_dir);
+    let slide_type = slide.slide_type();
+    let is_image = slide_type == "image";
+    let text_value = slide.text().unwrap_or("");
+    let video_path = to_streaming_path(slide.video_path().unwrap_or(""), app_data_dir);
     let background_image =
-        to_streaming_path(slide.background_image.as_deref().unwrap_or(""), app_data_dir);
-    let background_color = slide.background_color.as_deref().unwrap_or("");
-    let text_color = slide.text_color.as_deref().unwrap_or("");
-    let audio_path = to_streaming_path(slide.audio_path.as_deref().unwrap_or(""), app_data_dir);
-    let text_size = slide.text_size.unwrap_or(0);
-    let video_url = slide.video_url.as_deref().unwrap_or("");
-    let video_id = slide.video_id.as_deref().unwrap_or("");
-    let video_source = slide.video_source.as_deref().unwrap_or("");
-    let video_title = slide.video_title.as_deref().unwrap_or("");
+        to_streaming_path(slide.background_image().unwrap_or(""), app_data_dir);
+    let background_color = slide.background_color().unwrap_or("");
+    let text_color = slide.text_color().unwrap_or("");
+    let audio_path = to_streaming_path(slide.audio_path().unwrap_or(""), app_data_dir);
+    let text_size = slide.text_size().unwrap_or(0);
+    let video_url = slide.video_url().unwrap_or("");
+    let video_id = slide.video_id().unwrap_or("");
+    let video_source = slide.video_source().unwrap_or("");
+    let video_title = slide.video_title().unwrap_or("");
     let src = if is_image {
         background_image.clone()
     } else {
@@ -100,15 +86,15 @@ pub(crate) fn streaming_slide_payload(
     };
 
     serde_json::json!({
-        "slideType": slide.slide_type,
-        "slide_type": slide.slide_type,
-        "type": slide.slide_type,
+        "slideType": slide_type,
+        "slide_type": slide_type,
+        "type": slide_type,
         "videoPath": video_path,
         "video_path": video_path,
-        "label": slide.label.as_deref().unwrap_or(""),
+        "label": slide.label().unwrap_or(""),
         "text": text_value,
-        "title": slide.title.as_deref().unwrap_or(""),
-        "subtitle": slide.subtitle.as_deref().unwrap_or(""),
+        "title": slide.title().unwrap_or(""),
+        "subtitle": slide.subtitle().unwrap_or(""),
         "backgroundImage": background_image,
         "background_image": background_image,
         "backgroundColor": background_color,
@@ -252,7 +238,7 @@ fn sync_streaming_projection_state(
     app_data_dir: Option<&Path>,
 ) {
     if let Some(slide_data) = current_slide {
-        if slide_data.slide_type == "bible" {
+        if slide_data.slide_type() == "bible" {
             let music_json = serde_json::json!({
                 "slideType": "",
                 "videoPath": "",
@@ -270,11 +256,10 @@ fn sync_streaming_projection_state(
 
             let bible_json = serde_json::json!({
                 "reference": slide_data
-                    .title
-                    .as_deref()
-                    .or(slide_data.label.as_deref())
+                    .title()
+                    .or_else(|| slide_data.label())
                     .unwrap_or(""),
-                "text": slide_data.text.as_deref().unwrap_or(""),
+                "text": slide_data.text().unwrap_or(""),
             });
             server.broadcast_bible(&bible_json.to_string());
         } else {

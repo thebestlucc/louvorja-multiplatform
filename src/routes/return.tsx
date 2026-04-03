@@ -163,7 +163,7 @@ function ReturnPage() {
 
   // Disable pointer events on body when projecting online video (hides YouTube iframe controls)
   useEffect(() => {
-    document.body.style.pointerEvents = currentSlide?.slideType === "online_video" ? "none" : "";
+    document.body.style.pointerEvents = currentSlide?.slideType === "onlineVideo" ? "none" : "";
     return () => { document.body.style.pointerEvents = ""; };
   }, [currentSlide?.slideType]);
 
@@ -196,22 +196,10 @@ function ReturnPage() {
       slideType: "cover",
       title: formatUtilityProjectionValue(utilityProjection, i18n.language),
       subtitle,
-      text: null,
       label: null,
-      videoPath: null,
-      backgroundImage: null,
-      backgroundColor: null,
-      audioPath: null,
-      autoPlay: null,
-      loop: null,
-      muted: null,
-      mode: null,
-      textColor: null,
-      textSize: null,
-      videoUrl: null,
-      videoId: null,
-      videoSource: null,
-      videoTitle: null,
+      background: { kind: "solid", color: "#1a1a2e", imagePath: null, gradientStart: null, gradientEnd: null, gradientAngle: null, opacity: null },
+      text_color: null,
+      text_size: null,
     } satisfies SlideContent;
   }, [currentSlide, defaultSlide, i18n.language, t, utilityProjection]);
 

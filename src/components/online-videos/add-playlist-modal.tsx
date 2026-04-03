@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -14,9 +13,8 @@ import { Button } from "../ui/button";
 import { PlaylistPicker } from "./playlist-picker";
 import type { YoutubePlaylistInfo } from "./playlist-picker";
 import { catcher } from "../../lib/catcher";
-import { fetchYoutubeChannel, addYoutubePlaylist } from "../../lib/tauri";
+import { fetchYoutubeChannel, addYoutubePlaylist, createCustomPlaylist } from "../../lib/tauri";
 import { useYoutubePlaylists } from "../../lib/queries";
-import { usePresentationStore } from "../../stores/presentation-store";
 
 // Types from Rust YoutubeChannelResult (not yet in auto-generated bindings)
 interface YoutubeChannelResult {
@@ -53,8 +51,9 @@ export function AddPlaylistModal({
   const [adding, setAdding] = useState(false);
   const [channelResult, setChannelResult] =
     useState<YoutubeChannelResult | null>(null);
+  const [showVideoCollectionForm, setShowVideoCollectionForm] = useState(false);
+  const [collectionTitle, setCollectionTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
   const { data: existingPlaylists } = useYoutubePlaylists();
   const existingIds = new Set(existingPlaylists?.map((p) => p.playlistId) ?? []);
 
@@ -89,6 +88,9 @@ export function AddPlaylistModal({
         setLoading(false);
         setError(String(err));
       }
+    } else if (urlType === "video") {
+      setLoading(false);
+      setShowVideoCollectionForm(true);
     } else if (urlType === "playlist") {
       // Extract playlist ID and add directly
       const listMatch = url.match(/list=([^&#]+)/);
@@ -149,9 +151,25 @@ export function AddPlaylistModal({
     resetState();
   };
 
+  const handleCreateCustomPlaylist = async () => {
+    if (!collectionTitle.trim()) return;
+    setAdding(true);
+    const [, err] = await catcher(
+      createCustomPlaylist({ collectionTitle: collectionTitle.trim(), videoUrl: url }, apiKey),
+      { notify: true },
+    );
+    setAdding(false);
+    if (!err) {
+      onOpenChange(false);
+      resetState();
+    }
+  };
+
   const resetState = () => {
     setUrl("");
     setChannelResult(null);
+    setShowVideoCollectionForm(false);
+    setCollectionTitle("");
     setError(null);
     setLoading(false);
     setAdding(false);
@@ -170,7 +188,32 @@ export function AddPlaylistModal({
           <DialogTitle>{t("onlineVideos.addModal.title")}</DialogTitle>
         </DialogHeader>
 
-        {!channelResult ? (
+        {showVideoCollectionForm ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              {t("onlineVideos.addModal.videoCollectionHint")}
+            </p>
+            <Input
+              value={collectionTitle}
+              onChange={(e) => setCollectionTitle(e.target.value)}
+              placeholder={t("onlineVideos.addModal.collectionTitlePlaceholder")}
+              autoFocus
+              onKeyDown={(e) => e.key === "Enter" && handleCreateCustomPlaylist()}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowVideoCollectionForm(false)}>
+                {t("actions.cancel")}
+              </Button>
+              <Button
+                onClick={handleCreateCustomPlaylist}
+                disabled={!collectionTitle.trim() || adding}
+              >
+                {adding && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {t("onlineVideos.addModal.createCollection")}
+              </Button>
+            </div>
+          </div>
+        ) : !channelResult ? (
           <div className="flex flex-col gap-4">
             <Input
               value={url}
@@ -178,27 +221,6 @@ export function AddPlaylistModal({
               placeholder={t("onlineVideos.addModal.placeholder")}
               onKeyDown={(e) => e.key === "Enter" && handleFetch()}
             />
-
-            {urlType === "video" && (
-              <div className="rounded-md bg-muted p-3 text-sm">
-                <p className="font-medium">
-                  {t("onlineVideos.addModal.singleVideo")}
-                </p>
-                <p className="text-muted-foreground mt-1">
-                  {t("onlineVideos.addModal.singleVideoHint")}
-                </p>
-                {activeLiturgyId && (
-                  <Link
-                    to="/services/$serviceId"
-                    params={{ serviceId: String(activeLiturgyId) }}
-                  >
-                    <Button variant="outline" size="sm" className="mt-2">
-                      {t("onlineVideos.addModal.addToService")}
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -213,7 +235,6 @@ export function AddPlaylistModal({
                 onClick={handleFetch}
                 disabled={
                   !url.trim() ||
-                  urlType === "video" ||
                   urlType === "unknown" ||
                   loading
                 }
@@ -221,7 +242,9 @@ export function AddPlaylistModal({
                 {loading && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 )}
-                {urlType === "playlist"
+                {urlType === "video"
+                  ? t("onlineVideos.addModal.createCollection")
+                  : urlType === "playlist"
                   ? t("onlineVideos.addModal.addPlaylist")
                   : t("onlineVideos.addModal.fetchChannel")}
               </Button>

@@ -163,15 +163,15 @@ function getSlideTitle(slide: SlideContent): string {
     case "lyrics":
       return slide.label ?? "Lyrics";
     case "bible":
-      return `${slide.label ?? "Bible"}`;
+      return slide.reference?.substring(0, 40) ?? "Bible";
     case "text":
-      return slide.text?.substring(0, 40) ?? "Text";
+      return slide.content?.substring(0, 40) ?? "Text";
     case "pause":
       return "Pause";
     case "image":
-      return slide.label ?? "Image";
+      return slide.caption ?? "Image";
     case "video":
-      return slide.label ?? "Video";
+      return slide.overlay_text ?? "Video";
     default:
       return "Slide";
   }

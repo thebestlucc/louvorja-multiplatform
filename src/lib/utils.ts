@@ -22,3 +22,12 @@ export function isVideoFormatSupported(filename: string): boolean {
 export function getConversionRecommendation(_format: string): string {
   return "MP4";
 }
+
+export function getFileExt(filePath: string): string {
+  return filePath.replace(/\\/g, "/").split(".").pop()?.toLowerCase() ?? "";
+}
+
+export function parseOnlineVideoNotes(notes: string | null): { videoId?: string; videoSource?: string } | null {
+  try { return JSON.parse(notes ?? "") as { videoId?: string; videoSource?: string }; }
+  catch { return null; }
+}
