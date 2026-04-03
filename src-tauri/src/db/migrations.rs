@@ -1525,7 +1525,7 @@ fn migrate_v40(conn: &Connection) -> Result<(), AppError> {
     };
 
     for (id, content_str) in rows {
-        let mut obj: Map<String, Value> = match serde_json::from_str(&content_str) {
+        let obj: Map<String, Value> = match serde_json::from_str(&content_str) {
             Ok(Value::Object(m)) => m,
             _ => continue,
         };

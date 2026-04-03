@@ -125,6 +125,7 @@ pub fn get_slides(conn: &Connection, presentation_id: i64) -> Result<Vec<Slide>,
     Ok(slides)
 }
 
+#[allow(dead_code)]
 pub fn insert_slide(
     conn: &Connection,
     presentation_id: i64,
@@ -173,6 +174,7 @@ pub fn insert_slide_with_metadata(
     Ok(conn.last_insert_rowid())
 }
 
+#[allow(dead_code)]
 pub fn update_slide(conn: &Connection, id: i64, content_json: &str) -> Result<(), AppError> {
     let presentation_id: i64 = conn
         .query_row(

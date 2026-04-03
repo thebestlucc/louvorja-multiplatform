@@ -111,7 +111,7 @@ pub fn get_available_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, AppErr
                 .and_then(detect_manufacturer)
                 .or_else(|| detect_manufacturer(&tauri_name));
             let model = extract_model(
-                friendly_name.as_ref().map(|s| s.as_str()),
+                friendly_name.as_deref(),
                 manufacturer.as_deref(),
             );
             let connection_type =

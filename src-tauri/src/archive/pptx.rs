@@ -131,6 +131,8 @@ pub fn read_pptx(path: &Path) -> Result<PresentationArchive, AppError> {
 
 // ─── New typed import/export functions ────────────────────────────────────────
 
+type ParsedSlide = (SlideContent, Option<String>, Option<TransitionConfig>);
+
 /// Import a PPTX file → Vec of (SlideContent, optional speaker notes).
 ///
 /// Images found in the PPTX are extracted to `media_dest/{sha256}.{ext}` and
@@ -138,7 +140,7 @@ pub fn read_pptx(path: &Path) -> Result<PresentationArchive, AppError> {
 pub fn import_pptx_slides(
     path: &Path,
     media_dest: &Path,
-) -> Result<Vec<(SlideContent, Option<String>, Option<TransitionConfig>)>, AppError> {
+) -> Result<Vec<ParsedSlide>, AppError> {
     let path_str = path
         .to_str()
         .ok_or_else(|| AppError::Internal("PPTX path is not valid UTF-8".into()))?;
@@ -574,8 +576,8 @@ fn parse_slide_rels(
                     if !rid.is_empty() && !target.is_empty() {
                         // Target is relative to ppt/slides/, e.g. "../media/image1.png"
                         // Normalize to zip path: "ppt/media/image1.png"
-                        let normalized = if target.starts_with("../") {
-                            format!("ppt/{}", &target[3..])
+                        let normalized = if let Some(stripped) = target.strip_prefix("../") {
+                            format!("ppt/{}", stripped)
                         } else if target.starts_with('/') {
                             target.trim_start_matches('/').to_string()
                         } else {
@@ -659,17 +661,12 @@ fn detect_slide_image(
                     pic_rid = None;
                     pic_cx = 0;
                     pic_cy = 0;
-                } else if in_pic {
-                    match ln {
-                        b"ext" => {
-                            if let Some(cx) = get_attr(e, b"cx") {
-                                pic_cx = cx.parse::<i64>().unwrap_or(0);
-                            }
-                            if let Some(cy) = get_attr(e, b"cy") {
-                                pic_cy = cy.parse::<i64>().unwrap_or(0);
-                            }
-                        }
-                        _ => {}
+                } else if in_pic && ln == b"ext" {
+                    if let Some(cx) = get_attr(e, b"cx") {
+                        pic_cx = cx.parse::<i64>().unwrap_or(0);
+                    }
+                    if let Some(cy) = get_attr(e, b"cy") {
+                        pic_cy = cy.parse::<i64>().unwrap_or(0);
                     }
                 }
             }
@@ -935,9 +932,7 @@ fn extract_slide_formatting(
                         bg_fill_depth = 0;
                     }
                     b"solidFill" if in_bg => {
-                        if bg_fill_depth > 0 {
-                            bg_fill_depth -= 1;
-                        }
+                        bg_fill_depth = bg_fill_depth.saturating_sub(1);
                     }
                     b"txBody" => in_body = false,
                     b"rPr" => in_run_props = false,
@@ -1148,44 +1143,42 @@ fn extract_slide_content(
                             background_color = Some(format!("#{}", color));
                         }
                     }
-                } else {
-                    if local == b"ph" {
-                        for attr in e.attributes().flatten() {
-                            if local_name(attr.key.as_ref()) == b"type" {
-                                if let Ok(val) = std::str::from_utf8(&attr.value) {
-                                    placeholder_type = val.to_string();
-                                }
+                } else if local == b"ph" {
+                    for attr in e.attributes().flatten() {
+                        if local_name(attr.key.as_ref()) == b"type" {
+                            if let Ok(val) = std::str::from_utf8(&attr.value) {
+                                placeholder_type = val.to_string();
                             }
                         }
-                    } else if local == b"txBody" {
-                        in_txbody = true;
-                    } else if in_txbody && local == b"p" {
-                        in_paragraph = true;
-                        current_paragraph_runs.clear();
-                    } else if in_paragraph && local == b"r" {
-                        in_run = true;
-                    } else if in_run && local == b"rPr" {
-                        in_rpr = true;
-                        if shape_text_size.is_none() {
-                            for attr in e.attributes().flatten() {
-                                if local_name(attr.key.as_ref()) == b"sz" {
-                                    if let Ok(val) = std::str::from_utf8(&attr.value) {
-                                        if let Ok(sz) = val.parse::<i32>() {
-                                            shape_text_size = Some((sz / 100).clamp(8, 96));
-                                        }
+                    }
+                } else if local == b"txBody" {
+                    in_txbody = true;
+                } else if in_txbody && local == b"p" {
+                    in_paragraph = true;
+                    current_paragraph_runs.clear();
+                } else if in_paragraph && local == b"r" {
+                    in_run = true;
+                } else if in_run && local == b"rPr" {
+                    in_rpr = true;
+                    if shape_text_size.is_none() {
+                        for attr in e.attributes().flatten() {
+                            if local_name(attr.key.as_ref()) == b"sz" {
+                                if let Ok(val) = std::str::from_utf8(&attr.value) {
+                                    if let Ok(sz) = val.parse::<i32>() {
+                                        shape_text_size = Some((sz / 100).clamp(8, 96));
                                     }
                                 }
                             }
                         }
-                    } else if in_rpr && local == b"solidFill" {
-                        in_rpr_fill = true;
-                    } else if in_rpr_fill && local == b"srgbClr" && shape_text_color.is_none() {
-                        if let Some(color) = extract_attr_val(e.attributes()) {
-                            shape_text_color = Some(format!("#{}", color));
-                        }
-                    } else if in_paragraph && local == b"t" {
-                        in_text_elem = true;
                     }
+                } else if in_rpr && local == b"solidFill" {
+                    in_rpr_fill = true;
+                } else if in_rpr_fill && local == b"srgbClr" && shape_text_color.is_none() {
+                    if let Some(color) = extract_attr_val(e.attributes()) {
+                        shape_text_color = Some(format!("#{}", color));
+                    }
+                } else if in_paragraph && local == b"t" {
+                    in_text_elem = true;
                 }
             }
             Ok(Event::Empty(ref e)) => {
@@ -1199,33 +1192,31 @@ fn extract_slide_content(
                             background_color = Some(format!("#{}", color));
                         }
                     }
-                } else {
-                    if local == b"ph" {
-                        for attr in e.attributes().flatten() {
-                            if local_name(attr.key.as_ref()) == b"type" {
-                                if let Ok(val) = std::str::from_utf8(&attr.value) {
-                                    placeholder_type = val.to_string();
-                                }
+                } else if local == b"ph" {
+                    for attr in e.attributes().flatten() {
+                        if local_name(attr.key.as_ref()) == b"type" {
+                            if let Ok(val) = std::str::from_utf8(&attr.value) {
+                                placeholder_type = val.to_string();
                             }
                         }
-                    } else if in_paragraph && local == b"br" {
-                        current_paragraph_runs.push("\n".to_string());
-                    } else if in_run && local == b"rPr" {
-                        if shape_text_size.is_none() {
-                            for attr in e.attributes().flatten() {
-                                if local_name(attr.key.as_ref()) == b"sz" {
-                                    if let Ok(val) = std::str::from_utf8(&attr.value) {
-                                        if let Ok(sz) = val.parse::<i32>() {
-                                            shape_text_size = Some((sz / 100).clamp(8, 96));
-                                        }
+                    }
+                } else if in_paragraph && local == b"br" {
+                    current_paragraph_runs.push("\n".to_string());
+                } else if in_run && local == b"rPr" {
+                    if shape_text_size.is_none() {
+                        for attr in e.attributes().flatten() {
+                            if local_name(attr.key.as_ref()) == b"sz" {
+                                if let Ok(val) = std::str::from_utf8(&attr.value) {
+                                    if let Ok(sz) = val.parse::<i32>() {
+                                        shape_text_size = Some((sz / 100).clamp(8, 96));
                                     }
                                 }
                             }
                         }
-                    } else if in_rpr_fill && local == b"srgbClr" && shape_text_color.is_none() {
-                        if let Some(color) = extract_attr_val(e.attributes()) {
-                            shape_text_color = Some(format!("#{}", color));
-                        }
+                    }
+                } else if in_rpr_fill && local == b"srgbClr" && shape_text_color.is_none() {
+                    if let Some(color) = extract_attr_val(e.attributes()) {
+                        shape_text_color = Some(format!("#{}", color));
                     }
                 }
             }
@@ -1245,38 +1236,36 @@ fn extract_slide_content(
                     } else if local == b"solidFill" && bg_in_fill {
                         bg_in_fill = false;
                     }
-                } else {
-                    if local == b"sp" {
-                        in_sp = false;
-                        if current_paragraphs.iter().any(|p| !p.trim().is_empty()) {
-                            shapes.push(ShapeText {
-                                placeholder_type: placeholder_type.clone(),
-                                paragraphs: current_paragraphs.clone(),
-                                text_color: shape_text_color.clone(),
-                                text_size: shape_text_size,
-                            });
-                        }
-                    } else if local == b"t" && in_text_elem {
-                        in_text_elem = false;
-                    } else if local == b"r" && in_run {
-                        in_run = false;
-                        in_rpr = false;
-                        in_rpr_fill = false;
-                    } else if local == b"rPr" && in_rpr {
-                        in_rpr = false;
-                        in_rpr_fill = false;
-                    } else if local == b"solidFill" && in_rpr_fill {
-                        in_rpr_fill = false;
-                    } else if local == b"p" && in_paragraph {
-                        in_paragraph = false;
-                        in_run = false;
-                        let para_text = current_paragraph_runs.join("");
-                        current_paragraphs.push(para_text);
-                    } else if local == b"txBody" {
-                        in_txbody = false;
-                        in_paragraph = false;
-                        in_run = false;
+                } else if local == b"sp" {
+                    in_sp = false;
+                    if current_paragraphs.iter().any(|p| !p.trim().is_empty()) {
+                        shapes.push(ShapeText {
+                            placeholder_type: placeholder_type.clone(),
+                            paragraphs: current_paragraphs.clone(),
+                            text_color: shape_text_color.clone(),
+                            text_size: shape_text_size,
+                        });
                     }
+                } else if local == b"t" && in_text_elem {
+                    in_text_elem = false;
+                } else if local == b"r" && in_run {
+                    in_run = false;
+                    in_rpr = false;
+                    in_rpr_fill = false;
+                } else if local == b"rPr" && in_rpr {
+                    in_rpr = false;
+                    in_rpr_fill = false;
+                } else if local == b"solidFill" && in_rpr_fill {
+                    in_rpr_fill = false;
+                } else if local == b"p" && in_paragraph {
+                    in_paragraph = false;
+                    in_run = false;
+                    let para_text = current_paragraph_runs.join("");
+                    current_paragraphs.push(para_text);
+                } else if local == b"txBody" {
+                    in_txbody = false;
+                    in_paragraph = false;
+                    in_run = false;
                 }
             }
             Ok(Event::Text(ref e)) => {

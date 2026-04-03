@@ -238,14 +238,10 @@ fn handle_video_connection(
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
 
     // Keep-alive loop: handle multiple requests per connection
-    loop {
-        let request = match parse_http_request(&stream) {
-            Some(r) => r,
-            None => break, // Client closed or timeout
-        };
+    while let Some(request) = parse_http_request(&stream) {
 
         // Only log non-range requests to avoid flooding stdout during seeking
-        if request.headers.get("range").is_none() {
+        if !request.headers.contains_key("range") {
             println!(
                 "[video-server] {} {}",
                 request.method,

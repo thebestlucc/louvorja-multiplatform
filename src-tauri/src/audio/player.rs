@@ -78,6 +78,8 @@ struct VariantSession {
     active_variant: AudioVariant,
 }
 
+type AudioDecoder = Decoder<BufReader<Cursor<Arc<[u8]>>>>;
+
 impl VariantSession {
     fn active_track(&self) -> &VariantTrackSession {
         match self.active_variant {
@@ -530,7 +532,7 @@ impl AudioPlayer {
 
     fn decode_audio_bytes(
         bytes: Arc<[u8]>,
-    ) -> Result<Decoder<BufReader<Cursor<Arc<[u8]>>>>, AppError> {
+    ) -> Result<AudioDecoder, AppError> {
         Decoder::new(BufReader::new(Cursor::new(bytes)))
             .map_err(|e| AppError::Internal(format!("Failed to decode audio: {}", e)))
     }
