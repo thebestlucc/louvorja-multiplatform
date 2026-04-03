@@ -5,6 +5,7 @@ const SPOTLIGHT_W: f64 = 680.0;
 const SPOTLIGHT_H: f64 = 480.0;
 
 #[cfg(target_os = "macos")]
+#[allow(clippy::unused_unit)]
 mod macos {
     use super::*;
     use monitor::get_monitor_with_cursor;

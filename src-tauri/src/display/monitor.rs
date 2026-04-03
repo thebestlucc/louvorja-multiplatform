@@ -195,9 +195,7 @@ pub fn extract_model(value: Option<&str>, manufacturer: Option<&str>) -> Option<
     };
 
     let mut tokens = raw.split_whitespace();
-    let Some(first_token) = tokens.next() else {
-        return None;
-    };
+    let first_token = tokens.next()?;
 
     if first_token.eq_ignore_ascii_case(manufacturer) {
         let remainder = tokens.collect::<Vec<_>>().join(" ");

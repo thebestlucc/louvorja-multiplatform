@@ -18,7 +18,6 @@ pub fn init_bible_db(bible_db_path: &Path) -> Result<Pool<SqliteConnectionManage
              PRAGMA foreign_keys=ON;
              PRAGMA busy_timeout=5000;",
         )
-        .map_err(Into::into)
     });
     let pool = Pool::builder()
         .max_size(2)
@@ -78,7 +77,6 @@ pub fn init_db(app_data_dir: &Path) -> Result<Pool<SqliteConnectionManager>, App
              PRAGMA foreign_keys=ON;
              PRAGMA busy_timeout=5000;",
         )
-        .map_err(Into::into)
     });
 
     let pool = Pool::builder()

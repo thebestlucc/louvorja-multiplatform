@@ -753,7 +753,6 @@ pub fn open_content_db_pool(path: &Path) -> Result<Pool<SqliteConnectionManager>
              PRAGMA cache_size=-4000;
              PRAGMA busy_timeout=5000;",
         )
-        .map_err(Into::into)
     });
     Pool::builder()
         .min_idle(Some(0))

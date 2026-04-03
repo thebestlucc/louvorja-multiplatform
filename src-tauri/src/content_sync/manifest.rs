@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::error::AppError;
 
-const MAX_MANIFEST_BYTES: usize = 1 * 1024 * 1024; // 1 MiB limit for manifest JSON
+const MAX_MANIFEST_BYTES: usize = 1024 * 1024; // 1 MiB limit for manifest JSON
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

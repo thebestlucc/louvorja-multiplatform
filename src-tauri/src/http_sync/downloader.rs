@@ -39,6 +39,7 @@ fn validate_https_url(url: &str) -> Result<(), AppError> {
 /// this handle are deprioritized at the kernel I/O scheduler level.
 /// This applies regardless of which thread (including tokio thread pool) submits the I/O.
 #[cfg(target_os = "windows")]
+#[allow(dead_code)]
 fn set_file_io_priority_low(file: &std::fs::File) {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::SetFileInformationByHandle;
@@ -59,6 +60,7 @@ fn set_file_io_priority_low(file: &std::fs::File) {
 }
 
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 fn set_file_io_priority_low(_file: &std::fs::File) {}
 
 /// Creates a file with FILE_FLAG_SEQUENTIAL_SCAN on Windows for optimized cache behavior.
@@ -189,6 +191,7 @@ pub async fn download_file_http(
 
 /// Extract a ZIP file into `dest_dir`, preserving internal paths.
 /// Used by the pack_sync executor after SHA-256 verification.
+#[allow(dead_code)]
 pub fn extract_zip_to(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     extract_zip(zip_path, dest_dir)
 }

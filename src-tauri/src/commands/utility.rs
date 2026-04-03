@@ -117,7 +117,7 @@ pub fn open_media_folder(app: AppHandle) -> Result<(), AppError> {
     // Create the folder if it doesn't exist yet so opener doesn't fail
     if !media_dir.exists() {
         std::fs::create_dir_all(&media_dir)
-            .map_err(|e| AppError::Io(e))?;
+            .map_err(AppError::Io)?;
     }
 
     tauri_plugin_opener::open_path(media_dir, None::<&str>)
