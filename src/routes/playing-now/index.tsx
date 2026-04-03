@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useMediaPlayer } from "../../hooks/use-media-player";
 import { usePlaybackCoordinator } from "../../hooks/use-playback-coordinator";
+import { usePlayingNowKeyboard } from "../../hooks/use-playing-now-keyboard";
 import { useAudioStore } from "../../stores/audio-store";
 import { useDisplayStore } from "../../stores/display-store";
 import { usePresentationStore } from "../../stores/presentation-store";
@@ -20,6 +21,7 @@ function PlayingNowScreen() {
   // Mount coordination hooks
   usePlaybackCoordinator();
   const actions = useMediaPlayer();
+  usePlayingNowKeyboard(actions);
 
   // Read store state
   const {

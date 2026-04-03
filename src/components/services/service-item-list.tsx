@@ -694,7 +694,7 @@ function CategoryDivider({
 
 function SortableLiturgyItem({
   item,
-  serviceDate,
+  serviceDate: _serviceDate,
   index,
   isActive,
   onRemove,
@@ -785,7 +785,7 @@ function SortableLiturgyItem({
           </p>
           <p className="text-xs text-muted-foreground">{typeLabel}</p>
           {isScheduledCategory ? (
-            <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? null} />
+            <ScheduledItemBadge categoryId={item.itemId ?? 0} date={new Date().toISOString().slice(0, 10)} />
           ) : item.itemType === "file" && item.notes ? (
             <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60" title={item.notes}>
               {getShortenedPath(item.notes)}
@@ -843,7 +843,7 @@ function ScheduledItemBadge({ categoryId, date }: { categoryId: number; date: st
 
   if (!mediaItem) {
     return (
-      <Badge variant="outline" className="mt-1 h-5 px-1.5 text-[10px] border-destructive/30 text-destructive bg-destructive/5">
+      <Badge variant="outline" className="mt-1 h-5 px-1.5 text-[10px] border-amber-500/30 text-amber-600 bg-amber-500/5">
         {t("mediaLibrary.noItemOnDate", "No item for this date")}
       </Badge>
     );

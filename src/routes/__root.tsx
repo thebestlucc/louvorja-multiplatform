@@ -376,8 +376,8 @@ function RootLayout() {
             </span>
             <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium tabular-nums shrink-0">
               {t("services.progressOf", {
-                current: liturgyItems.slice(0, activeLiturgyItemIndex + 1).filter((i) => i.itemType !== "hymn").length,
-                total: liturgyItems.filter((i) => i.itemType !== "hymn").length,
+                current: activeLiturgyItemIndex + 1,
+                total: liturgyItems.length,
               })}
             </span>
 

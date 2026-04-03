@@ -45,7 +45,7 @@ pub fn insert_playlist(
 pub fn get_playlists(conn: &Connection) -> Result<Vec<OnlineVideoPlaylist>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT p.id, p.id_channel, p.playlist_id, p.title, p.description, p.images, p.status,
-                p.error, p.cover_path,
+                p.error, p.cover_path, p.is_custom,
                 c.title as channel_title,
                 (SELECT COUNT(*) FROM online_videos WHERE id_playlist = p.id) as video_count
          FROM online_videos_playlists p
@@ -65,6 +65,7 @@ pub fn get_playlists(conn: &Connection) -> Result<Vec<OnlineVideoPlaylist>, AppE
             cover_path: row.get("cover_path")?,
             channel_title: row.get("channel_title")?,
             video_count: row.get("video_count")?,
+            is_custom: row.get::<_, i64>("is_custom").unwrap_or(0) != 0,
         })
     })?;
     let mut result = Vec::new();
@@ -78,7 +79,7 @@ pub fn get_playlist(conn: &Connection, playlist_id: &str) -> Result<OnlineVideoP
     let row = conn
         .query_row(
             "SELECT p.id, p.id_channel, p.playlist_id, p.title, p.description, p.images, p.status,
-                p.error, p.cover_path,
+                p.error, p.cover_path, p.is_custom,
                 c.title as channel_title,
                 (SELECT COUNT(*) FROM online_videos WHERE id_playlist = p.id) as video_count
          FROM online_videos_playlists p
@@ -98,6 +99,7 @@ pub fn get_playlist(conn: &Connection, playlist_id: &str) -> Result<OnlineVideoP
                     cover_path: row.get("cover_path")?,
                     channel_title: row.get("channel_title")?,
                     video_count: row.get("video_count")?,
+                    is_custom: row.get::<_, i64>("is_custom").unwrap_or(0) != 0,
                 })
             },
         )
@@ -108,6 +110,18 @@ pub fn get_playlist(conn: &Connection, playlist_id: &str) -> Result<OnlineVideoP
             other => AppError::Database(other),
         })?;
     Ok(row)
+}
+
+pub fn update_playlist_cover(
+    conn: &Connection,
+    playlist_id: &str,
+    cover_path: Option<&str>,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE online_videos_playlists SET cover_path = ?1, updated_at = CURRENT_TIMESTAMP WHERE playlist_id = ?2",
+        params![cover_path, playlist_id],
+    )?;
+    Ok(())
 }
 
 pub fn delete_playlist(conn: &Connection, playlist_id: &str) -> Result<(), AppError> {
@@ -231,6 +245,43 @@ pub fn clear_video_local_path(
     conn.execute(
         "UPDATE online_videos SET local_path = NULL, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE video_id = ?1",
         params![video_id],
+    )?;
+    Ok(())
+}
+
+pub fn create_custom_playlist(
+    conn: &Connection,
+    title: &str,
+    playlist_id: &str,
+) -> Result<i64, AppError> {
+    conn.execute(
+        "INSERT INTO online_videos_playlists (playlist_id, title, status, is_custom)
+         VALUES (?1, ?2, 'validated', 1)
+         ON CONFLICT(playlist_id) DO UPDATE SET title = ?2, updated_at = CURRENT_TIMESTAMP",
+        params![playlist_id, title],
+    )?;
+    let id = conn.query_row(
+        "SELECT id FROM online_videos_playlists WHERE playlist_id = ?1",
+        params![playlist_id],
+        |row| row.get(0),
+    )?;
+    Ok(id)
+}
+
+pub fn upsert_single_video(
+    conn: &Connection,
+    playlist_db_id: i64,
+    video_id: &str,
+    title: &str,
+    thumbnail_url: &str,
+    duration_seconds: Option<i64>,
+) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO online_videos (id_playlist, video_id, title, images, duration_seconds, sequence, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, 'pending')
+         ON CONFLICT(id_playlist, video_id) DO UPDATE SET
+            title = ?3, images = ?4, duration_seconds = ?5, updated_at = CURRENT_TIMESTAMP",
+        params![playlist_db_id, video_id, title, thumbnail_url, duration_seconds],
     )?;
     Ok(())
 }

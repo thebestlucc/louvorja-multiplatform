@@ -1,4 +1,5 @@
 use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, SlideContext, Verse};
+use crate::db::models::slides::{BibleMode, BackgroundConfig, BackgroundKind};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::utils::catcher::catcher;
@@ -19,16 +20,16 @@ fn broadcast_bible_stream_payloads(
 
     let bible_json = serde_json::json!({
         "reference": reference,
-        "text": slide_data.text.as_deref().unwrap_or(""),
+        "text": slide_data.text().unwrap_or(""),
     });
     server.broadcast_bible(&bible_json.to_string());
 
     let return_json = serde_json::json!({
         "current": {
-            "label": slide_data.label.as_deref().unwrap_or(""),
-            "text": slide_data.text.as_deref().unwrap_or(""),
-            "title": slide_data.title.as_deref().unwrap_or(""),
-            "subtitle": slide_data.subtitle.as_deref().unwrap_or(""),
+            "label": slide_data.label().unwrap_or(""),
+            "text": slide_data.text().unwrap_or(""),
+            "title": slide_data.title().unwrap_or(""),
+            "subtitle": slide_data.subtitle().unwrap_or(""),
         },
         "next": null,
         "index": 0,
@@ -146,26 +147,13 @@ pub fn project_bible_verse(
         format!("{} {}:{}-{}", book, chapter, start, end)
     };
 
-    let slide_data = SlideContent {
-        slide_type: "bible".to_string(),
-        text: Some(text),
-        title: Some(reference.clone()),
-        subtitle: None,
-        label: None,
-        video_path: None,
-        background_image: None,
-        background_color: None,
-        audio_path: None,
-        auto_play: None,
-        r#loop: None,
-        muted: None,
-        mode: None,
+    let slide_data = SlideContent::Bible {
+        reference: reference.clone(),
+        text,
+        mode: BibleMode::default(),
+        background: BackgroundConfig { kind: BackgroundKind::Solid, color: Some("#1a1a2e".to_string()), ..Default::default() },
         text_color: None,
         text_size: None,
-        video_url: None,
-        video_id: None,
-        video_source: None,
-        video_title: None,
     };
 
     drop(conn);
@@ -234,12 +222,12 @@ pub fn navigate_bible_verse(
     };
 
     let slide = current_slide.ok_or_else(|| AppError::Internal("No slide projected".into()))?;
-    if slide.slide_type != "bible" {
+    if slide.slide_type() != "bible" {
         return Ok(()); // Not a bible slide, ignore
     }
 
     // Parse reference from title: "Book Chapter:Start" or "Book Chapter:Start-End"
-    let reference = slide.title.as_deref().unwrap_or("");
+    let reference = slide.title().unwrap_or("");
     let (book, chapter, verse_start) = parse_bible_reference(reference)?;
 
     let (conn, err) = catcher(state.bible_db.get());
@@ -344,26 +332,13 @@ pub fn navigate_bible_verse(
     let text = format!("{} {}", v.verse, v.text);
     let new_reference = format!("{} {}:{}", new_book, new_chapter, new_verse);
 
-    let slide_data = SlideContent {
-        slide_type: "bible".to_string(),
-        text: Some(text),
-        title: Some(new_reference.clone()),
-        subtitle: None,
-        label: None,
-        video_path: None,
-        background_image: None,
-        background_color: None,
-        audio_path: None,
-        auto_play: None,
-        r#loop: None,
-        muted: None,
-        mode: None,
+    let slide_data = SlideContent::Bible {
+        reference: new_reference.clone(),
+        text,
+        mode: BibleMode::default(),
+        background: BackgroundConfig { kind: BackgroundKind::Solid, color: Some("#1a1a2e".to_string()), ..Default::default() },
         text_color: None,
         text_size: None,
-        video_url: None,
-        video_id: None,
-        video_source: None,
-        video_title: None,
     };
 
     drop(conn);

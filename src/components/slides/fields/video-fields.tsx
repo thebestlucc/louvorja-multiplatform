@@ -1,41 +1,41 @@
 import { useTranslation } from "react-i18next";
-import type { SlideContent } from "../../../types/presentation";
-import { Input } from "../../ui/input";
+import type { SlideContent } from "../../../lib/bindings";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../ui/select";
 import { cn } from "../../../lib/utils";
 import { VideoPicker } from "../video-picker";
 import { ToggleField } from "./toggle-field";
 
-export function VideoFields({
-  slide,
-  onChange,
-}: {
-  slide: SlideContent;
-  onChange: (slide: SlideContent) => void;
-}) {
+type VideoSlide = Extract<SlideContent, { slideType: "video" }>;
+
+interface VideoFieldsProps {
+  slide: VideoSlide;
+  onChange: (slide: VideoSlide) => void;
+}
+
+export function VideoFields({ slide, onChange }: VideoFieldsProps) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-4">
       <VideoPicker
         value={slide}
-        onChange={(next) => onChange(next)}
+        onChange={(next) => onChange(next as VideoSlide)}
       />
 
       <div className="grid grid-cols-2 gap-3">
         <ToggleField
           label={t("presentations.videoAutoPlay")}
-          checked={slide.autoPlay ?? true}
-          onToggle={() => onChange({ ...slide, autoPlay: !slide.autoPlay })}
+          checked={slide.auto_play}
+          onToggle={() => onChange({ ...slide, auto_play: !slide.auto_play })}
         />
         <ToggleField
           label={t("presentations.videoLoop")}
-          checked={slide.loop ?? false}
-          onToggle={() => onChange({ ...slide, loop: !slide.loop })}
+          checked={slide.loop_video}
+          onToggle={() => onChange({ ...slide, loop_video: !slide.loop_video })}
         />
         <ToggleField
           label={t("presentations.videoMuted")}
-          checked={slide.muted ?? false}
+          checked={slide.muted}
           onToggle={() => onChange({ ...slide, muted: !slide.muted })}
         />
       </div>
@@ -44,7 +44,7 @@ export function VideoFields({
         <label className="text-sm font-medium text-muted-foreground w-24 shrink-0">
           {t("presentations.videoMode")}
         </label>
-        <Select value={slide.mode ?? "fullscreen"} onValueChange={(value) => onChange({ ...slide, mode: value })}>
+        <Select value={slide.mode} onValueChange={(value) => onChange({ ...slide, mode: value as VideoSlide["mode"] })}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
@@ -67,33 +67,10 @@ export function VideoFields({
                 "placeholder:text-muted-foreground",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               )}
-              value={slide.text ?? ""}
-              onChange={(e) => onChange({ ...slide, text: e.target.value || null })}
+              value={slide.overlay_text ?? ""}
+              onChange={(e) => onChange({ ...slide, overlay_text: e.target.value || null })}
               placeholder={t("presentations.videoOverlayPlaceholder")}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground w-24 shrink-0">
-                {t("presentations.videoTextColor")}
-              </label>
-              <Input
-                value={slide.textColor ?? "#ffffff"}
-                onChange={(e) => onChange({ ...slide, textColor: e.target.value })}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground w-24 shrink-0">
-                {t("presentations.videoTextSize")}
-              </label>
-              <Input
-                type="number"
-                min={12}
-                max={120}
-                value={slide.textSize ?? 42}
-                onChange={(e) => onChange({ ...slide, textSize: Number(e.target.value) || 42 })}
-              />
-            </div>
           </div>
         </>
       )}

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { FileIcon, MoreVertical, Trash2, Edit2, Plus, Calendar } from "lucide-react";
+import { FileIcon, MoreVertical, Trash2, Edit2, Plus, Calendar, Music, Video, ImageIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { useMediaLibraryItemsByDate, useUpsertMediaLibraryItem, useDeleteMediaLibraryItem } from "../../lib/queries";
 import { MediaLibraryItem } from "../../lib/bindings";
@@ -11,6 +12,18 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { catcher } from "../../lib/catcher";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
+
+const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "ogg", "flac", "aac", "m4a"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v"]);
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif"]);
+
+function getFileTypeIcon(fileType: string): { icon: LucideIcon; color: string; bg: string } {
+  const ext = fileType.toLowerCase();
+  if (AUDIO_EXTENSIONS.has(ext)) return { icon: Music, color: "text-blue-500", bg: "bg-blue-500/10" };
+  if (VIDEO_EXTENSIONS.has(ext)) return { icon: Video, color: "text-red-500", bg: "bg-red-500/10" };
+  if (IMAGE_EXTENSIONS.has(ext)) return { icon: ImageIcon, color: "text-green-500", bg: "bg-green-500/10" };
+  return { icon: FileIcon, color: "text-muted-foreground", bg: "bg-accent/5" };
+}
 
 interface ItemGridProps {
   categoryId: number | null;
@@ -45,7 +58,7 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
       multiple: false,
       filters: [{
         name: "Media",
-        extensions: ["mp4", "webm", "mov", "m4v", "ogv", "3gp", "pdf", "jpg", "jpeg", "png", "webp", "gif", "svg", "bmp", "avif", "tif", "tiff", "ico"]
+        extensions: ["mp3", "wav", "ogg", "flac", "aac", "m4a", "mp4", "webm", "mov", "m4v", "ogv", "3gp", "jpg", "jpeg", "png", "webp", "gif", "svg", "bmp", "avif", "tif", "tiff", "ico"]
       }]
     });
     if (selected && typeof selected === "string") {
@@ -140,9 +153,11 @@ export function ItemGrid({ categoryId, selectedDate }: ItemGridProps) {
                   onClick={() => {/* TODO: Implement direct projection from library */}}
                 >
                   <div className="min-w-0 flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent/5 text-muted-foreground">
-                      <FileIcon className="h-4 w-4" />
+                    {(() => { const { icon: Icon, color, bg } = getFileTypeIcon(item.fileType); return (
+                    <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded", bg, color)}>
+                      <Icon className="h-4 w-4" />
                     </div>
+                    ); })()}
                     <div className="min-w-0 flex flex-col">
                       <span className="truncate font-medium text-foreground" title={item.name}>
                         {item.name}

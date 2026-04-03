@@ -74,34 +74,21 @@ function parseFirstStanza(lyrics: string | null): string {
   return stanzas[0] ?? "";
 }
 
-const EMPTY_SLIDE_PROPS = {
-  text: null,
-  title: null,
-  subtitle: null,
-  label: null,
-  videoPath: null,
-  backgroundImage: null,
-  backgroundColor: null,
-  audioPath: null,
-  autoPlay: null,
-  loop: null,
-  muted: null,
-  mode: null,
-  textColor: null,
-  textSize: null,
-  videoUrl: null,
-  videoId: null,
-  videoSource: null,
-  videoTitle: null,
+const _SPOT_DEFAULT_BG: import("../lib/bindings").BackgroundConfig = {
+  kind: "solid", color: "#1a1a2e", imagePath: null,
+  gradientStart: null, gradientEnd: null, gradientAngle: null, opacity: null,
 };
 
 async function projectBibleVerse(result: BibleSearchResult) {
   const { verse, bookName } = result;
   await setCurrentSlide({
-    ...EMPTY_SLIDE_PROPS,
     slideType: "bible",
     text: verse.text,
-    title: `${bookName} ${verse.chapter}:${verse.verse}`,
+    reference: `${bookName} ${verse.chapter}:${verse.verse}`,
+    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null },
+    background: _SPOT_DEFAULT_BG,
+    text_color: null,
+    text_size: null,
   });
 }
 
@@ -109,10 +96,12 @@ async function projectHymnFirstStanza(hymn: Hymn) {
   const fullHymn = await getHymn(hymn.id);
   const stanzaText = parseFirstStanza(fullHymn.lyrics);
   await setCurrentSlide({
-    ...EMPTY_SLIDE_PROPS,
     slideType: "lyrics",
     text: stanzaText || hymn.title,
-    title: hymn.title,
+    label: hymn.title,
+    background: _SPOT_DEFAULT_BG,
+    text_color: null,
+    text_size: null,
   });
 }
 

@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
-import type { SlideContent, SlideType } from "../../types/presentation";
+import type { SlideContent } from "../../lib/bindings";
+import type { SlideType } from "../../types/presentation";
+import { defaultSlide } from "../../types/presentation";
 import { SlideRenderer } from "./slide-renderer";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select";
 import { cn } from "../../lib/utils";
@@ -10,7 +12,7 @@ import {
   ImageFields,
   VideoFields,
   OnlineVideoFields,
-  defaultVideoSlide,
+  BibleFields,
 } from "./fields";
 
 interface SlideEditorProps {
@@ -23,57 +25,13 @@ interface SlideEditorProps {
   hideTypeSelector?: boolean;
 }
 
-const SLIDE_TYPES: SlideType[] = ["cover", "lyrics", "pause", "text", "image", "video", "online_video"];
-
-const EMPTY_SLIDE_PROPS = {
-  text: null,
-  title: null,
-  subtitle: null,
-  label: null,
-  videoPath: null,
-  backgroundImage: null,
-  backgroundColor: null,
-  audioPath: null,
-  autoPlay: null,
-  loop: null,
-  muted: null,
-  mode: null,
-  textColor: null,
-  textSize: null,
-  videoUrl: null,
-  videoId: null,
-  videoSource: null,
-  videoTitle: null,
-};
+const SLIDE_TYPES: SlideType[] = ["cover", "lyrics", "pause", "text", "image", "video", "onlineVideo"];
 
 export function SlideEditor({ slide, presentationId: _presentationId, onChange, hidePreview, hideTypeSelector }: SlideEditorProps) {
   const { t } = useTranslation();
 
   const handleTypeChange = (newType: string) => {
-    const type = newType as SlideType;
-    switch (type) {
-      case "cover":
-        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "cover", title: "", subtitle: "" });
-        break;
-      case "lyrics":
-        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "lyrics", text: "", label: "" });
-        break;
-      case "pause":
-        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "pause" });
-        break;
-      case "text":
-        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "text", text: "" });
-        break;
-      case "image":
-        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "image", backgroundImage: "", label: "" });
-        break;
-      case "video":
-        onChange(defaultVideoSlide());
-        break;
-      case "online_video":
-        onChange({ ...EMPTY_SLIDE_PROPS, slideType: "online_video", videoUrl: "", videoId: "", videoSource: "youtube", videoTitle: "" });
-        break;
-    }
+    onChange(defaultSlide(newType as SlideType));
   };
 
   return (
@@ -113,32 +71,33 @@ export function SlideEditor({ slide, presentationId: _presentationId, onChange, 
         {/* Type-specific fields */}
         {slide.slideType === "cover" && (
           <CoverFields
-            title={slide.title ?? ""}
-            subtitle={slide.subtitle ?? ""}
-            onChange={(title, subtitle) => onChange({ ...slide, title, subtitle: subtitle || null })}
+            title={slide.title}
+            subtitle={slide.subtitle}
+            onChange={(title, subtitle) => onChange({ ...slide, title, subtitle })}
           />
         )}
 
         {slide.slideType === "lyrics" && (
           <LyricsFields
-            text={slide.text ?? ""}
-            label={slide.label ?? ""}
-            onChange={(text, label) => onChange({ ...slide, text, label: label || null })}
+            text={slide.text}
+            label={slide.label}
+            onChange={(text, label) => onChange({ ...slide, text, label })}
           />
         )}
 
         {slide.slideType === "text" && (
           <TextFields
-            text={slide.text ?? ""}
-            onChange={(text) => onChange({ ...slide, text })}
+            content={slide.content}
+            onChange={(content) => onChange({ ...slide, content })}
           />
         )}
 
         {slide.slideType === "image" && (
           <ImageFields
-            src={slide.backgroundImage ?? ""}
-            alt={slide.label ?? ""}
-            onChange={(src, alt) => onChange({ ...slide, backgroundImage: src, label: alt || null })}
+            path={slide.path}
+            caption={slide.caption}
+            fit={slide.fit}
+            onChange={(path, caption, fit) => onChange({ ...slide, path, caption, fit })}
           />
         )}
 
@@ -149,8 +108,15 @@ export function SlideEditor({ slide, presentationId: _presentationId, onChange, 
           />
         )}
 
-        {slide.slideType === "online_video" && (
+        {slide.slideType === "onlineVideo" && (
           <OnlineVideoFields
+            slide={slide}
+            onChange={(next) => onChange(next)}
+          />
+        )}
+
+        {slide.slideType === "bible" && (
+          <BibleFields
             slide={slide}
             onChange={(next) => onChange(next)}
           />

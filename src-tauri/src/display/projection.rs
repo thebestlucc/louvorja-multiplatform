@@ -16,16 +16,15 @@ pub fn update_current_slide(
 ) -> Result<(), AppError> {
     // Enrich online_video slides with local path if the video has been downloaded
     let mut slide_data = slide_data;
-    if slide_data.slide_type == "online_video" {
-        if let Some(ref video_id) = slide_data.video_id.clone() {
-            if let Ok(conn) = state.db.get() {
-                if let Ok(Some(local_path)) =
-                    crate::db::queries::online_videos::get_video_local_path(&conn, video_id)
-                {
-                    if !local_path.is_empty() {
-                        slide_data.video_source = Some("local".to_string());
-                        slide_data.video_url = Some(local_path);
-                    }
+    if let SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
+        let vid = video_id.clone();
+        if let Ok(conn) = state.db.get() {
+            if let Ok(Some(local_path)) =
+                crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
+            {
+                if !local_path.is_empty() {
+                    *source = crate::db::models::slides::VideoSource::Local;
+                    *url = local_path;
                 }
             }
         }
@@ -78,14 +77,13 @@ pub fn update_current_slide(
     let adr = app_data_dir.as_deref();
 
     if let Ok(server) = streaming_state.server.lock() {
-        if slide_data.slide_type == "bible" {
+        if slide_data.slide_type() == "bible" {
             let json = serde_json::json!({
                 "reference": slide_data
-                    .title
-                    .as_deref()
-                    .or(slide_data.label.as_deref())
+                    .title()
+                    .or_else(|| slide_data.label())
                     .unwrap_or(""),
-                "text": slide_data.text.as_deref().unwrap_or(""),
+                "text": slide_data.text().unwrap_or(""),
             });
             server.broadcast_bible(&json.to_string());
             server.broadcast_music(&empty_streaming_music_payload().to_string());

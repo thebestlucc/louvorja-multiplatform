@@ -1,0 +1,7 @@
+/* Base scale tokens — set on .slide-renderer[data-mode="..."] */
+.slide-renderer[data-mode="projector"]            { --base-title: clamp(2rem, 4vw, 5rem);   --base-body: clamp(1.5rem, 3vw, 3.5rem); }
+.slide-renderer[data-mode="return-current"]       { --base-title: clamp(1.4rem, 2.8vw, 3.5rem); --base-body: clamp(1.1rem, 2.1vw, 2.5rem); }
+.slide-renderer[data-mode="return-next"]          { --base-title: clamp(0.9rem, 1.7vw, 2.2rem); --base-body: clamp(0.7rem, 1.3vw, 1.6rem); }
+.slide-renderer[data-mode="thumbnail"]            { --base-title: clamp(0.5rem, 1vw, 1.2rem);  --base-body: clamp(0.4rem, 0.8vw, 1rem); }
+.slide-renderer[data-mode="editor"]              { --base-title: clamp(1.5rem, 3vw, 4rem);    --base-body: clamp(1.2rem, 2.5vw, 3rem); }
+.slide-renderer[data-mode="playing-now-preview"] { --base-title: clamp(0.9rem, 1.7vw, 2.2rem); --base-body: clamp(0.7rem, 1.3vw, 1.6rem); }

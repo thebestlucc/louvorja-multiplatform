@@ -147,7 +147,7 @@ export function AudioSyncEditor({
           {Array.from({ length: totalSlides }).map((_, slideIndex) => {
             const point = points.find((p) => p.slideIndex === slideIndex);
             const slide = slides[slideIndex];
-            const slideText = slide?.text || (slideIndex === 0 ? "Título / Capa" : "...");
+            const slideText = (slide?.slideType === "lyrics" ? slide.text : slide?.slideType === "cover" ? slide.title : null) || (slideIndex === 0 ? "Título / Capa" : "...");
             const activeTimestamp = point ? getActiveTimestamp(point, activeMode) : null;
             
             return (

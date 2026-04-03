@@ -1,4 +1,4 @@
-use crate::db::models::{Presentation, Slide};
+use crate::db::models::{Presentation, Slide, SlideContent, TransitionConfig};
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::catcher::catcher;
@@ -92,8 +92,7 @@ pub fn get_slides(
 #[specta::specta]
 pub fn create_slide(
     presentation_id: i64,
-    content_json: String,
-    sort_order: i32,
+    content: SlideContent,
     state: tauri::State<'_, AppState>,
 ) -> Result<Slide, AppError> {
     let (conn, err) = catcher(state.db.get());
@@ -101,25 +100,15 @@ pub fn create_slide(
         return Err(e);
     }
     let conn = conn.unwrap();
-    let id = crate::db::queries::slides::insert_slide(
-        &conn,
-        presentation_id,
-        &content_json,
-        sort_order,
-    )?;
-    // Return the created slide
-    let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;
-    slides
-        .into_iter()
-        .find(|s| s.id == id)
-        .ok_or_else(|| AppError::Internal("Failed to retrieve created slide".into()))
+    let slide_count = crate::db::queries::slides::count_slides(&conn, presentation_id)?;
+    crate::db::queries::slides::create_slide(&conn, presentation_id, slide_count as i32, &content)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn update_slide(
     id: i64,
-    content_json: String,
+    content: SlideContent,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
     let (conn, err) = catcher(state.db.get());
@@ -127,7 +116,119 @@ pub fn update_slide(
         return Err(e);
     }
     let conn = conn.unwrap();
-    crate::db::queries::slides::update_slide(&conn, id, &content_json)
+    crate::db::queries::slides::update_slide_content(&conn, id, &content)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_slide_notes(
+    id: i64,
+    notes: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::slides::update_slide_notes(&conn, id, &notes)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_slide_transition(
+    id: i64,
+    transition: TransitionConfig,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+    crate::db::queries::slides::update_slide_transition(&conn, id, &transition)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn import_pptx(
+    path: String,
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Presentation, AppError> {
+    let media_dest = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data dir: {}", e)))?
+        .join("media/images");
+    std::fs::create_dir_all(&media_dest)?;
+
+    let slides = crate::archive::pptx::import_pptx_slides(Path::new(&path), &media_dest)?;
+
+    let title = Path::new(&path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Imported Presentation")
+        .to_string();
+
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+
+    let pres_id = crate::db::queries::slides::insert_presentation(&conn, &title, "16:9")?;
+
+    for (i, (content, notes, transition)) in slides.iter().enumerate() {
+        let slide = crate::db::queries::slides::create_slide(&conn, pres_id, i as i32, content)?;
+        if let Some(notes_text) = notes {
+            crate::db::queries::slides::update_slide_notes(&conn, slide.id, notes_text)?;
+        }
+        if let Some(t) = transition {
+            crate::db::queries::slides::update_slide_transition(&conn, slide.id, t)?;
+        }
+    }
+
+    crate::db::queries::slides::get_presentation_by_id(&conn, pres_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn export_pptx(
+    presentation_id: i64,
+    path: String,
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), AppError> {
+    let (conn, err) = catcher(state.db.get());
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let conn = conn.unwrap();
+
+    let presentation = crate::db::queries::slides::get_presentation_by_id(&conn, presentation_id)?;
+    let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Internal(format!("Failed to get app data dir: {}", e)))?;
+
+    let slide_pairs: Vec<(crate::db::models::SlideContent, Option<String>)> = slides
+        .into_iter()
+        .map(|s| {
+            let content = serde_json::from_str::<crate::db::models::SlideContent>(&s.content)
+                .unwrap_or(crate::db::models::SlideContent::Pause);
+            (content, s.notes)
+        })
+        .collect();
+
+    crate::archive::pptx::export_pptx_slides(
+        &slide_pairs,
+        Path::new(&path),
+        &presentation.title,
+        &app_data_dir,
+    )
 }
 
 #[tauri::command]

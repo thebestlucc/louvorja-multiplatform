@@ -37,6 +37,7 @@ pub struct OnlineVideoPlaylist {
     pub channel_title: Option<String>,
     #[specta(type = Option<i32>)]
     pub video_count: Option<i64>,
+    pub is_custom: bool,
 }
 
 /// Online Videos feature — individual video record (queries SELECT explicitly).
@@ -100,6 +101,14 @@ pub struct OnlinePlaylistSearchResult {
     pub channel_title: String,
     pub snippet: String,
     pub cover_path: Option<String>,
+}
+
+/// Online Videos feature — input for creating a custom single-video collection.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCustomPlaylistInput {
+    pub collection_title: String,
+    pub video_url: String,
 }
 
 /// Online Videos feature — video info from YouTube API response.

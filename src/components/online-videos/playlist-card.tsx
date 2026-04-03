@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { RefreshCw, Trash2, ListVideo } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { OnlineVideoPlaylist } from "../../lib/bindings";
+import { buildAssetPath } from "../../lib/asset-url";
 
 interface PlaylistCardProps {
   playlist: OnlineVideoPlaylist;
@@ -20,7 +21,7 @@ export function PlaylistCard({
 }: PlaylistCardProps) {
   const { t } = useTranslation();
   const coverUrl = appDataDir && playlist.coverPath
-    ? convertFileSrc(`${appDataDir}/${playlist.coverPath}`)
+    ? convertFileSrc(buildAssetPath(appDataDir, playlist.coverPath))
     : null;
 
   return (
@@ -44,19 +45,26 @@ export function PlaylistCard({
             <ListVideo className="h-10 w-10 text-muted-foreground/50" />
           </div>
         )}
+        {playlist.isCustom && (
+          <div className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/80 text-primary-foreground">
+            {t("onlineVideos.customCollection")}
+          </div>
+        )}
         {/* Hover actions */}
         <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRefresh(playlist.playlistId);
-            }}
-            className="rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
-            title={t("onlineVideos.refresh")}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
+          {!playlist.isCustom && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRefresh(playlist.playlistId);
+              }}
+              className="rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+              title={t("onlineVideos.refresh")}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {

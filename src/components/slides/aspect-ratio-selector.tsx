@@ -1,4 +1,3 @@
-import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 
 interface AspectRatioSelectorProps {
@@ -13,36 +12,29 @@ const RATIOS = [
 ];
 
 export function AspectRatioSelector({ value, onChange }: AspectRatioSelectorProps) {
-  const { t } = useTranslation();
-
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs font-medium text-muted-foreground">
-        {t("presentations.aspectRatio")}
-      </label>
-      <div className="grid grid-cols-1 gap-2">
-        {RATIOS.map((ratio) => (
-          <button
-            key={ratio.value}
+    <div className="flex gap-1.5">
+      {RATIOS.map((ratio) => (
+        <button
+          key={ratio.value}
+          className={cn(
+            "flex flex-1 flex-col items-center gap-1 rounded-md border px-2 py-1.5 transition-colors cursor-pointer",
+            value === ratio.value
+              ? "border-amber-500/60 bg-amber-500/10 text-amber-400"
+              : "border-white/10 bg-white/5 text-white/50 hover:border-white/20 hover:text-white/70",
+          )}
+          onClick={() => onChange(ratio.value)}
+        >
+          <div
             className={cn(
-              "flex w-full flex-col items-center gap-1 rounded-md border-2 p-2 transition-colors",
-              value === ratio.value
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-muted-foreground",
+              "rounded-sm border",
+              value === ratio.value ? "border-amber-500/60 bg-amber-500/20" : "border-white/20 bg-white/10",
             )}
-            onClick={() => onChange(ratio.value)}
-          >
-            <div
-              className={cn(
-                "rounded border",
-                value === ratio.value ? "border-primary bg-primary/20" : "border-muted-foreground/30 bg-muted",
-              )}
-              style={{ width: ratio.w, height: ratio.h }}
-            />
-            <span className="text-[10px] font-medium">{ratio.label}</span>
-          </button>
-        ))}
-      </div>
+            style={{ width: ratio.w * 0.6, height: ratio.h * 0.6 }}
+          />
+          <span className="text-[10px] font-medium leading-none">{ratio.label}</span>
+        </button>
+      ))}
     </div>
   );
 }

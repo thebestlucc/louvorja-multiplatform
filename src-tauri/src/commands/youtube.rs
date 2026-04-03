@@ -1,4 +1,4 @@
-use crate::db::models::{AddPlaylistInput, OnlinePlaylistSearchResult, OnlineVideo, OnlineVideoPlaylist};
+use crate::db::models::{AddPlaylistInput, CreateCustomPlaylistInput, OnlinePlaylistSearchResult, OnlineVideo, OnlineVideoPlaylist};
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::youtube::{api, parser, thumbnails};
@@ -139,6 +139,17 @@ pub fn add_youtube_playlist(
         }
     });
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_online_playlist_cover(
+    playlist_id: String,
+    cover_path: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    crate::db::queries::online_videos::update_playlist_cover(&conn, &playlist_id, cover_path.as_deref())
 }
 
 #[tauri::command]
@@ -419,4 +430,87 @@ pub fn find_online_video_by_yt_id(
 ) -> Result<Option<OnlineVideo>, AppError> {
     let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
     crate::db::queries::online_videos::find_video_by_yt_id(&conn, &yt_video_id)
+}
+
+/// Extract a YouTube video ID from a URL or bare ID string.
+fn extract_video_id(url: &str) -> Option<String> {
+    // youtu.be/<id>
+    if let Some(pos) = url.find("youtu.be/") {
+        let rest = &url[pos + 9..];
+        let id: String = rest.chars().take_while(|c| *c != '?' && *c != '&' && *c != '#').collect();
+        if !id.is_empty() { return Some(id); }
+    }
+    // v=<id>
+    if let Some(pos) = url.find("v=") {
+        let rest = &url[pos + 2..];
+        let id: String = rest.chars().take_while(|c| *c != '&' && *c != '#').collect();
+        if !id.is_empty() { return Some(id); }
+    }
+    // Bare ID (no slashes, no spaces, 11 chars typical)
+    let trimmed = url.trim();
+    if !trimmed.contains('/') && !trimmed.contains(' ') && trimmed.len() >= 8 {
+        return Some(trimmed.to_string());
+    }
+    None
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn create_custom_playlist(
+    input: CreateCustomPlaylistInput,
+    api_key: String,
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), AppError> {
+    let pool = state.db.clone();
+
+    std::thread::spawn(move || {
+        let result = (|| -> Result<(), AppError> {
+            let video_id = extract_video_id(&input.video_url)
+                .ok_or_else(|| AppError::Internal("Could not extract video ID from URL".into()))?;
+
+            let playlist_id = format!(
+                "custom_{}",
+                uuid::Uuid::new_v4().to_string().replace("-", "")
+            );
+
+            let conn = pool.get().map_err(|e| AppError::Internal(e.to_string()))?;
+            let db_playlist_id = crate::db::queries::online_videos::create_custom_playlist(
+                &conn,
+                &input.collection_title,
+                &playlist_id,
+            )?;
+
+            // Try to fetch video metadata via YouTube API if key is provided
+            let (title, thumbnail_url, duration_seconds) = if !api_key.is_empty() {
+                match api::fetch_single_video_info(&api_key, &video_id) {
+                    Ok(info) => (info.title, info.thumbnail_url, info.duration_seconds),
+                    Err(_) => (video_id.clone(), String::new(), None),
+                }
+            } else {
+                (video_id.clone(), String::new(), None)
+            };
+
+            crate::db::queries::online_videos::upsert_single_video(
+                &conn,
+                db_playlist_id,
+                &video_id,
+                &title,
+                &thumbnail_url,
+                duration_seconds,
+            )?;
+
+            Ok(())
+        })();
+
+        match result {
+            Ok(()) => {
+                let _ = app.emit("youtube-playlist-added", &());
+            }
+            Err(e) => {
+                let _ = app.emit("youtube-playlist-add-error", &e.to_string());
+            }
+        }
+    });
+    Ok(())
 }

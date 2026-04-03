@@ -4,7 +4,7 @@
 
 export interface ShortcutDefinition {
   id: string;
-  category: "app" | "slides" | "display";
+  category: "app" | "slides" | "display" | "playback";
   labelKey: string; // i18n key, e.g. "shortcuts.items.nextSlide"
   defaultLocal?: string; // key combo for in-app (e.g. "ArrowRight", "F5", "Shift+F5")
   defaultGlobal?: string; // key combo for OS-level (e.g. "Alt+Right")
@@ -71,11 +71,36 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultLocal: "Meta+/",
     defaultGlobal: "Alt+H",
   },
+  {
+    id: "playback-play-pause",
+    category: "playback",
+    labelKey: "shortcuts.items.playPause",
+    defaultLocal: "p",
+  },
+  {
+    id: "playback-mute",
+    category: "playback",
+    labelKey: "shortcuts.items.mute",
+    defaultLocal: "m",
+  },
+  {
+    id: "playback-prev-item",
+    category: "playback",
+    labelKey: "shortcuts.items.prevItem",
+    defaultLocal: "[",
+  },
+  {
+    id: "playback-next-item",
+    category: "playback",
+    labelKey: "shortcuts.items.nextItem",
+    defaultLocal: "]",
+  },
 ];
 
 export const SHORTCUT_CATEGORY_ORDER: ShortcutDefinition["category"][] = [
   "app",
   "slides",
+  "playback",
   "display",
 ];
 

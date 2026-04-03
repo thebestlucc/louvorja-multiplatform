@@ -6,3 +6,4 @@ export * from "./video-fields";
 export * from "./toggle-field";
 export * from "./default-video-slide";
 export * from "./online-video-fields";
+export * from "./bible-fields";

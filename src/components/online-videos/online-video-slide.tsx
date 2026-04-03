@@ -199,8 +199,10 @@ function LocalVideoFollower({ videoPath, className }: { videoPath: string; class
 
 // ─── OnlineVideoSlide ─────────────────────────────────────────────────────
 
+type OnlineVideoSlideVariant = Extract<SlideContent, { slideType: "onlineVideo" }>;
+
 interface OnlineVideoSlideProps {
-  slide: SlideContent;
+  slide: OnlineVideoSlideVariant;
   renderMode: OnlineVideoRenderMode;
   className?: string;
 }
@@ -210,15 +212,15 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
 
   // Live video renderer for projector/return screens
   const renderLiveVideo = () => {
-    const isLocalFile = slide.videoSource === "local" && !!slide.videoUrl;
+    const isLocalFile = slide.source === "local" && !!slide.url;
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile ? (
-          <LocalVideoFollower videoPath={slide.videoUrl!} className="h-full w-full" />
-        ) : slide.videoId ? (
+          <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
+        ) : slide.video_id ? (
           <YouTubePlayer
-            videoId={slide.videoId}
-            title={slide.videoTitle ?? slide.videoId}
+            videoId={slide.video_id}
+            title={slide.title ?? slide.video_id}
             className="h-full w-full"
             muted
             isFollower
@@ -241,8 +243,8 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   }
 
   if (renderMode === "return-next") {
-    const thumbUrl = slide.videoId
-      ? `https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`
+    const thumbUrl = slide.video_id
+      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
       : null;
 
     return (
@@ -254,7 +256,7 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
           <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.25em] text-white/60 self-start">
             {t("presentations.types.onlineVideo")}
           </span>
-          <p className="text-[10px] text-white/70 truncate">{slide.videoTitle ?? slide.videoId ?? ""}</p>
+          <p className="text-[10px] text-white/70 truncate">{slide.title ?? slide.video_id ?? ""}</p>
         </div>
       </div>
     );
@@ -268,17 +270,17 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
         </span>
         <span
           className="block w-full overflow-hidden break-all text-[10px] leading-tight text-white/60"
-          title={slide.videoTitle ?? ""}
+          title={slide.title ?? ""}
         >
-          {slide.videoTitle ?? slide.videoId ?? ""}
+          {slide.title ?? slide.video_id ?? ""}
         </span>
       </div>
     );
   }
 
   if (renderMode === "playing-now-preview") {
-    const thumbUrl = slide.videoId
-      ? `https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`
+    const thumbUrl = slide.video_id
+      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
       : null;
     return (
       <div className={cn("h-full w-full bg-black relative overflow-hidden", className)}>
@@ -291,7 +293,7 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
         )}
         <div className="absolute bottom-2 left-2 right-2 flex items-end gap-2 pointer-events-none">
           <span className="rounded bg-black/60 px-2 py-0.5 text-[10px] text-white/80 truncate max-w-full">
-            {slide.videoTitle ?? ""}
+            {slide.title ?? ""}
           </span>
         </div>
       </div>
@@ -301,15 +303,15 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   // editor mode
   return (
     <div className={cn("relative h-full w-full bg-black", className)}>
-      {slide.videoId && (
+      {slide.video_id && (
         <img
-          src={`https://i.ytimg.com/vi/${slide.videoId}/hqdefault.jpg`}
+          src={`https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`}
           alt=""
           className="h-full w-full object-contain"
         />
       )}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-        <p className="text-xs text-white/80 truncate">{slide.videoTitle ?? ""}</p>
+        <p className="text-xs text-white/80 truncate">{slide.title ?? ""}</p>
       </div>
     </div>
   );

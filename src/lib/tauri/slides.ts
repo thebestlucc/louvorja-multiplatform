@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Presentation, Slide } from "../bindings";
+import type { Presentation, Slide, SlideContent, TransitionConfig } from "../bindings";
 
 async function tauriInvoke<T>(
   command: string,
@@ -34,12 +34,16 @@ export async function getSlides(presentationId: number): Promise<Slide[]> {
   return tauriInvoke<Slide[]>("get_slides", { presentationId });
 }
 
+/** @deprecated Use createSlideTyped — this wrapper serialises content to JSON string for backward compat */
 export async function createSlide(presentationId: number, contentJson: string, sortOrder: number): Promise<Slide> {
-  return tauriInvoke<Slide>("create_slide", { presentationId, contentJson, sortOrder });
+  const content = JSON.parse(contentJson) as SlideContent;
+  return tauriInvoke<Slide>("create_slide", { presentationId, content, sortOrder });
 }
 
+/** @deprecated Use updateSlideContent — this wrapper serialises content to JSON string for backward compat */
 export async function updateSlide(id: number, contentJson: string): Promise<void> {
-  return tauriInvoke<void>("update_slide", { id, contentJson });
+  const content = JSON.parse(contentJson) as SlideContent;
+  return tauriInvoke<void>("update_slide", { id, content });
 }
 
 export async function deleteSlide(id: number): Promise<void> {
@@ -56,4 +60,30 @@ export async function importSlja(path: string): Promise<Presentation> {
 
 export async function exportSlja(presentationId: number, path: string): Promise<void> {
   return tauriInvoke<void>("export_slja", { presentationId, path });
+}
+
+// New typed wrappers
+
+export async function createSlideTyped(presentationId: number, content: SlideContent, sortOrder: number): Promise<Slide> {
+  return tauriInvoke<Slide>("create_slide", { presentationId, content, sortOrder });
+}
+
+export async function updateSlideContent(id: number, content: SlideContent): Promise<void> {
+  return tauriInvoke<void>("update_slide", { id, content });
+}
+
+export async function updateSlideNotes(id: number, notes: string): Promise<void> {
+  return tauriInvoke<void>("update_slide_notes", { id, notes });
+}
+
+export async function updateSlideTransition(id: number, transition: TransitionConfig): Promise<void> {
+  return tauriInvoke<void>("update_slide_transition", { id, transition });
+}
+
+export async function importPptx(path: string): Promise<Presentation> {
+  return tauriInvoke<Presentation>("import_pptx", { path });
+}
+
+export async function exportPptx(presentationId: number, path: string): Promise<void> {
+  return tauriInvoke<void>("export_pptx", { presentationId, path });
 }

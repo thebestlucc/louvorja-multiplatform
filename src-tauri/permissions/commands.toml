@@ -75,7 +75,11 @@ allow = [
     "delete_slide",
     "reorder_slides",
     "import_slja",
-    "export_slja"
+    "export_slja",
+    "update_slide_notes",
+    "update_slide_transition",
+    "import_pptx",
+    "export_pptx"
 ]
 
 [[permission]]
@@ -263,7 +267,9 @@ allow = [
     "cancel_download",
     "delete_video_local_file",
     "find_online_video_by_yt_id",
-    "search_online_playlists"
+    "search_online_playlists",
+    "create_custom_playlist",
+    "update_online_playlist_cover"
 ]
 
 [[permission]]

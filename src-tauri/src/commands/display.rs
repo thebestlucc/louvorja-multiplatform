@@ -22,7 +22,7 @@ const MONITORS_CHANGED_EVENT: &str = "monitors-changed";
 const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 fn is_live_utility_slide(slide: &SlideContent) -> bool {
-    slide.slide_type == "cover" && matches!(slide.label.as_deref(), Some("timer" | "clock"))
+    slide.slide_type() == "cover" && matches!(slide.label(), Some("timer" | "clock"))
 }
 
 pub fn start_monitor_hotplug_watcher(app: AppHandle) {
@@ -340,16 +340,15 @@ pub fn set_slide_on_projector(
     }
     // Enrich online_video slides with local path if the video has been downloaded
     let mut slide_data = slide_data;
-    if slide_data.slide_type == "online_video" {
-        if let Some(ref video_id) = slide_data.video_id.clone() {
-            if let Ok(conn) = state.db.get() {
-                if let Ok(Some(local_path)) =
-                    crate::db::queries::online_videos::get_video_local_path(&conn, video_id)
-                {
-                    if !local_path.is_empty() {
-                        slide_data.video_source = Some("local".to_string());
-                        slide_data.video_url = Some(local_path);
-                    }
+    if let crate::db::models::SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
+        let vid = video_id.clone();
+        if let Ok(conn) = state.db.get() {
+            if let Ok(Some(local_path)) =
+                crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
+            {
+                if !local_path.is_empty() {
+                    *source = crate::db::models::slides::VideoSource::Local;
+                    *url = local_path;
                 }
             }
         }
@@ -383,16 +382,15 @@ pub fn set_slide_on_return(
     }
     // Enrich online_video slides with local path if the video has been downloaded
     let mut slide_data = slide_data;
-    if slide_data.slide_type == "online_video" {
-        if let Some(ref video_id) = slide_data.video_id.clone() {
-            if let Ok(conn) = state.db.get() {
-                if let Ok(Some(local_path)) =
-                    crate::db::queries::online_videos::get_video_local_path(&conn, video_id)
-                {
-                    if !local_path.is_empty() {
-                        slide_data.video_source = Some("local".to_string());
-                        slide_data.video_url = Some(local_path);
-                    }
+    if let crate::db::models::SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
+        let vid = video_id.clone();
+        if let Ok(conn) = state.db.get() {
+            if let Ok(Some(local_path)) =
+                crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
+            {
+                if !local_path.is_empty() {
+                    *source = crate::db::models::slides::VideoSource::Local;
+                    *url = local_path;
                 }
             }
         }

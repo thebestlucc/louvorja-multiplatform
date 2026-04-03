@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AddPlaylistInput, OnlinePlaylistSearchResult, OnlineVideoPlaylist, OnlineVideo } from "../bindings";
+import type { AddPlaylistInput, CreateCustomPlaylistInput, OnlinePlaylistSearchResult, OnlineVideoPlaylist, OnlineVideo } from "../bindings";
 
 async function tauriInvoke<T>(
   command: string,
@@ -64,4 +64,12 @@ export async function searchOnlinePlaylists(query: string): Promise<OnlinePlayli
 
 export async function findOnlineVideoByYtId(ytVideoId: string): Promise<OnlineVideo | null> {
   return tauriInvoke<OnlineVideo | null>("find_online_video_by_yt_id", { ytVideoId });
+}
+
+export async function createCustomPlaylist(input: CreateCustomPlaylistInput, apiKey: string): Promise<void> {
+  return tauriInvoke<void>("create_custom_playlist", { input, apiKey });
+}
+
+export async function updateOnlinePlaylistCover(playlistId: string, coverPath: string | null): Promise<void> {
+  return tauriInvoke<void>("update_online_playlist_cover", { playlistId, coverPath });
 }

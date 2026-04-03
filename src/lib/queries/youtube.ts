@@ -7,8 +7,10 @@ import {
   addYoutubePlaylist,
   refreshYoutubePlaylist,
   deleteVideoLocalFile,
+  createCustomPlaylist,
+  updateOnlinePlaylistCover,
 } from "../tauri";
-import type { AddPlaylistInput } from "../bindings";
+import type { AddPlaylistInput, CreateCustomPlaylistInput } from "../bindings";
 import { queryKeys } from "./keys";
 
 export function useYoutubePlaylists() {
@@ -46,6 +48,25 @@ export function useDeleteYoutubePlaylist() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (playlistId: string) => deleteYoutubePlaylist(playlistId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtubeVideos.playlists });
+    },
+  });
+}
+
+export function useCreateCustomPlaylist() {
+  return useMutation({
+    mutationFn: (vars: { input: CreateCustomPlaylistInput; apiKey: string }) =>
+      createCustomPlaylist(vars.input, vars.apiKey),
+    // No onSuccess invalidation — event-driven via useYoutubeEvents()
+  });
+}
+
+export function useUpdateOnlinePlaylistCover() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { playlistId: string; coverPath: string | null }) =>
+      updateOnlinePlaylistCover(vars.playlistId, vars.coverPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.youtubeVideos.playlists });
     },

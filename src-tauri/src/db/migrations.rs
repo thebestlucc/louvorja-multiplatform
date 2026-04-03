@@ -226,6 +226,16 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (39)", [])?;
     }
 
+    if current_version < 40 {
+        migrate_v40(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (40)", [])?;
+    }
+
+    if current_version < 41 {
+        migrate_v41(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (41)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1498,6 +1508,214 @@ fn migrate_v36(conn: &Connection) -> Result<(), AppError> {
         );"
     )?;
 
+    Ok(())
+}
+
+fn migrate_v40(conn: &Connection) -> Result<(), AppError> {
+    use serde_json::{Map, Value};
+
+    let tx = conn.unchecked_transaction()?;
+
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = tx.prepare("SELECT id, content FROM slides")?;
+        let rows = stmt
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        rows
+    };
+
+    for (id, content_str) in rows {
+        let mut obj: Map<String, Value> = match serde_json::from_str(&content_str) {
+            Ok(Value::Object(m)) => m,
+            _ => continue,
+        };
+
+        // Skip already-migrated rows (have both slideType and background keys)
+        if obj.contains_key("slideType") && obj.contains_key("background") {
+            continue;
+        }
+
+        let slide_type = match obj.get("slideType").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+
+        // Build background object from old flat fields
+        let build_background = |obj: &Map<String, Value>| -> Value {
+            let color = obj.get("backgroundColor").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let image_path = obj.get("backgroundImage").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let kind = if image_path.is_some() { "image" } else { "solid" };
+            let mut bg = serde_json::Map::new();
+            bg.insert("kind".into(), Value::String(kind.into()));
+            bg.insert("color".into(), color.map(Value::String).unwrap_or(Value::Null));
+            bg.insert("image_path".into(), image_path.map(Value::String).unwrap_or(Value::Null));
+            bg.insert("gradient_start".into(), Value::Null);
+            bg.insert("gradient_end".into(), Value::Null);
+            bg.insert("gradient_angle".into(), Value::Null);
+            bg.insert("opacity".into(), Value::Null);
+            Value::Object(bg)
+        };
+
+        let parse_bible_mode = |mode_str: &str| -> Value {
+            let mut alignment = "center".to_string();
+            let mut ref_position = "bottom".to_string();
+            let mut text_shadow = false;
+            let mut gradient: Option<Value> = None;
+
+            for token in mode_str.split_whitespace() {
+                match token {
+                    "align-left" => alignment = "left".into(),
+                    "align-center" => alignment = "center".into(),
+                    "align-right" => alignment = "right".into(),
+                    "ref-bottom" => ref_position = "bottom".into(),
+                    "ref-top" => ref_position = "top".into(),
+                    "ref-hidden" => ref_position = "hidden".into(),
+                    "text-shadow" => text_shadow = true,
+                    t if t.starts_with("gradient-") => {
+                        let parts: Vec<&str> = t.splitn(4, '-').collect();
+                        // format: gradient-<angle>-<startColor>-<endColor>
+                        if parts.len() == 4 {
+                            let angle = parts[1].parse::<i64>().unwrap_or(180);
+                            let mut g = serde_json::Map::new();
+                            g.insert("angle".into(), Value::Number(angle.into()));
+                            g.insert("startColor".into(), Value::String(format!("#{}", parts[2])));
+                            g.insert("endColor".into(), Value::String(format!("#{}", parts[3])));
+                            gradient = Some(Value::Object(g));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let mut mode = serde_json::Map::new();
+            mode.insert("alignment".into(), Value::String(alignment));
+            mode.insert("ref_position".into(), Value::String(ref_position));
+            mode.insert("text_shadow".into(), Value::Bool(text_shadow));
+            mode.insert("gradient".into(), gradient.unwrap_or(Value::Null));
+            Value::Object(mode)
+        };
+
+        let new_obj: Map<String, Value> = match slide_type.as_str() {
+            "cover" => {
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("cover".into()));
+                m.insert("title".into(), obj.get("title").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("subtitle".into(), obj.get("subtitle").cloned().unwrap_or(Value::Null));
+                m.insert("background".into(), build_background(&obj));
+                m.insert("text_color".into(), obj.get("textColor").cloned().unwrap_or(Value::Null));
+                m.insert("text_size".into(), obj.get("textSize").cloned().unwrap_or(Value::Null));
+                m
+            }
+            "lyrics" => {
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("lyrics".into()));
+                m.insert("text".into(), obj.get("text").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("label".into(), obj.get("label").cloned().unwrap_or(Value::Null));
+                m.insert("background".into(), build_background(&obj));
+                m.insert("text_color".into(), obj.get("textColor").cloned().unwrap_or(Value::Null));
+                m.insert("text_size".into(), obj.get("textSize").cloned().unwrap_or(Value::Null));
+                m
+            }
+            "text" => {
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("text".into()));
+                m.insert("content".into(), obj.get("text").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("background".into(), build_background(&obj));
+                m.insert("text_color".into(), obj.get("textColor").cloned().unwrap_or(Value::Null));
+                m.insert("text_size".into(), obj.get("textSize").cloned().unwrap_or(Value::Null));
+                m
+            }
+            "image" => {
+                let path = obj.get("backgroundImage").cloned().unwrap_or(Value::String(String::new()));
+                let fit = obj.get("mode").and_then(|v| v.as_str()).unwrap_or("cover").to_string();
+                let mut bg = Map::new();
+                bg.insert("kind".into(), Value::String("solid".into()));
+                bg.insert("color".into(), obj.get("backgroundColor").cloned().unwrap_or(Value::Null));
+                bg.insert("image_path".into(), Value::Null);
+                bg.insert("gradient_start".into(), Value::Null);
+                bg.insert("gradient_end".into(), Value::Null);
+                bg.insert("gradient_angle".into(), Value::Null);
+                bg.insert("opacity".into(), Value::Null);
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("image".into()));
+                m.insert("path".into(), path);
+                m.insert("caption".into(), obj.get("label").cloned().unwrap_or(Value::Null));
+                m.insert("fit".into(), Value::String(fit));
+                m.insert("background".into(), Value::Object(bg));
+                m
+            }
+            "video" => {
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("video".into()));
+                m.insert("path".into(), obj.get("videoPath").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("auto_play".into(), obj.get("autoPlay").cloned().unwrap_or(Value::Bool(false)));
+                m.insert("loop_video".into(), obj.get("loop").cloned().unwrap_or(Value::Bool(false)));
+                m.insert("muted".into(), obj.get("muted").cloned().unwrap_or(Value::Bool(false)));
+                m.insert("mode".into(), obj.get("mode").cloned().unwrap_or(Value::String("fullscreen".into())));
+                m.insert("overlay_text".into(), obj.get("text").cloned().unwrap_or(Value::Null));
+                m.insert("audio_path".into(), obj.get("audioPath").cloned().unwrap_or(Value::Null));
+                m
+            }
+            "bible" => {
+                let mode_val = match obj.get("mode").and_then(|v| v.as_str()) {
+                    Some(s) => parse_bible_mode(s),
+                    None => {
+                        let mut mode = Map::new();
+                        mode.insert("alignment".into(), Value::String("center".into()));
+                        mode.insert("ref_position".into(), Value::String("bottom".into()));
+                        mode.insert("text_shadow".into(), Value::Bool(false));
+                        mode.insert("gradient".into(), Value::Null);
+                        Value::Object(mode)
+                    }
+                };
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("bible".into()));
+                m.insert("reference".into(), obj.get("title").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("text".into(), obj.get("text").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("mode".into(), mode_val);
+                m.insert("background".into(), build_background(&obj));
+                m.insert("text_color".into(), obj.get("textColor").cloned().unwrap_or(Value::Null));
+                m.insert("text_size".into(), obj.get("textSize").cloned().unwrap_or(Value::Null));
+                m
+            }
+            "online_video" => {
+                let source = match obj.get("videoSource").and_then(|v| v.as_str()) {
+                    Some("youtube") => "youtube",
+                    _ => "local",
+                };
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("onlineVideo".into()));
+                m.insert("url".into(), obj.get("videoUrl").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("video_id".into(), obj.get("videoId").cloned().unwrap_or(Value::String(String::new())));
+                m.insert("source".into(), Value::String(source.into()));
+                m.insert("title".into(), obj.get("videoTitle").cloned().unwrap_or(Value::Null));
+                m
+            }
+            "pause" => {
+                let mut m = Map::new();
+                m.insert("slideType".into(), Value::String("pause".into()));
+                m
+            }
+            _ => continue,
+        };
+
+        let new_content = serde_json::to_string(&new_obj)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        tx.execute("UPDATE slides SET content = ?1 WHERE id = ?2", rusqlite::params![new_content, id])?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+fn migrate_v41(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "online_videos_playlists",
+        "is_custom",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
     Ok(())
 }
 

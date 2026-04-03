@@ -2,11 +2,13 @@ import { useTranslation } from "react-i18next";
 import { Input } from "../../ui/input";
 import { cn } from "../../../lib/utils";
 
-export function LyricsFields({ text, label, onChange }: {
+interface LyricsFieldsProps {
   text: string;
-  label?: string;
-  onChange: (text: string, label?: string) => void;
-}) {
+  label: string | null;
+  onChange: (text: string, label: string | null) => void;
+}
+
+export function LyricsFields({ text, label, onChange }: LyricsFieldsProps) {
   const { t } = useTranslation();
   return (
     <>
@@ -16,7 +18,7 @@ export function LyricsFields({ text, label, onChange }: {
         </label>
         <Input
           value={label ?? ""}
-          onChange={(e) => onChange(text, e.target.value || undefined)}
+          onChange={(e) => onChange(text, e.target.value || null)}
           placeholder={t("presentations.labelPlaceholder")}
         />
       </div>

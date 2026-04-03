@@ -9,6 +9,7 @@ import {
   Link2,
   FileIcon,
   Layers,
+  CalendarClock,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { cn } from "../../lib/utils";
@@ -43,6 +44,7 @@ const TYPES: { type: LiturgyItemType; icon: typeof Music }[] = [
   { type: "annotation", icon: StickyNote },
   { type: "url", icon: Link2 },
   { type: "file", icon: FileIcon },
+  { type: "scheduled_category", icon: CalendarClock },
 ];
 
 const DEFAULT_TYPE: LiturgyItemType = "hymn";

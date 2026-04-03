@@ -43,15 +43,11 @@ function parseThumbnail(images: string | null): string | null {
 function buildVideoSlidePayload(video: OnlineVideo): SlideContent {
   const isLocal = !!video.localPath;
   return {
-    slideType: "online_video",
-    videoId: isLocal ? null : video.videoId,
-    videoTitle: video.title ?? "",
-    videoUrl: isLocal ? video.localPath : null,
-    videoSource: isLocal ? "local" : "youtube",
-    text: null, title: null, subtitle: null, label: null,
-    videoPath: null, backgroundImage: null, backgroundColor: null,
-    audioPath: null, autoPlay: null, loop: null, muted: null,
-    mode: null, textColor: null, textSize: null,
+    slideType: "onlineVideo",
+    url: isLocal ? (video.localPath ?? "") : "",
+    video_id: isLocal ? "" : (video.videoId ?? ""),
+    source: isLocal ? "local" : "youtube",
+    title: video.title ?? null,
   };
 }
 

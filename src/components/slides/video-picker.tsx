@@ -9,9 +9,11 @@ import { getConversionRecommendation, isVideoFormatSupported } from "../../lib/u
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
+type VideoSlideVariant = Extract<SlideContent, { slideType: "video" }>;
+
 interface VideoPickerProps {
-  value: SlideContent;
-  onChange: (next: SlideContent) => void;
+  value: VideoSlideVariant;
+  onChange: (next: VideoSlideVariant) => void;
 }
 
 export function VideoPicker({ value, onChange }: VideoPickerProps) {
@@ -67,7 +69,7 @@ export function VideoPicker({ value, onChange }: VideoPickerProps) {
 
     onChange({
       ...value,
-      videoPath: managedPath,
+      path: managedPath,
     });
 
     notify.success(t("presentations.videoImported"));
@@ -78,7 +80,7 @@ export function VideoPicker({ value, onChange }: VideoPickerProps) {
       <div className="flex items-center gap-2">
         <Input
           readOnly
-          value={value.videoPath || ""}
+          value={value.path || ""}
           placeholder={t("presentations.videoPathPlaceholder")}
           className="flex-1"
         />

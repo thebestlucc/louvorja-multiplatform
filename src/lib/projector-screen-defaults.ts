@@ -98,26 +98,20 @@ interface BuildProjectorDefaultSlideArgs {
   };
 }
 
-export const EMPTY_SLIDE_PROPS = {
-  text: null,
-  title: null,
-  subtitle: null,
-  label: null,
-  videoPath: null,
-  backgroundImage: null,
-  backgroundColor: null,
-  audioPath: null,
-  autoPlay: null,
-  loop: null,
-  muted: null,
-  mode: null,
-  textColor: null,
-  textSize: null,
-  videoUrl: null,
-  videoId: null,
-  videoSource: null,
-  videoTitle: null,
-};
+/** @deprecated EMPTY_SLIDE_PROPS is removed — use per-type constructors or defaultSlide() */
+export const EMPTY_SLIDE_PROPS: Record<string, never> = {};
+
+function defaultBg(): import("./bindings").BackgroundConfig {
+  return {
+    kind: "solid",
+    color: "#1a1a2e",
+    imagePath: null,
+    gradientStart: null,
+    gradientEnd: null,
+    gradientAngle: null,
+    opacity: null,
+  };
+}
 
 export function buildProjectorDefaultSlide({
   defaults,
@@ -131,49 +125,60 @@ export function buildProjectorDefaultSlide({
       return null;
     case "text":
       return {
-        ...EMPTY_SLIDE_PROPS,
         slideType: "text",
-        text: normalizeText(defaults.text) || DEFAULT_PROJECTOR_SCREEN_TEXT,
+        content: normalizeText(defaults.text) || DEFAULT_PROJECTOR_SCREEN_TEXT,
+        background: defaultBg(),
+        text_color: null,
+        text_size: null,
       };
     case "image": {
       const mediaPath = normalizeText(defaults.mediaPath);
       if (!mediaPath) {
         return {
-          ...EMPTY_SLIDE_PROPS,
           slideType: "cover",
           title: labels.missingMedia,
+          subtitle: null,
+          label: null,
+          background: defaultBg(),
+          text_color: null,
+          text_size: null,
         };
       }
       return {
-        ...EMPTY_SLIDE_PROPS,
         slideType: "image",
-        backgroundImage: mediaPath,
-        label: DEFAULT_PROJECTOR_SCREEN_TEXT,
+        path: mediaPath,
+        caption: DEFAULT_PROJECTOR_SCREEN_TEXT,
+        fit: "contain",
+        background: defaultBg(),
       };
     }
     case "video": {
       const mediaPath = normalizeText(defaults.mediaPath);
       if (!mediaPath) {
         return {
-          ...EMPTY_SLIDE_PROPS,
           slideType: "cover",
           title: labels.missingMedia,
+          subtitle: null,
+          label: null,
+          background: defaultBg(),
+          text_color: null,
+          text_size: null,
         };
       }
       return {
-        ...EMPTY_SLIDE_PROPS,
         slideType: "video",
-        videoPath: mediaPath,
-        autoPlay: true,
-        loop: true,
+        path: mediaPath,
+        auto_play: true,
+        loop_video: true,
         muted: true,
         mode: "fullscreen",
+        overlay_text: null,
+        audio_path: null,
       };
     }
     case "clock": {
       const locale = localeFromLanguage(language);
       return {
-        ...EMPTY_SLIDE_PROPS,
         slideType: "cover",
         title: now.toLocaleTimeString(locale, {
           hour: "2-digit",
@@ -186,16 +191,23 @@ export function buildProjectorDefaultSlide({
           month: "long",
           day: "numeric",
         }),
+        label: null,
+        background: defaultBg(),
+        text_color: null,
+        text_size: null,
       };
     }
     case "timer": {
       const timerMode = timerState?.mode ?? "countdown";
       const valueMs = resolveTimerFallbackMs(timerState, timerMode);
       return {
-        ...EMPTY_SLIDE_PROPS,
         slideType: "cover",
         title: formatUtilityTimer(valueMs, timerMode),
         subtitle: timerMode === "countdown" ? labels.countdown : labels.stopwatch,
+        label: null,
+        background: defaultBg(),
+        text_color: null,
+        text_size: null,
       };
     }
   }

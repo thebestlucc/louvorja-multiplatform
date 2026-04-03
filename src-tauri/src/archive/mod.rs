@@ -1,5 +1,5 @@
 pub mod manifest;
-mod pptx;
+pub mod pptx;
 
 use crate::db::models::slides::SlideContent;
 use crate::error::AppError;
@@ -535,9 +535,9 @@ fn decode_legacy_text(bytes: &[u8]) -> String {
 /// Relative paths (yt-dlp downloads, managed covers) are excluded.
 pub(crate) fn extract_media_paths(content: &SlideContent) -> Vec<String> {
     [
-        content.background_image.as_deref(),
-        content.video_path.as_deref(),
-        content.video_url.as_deref(),
+        content.background_image(),
+        content.video_path(),
+        content.video_url(),
     ]
     .into_iter()
     .flatten()

@@ -122,26 +122,35 @@ export function buildBibleSlideContent(
     );
   }
 
+  const gradient = settings.backgroundGradient
+    ? {
+        angle: settings.backgroundGradient.angle,
+        startColor: settings.backgroundGradient.from,
+        endColor: settings.backgroundGradient.to,
+      }
+    : null;
+
   return {
     slideType: "bible",
     text,
-    title: settings.showReference ? reference : null,
-    subtitle: null,
-    label: settings.showReference ? reference : null,
-    videoPath: null,
-    backgroundImage: settings.backgroundImage,
-    backgroundColor: bgColor,
-    audioPath: null,
-    autoPlay: null,
-    loop: null,
-    muted: null,
-    mode: modeTokens.length > 0 ? modeTokens.join(" ") : null,
-    textColor: settings.textColor,
-    textSize: settings.textSize,
-    videoUrl: null,
-    videoId: null,
-    videoSource: null,
-    videoTitle: null,
+    reference: settings.showReference ? reference : "",
+    mode: {
+      alignment: (settings.textAlign ?? "center") as import("../../lib/bindings").TextAlignment,
+      refPosition: (settings.referencePosition === "bottom" ? "bottom" : "top") as import("../../lib/bindings").RefPosition,
+      textShadow: settings.textShadow ?? false,
+      gradient,
+    },
+    background: {
+      kind: settings.backgroundImage ? "image" : settings.backgroundGradient ? "gradient" : "solid",
+      color: bgColor ?? "#1a1a2e",
+      imagePath: settings.backgroundImage ?? null,
+      gradientStart: settings.backgroundGradient?.from ?? null,
+      gradientEnd: settings.backgroundGradient?.to ?? null,
+      gradientAngle: settings.backgroundGradient?.angle ?? null,
+      opacity: null,
+    },
+    text_color: settings.textColor ?? null,
+    text_size: settings.textSize ?? null,
   };
 }
 
