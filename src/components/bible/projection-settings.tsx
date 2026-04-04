@@ -349,7 +349,7 @@ export function ProjectionSettings({
                       ],
                     }));
                     if (typeof selected === "string") {
-                      onChange({ ...settings, backgroundImage: selected });
+                      onChange({ ...settings, backgroundImage: selected.replace(/\\/g, "/") });
                     }
                   }}
                 >

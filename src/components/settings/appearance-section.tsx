@@ -119,7 +119,7 @@ export function AppearanceSection() {
       filters: [{ name: "Video", extensions: ["mp4", "webm", "mov", "m4v", "ogv", "3gp"] }],
     });
     if (!selected || Array.isArray(selected)) return;
-    persistProjectorDefaultMediaPath(selected);
+    persistProjectorDefaultMediaPath(selected.replace(/\\/g, "/"));
     notify.success(t("settings.projectorMediaUpdated"));
   };
 

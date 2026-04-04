@@ -465,7 +465,7 @@ fn import_or_resync_collection_song(
             &tx,
             crate::db::queries::collections::InsertCollectionSongInput {
                 collection_id,
-                source_path: &canonical.to_string_lossy(),
+                source_path: &canonical.to_string_lossy().replace('\\', "/"),
                 source_format: &source_format,
                 source_hash: Some(&source_hash),
                 source_mtime_ms: Some(source_mtime_ms),

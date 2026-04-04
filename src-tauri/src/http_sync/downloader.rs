@@ -223,8 +223,13 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
         if stripped.is_empty() {
             continue;
         }
+        // Normalize forward slashes to platform separator. On Windows,
+        // canonicalize() produces \\?\ verbatim paths where '/' is NOT
+        // a directory separator — joining "covers/img.jpg" would create a
+        // single component with a literal '/' instead of nested dirs.
+        let stripped = stripped.replace('/', std::path::MAIN_SEPARATOR_STR);
 
-        let dest_path = canonical_dest.join(stripped);
+        let dest_path = canonical_dest.join(&stripped);
 
         // Path traversal guard: dest_path must stay inside canonical_dest.
         // Component-based check avoids per-file canonicalize syscall.
@@ -455,8 +460,10 @@ async fn try_stream_extract_zip(
                         let _ = std::io::copy(&mut entry, &mut std::io::sink());
                         continue;
                     }
+                    // Normalize '/' → platform separator for Windows \\?\ verbatim paths
+                    let stripped = stripped.replace('/', std::path::MAIN_SEPARATOR_STR);
 
-                    let dest_path = dest_clone.join(stripped);
+                    let dest_path = dest_clone.join(&stripped);
 
                     // Path traversal guard: component-based check avoids per-file canonicalize.
                     if !dest_path.starts_with(&dest_clone) {

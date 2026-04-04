@@ -40,4 +40,10 @@ src-tauri/resources/bible.db
 .env
 legacy-app
 legacy-reference
-docs/
+docs/*
+!docs/installation/
+!docs/USER_GUIDE.md
+!docs/MIGRATION_GUIDE.md
+!docs/code-signing-guide.md
+!docs/UPDATER_SETUP.md
+!docs/architecture.md
