@@ -54,9 +54,17 @@ jobs:
 
   rust-checks:
     runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
     steps:
       - name: Checkout app sources
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            src-tauri
+          sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-tauri-ci
         with:
           setup-node: "false"
@@ -68,7 +76,6 @@ jobs:
   tauri-release:
     needs:
       - frontend-checks
-      - rust-checks
     permissions:
       contents: write
     strategy:
