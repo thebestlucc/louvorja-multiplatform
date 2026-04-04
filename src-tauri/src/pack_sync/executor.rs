@@ -224,11 +224,6 @@ pub fn execute_pack_sync(
     let download_total = items_to_download.len();
     let completed_count = Arc::new(AtomicUsize::new(0));
 
-    // Collects (pack_id, pack_version) for successfully extracted ZIP packs.
-    // Each tokio task pushes its entry here on success.
-    let extracted_zip_versions_arc: Arc<Mutex<Vec<(String, u32)>>> =
-        Arc::new(Mutex::new(Vec::new()));
-
     tauri::async_runtime::block_on(async {
         use tokio::sync::Semaphore;
         let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS));
@@ -247,7 +242,6 @@ pub fn execute_pack_sync(
             let app_clone = app.clone();
             let run_id_clone = run_id.clone();
             let cancel = cancel_flag.clone();
-            let versions_arc = extracted_zip_versions_arc.clone();
 
             statuses
                 .lock()
@@ -355,14 +349,21 @@ pub fn execute_pack_sync(
                         .await
                         {
                             Ok(()) => {
+                                // Save extracted version immediately so cancellation mid-sync
+                                // does not force a full re-download of already-completed packs.
+                                if let Some(state) = app_clone.try_state::<AppState>() {
+                                    if let Ok(db_conn) = state.db.get() {
+                                        let _ = crate::db::queries::content_sync::set_pack_extracted_version(
+                                            &db_conn,
+                                            &item.pack_id,
+                                            item.pack_version,
+                                        );
+                                    }
+                                }
                                 statuses
                                     .lock()
                                     .unwrap()
                                     .insert(item.pack_id.clone(), "done".to_string());
-                                versions_arc
-                                    .lock()
-                                    .unwrap()
-                                    .push((item.pack_id.clone(), item.pack_version));
                                 succeeded = true;
                                 break;
                             }
@@ -418,12 +419,6 @@ pub fn execute_pack_sync(
         }
     });
 
-    // All tasks are done; Arc has no other owners at this point.
-    let extracted_zip_versions = Arc::try_unwrap(extracted_zip_versions_arc)
-        .expect("all tasks completed before unwrap")
-        .into_inner()
-        .unwrap_or_default();
-
     if cancel_flag.load(Ordering::Relaxed) {
         clear_background_io_priority();
         emit(
@@ -435,11 +430,6 @@ pub fn execute_pack_sync(
             snapshot(),
         );
         return;
-    }
-
-    // ── Phase 2b: Batch DB version writes for successfully extracted ZIP packs ─
-    for (pack_id, version) in &extracted_zip_versions {
-        let _ = content_sync::set_pack_extracted_version(&conn, pack_id, *version);
     }
 
     // ── Phase 3: Save and hot-swap content DB files ─────────────────────────

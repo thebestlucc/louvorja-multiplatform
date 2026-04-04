@@ -525,6 +525,53 @@ pub fn run() {
                         if let Ok(conn) = state.db.get() {
                             let _ = conn.execute_batch("PRAGMA optimize;");
                         }
+
+                        let app = window.app_handle();
+
+                        if let Some(audio) = app.try_state::<AudioState>() {
+                            if let Ok(mut player) = audio.player.write() {
+                                player.stop();
+                            }
+                        }
+
+                        if let Ok(pack_sync) = state.pack_sync.lock() {
+                            for flag in pack_sync.cancel_flags.values() {
+                                flag.store(true, Ordering::Relaxed);
+                            }
+                        }
+
+                        if let Ok(ytdlp) = state.ytdlp.lock() {
+                            for flag in ytdlp.cancel_flags.values() {
+                                flag.store(true, Ordering::Relaxed);
+                            }
+                        }
+
+                        if let Some(w) = app.get_webview_window("projector") {
+                            state.projector_open.store(false, Ordering::Relaxed);
+                            let _ = w.emit("projector-state-changed", false);
+                            let _ = w.close();
+                        }
+                        if let Some(w) = app.get_webview_window("return") {
+                            state.return_open.store(false, Ordering::Relaxed);
+                            let _ = w.emit("return-state-changed", false);
+                            let _ = w.close();
+                        }
+
+                        // server.stop() joins background threads — run off the event loop
+                        // to avoid blocking the main thread on shutdown.
+                        let app_for_shutdown = app.clone();
+                        std::thread::spawn(move || {
+                            if let Some(streaming) = app_for_shutdown.try_state::<StreamingState>() {
+                                if let Ok(mut server) = streaming.server.lock() {
+                                    server.stop();
+                                }
+                            }
+                            if let Some(video_server) = app_for_shutdown.try_state::<VideoServerState>() {
+                                if let Ok(mut server) = video_server.server.lock() {
+                                    server.stop();
+                                }
+                            }
+                        });
                     }
                     _ => {}
                 }
