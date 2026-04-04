@@ -68,47 +68,54 @@ jobs:
   tauri-release:
     needs:
       - frontend-checks
+      - rust-checks
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: macos-aarch64
+          - name: macos-universal
             platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-            rust_targets: "aarch64-apple-darwin"
-          - name: macos-x86_64
-            platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-            rust_targets: "x86_64-apple-darwin"
+            args: "--target universal-apple-darwin"
+            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+            cache_suffix: "universal"
           - name: linux-x86_64
             platform: ubuntu-22.04
             args: ""
             rust_targets: ""
+            cache_suffix: ""
           - name: linux-aarch64
             platform: ubuntu-22.04-arm
             args: ""
             rust_targets: ""
+            cache_suffix: ""
           - name: windows-x86_64
             platform: windows-latest
             args: ""
             rust_targets: ""
+            cache_suffix: ""
           - name: windows-x86
             platform: windows-latest
             args: "--target i686-pc-windows-msvc"
             rust_targets: "i686-pc-windows-msvc"
+            cache_suffix: "x86"
     runs-on: ${{ matrix.platform }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       CDN_MANIFEST_URL: ${{ vars.CDN_MANIFEST_URL }}
+      # Disable incremental compilation (useless on clean CI, adds overhead)
+      CARGO_INCREMENTAL: "0"
+      # No debug symbols in test/check binaries (significant size + time reduction)
+      CARGO_PROFILE_DEV_DEBUG: "0"
     steps:
       - name: Checkout app sources
         uses: actions/checkout@v4
       - uses: ./.github/actions/setup-tauri-ci
         with:
           rust-targets: ${{ matrix.rust_targets }}
+          cache-suffix: ${{ matrix.cache_suffix }}
       - name: Download frontend dist
         uses: actions/download-artifact@v4
         with:
