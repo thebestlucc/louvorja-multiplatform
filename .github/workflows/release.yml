@@ -60,11 +60,6 @@ jobs:
     steps:
       - name: Checkout app sources
         uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            .github
-            src-tauri
-          sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-tauri-ci
         with:
           setup-node: "false"
