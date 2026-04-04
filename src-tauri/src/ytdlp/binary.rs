@@ -5,19 +5,22 @@ use crate::error::AppError;
 
 /// Returns the platform-specific binary filename.
 fn binary_name() -> &'static str {
-    if cfg!(target_os = "windows") { "yt-dlp.exe" }
-    else if cfg!(target_os = "macos") { "yt-dlp_macos" }
-    else { "yt-dlp" }
+    // On Windows, x86 (32-bit) builds must use yt-dlp_x86.exe — the standard
+    // yt-dlp.exe is a 64-bit binary and will fail to run on 32-bit Windows.
+    #[cfg(all(target_os = "windows", target_arch = "x86"))]
+    return "yt-dlp_x86.exe";
+    #[cfg(all(target_os = "windows", not(target_arch = "x86")))]
+    return "yt-dlp.exe";
+    #[cfg(target_os = "macos")]
+    return "yt-dlp_macos";
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    return "yt-dlp";
 }
 
 /// Returns the path where the yt-dlp binary should be stored.
 fn binary_path(app_data_dir: &Path) -> PathBuf {
     let bin_dir = app_data_dir.join("bin");
-    if cfg!(target_os = "windows") {
-        bin_dir.join("yt-dlp.exe")
-    } else {
-        bin_dir.join("yt-dlp")
-    }
+    bin_dir.join(binary_name())
 }
 
 /// Ensures the yt-dlp binary exists. Downloads if missing.

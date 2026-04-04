@@ -441,5 +441,5 @@ fn resolve_audio_path(path: &str, app: &AppHandle) -> Result<String, AppError> {
     };
 
     let resolved = safe_path.resolve(candidate)?;
-    Ok(resolved.to_string_lossy().to_string())
+    Ok(resolved.to_string_lossy().replace('\\', "/"))
 }

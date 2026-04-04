@@ -66,7 +66,6 @@ jobs:
   tauri-release:
     needs:
       - frontend-checks
-      - rust-checks
     permissions:
       contents: write
     strategy:
@@ -76,11 +75,11 @@ jobs:
           - name: macos-aarch64
             platform: macos-latest
             args: "--target aarch64-apple-darwin"
-            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+            rust_targets: "aarch64-apple-darwin"
           - name: macos-x86_64
             platform: macos-latest
             args: "--target x86_64-apple-darwin"
-            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+            rust_targets: "x86_64-apple-darwin"
           - name: linux-x86_64
             platform: ubuntu-22.04
             args: ""
@@ -93,6 +92,10 @@ jobs:
             platform: windows-latest
             args: ""
             rust_targets: ""
+          - name: windows-x86
+            platform: windows-latest
+            args: "--target i686-pc-windows-msvc"
+            rust_targets: "i686-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

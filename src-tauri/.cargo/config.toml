@@ -1,0 +1,7 @@
+# Use rust-lld on Windows for significantly faster linking.
+# rust-lld.exe is bundled with rustup — no extra install required.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+
+[target.i686-pc-windows-msvc]
+linker = "rust-lld"
