@@ -32,13 +32,13 @@ runs:
   steps:
     - name: Setup pnpm
       if: ${{ inputs.setup-node == 'true' }}
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@v5.0.0
       with:
         run_install: false
 
     - name: Setup Node.js
       if: ${{ inputs.setup-node == 'true' }}
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6.3.0
       with:
         node-version: 22
         cache: pnpm
@@ -67,7 +67,7 @@ runs:
 
     - name: Cache Linux apt packages
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
-      uses: awalsh128/cache-apt-pkgs-action@latest
+      uses: awalsh128/cache-apt-pkgs-action@v1.6.0
       with:
         packages: pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev xdg-utils clang
         version: 1.0
