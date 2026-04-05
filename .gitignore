@@ -47,3 +47,5 @@ docs/*
 !docs/code-signing-guide.md
 !docs/UPDATER_SETUP.md
 !docs/architecture.md
+
+TODO.md

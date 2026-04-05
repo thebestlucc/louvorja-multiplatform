@@ -34,7 +34,7 @@ import {
   toggleSelectedDate,
 } from "../../lib/schedules";
 
-export const Route = createFileRoute("/utilities/schedules")({
+export const Route = createFileRoute("/schedules/")({
   component: UtilitiesSchedulesPage,
 });
 
