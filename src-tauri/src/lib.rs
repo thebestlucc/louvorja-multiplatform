@@ -330,13 +330,19 @@ pub fn run() {
             // hook failed, generate on first launch from bundled .sqlite sources.
             let bible_db_path = app_data_dir.join("bible.db");
             if !bible_db_path.exists() {
-                let resource_dir = if cfg!(debug_assertions) {
-                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources")
+                // In dev, resources live at {CARGO_MANIFEST_DIR}/resources/.
+                // In release, tauri.conf.json `"resources/bible/*.sqlite"` places
+                // files at {resource_dir}/resources/bible/*.sqlite (path preserved).
+                let bible_source_dir = if cfg!(debug_assertions) {
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("resources")
+                        .join("bible")
                 } else {
-                    app.path().resource_dir()?
+                    app.path().resource_dir()?.join("resources").join("bible")
                 };
-                // Linux deb/rpm postinst generates bible.db in the resource dir
-                let resource_bible_db = resource_dir.join("bible.db");
+
+                // Linux deb/rpm postinst generates bible.db next to the source dir
+                let resource_bible_db = bible_source_dir.with_file_name("bible.db");
                 if resource_bible_db.exists() {
                     eprintln!("[app] Copying bible.db from install directory...");
                     let tmp_path = bible_db_path.with_extension("db.tmp");
@@ -344,18 +350,15 @@ pub fn run() {
                         .map_err(|e| format!("Failed to copy bible.db: {e}"))?;
                     std::fs::rename(&tmp_path, &bible_db_path)
                         .map_err(|e| format!("Failed to install bible.db: {e}"))?;
-                } else {
+                } else if bible_source_dir.exists() {
                     // macOS / AppImage / fallback: generate from bundled .sqlite files
-                    let bible_source_dir = resource_dir.join("bible");
-                    if bible_source_dir.exists() {
-                        eprintln!("[app] Generating bible.db from bundled sources (first launch)...");
-                        match bible_builder::build_bible_db(&bible_source_dir, &bible_db_path) {
-                            Ok(_) => eprintln!("[app] bible.db generated successfully"),
-                            Err(e) => eprintln!("[app] Failed to generate bible.db: {e} — bible features will be unavailable"),
-                        }
-                    } else {
-                        eprintln!("[app] Bible source files not found at {} — bible features will be unavailable", bible_source_dir.display());
+                    eprintln!("[app] Generating bible.db from bundled sources (first launch)...");
+                    match bible_builder::build_bible_db(&bible_source_dir, &bible_db_path) {
+                        Ok(_) => eprintln!("[app] bible.db generated successfully"),
+                        Err(e) => eprintln!("[app] Failed to generate bible.db: {e} — bible features will be unavailable"),
                     }
+                } else {
+                    eprintln!("[app] Bible source files not found at {} — bible features will be unavailable", bible_source_dir.display());
                 }
             }
             let bible_pool = db::init_bible_db(&bible_db_path)
