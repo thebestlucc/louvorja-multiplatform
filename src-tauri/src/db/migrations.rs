@@ -236,6 +236,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (41)", [])?;
     }
 
+    if current_version < 42 {
+        migrate_v42(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (42)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1719,6 +1724,16 @@ fn migrate_v41(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v42(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(
+        conn,
+        "schedule_departments",
+        "description",
+        "TEXT",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1898,6 +1913,9 @@ mod tests {
             (37, migrate_v37),
             (38, migrate_v38),
             (39, migrate_v39),
+            (40, migrate_v40),
+            (41, migrate_v41),
+            (42, migrate_v42),
         ] {
             migration(&conn)
                 .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));

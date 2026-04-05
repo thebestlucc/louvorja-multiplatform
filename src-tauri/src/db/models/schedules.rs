@@ -30,6 +30,7 @@ pub struct ScheduleDepartment {
     pub shuffle_on_generate: bool,
     pub group_dates_in_print: bool,
     pub repeat_members_in_grouped_dates: bool,
+    pub description: Option<String>,
     pub sort_order: i32,
     pub is_system: bool,
     pub is_active: bool,
@@ -120,6 +121,7 @@ pub struct ScheduleDepartmentInput {
     pub shuffle_on_generate: bool,
     pub group_dates_in_print: bool,
     pub repeat_members_in_grouped_dates: bool,
+    pub description: Option<String>,
     pub sort_order: i32,
     pub is_active: bool,
 }

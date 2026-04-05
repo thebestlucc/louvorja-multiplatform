@@ -1461,6 +1461,8 @@
         "peoplePerDaySummary": "{{count}} por dia",
         "repeatMembersInGroupedDates": "Repetir membros nas datas agrupadas",
         "repeatMembersInGroupedDatesHint": "Quando desativado, a prévia e a impressão mostram uma lista única de membros para o grupo de datas consecutivas.",
+        "description": "Descrição",
+        "descriptionHint": "Exibida na escala impressa.",
         "saveAndGenerate": "Salvar e gerar escala",
         "saveSuccess": "Departamento salvo",
         "shuffleOnGenerate": "Randomizar membros ao gerar escala",
