@@ -42,12 +42,12 @@ export function invalidateOnboardingCache() {
 
 export const TOUR_COMPLETED_KEY = "app.tourCompleted";
 
-export async function isTourCompleted(): Promise<boolean> {
+export async function isTourCompleted(key: string = TOUR_COMPLETED_KEY): Promise<boolean> {
   const [settings, error] = await catcher(getAllSettings(), { notify: false });
   if (error || !settings) return true;
-  return settings.find((item) => item.key === TOUR_COMPLETED_KEY)?.value === "true";
+  return settings.find((item) => item.key === key)?.value === "true";
 }
 
-export async function completeTour(): Promise<void> {
-  await setSetting(TOUR_COMPLETED_KEY, "true");
+export async function completeTour(key: string = TOUR_COMPLETED_KEY): Promise<void> {
+  await setSetting(key, "true");
 }

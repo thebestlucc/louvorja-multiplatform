@@ -1,11 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { TOUR_STEPS, finishTour } from "../../lib/tour";
+import { TOUR_STEPS, finishTour, type TourStep } from "../../lib/tour";
 import { TourTooltip } from "./tour-tooltip";
 
 interface SpotlightTourProps {
   onComplete: () => void;
+  onSkip?: () => void;
+  /** Custom steps override. Falls back to the global TOUR_STEPS when omitted. */
+  steps?: TourStep[];
 }
 
 interface CutoutRect {
@@ -15,13 +18,14 @@ interface CutoutRect {
   height: number;
 }
 
-export function SpotlightTour({ onComplete }: SpotlightTourProps) {
+export function SpotlightTour({ onComplete, onSkip: onSkipProp, steps: stepsProp }: SpotlightTourProps) {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [cutout, setCutout] = useState<CutoutRect | null>(null);
 
-  const step = TOUR_STEPS[currentIndex];
-  const isFinishStep = step?.i18nKey === "tour.finish";
+  const steps = stepsProp ?? TOUR_STEPS;
+  const step = steps[currentIndex];
+  const isFinishStep = !stepsProp && step?.i18nKey === "tour.finish";
 
   // Update cutout position when step changes
   useEffect(() => {
@@ -45,21 +49,27 @@ export function SpotlightTour({ onComplete }: SpotlightTourProps) {
   }, [step, isFinishStep]);
 
   const handleComplete = useCallback(async () => {
-    await finishTour();
+    if (!stepsProp) {
+      await finishTour();
+    }
     onComplete();
-  }, [onComplete]);
+  }, [onComplete, stepsProp]);
 
   const handleNext = useCallback(() => {
-    if (currentIndex >= TOUR_STEPS.length - 1) {
+    if (currentIndex >= steps.length - 1) {
       void handleComplete();
     } else {
       setCurrentIndex((i) => i + 1);
     }
-  }, [currentIndex, handleComplete]);
+  }, [currentIndex, steps.length, handleComplete]);
 
   const handleSkip = useCallback(() => {
-    void handleComplete();
-  }, [handleComplete]);
+    if (onSkipProp) {
+      onSkipProp();
+    } else {
+      void handleComplete();
+    }
+  }, [handleComplete, onSkipProp]);
 
   if (!step) return null;
 
@@ -88,7 +98,7 @@ export function SpotlightTour({ onComplete }: SpotlightTourProps) {
         title={t(`${step.i18nKey}.title`)}
         description={t(`${step.i18nKey}.description`)}
         currentStep={currentIndex}
-        totalSteps={TOUR_STEPS.length}
+        totalSteps={steps.length}
         onNext={handleNext}
         onSkip={handleSkip}
       />

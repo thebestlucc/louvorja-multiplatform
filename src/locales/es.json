@@ -458,6 +458,76 @@
     "finish": {
       "title": "¡Eso es todo!",
       "description": "Explora y disfruta. Puedes repetir este tour desde el menú Ayuda."
+    },
+    "home": {
+      "sidebar": {
+        "title": "Navegación lateral",
+        "description": "Accede a himnos, biblia, presentaciones, servicios y más desde la barra lateral."
+      },
+      "search": {
+        "title": "Búsqueda rápida",
+        "description": "Presiona Ctrl+K para encontrar himnos, versículos o presentaciones al instante."
+      },
+      "projector": {
+        "title": "Controles de proyección",
+        "description": "Inicia el proyector, alterna pantalla negra/logo y gestiona las ventanas."
+      },
+      "statusBar": {
+        "title": "Barra de estado",
+        "description": "Ve el estado de conexión, versión y controles rápidos de proyección aquí."
+      }
+    },
+    "hymnal": {
+      "search": {
+        "title": "Buscar himnos",
+        "description": "Escribe un título, número o fragmento de la letra para filtrar la lista."
+      },
+      "card": {
+        "title": "Tarjetas de himnos",
+        "description": "Haz clic en un himno para ver la letra, reproducir audio o proyectar diapositivas."
+      }
+    },
+    "presentations": {
+      "list": {
+        "title": "Tus presentaciones",
+        "description": "Todas tus presentaciones aparecen aquí. Haz clic para editar."
+      },
+      "new": {
+        "title": "Crear presentación",
+        "description": "Crea una nueva presentación o importa un archivo .slja/.pptx."
+      }
+    },
+    "services": {
+      "list": {
+        "title": "Lista de servicios",
+        "description": "Tus servicios de culto están listados aquí con fecha y cantidad de elementos."
+      },
+      "new": {
+        "title": "Nuevo servicio",
+        "description": "Crea un nuevo servicio para organizar himnos, lecturas y presentaciones."
+      }
+    },
+    "collections": {
+      "tabs": {
+        "title": "Colecciones y videos",
+        "description": "Alterna entre colecciones de himnos y listas de videos en línea."
+      }
+    },
+    "playingNow": {
+      "queue": {
+        "title": "Cola de reproducción",
+        "description": "Visualiza y reordena la cola de reproducción actual."
+      },
+      "controls": {
+        "title": "Controles de reproducción",
+        "description": "Reproduce, pausa, navega por las diapositivas y ajusta el volumen aquí."
+      }
+    },
+    "settings": {
+      "theme": {
+        "title": "Pestañas de configuración",
+        "description": "Configura apariencia, atajos, monitores, streaming y más."
+      }
     }
   },
   "playingNow": {

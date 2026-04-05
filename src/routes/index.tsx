@@ -13,6 +13,8 @@ import {
 import { usePresentationStore } from "../stores/presentation-store";
 import { useLiturgy } from "../lib/queries";
 import { cn } from "../lib/utils";
+import { useRouteTour } from "../hooks/use-route-tour";
+import { SpotlightTour } from "../components/tour/spotlight-tour";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -38,6 +40,7 @@ function Dashboard() {
   const { t } = useTranslation();
   const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
   const { data: activeLiturgyData } = useLiturgy(activeLiturgyId ?? 0);
+  const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/");
 
   const shortcuts = [
     { keys: "Ctrl+K", label: t("dashboard.shortcuts.search") },
@@ -120,6 +123,10 @@ function Dashboard() {
           </span>
         ))}
       </div>
+
+      {showTour && steps.length > 0 && (
+        <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />
+      )}
     </div>
   );
 }

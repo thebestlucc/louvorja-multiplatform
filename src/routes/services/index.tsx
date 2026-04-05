@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, type MouseEvent } from "react";
 import { useLiturgies, useCreateLiturgy, useDeleteLiturgy, useDuplicateLiturgy } from "../../lib/queries";
+import { useRouteTour } from "../../hooks/use-route-tour";
+import { SpotlightTour } from "../../components/tour/spotlight-tour";
 import { Button } from "../../components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
 import { useCategoryStore } from "../../components/services/category-picker";
@@ -118,6 +120,7 @@ function LiturgiesIndex() {
   const navigate = useNavigate();
   const { data: services, isLoading } = useLiturgies();
   const createMutation = useCreateLiturgy();
+  const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/services");
   const deleteMutation = useDeleteLiturgy();
   const duplicateMutation = useDuplicateLiturgy();
   const [searchQuery, setSearchQuery] = useState("");
@@ -171,7 +174,7 @@ function LiturgiesIndex() {
   const handleDuplicate = (id: number) => duplicateMutation.mutate(id);
 
   return (
-    <div className="flex flex-col gap-4 p-1">
+    <div className="flex flex-col gap-4 p-1" data-tour="services-list">
       {/* Header: title left, "Nova Liturgia" right */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-0.5">
@@ -185,7 +188,7 @@ function LiturgiesIndex() {
           </div>
           <p className="text-xs text-muted-foreground">{t("dashboard.descriptions.services")}</p>
         </div>
-        <Button onClick={handleCreate} size="sm" className="flex-shrink-0">
+        <Button onClick={handleCreate} size="sm" className="flex-shrink-0" data-tour="new-service">
           <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
           {t("services.new")}
         </Button>
@@ -311,6 +314,10 @@ function LiturgiesIndex() {
             </>
           )}
         </>
+      )}
+
+      {showTour && steps.length > 0 && (
+        <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />
       )}
     </div>
   );

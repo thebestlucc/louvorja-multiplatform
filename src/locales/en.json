@@ -458,6 +458,76 @@
     "finish": {
       "title": "That's it!",
       "description": "Explore and enjoy. You can replay this tour from the Help menu."
+    },
+    "home": {
+      "sidebar": {
+        "title": "Sidebar navigation",
+        "description": "Browse hymns, bible, presentations, services, and more from the sidebar."
+      },
+      "search": {
+        "title": "Quick search",
+        "description": "Press Ctrl+K to instantly find hymns, bible verses, or presentations."
+      },
+      "projector": {
+        "title": "Projection controls",
+        "description": "Start the projector, toggle black/logo screen, and manage display windows."
+      },
+      "statusBar": {
+        "title": "Status bar",
+        "description": "See connection status, version info, and quick-access projection controls here."
+      }
+    },
+    "hymnal": {
+      "search": {
+        "title": "Search hymns",
+        "description": "Type a title, number, or lyric to filter the hymn list instantly."
+      },
+      "card": {
+        "title": "Hymn cards",
+        "description": "Click a hymn to see lyrics, play audio, or project slides."
+      }
+    },
+    "presentations": {
+      "list": {
+        "title": "Your presentations",
+        "description": "All your slide presentations appear here. Click one to edit."
+      },
+      "new": {
+        "title": "Create presentation",
+        "description": "Start a new blank presentation or import a .slja/.pptx file."
+      }
+    },
+    "services": {
+      "list": {
+        "title": "Service list",
+        "description": "Your worship services are listed here with date and item count."
+      },
+      "new": {
+        "title": "New service",
+        "description": "Create a new service to organize hymns, readings, and presentations."
+      }
+    },
+    "collections": {
+      "tabs": {
+        "title": "Collections & videos",
+        "description": "Switch between hymn collections and online video playlists."
+      }
+    },
+    "playingNow": {
+      "queue": {
+        "title": "Playing queue",
+        "description": "View and reorder the current playback queue."
+      },
+      "controls": {
+        "title": "Playback controls",
+        "description": "Play, pause, navigate slides, and adjust volume from here."
+      }
+    },
+    "settings": {
+      "theme": {
+        "title": "Settings tabs",
+        "description": "Configure appearance, shortcuts, monitor setup, streaming, and more."
+      }
     }
   },
   "playingNow": {

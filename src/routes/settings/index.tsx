@@ -10,6 +10,8 @@ import { SyncSection } from "../../components/settings/sync-section";
 import { DataSection } from "../../components/settings/data-section";
 import { YouTubeSection } from "../../components/settings/youtube-section";
 import { cn } from "../../lib/utils";
+import { useRouteTour } from "../../hooks/use-route-tour";
+import { SpotlightTour } from "../../components/tour/spotlight-tour";
 
 type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "sync" | "youtube" | "data";
 
@@ -42,6 +44,7 @@ function SettingsIndex() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const activeTab = search.tab ?? "general";
+  const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/settings");
 
   const setActiveTab = (tab: SettingsTab) => {
     navigate({
@@ -53,7 +56,7 @@ function SettingsIndex() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <nav className="w-52 flex-shrink-0 border-r border-border bg-surface p-3">
+      <nav data-tour="settings-tabs" className="w-52 flex-shrink-0 border-r border-border bg-surface p-3">
         <h1 className="mb-3 px-3 text-lg font-semibold">{t("nav.settings")}</h1>
         <ul className="space-y-1">
           {SETTINGS_TABS.map(({ id, labelKey, icon: Icon }) => (
@@ -85,6 +88,10 @@ function SettingsIndex() {
         {activeTab === "youtube" && <YouTubeSection />}
         {activeTab === "data" && <DataSection />}
       </main>
+
+      {showTour && steps.length > 0 && (
+        <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />
+      )}
     </div>
   );
 }

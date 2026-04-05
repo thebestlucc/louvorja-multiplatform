@@ -34,6 +34,7 @@ import { catcher } from "../lib/catcher";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
 import { SpotlightTour } from "../components/tour/spotlight-tour";
+import { completeRouteTour } from "../lib/tour";
 import type { ContentSyncProgress, ContentSyncReport, PackSyncProgress } from "../types/content-sync";
 
 export const Route = createRootRoute({
@@ -76,7 +77,11 @@ function RootLayout() {
       return () => clearTimeout(timer);
     }
   }, [isBareRoute]);
-  const handleTourComplete = useCallback(() => setShowTour(false), []);
+  const handleTourComplete = useCallback(() => {
+    setShowTour(false);
+    // Mark home route tour as completed too to avoid double-touring
+    void completeRouteTour("/");
+  }, []);
 
   const setLanguage = useThemeStore((state) => state.setLanguage);
   const { data: monitors = [], isSuccess: monitorsLoaded } = useMonitors();
