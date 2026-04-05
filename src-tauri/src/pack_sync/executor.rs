@@ -201,6 +201,7 @@ pub fn execute_pack_sync(
     // Shadow with the resolved items vec for the rest of the function.
     let total = plan_items.len();
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+    log::info!("[pack-sync] Extraction target: {:?}", app_data_dir);
 
     // Initialize per-pack statuses.
     let pack_statuses: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(
