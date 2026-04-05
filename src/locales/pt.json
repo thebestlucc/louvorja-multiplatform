@@ -385,7 +385,7 @@
     "setup": {
       "title": "Personalize sua experiência",
       "churchName": "Nome da igreja",
-      "churchNamePlaceholder": "ex: Primeira Igreja Batista",
+      "churchNamePlaceholder": "ex: Igreja Adventista Central",
       "churchNameHint": "Opcional — usado em sobreposições do projetor e streaming.",
       "appearanceTitle": "Escolha um tema",
       "continue": "Continuar"
