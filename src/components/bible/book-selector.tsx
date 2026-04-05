@@ -136,7 +136,7 @@ function NavGrid({
   return (
     <div
       data-grid-type={gridType}
-      className="grid h-full gap-[3px]"
+      className="grid h-full gap-0.75"
       style={{
         gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
         gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))`,
@@ -242,7 +242,7 @@ export function BookSelector({
       {/* Books — top 50% */}
       <div className="min-h-0 flex-1">
         <div
-          className="grid h-full gap-[3px]"
+          className="grid h-full gap-0.75"
           style={{
             gridTemplateColumns: `repeat(${BOOK_COLS}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${BOOK_ROWS}, minmax(0, 1fr))`,
@@ -267,7 +267,7 @@ export function BookSelector({
                 }}
                 title={localizedName}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 overflow-hidden rounded-sm p-[3px] text-white transition-all",
+                  "flex flex-col items-center justify-center gap-0.5 overflow-hidden rounded-sm p-0.75 text-white transition-all",
                   CATEGORY_COLORS[book.cat],
                   available && [CATEGORY_HOVER[book.cat], "cursor-pointer"],
                   !available && "cursor-not-allowed opacity-20",

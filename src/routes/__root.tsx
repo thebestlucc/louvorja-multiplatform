@@ -384,7 +384,7 @@ function RootLayout() {
                 {t("services.liveIndicator")}
               </span>
             </div>
-            <span className="text-sm font-semibold truncate max-w-[200px]">
+            <span className="text-sm font-semibold truncate max-w-50">
               {liturgyService.title}
             </span>
             <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium tabular-nums shrink-0">

@@ -36,7 +36,7 @@ export function ScheduledCategoryForm({ onAdd }: { onAdd: AddItemOnAdd }) {
   }
 
   return (
-    <ScrollArea className="h-[340px]">
+    <ScrollArea className="h-85">
       <div className="flex flex-col gap-0.5">
         {categories.map((category) => (
           <button

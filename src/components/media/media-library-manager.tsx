@@ -13,7 +13,7 @@ export function MediaLibraryManager() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] min-h-[400px] w-full gap-6">
+    <div className="flex h-[calc(100vh-12rem)] min-h-100 w-full gap-6">
       <CategorySidebar
         selectedCategoryId={selectedCategoryId}
         onSelectCategory={handleSelectCategory}

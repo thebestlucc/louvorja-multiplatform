@@ -85,7 +85,7 @@ export function BibleForm({ onAdd, initialTitle: _initialTitle, submitLabel }: {
       )}
 
       {/* Three-column navigator */}
-      <div className="flex h-[380px] overflow-hidden rounded-lg border border-border">
+      <div className="flex h-95 overflow-hidden rounded-lg border border-border">
 
         {/* Column 1: Book list */}
         <div className="flex w-44 flex-shrink-0 flex-col border-r border-border">

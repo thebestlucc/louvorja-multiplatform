@@ -87,7 +87,7 @@ function PrintEntryDayDetails({
         ) : null}
       </div>
 
-      <div className="mt-2 text-[16px] leading-7 text-slate-700">
+      <div className="mt-2 text-base leading-7 text-slate-700">
         {day.assigneeNames.length > 0 ? (
           day.assigneeNames.map((name, index) => (
             <Fragment key={`${day.serviceDate}-${name}`}>
@@ -115,7 +115,7 @@ function PrintGroupedMembersRow({
   const { t } = useTranslation();
 
   return (
-    <div className={`min-w-0 text-[14px] leading-6 text-slate-700 ${className ?? ""}`}>
+    <div className={`min-w-0 text-sm leading-6 text-slate-700 ${className ?? ""}`}>
       {names.length > 0 ? (
         names.map((name, index) => (
           <Fragment key={`grouped-members-${name}-${index}`}>
@@ -148,7 +148,7 @@ function PrintGroupedDistinctMembers({
         >
           <PrintGroupedMembersRow
             names={day.assigneeNames}
-            className="w-full py-2 text-[16px] leading-7"
+            className="w-full py-2 text-base leading-7"
           />
         </div>
       ))}
@@ -174,7 +174,7 @@ function PrintGroupedDateRail({
           <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
             {startLabel.weekday}
           </span>
-          <span className="text-[16px] font-black tracking-[0.04em] text-slate-950">
+          <span className="text-base font-black tracking-[0.04em] text-slate-950">
             {startLabel.date}
           </span>
         </div>
@@ -183,7 +183,7 @@ function PrintGroupedDateRail({
           <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
             {endLabel.weekday}
           </span>
-          <span className="text-[16px] font-black tracking-[0.04em] text-slate-950">
+          <span className="text-base font-black tracking-[0.04em] text-slate-950">
             {endLabel.date}
           </span>
         </div>
@@ -213,7 +213,7 @@ function PrintGroupedDateRail({
           <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
             {startLabel.weekday}
           </span>
-          <span className="text-[16px] font-black tracking-[0.04em] text-slate-950">
+          <span className="text-base font-black tracking-[0.04em] text-slate-950">
             {startLabel.date}
           </span>
         </div>
@@ -227,7 +227,7 @@ function PrintGroupedDateRail({
           <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
             {endLabel.weekday}
           </span>
-          <span className="text-[16px] font-black tracking-[0.04em] text-slate-950">
+          <span className="text-base font-black tracking-[0.04em] text-slate-950">
             {endLabel.date}
           </span>
         </div>
@@ -252,28 +252,28 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
     } 45%, rgba(255, 255, 255, 0.98) 100%)`;
 
   return (
-    <article className="schedule-print-section rounded-[24px] border border-slate-200/90 bg-white p-3">
+    <article className="schedule-print-section rounded-3xl border border-slate-200/90 bg-white p-3">
       <div className="px-1 pb-1">
         <header
-          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 rounded-[20px] border px-4 py-4"
+          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 rounded-[1.25rem] border px-4 py-4"
           style={{
             background: accentGradient,
             borderColor: accentBorder,
           }}
         >
           <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.55)]"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.125rem] text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.55)]"
             style={{ backgroundColor: section.color }}
           >
             <Icon className="h-6 w-6" />
           </div>
 
           <div className="min-w-0 flex-1">
-            <h3 className="text-[18px] font-black uppercase tracking-[0.12em] text-slate-950">
+            <h3 className="text-lg font-black uppercase tracking-[0.12em] text-slate-950">
               {section.title}
             </h3>
             <div
-              className="mt-2 h-[2px] w-16 rounded-full"
+              className="mt-2 h-0.5 w-16 rounded-full"
               style={{ backgroundColor: accentBorder }}
             />
           </div>
@@ -300,7 +300,7 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
             return (
               <div
                 key={`${section.departmentId}-${entry.startDate}-${entry.endDate}`}
-                className={`grid overflow-hidden rounded-[18px] border border-slate-200/90 bg-white ${
+                className={`grid overflow-hidden rounded-[1.125rem] border border-slate-200/90 bg-white ${
                   isGroupedEntry
                     ? "grid-cols-[7.4rem_minmax(0,1fr)]"
                     : "grid-cols-[7.4rem_minmax(0,1fr)]"
@@ -327,7 +327,7 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
                       <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-600">
                         {startLabel.weekday || "\u00A0"}
                       </div>
-                      <div className="mt-1 text-[18px] font-black tracking-[0.08em] text-slate-950">
+                      <div className="mt-1 text-lg font-black tracking-[0.08em] text-slate-950">
                         {startLabel.date}
                       </div>
                     </>
@@ -339,7 +339,7 @@ export function PrintDepartmentSection({ locale, section }: PrintDepartmentSecti
                     <div className="flex h-full items-center">
                       <PrintGroupedMembersRow
                         names={collectEntryAssigneeNames(entry.days)}
-                        className="text-[16px] leading-7"
+                        className="text-base leading-7"
                       />
                     </div>
                   ) : shouldShowDistinctGroupedMembers ? (

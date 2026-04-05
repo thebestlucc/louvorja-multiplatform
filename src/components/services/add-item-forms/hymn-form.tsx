@@ -25,7 +25,7 @@ export function HymnForm({ onAdd, initialTitle, submitLabel: _submitLabel }: { o
           autoFocus
         />
       </div>
-      <ScrollArea className="h-[340px]">
+      <ScrollArea className="h-85">
         <div className="flex flex-col gap-0.5">
           {(hymns ?? []).map((hymn: Hymn) => (
             <button

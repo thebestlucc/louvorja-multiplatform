@@ -105,7 +105,7 @@ export function AddItemModal({ open, onOpenChange, serviceId, onAdd, editItem, o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-[900px] flex-col gap-0 overflow-hidden bg-surface p-0">
+      <DialogContent className="flex max-h-[90vh] max-w-225 flex-col gap-0 overflow-hidden bg-surface p-0">
         {/* Header */}
         <DialogTitle className="border-b border-border px-6 py-4 text-base font-semibold text-foreground">
           {isEditMode ? t("services.editItem") : t("services.addItem")}

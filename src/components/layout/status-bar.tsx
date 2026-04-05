@@ -88,10 +88,10 @@ export function StatusBar() {
                   params: { serviceId: String(activeLiturgyId) },
                 })
               }
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-surface-hover"
+              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-surface-hover"
               title={t("services.activeServiceIndicator")}
             >
-              <ListChecks className="h-[15px] w-[15px]" />
+              <ListChecks className="size-3.75" />
               <span>{truncatedTitle}</span>
             </button>
             <div className="mx-1 h-4 w-px bg-border" />
@@ -101,9 +101,9 @@ export function StatusBar() {
           <>
             <button
               onClick={openPackSyncProgress}
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
+              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
             >
-              <Loader2 className="h-[15px] w-[15px] animate-spin" />
+              <Loader2 className="size-3.75 animate-spin" />
               <span>
                 {t("settings.packSync.statusBar", {
                   current: packSyncProgress!.packsProcessed,
@@ -123,10 +123,10 @@ export function StatusBar() {
                   search: { tab: "online-videos", playlist: firstDownload.playlistId },
                 })
               }
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
+              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
               title={t("onlineVideos.detail.downloading")}
             >
-              <Loader2 className="h-[15px] w-[15px] animate-spin" />
+              <Loader2 className="size-3.75 animate-spin" />
               <span>
                 {downloadEntries.length > 1
                   ? `${downloadEntries.length} downloads`
@@ -140,10 +140,10 @@ export function StatusBar() {
           <>
             <button
               onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
-              className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-surface-hover"
+              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-surface-hover"
               title={t("settings.contentSync.title")}
             >
-              <Loader2 className="h-[15px] w-[15px] animate-spin" />
+              <Loader2 className="size-3.75 animate-spin" />
               <span>
                 {t("settings.contentSync.statusBar", {
                   current: contentSyncProgress?.itemsProcessed ?? 0,
@@ -157,12 +157,12 @@ export function StatusBar() {
         <button
           onClick={() => navigate({ to: "/utilities/timer" })}
           className={cn(
-            "flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover",
+            "flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover",
             hasTimerProgress && "text-foreground",
           )}
           title={t("status.timerOpen")}
         >
-          <Timer className={cn("h-[15px] w-[15px]", timerState?.isRunning && "text-green-500")} />
+          <Timer className={cn("size-3.75", timerState?.isRunning && "text-green-500")} />
           <span>
             {timerLabel
               ? t("status.timerCompact", { value: timerLabel })
@@ -175,9 +175,9 @@ export function StatusBar() {
         <StatusBarUpdateIndicator />
         <button
           onClick={() => setStreamingOpen(true)}
-          className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover"
+          className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover"
         >
-          <Wifi className={cn("h-[15px] w-[15px]", isRunning && "text-green-500")} />
+          <Wifi className={cn("size-3.75", isRunning && "text-green-500")} />
           {isRunning
             ? t("status.streamingOn", {
               port: status?.port ?? 7070,

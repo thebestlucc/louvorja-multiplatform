@@ -577,7 +577,7 @@ function UtilitiesTimerPage() {
                   <Input
                     readOnly
                     value={rule.audioPath ?? t("utilities.timer.defaultBeep")}
-                    className="min-w-[220px] flex-1"
+                    className="min-w-55 flex-1"
                   />
                   <Button
                     size="sm"

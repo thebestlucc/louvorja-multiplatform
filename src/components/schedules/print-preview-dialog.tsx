@@ -82,7 +82,7 @@ function SchedulePrintPages({
   showPageLabel?: boolean;
 }) {
   return pages.map((page) => (
-    <section key={page.pageNumber} className="schedule-print-page relative rounded-[28px] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
+    <section key={page.pageNumber} className="schedule-print-page relative rounded-[1.75rem] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
       {showPageLabel ? (
         <div className="schedule-print-page-label absolute right-[10mm] top-[6mm] text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
           {pageLabel(page.pageNumber)}
@@ -91,7 +91,7 @@ function SchedulePrintPages({
       <div className="border-b border-slate-200/80 pb-3">
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">
-            <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[20px] font-black uppercase tracking-[0.08em] text-slate-950">
+            <div className="overflow-hidden text-ellipsis whitespace-nowrap text-xl font-black uppercase tracking-[0.08em] text-slate-950">
               {documentTitle}
             </div>
           </div>
@@ -120,19 +120,19 @@ function SchedulePrintEmptyPage({
   description: string;
 }) {
   return (
-    <section className="schedule-print-page relative rounded-[28px] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
-      <div className="flex h-full flex-col justify-between rounded-[24px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.04)_0%,rgba(255,255,255,0.98)_45%,rgba(59,130,246,0.05)_100%)] px-8 py-8">
+    <section className="schedule-print-page relative rounded-[1.75rem] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
+      <div className="flex h-full flex-col justify-between rounded-3xl border border-slate-200/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.04)_0%,rgba(255,255,255,0.98)_45%,rgba(59,130,246,0.05)_100%)] px-8 py-8">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
             {subtitle}
           </div>
-          <h2 className="mt-4 overflow-hidden text-ellipsis whitespace-nowrap text-[32px] font-black uppercase leading-[1.05] tracking-[0.08em] text-slate-950">
+          <h2 className="mt-4 overflow-hidden text-ellipsis whitespace-nowrap text-3xl font-black uppercase leading-[1.05] tracking-[0.08em] text-slate-950">
             {title}
           </h2>
-          <div className="mt-5 h-[3px] w-20 rounded-full bg-slate-900/12" />
+          <div className="mt-5 h-0.75 w-20 rounded-full bg-slate-900/12" />
         </div>
 
-        <div className="max-w-[32rem] rounded-[24px] border border-dashed border-slate-300 bg-slate-50/80 px-6 py-6 text-[16px] leading-7 text-slate-600">
+        <div className="max-w-[32rem] rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 px-6 py-6 text-base leading-7 text-slate-600">
           {description}
         </div>
       </div>
