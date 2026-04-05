@@ -190,6 +190,14 @@ pub fn execute_pack_sync(
         return;
     }
 
+    // Release the main DB connection before downloads start.
+    // During concurrent downloads, each completed pack briefly acquires its own
+    // connection via spawn_blocking.  Holding one here permanently would reduce
+    // the pool by 25 % and — when combined with download-completion writes —
+    // could exhaust the pool, blocking ALL IPC commands (settings reads, plan
+    // queries, etc.) and freezing the UI for up to connection_timeout seconds.
+    drop(conn);
+
     // Shadow with the resolved items vec for the rest of the function.
     let total = plan_items.len();
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
@@ -351,15 +359,23 @@ pub fn execute_pack_sync(
                             Ok(()) => {
                                 // Save extracted version immediately so cancellation mid-sync
                                 // does not force a full re-download of already-completed packs.
-                                if let Some(state) = app_clone.try_state::<AppState>() {
-                                    if let Ok(db_conn) = state.db.get() {
-                                        let _ = crate::db::queries::content_sync::set_pack_extracted_version(
-                                            &db_conn,
-                                            &item.pack_id,
-                                            item.pack_version,
-                                        );
+                                // Uses spawn_blocking so the r2d2 pool.get() call (which can
+                                // block up to connection_timeout) runs on a dedicated blocking
+                                // thread instead of starving a tokio async worker.
+                                let app_db = app_clone.clone();
+                                let pack_id_db = item.pack_id.clone();
+                                let pack_ver_db = item.pack_version;
+                                let _ = tokio::task::spawn_blocking(move || {
+                                    if let Some(st) = app_db.try_state::<AppState>() {
+                                        if let Ok(db_conn) = st.db.get() {
+                                            let _ = crate::db::queries::content_sync::set_pack_extracted_version(
+                                                &db_conn,
+                                                &pack_id_db,
+                                                pack_ver_db,
+                                            );
+                                        }
                                     }
-                                }
+                                }).await;
                                 statuses
                                     .lock()
                                     .unwrap()
@@ -433,6 +449,24 @@ pub fn execute_pack_sync(
     }
 
     // ── Phase 3: Save and hot-swap content DB files ─────────────────────────
+
+    // Re-acquire a main DB connection for Phase 3 settings writes.
+    let conn = match state.db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("[pack-sync] Could not re-acquire DB connection for Phase 3: {}", e);
+            clear_background_io_priority();
+            emit(
+                "completed_with_errors",
+                100.0,
+                &format!("DB unavailable for post-sync: {}", e),
+                total,
+                total,
+                snapshot(),
+            );
+            return;
+        }
+    };
 
     for item in &plan_items {
         if !item.pack_id.starts_with("content-db-") {
