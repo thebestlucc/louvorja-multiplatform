@@ -149,7 +149,7 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
       </button>
 
       {open && (
-        <PopoverContent className="w-[240px] p-2" onClose={() => setOpen(false)}>
+        <PopoverContent className="w-60 p-2" onClose={() => setOpen(false)}>
           <input
             ref={inputRef}
             className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -161,7 +161,7 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
               if (e.key === "Escape") setOpen(false);
             }}
           />
-          <div className="mt-2 max-h-[200px] overflow-auto">
+          <div className="mt-2 max-h-50 overflow-auto">
             {recentCategories.length > 0 && !inputValue && (
               <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
                 {t("services.categoryRecent")}

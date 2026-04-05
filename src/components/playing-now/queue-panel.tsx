@@ -84,7 +84,7 @@ export function QueuePanel({ className }: QueuePanelProps) {
 
       {/* Expanded state */}
       <div
-        className="flex h-full w-[280px] flex-col transition-opacity duration-200"
+        className="flex h-full w-70 flex-col transition-opacity duration-200"
         style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? "none" : "auto" }}
       >
         {/* Header */}

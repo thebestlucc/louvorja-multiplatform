@@ -16,10 +16,10 @@ export function StatusBarUpdateIndicator() {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 text-muted-foreground"
+          className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-muted-foreground"
           aria-label={t("updater.guardActive")}
         >
-          <Download className="h-[15px] w-[15px]" />
+          <Download className="size-3.75" />
           <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
         </div>
       </TooltipTrigger>

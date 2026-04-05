@@ -59,7 +59,7 @@ export function SlidePanel({ slides, activeSlideIndex, onSlideClick, visible }: 
 
       {/* Expanded state */}
       <div
-        className="flex h-full w-[200px] flex-col transition-opacity duration-200"
+        className="flex h-full w-50 flex-col transition-opacity duration-200"
         style={{ opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? "none" : "auto" }}
       >
         {/* Header */}

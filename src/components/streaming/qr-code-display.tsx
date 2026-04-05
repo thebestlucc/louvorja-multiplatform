@@ -12,7 +12,7 @@ export function QrCodeDisplay({ url, label }: QrCodeDisplayProps) {
       <div className="rounded-lg bg-white p-2">
         <QRCodeSVG value={url} size={120} />
       </div>
-      <span className="max-w-[160px] truncate text-[10px] text-muted-foreground">{url}</span>
+      <span className="max-w-40 truncate text-[10px] text-muted-foreground">{url}</span>
     </div>
   );
 }

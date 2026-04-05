@@ -81,7 +81,7 @@ export function LiturgyTimeline({ items, activeIndex = -1 }: LiturgyTimelineProp
     <ScrollArea className="h-full">
       <div className="relative py-4 pl-7 pr-3">
         {/* Vertical connector line (dashed) */}
-        <div className="absolute bottom-4 left-[21px] top-4 w-0 border-l-2 border-dashed border-border/50" />
+        <div className="absolute bottom-4 left-5.25 top-4 w-0 border-l-2 border-dashed border-border/50" />
 
         <div className="flex flex-col gap-0.5">
           {items.map((item, index) => {

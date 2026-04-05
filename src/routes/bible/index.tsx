@@ -583,7 +583,7 @@ function BibleIndex() {
             className={cn(
               "min-h-0 overflow-y-auto rounded-lg border border-border bg-surface transition-all duration-200",
               showSettings
-                ? "w-[260px] shrink-0 p-3 opacity-100"
+                ? "w-65 shrink-0 p-3 opacity-100"
                 : "w-0 overflow-hidden border-0 p-0 opacity-0",
             )}
           >

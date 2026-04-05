@@ -135,7 +135,7 @@ export function Header() {
                 className="relative h-9 w-9"
                 aria-label={t("settings.packSync.newPacksAvailable")}
               >
-                <Bell className="h-[18px] w-[18px]" />
+                <Bell className="size-4.5" />
                 <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-surface" />
               </Button>
             </DropdownMenuTrigger>
@@ -199,7 +199,7 @@ export function Header() {
           title={`${shortcutsHelpLabel} (${shortcutsHelpComboLabel})`}
           onClick={openKeyboardShortcutsPanel}
         >
-          <Keyboard className="h-[18px] w-[18px]" />
+          <Keyboard className="size-4.5" />
         </Button>
 
         <DropdownMenu>
@@ -211,7 +211,7 @@ export function Header() {
               aria-label={t("settings.language")}
               title={t("settings.language")}
             >
-              <Languages className="h-[18px] w-[18px]" />
+              <Languages className="size-4.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -242,7 +242,7 @@ export function Header() {
               aria-label={t("settings.theme")}
               title={t("settings.theme")}
             >
-              <Palette className="h-[18px] w-[18px]" />
+              <Palette className="size-4.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

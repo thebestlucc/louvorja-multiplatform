@@ -106,7 +106,7 @@ export function BibleFields({ slide, onChange }: BibleFieldsProps) {
         <textarea
           readOnly
           className={cn(
-            "flex min-h-[80px] w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground",
+            "flex min-h-20 w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground",
           )}
           value={slide.text}
         />

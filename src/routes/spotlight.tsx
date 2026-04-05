@@ -294,7 +294,7 @@ function SpotlightWindow() {
   const groupHeadingClass =
     "*:[[cmdk-group-heading]]:px-4 *:[[cmdk-group-heading]]:pt-3 *:[[cmdk-group-heading]]:pb-1.5 *:[[cmdk-group-heading]]:text-xs *:[[cmdk-group-heading]]:font-medium *:[[cmdk-group-heading]]:text-muted-foreground *:[[cmdk-group-heading]]:select-none";
   const itemClass =
-    "group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-foreground transition-colors hover:bg-surface-hover aria-selected:bg-accent aria-selected:text-accent-foreground";
+    "group mx-1.5 my-0.5 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover aria-selected:bg-accent aria-selected:text-accent-foreground";
   const itemIconClass =
     "h-4 w-4 shrink-0 text-muted-foreground group-aria-selected:text-accent-foreground";
   const metaTextClass = "text-[11px] text-muted-foreground";

@@ -616,7 +616,7 @@ function CategoryDivider({
       >
         {/* Left accent bar */}
         <div className={cn(
-          "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-colors",
+          "absolute left-0 top-1 bottom-1 w-0.75 rounded-full transition-colors",
           isPendingDrop ? "bg-primary/60" : "bg-foreground/15 group-hover:bg-foreground/25",
         )} />
 
@@ -748,7 +748,7 @@ function SortableLiturgyItem({
       {/* Left indent connector for child items */}
       {isChild && (
         <div className="pointer-events-none absolute -left-5 top-0 bottom-0 flex items-stretch">
-          <div className="w-[2px] self-stretch bg-border/50" />
+          <div className="w-0.5 self-stretch bg-border/50" />
         </div>
       )}
 

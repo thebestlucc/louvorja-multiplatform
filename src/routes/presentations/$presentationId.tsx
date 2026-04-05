@@ -236,7 +236,7 @@ function PresentationDetail() {
           <Input
             value={localTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
-            className="h-7 max-w-[200px] border-none bg-transparent text-sm font-semibold text-white shadow-none focus-visible:bg-white/5 focus-visible:ring-1 focus-visible:ring-amber-500/50 px-1.5"
+            className="h-7 max-w-50 border-none bg-transparent text-sm font-semibold text-white shadow-none focus-visible:bg-white/5 focus-visible:ring-1 focus-visible:ring-amber-500/50 px-1.5"
             aria-label={t("presentations.title")}
           />
         </nav>
@@ -588,7 +588,7 @@ function PresentationDetail() {
                 >
                   <textarea
                     className={cn(
-                      "w-full min-h-[100px] rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70",
+                      "w-full min-h-25 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70",
                       "font-mono placeholder:text-white/20",
                       "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/50",
                       "resize-y",

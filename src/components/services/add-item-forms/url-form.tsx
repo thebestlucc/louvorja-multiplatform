@@ -232,7 +232,7 @@ export function UrlForm({ onAdd, items = [], initialUrl, initialTitle, submitLab
       {/* YouTube preview / skeleton */}
       {isYouTube && metaState === "loading" && (
         <div className="flex items-start gap-3 rounded-md border border-border bg-muted p-3 animate-pulse">
-          <div className="h-[54px] w-24 rounded bg-muted-foreground/20 shrink-0" />
+          <div className="h-13.5 w-24 rounded bg-muted-foreground/20 shrink-0" />
           <div className="flex flex-col gap-2 flex-1 pt-1">
             <div className="h-3 w-3/4 rounded bg-muted-foreground/20" />
             <div className="h-3 w-1/2 rounded bg-muted-foreground/20" />
@@ -250,7 +250,7 @@ export function UrlForm({ onAdd, items = [], initialUrl, initialTitle, submitLab
             <img
               src={ytMeta.thumbnailUrl}
               alt=""
-              className="h-[54px] w-24 rounded object-cover shrink-0"
+              className="h-13.5 w-24 rounded object-cover shrink-0"
             />
             <div className="flex flex-col gap-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{ytMeta.title}</p>

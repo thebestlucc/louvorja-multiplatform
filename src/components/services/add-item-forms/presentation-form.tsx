@@ -28,7 +28,7 @@ export function PresentationForm({ onAdd, initialTitle, submitLabel: _submitLabe
           autoFocus
         />
       </div>
-      <ScrollArea className="h-[340px]">
+      <ScrollArea className="h-85">
         <div className="flex flex-col gap-0.5">
           {filtered.map((pres: PresentationType) => (
             <button

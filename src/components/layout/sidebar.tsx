@@ -243,7 +243,7 @@ export function Sidebar() {
                 >
                   <Link
                     to={item.to}
-                    className="flex flex-1 items-center gap-3 pl-[10px] pr-3 py-2"
+                    className="flex flex-1 items-center gap-3 pl-2.5 pr-3 py-2"
                   >
                     <div className="relative shrink-0">
                       <item.icon className="h-4 w-4" />
@@ -266,7 +266,7 @@ export function Sidebar() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-0.5 flex flex-col gap-0.5 ml-[13px] border-l border-border pl-3">
+                  <div className="mt-0.5 flex flex-col gap-0.5 ml-3.25 border-l border-border pl-3">
                     {item.children!.map((child) => {
                       const childActive = isChildActive(pathname, searchParams, child, item.children!);
                       return (
@@ -300,8 +300,8 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-r-md py-2 text-sm transition-colors",
                 "hover:bg-surface-hover hover:text-foreground",
                 isActive
-                  ? "border-l-2 border-primary bg-accent/60 text-foreground font-medium pl-[10px] pr-3"
-                  : "border-l-2 border-transparent text-muted-foreground pl-[10px] pr-3",
+                  ? "border-l-2 border-primary bg-accent/60 text-foreground font-medium pl-2.5 pr-3"
+                  : "border-l-2 border-transparent text-muted-foreground pl-2.5 pr-3",
                 !sidebarOpen && "justify-center pl-0 pr-0 border-l-0 rounded-md",
               )}
             >

@@ -118,7 +118,7 @@ export function CategoryForm({ onAdd, initialTitle, submitLabel, existingCategor
               {t("services.categories.emptyLibrary", "Nenhuma seção criada ainda")}
             </p>
           ) : (
-            <ScrollArea className="max-h-[200px]">
+            <ScrollArea className="max-h-50">
               <div className="flex flex-col gap-0.5">
                 {library.map((name) => (
                   <div

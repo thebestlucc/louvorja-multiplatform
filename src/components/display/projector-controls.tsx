@@ -21,10 +21,10 @@ export function ProjectorControls() {
       {/* Projector toggle */}
       <button
         onClick={() => toggleProjector()}
-        className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10"
+        className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10"
         title={isProjectorOpen ? t("display.closeProjector") : t("display.openProjector")}
       >
-        <Monitor className="h-[15px] w-[15px]" />
+        <Monitor className="size-3.75" />
         <span
           className={cn(
             "inline-block h-2 w-2 rounded-full",
@@ -36,10 +36,10 @@ export function ProjectorControls() {
       {/* Return monitor toggle */}
       <button
         onClick={() => toggleReturn()}
-        className="flex min-h-[28px] items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10"
+        className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-white/10"
         title={isReturnOpen ? t("display.closeReturn") : t("display.openReturn")}
       >
-        <MonitorSmartphone className="h-[15px] w-[15px]" />
+        <MonitorSmartphone className="size-3.75" />
         <span
           className={cn(
             "inline-block h-2 w-2 rounded-full",
@@ -55,24 +55,24 @@ export function ProjectorControls() {
       <button
         onClick={() => toggleBlackScreen()}
         className={cn(
-          "flex min-h-[28px] items-center rounded px-2 py-1 hover:bg-white/10",
+          "flex min-h-7 items-center rounded px-2 py-1 hover:bg-white/10",
           isBlackScreen && "bg-white/15 text-yellow-400",
         )}
         title={t("display.toggleBlack")}
       >
-        <MonitorOff className="h-[15px] w-[15px]" />
+        <MonitorOff className="size-3.75" />
       </button>
 
       {/* Logo screen */}
       <button
         onClick={() => toggleLogoScreen()}
         className={cn(
-          "flex min-h-[28px] items-center rounded px-2 py-1 hover:bg-white/10",
+          "flex min-h-7 items-center rounded px-2 py-1 hover:bg-white/10",
           isLogoScreen && "bg-white/15 text-yellow-400",
         )}
         title={t("display.toggleLogo")}
       >
-        <Image className="h-[15px] w-[15px]" />
+        <Image className="size-3.75" />
       </button>
     </div>
   );

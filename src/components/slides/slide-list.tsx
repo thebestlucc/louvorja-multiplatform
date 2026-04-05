@@ -190,7 +190,7 @@ function SlideItemRow({
 
       {/* Active indicator bar */}
       <div className={cn(
-        "h-auto self-stretch w-[3px] shrink-0 rounded-full transition-colors duration-100",
+        "h-auto self-stretch w-0.75 shrink-0 rounded-full transition-colors duration-100",
         isActive ? "bg-primary" : "bg-transparent group-hover:bg-muted-foreground/30",
       )} />
 
@@ -272,7 +272,7 @@ function SortableSlideItem({
 
       {/* Active indicator bar */}
       <div className={cn(
-        "h-auto self-stretch w-[3px] shrink-0 rounded-full transition-colors duration-100",
+        "h-auto self-stretch w-0.75 shrink-0 rounded-full transition-colors duration-100",
         isActive ? "bg-primary" : "bg-transparent group-hover:bg-muted-foreground/30",
       )} />
 

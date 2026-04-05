@@ -196,14 +196,14 @@ function LiturgiesIndex() {
         <div className="relative flex flex-1 items-center">
           <Search className="absolute left-3 h-3.5 w-3.5 text-muted-foreground/60" />
           <input
-            className="h-[30px] w-full rounded-md border border-border bg-white/4 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="h-7.5 w-full rounded-md border border-border bg-white/4 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
             placeholder={t("services.searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="h-[18px] w-px flex-shrink-0 bg-border" />
-        <button className="flex h-[30px] flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-white/5 px-2.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+        <div className="h-4.5 w-px flex-shrink-0 bg-border" />
+        <button className="flex h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-white/5 px-2.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
           <ListFilter className="h-3 w-3" />
           {t("services.sortByDate")}
           <ChevronDown className="h-3 w-3" />
@@ -212,7 +212,7 @@ function LiturgiesIndex() {
           <button
             onClick={() => setView("grid")}
             className={cn(
-              "flex h-[30px] w-[30px] items-center justify-center transition-colors",
+              "flex size-7.5 items-center justify-center transition-colors",
               view === "grid"
                 ? "bg-white/12 text-foreground"
                 : "bg-white/4 text-muted-foreground hover:bg-white/8 hover:text-foreground",
@@ -223,7 +223,7 @@ function LiturgiesIndex() {
           <button
             onClick={() => setView("list")}
             className={cn(
-              "flex h-[30px] w-[30px] items-center justify-center border-l border-border transition-colors",
+              "flex size-7.5 items-center justify-center border-l border-border transition-colors",
               view === "list"
                 ? "bg-white/12 text-foreground"
                 : "bg-white/4 text-muted-foreground hover:bg-white/8 hover:text-foreground",
@@ -238,7 +238,7 @@ function LiturgiesIndex() {
       {isLoading ? (
         <div className="grid grid-cols-3 gap-2.5">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-[140px] animate-pulse rounded-xl border border-border bg-card" />
+            <div key={i} className="h-35 animate-pulse rounded-xl border border-border bg-card" />
           ))}
         </div>
       ) : (
@@ -441,7 +441,7 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
           isToday && "border-primary/25 bg-gradient-to-r from-primary/8 to-transparent hover:from-primary/12",
         )}
       >
-        <div className="w-[120px] flex-shrink-0">{datePill}</div>
+        <div className="w-30 flex-shrink-0">{datePill}</div>
         {starBtn}
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{service.title}</span>
         {categoryPill && <div className="flex-shrink-0">{categoryPill}</div>}
@@ -459,14 +459,14 @@ function LiturgyCard({ service, view, isFavorite, isFull, category, onToggleFavo
       to="/services/$serviceId"
       params={{ serviceId: String(service.id) }}
       className={cn(
-        "group flex min-h-[140px] min-w-0 cursor-pointer flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5",
+        "group flex min-h-35 min-w-0 cursor-pointer flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5",
         "transition-all duration-200 hover:-translate-y-0.5 hover:border-border/80 hover:bg-accent/40 hover:shadow-md",
         isFavorite && "border-primary/15 bg-primary/5 hover:bg-primary/8",
         isToday && "relative overflow-hidden border-primary/25 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent shadow-sm hover:shadow-md hover:from-primary/14",
       )}
     >
       {isToday && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary/80 via-primary/40 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary/80 via-primary/40 to-transparent" />
       )}
       {/* Top: date + actions */}
       <div className="flex items-start justify-between gap-1.5">

@@ -123,7 +123,7 @@ export function DatePicker({ value, onChange, className }: DatePickerProps) {
       </button>
 
       {open && (
-        <PopoverContent className="w-[280px] p-3" onClose={() => setOpen(false)}>
+        <PopoverContent className="w-70 p-3" onClose={() => setOpen(false)}>
           {/* Month/Year header */}
           <div className="mb-2 flex items-center justify-between">
             <button
