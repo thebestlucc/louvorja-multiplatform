@@ -39,7 +39,8 @@
     "createUpdaterArtifacts": false,
     "targets": "all",
     "resources": [
-      "resources/bible/*.sqlite"
+      "resources/bible/*.sqlite",
+      "resources/bible.db"
     ],
     "icon": [
       "icons/32x32.png",

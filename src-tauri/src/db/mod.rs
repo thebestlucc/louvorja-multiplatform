@@ -80,7 +80,7 @@ pub fn init_db(app_data_dir: &Path) -> Result<Pool<SqliteConnectionManager>, App
     });
 
     let pool = Pool::builder()
-        .max_size(4)
+        .max_size(8)
         .min_idle(Some(1))
         .connection_timeout(std::time::Duration::from_secs(5))
         .build(manager)
