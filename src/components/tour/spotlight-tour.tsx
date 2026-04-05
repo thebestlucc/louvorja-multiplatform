@@ -22,6 +22,7 @@ export function SpotlightTour({ onComplete, onSkip: onSkipProp, steps: stepsProp
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [cutout, setCutout] = useState<CutoutRect | null>(null);
+  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
 
   const steps = stepsProp ?? TOUR_STEPS;
   const step = steps[currentIndex];
@@ -39,6 +40,7 @@ export function SpotlightTour({ onComplete, onSkip: onSkipProp, steps: stepsProp
       return;
     }
     const rect = target.getBoundingClientRect();
+    setTargetRect(rect);
     const padding = 8;
     setCutout({
       top: rect.top - padding,
@@ -99,6 +101,7 @@ export function SpotlightTour({ onComplete, onSkip: onSkipProp, steps: stepsProp
         description={t(`${step.i18nKey}.description`)}
         currentStep={currentIndex}
         totalSteps={steps.length}
+        targetRect={targetRect}
         onNext={handleNext}
         onSkip={handleSkip}
       />
