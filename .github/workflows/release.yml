@@ -64,6 +64,9 @@ jobs:
         with:
           setup-node: "false"
           install-frontend-deps: "false"
+      - name: Create bible.db placeholder for build-script validation
+        shell: bash
+        run: touch src-tauri/resources/bible.db
       - name: Rust check
         shell: bash
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
