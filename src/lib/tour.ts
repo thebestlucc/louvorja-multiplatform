@@ -1,4 +1,5 @@
-import { completeTour, isTourCompleted } from "./onboarding";
+import { completeTour, isTourCompleted, TOUR_COMPLETED_KEY } from "./onboarding";
+import { setSetting } from "./tauri";
 
 export interface TourStep {
   /** CSS selector for the target element */
@@ -62,4 +63,12 @@ export async function completeRouteTour(routePath: string): Promise<void> {
 
 export async function finishTour(): Promise<void> {
   await completeTour();
+}
+
+export async function resetAllTours(): Promise<void> {
+  const keys = [
+    TOUR_COMPLETED_KEY,
+    ...Object.keys(ROUTE_TOURS).map(routeTourKey),
+  ];
+  await Promise.all(keys.map((key) => setSetting(key, "false")));
 }

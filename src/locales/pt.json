@@ -279,7 +279,9 @@
         }
       },
       "title": "Tour guiado"
-    }
+    },
+    "restartTours": "Reiniciar todos os tours",
+    "toursReset": "Todos os tours foram reiniciados. Acesse cada seção para vê-los novamente."
   },
   "hymn": {
     "actionPlayback": "Playback",
