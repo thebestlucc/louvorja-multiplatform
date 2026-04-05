@@ -1,5 +1,5 @@
 import { createRootRoute, Link, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Square, ExternalLink } from "lucide-react";
@@ -33,6 +33,7 @@ import { useContentSyncStore } from "../stores/content-sync-store";
 import { catcher } from "../lib/catcher";
 import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
+import { SpotlightTour } from "../components/tour/spotlight-tour";
 import type { ContentSyncProgress, ContentSyncReport, PackSyncProgress } from "../types/content-sync";
 
 export const Route = createRootRoute({
@@ -57,13 +58,26 @@ function RootLayout() {
   const queryClient = useQueryClient();
 
   // Projection windows: disable pointer events on body so YouTube iframes never
-  // show their native controls/HUD on hover or focus.
+  // show their native controls/HUD on hover or focus. Only for actual projection windows, not onboarding.
+  const isProjectionWindow = BARE_ROUTES.includes(pathname);
   useEffect(() => {
-    if (isBareRoute) {
+    if (isProjectionWindow) {
       document.body.classList.add("pointer-events-none");
       return () => { document.body.classList.remove("pointer-events-none"); };
     }
+  }, [isProjectionWindow]);
+  // Spotlight tour state — triggered via sessionStorage from onboarding ready page
+  const [showTour, setShowTour] = useState(false);
+  useEffect(() => {
+    if (isBareRoute) return;
+    if (sessionStorage.getItem("louvorja.startTour") === "true") {
+      sessionStorage.removeItem("louvorja.startTour");
+      const timer = setTimeout(() => setShowTour(true), 500);
+      return () => clearTimeout(timer);
+    }
   }, [isBareRoute]);
+  const handleTourComplete = useCallback(() => setShowTour(false), []);
+
   const setLanguage = useThemeStore((state) => state.setLanguage);
   const { data: monitors = [], isSuccess: monitorsLoaded } = useMonitors();
   const { data: monitorConfigs = [], isSuccess: monitorConfigsLoaded } = useMonitorConfigs();
@@ -226,13 +240,12 @@ function RootLayout() {
     setPackSyncPlan(count > 0 ? plan : null);
   }, [packSyncPlanQuery.data, setPackSyncPendingCount, setPackSyncPlan]);
 
-  // Show pack sync dialog on startup if there are items OR if language selection is needed
+  // Show pack sync dialog on startup if there are new manifest items (not first-run lang setup — onboarding handles that)
   useEffect(() => {
     if (isBareRoute || packSyncPlanShownRef.current) return;
     const plan = packSyncPlanQuery.data;
     const hasVisible = plan?.items.some((i) => !i.packId.startsWith("content-db-"));
-    const needsLangSetup = plan && plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
-    if (plan && (hasVisible || needsLangSetup)) {
+    if (plan && hasVisible) {
       packSyncPlanShownRef.current = true;
       openPackSyncPlan();
     }
@@ -447,6 +460,7 @@ function RootLayout() {
       <PackSyncDialog />
       <PackSyncProgressDialog />
       <UpdateNotification />
+      {showTour && <SpotlightTour onComplete={handleTourComplete} />}
       <AppToaster />
       <PersistentVideoPlayer />
     </div>

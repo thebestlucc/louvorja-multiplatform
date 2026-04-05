@@ -39,3 +39,15 @@ export function invalidateOnboardingCache() {
   cachedNeedsOnboarding = null;
   cachedAt = 0;
 }
+
+export const TOUR_COMPLETED_KEY = "app.tourCompleted";
+
+export async function isTourCompleted(): Promise<boolean> {
+  const [settings, error] = await catcher(getAllSettings(), { notify: false });
+  if (error || !settings) return true;
+  return settings.find((item) => item.key === TOUR_COMPLETED_KEY)?.value === "true";
+}
+
+export async function completeTour(): Promise<void> {
+  await setSetting(TOUR_COMPLETED_KEY, "true");
+}

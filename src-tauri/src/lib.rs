@@ -466,6 +466,14 @@ pub fn run() {
             // Create main window after setup
             create_main_window(app.handle())?;
 
+            // Pre-create spotlight window hidden so its webview is prewarmed.
+            // This ensures the React event listener for "spotlight-shown" is
+            // registered before the user first opens the palette (first-open
+            // race condition fix, especially on Windows).
+            if let Err(e) = commands::spotlight::create_spotlight_window(app.handle()) {
+                eprintln!("[spotlight] Failed to pre-create window: {e}");
+            }
+
 
             // Auto-start streaming server if configured
             {
