@@ -12,6 +12,8 @@ import { QueuePanel } from "../../components/playing-now/queue-panel";
 import { PreviewCanvas } from "../../components/playing-now/preview-canvas";
 import { ControlBar } from "../../components/playing-now/control-bar";
 import { mediaHasSlides } from "../../types/media";
+import { useRouteTour } from "../../hooks/use-route-tour";
+import { SpotlightTour } from "../../components/tour/spotlight-tour";
 
 export const Route = createFileRoute("/playing-now/")({
   component: PlayingNowScreen,
@@ -59,6 +61,7 @@ function PlayingNowScreen() {
   const currentSlide = effectiveSlides[effectiveActiveIndex] ?? null;
   const showSlides = currentItem ? mediaHasSlides(currentItem) : effectiveSlides.length > 0 || isPlayingLiturgy;
   const currentMode = currentItem?.type === "hymn" ? currentItem.mode : undefined;
+  const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/playing-now");
 
   return (
     <div className="flex h-full flex-col">
@@ -82,6 +85,7 @@ function PlayingNowScreen() {
               isProjectorOpen={isProjectorOpen}
             />
           </div>
+          <div data-tour="playback-controls">
           <ControlBar
             currentItem={currentItem}
             status={status}
@@ -108,11 +112,18 @@ function PlayingNowScreen() {
             currentMode={currentMode}
             onModeChange={actions.switchMode}
           />
+          </div>
         </div>
 
         {/* Right: Queue Panel */}
-        <QueuePanel />
+        <div data-tour="playing-queue">
+          <QueuePanel />
+        </div>
       </div>
+
+      {showTour && steps.length > 0 && (
+        <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />
+      )}
     </div>
   );
 }

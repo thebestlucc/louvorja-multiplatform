@@ -38,6 +38,8 @@ import {
 import { cn } from "../../lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMedia } from "react-use";
+import { useRouteTour } from "../../hooks/use-route-tour";
+import { SpotlightTour } from "../../components/tour/spotlight-tour";
 
 export const Route = createFileRoute("/collections/")({
   component: CollectionsIndex,
@@ -278,6 +280,7 @@ function CollectionsIndex() {
   });
 
   const isOnlineVideos = routeSearch.tab === "online-videos";
+  const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/collections");
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6" ref={listRef}>
@@ -420,7 +423,7 @@ function CollectionsIndex() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between border-b border-border pb-2">
+      <div className="flex items-center justify-between border-b border-border pb-2" data-tour="collections-tabs">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -729,6 +732,10 @@ function CollectionsIndex() {
         </div>
       )}
       </>}
+
+      {showTour && steps.length > 0 && (
+        <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />
+      )}
     </div>
   );
 }

@@ -67,7 +67,7 @@ export function HymnSearch() {
   return (
     <div className="space-y-4" ref={listRef}>
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1" data-tour="hymnal-search">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={t("hymnal.searchPlaceholder")}

@@ -458,6 +458,76 @@
     "finish": {
       "title": "É isso!",
       "description": "Explore e aproveite. Você pode repetir este tour pelo menu Ajuda."
+    },
+    "home": {
+      "sidebar": {
+        "title": "Navegação lateral",
+        "description": "Acesse hinos, bíblia, apresentações, cultos e mais pela barra lateral."
+      },
+      "search": {
+        "title": "Busca rápida",
+        "description": "Pressione Ctrl+K para encontrar hinos, versículos ou apresentações instantaneamente."
+      },
+      "projector": {
+        "title": "Controles de projeção",
+        "description": "Inicie o projetor, alterne tela preta/logo e gerencie as janelas de exibição."
+      },
+      "statusBar": {
+        "title": "Barra de status",
+        "description": "Veja status de conexão, versão e controles rápidos de projeção aqui."
+      }
+    },
+    "hymnal": {
+      "search": {
+        "title": "Pesquisar hinos",
+        "description": "Digite um título, número ou trecho da letra para filtrar a lista."
+      },
+      "card": {
+        "title": "Cards de hinos",
+        "description": "Clique em um hino para ver a letra, tocar áudio ou projetar slides."
+      }
+    },
+    "presentations": {
+      "list": {
+        "title": "Suas apresentações",
+        "description": "Todas as suas apresentações aparecem aqui. Clique para editar."
+      },
+      "new": {
+        "title": "Criar apresentação",
+        "description": "Crie uma nova apresentação ou importe um arquivo .slja/.pptx."
+      }
+    },
+    "services": {
+      "list": {
+        "title": "Lista de cultos",
+        "description": "Seus cultos estão listados aqui com data e quantidade de itens."
+      },
+      "new": {
+        "title": "Novo culto",
+        "description": "Crie um novo culto para organizar hinos, leituras e apresentações."
+      }
+    },
+    "collections": {
+      "tabs": {
+        "title": "Coleções e vídeos",
+        "description": "Alterne entre coleções de hinos e playlists de vídeos online."
+      }
+    },
+    "playingNow": {
+      "queue": {
+        "title": "Fila de reprodução",
+        "description": "Visualize e reordene a fila de reprodução atual."
+      },
+      "controls": {
+        "title": "Controles de reprodução",
+        "description": "Reproduza, pause, navegue pelos slides e ajuste o volume aqui."
+      }
+    },
+    "settings": {
+      "theme": {
+        "title": "Abas de configuração",
+        "description": "Configure aparência, atalhos, monitores, streaming e mais."
+      }
     }
   },
   "playingNow": {
