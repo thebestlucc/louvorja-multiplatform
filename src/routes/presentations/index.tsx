@@ -4,6 +4,8 @@ import { Plus, Upload, MoreVertical, Trash2, Download, Presentation as Presentat
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { usePresentations, useCreatePresentation, useDeletePresentation, useImportSlja, useExportSlja, useImportPptx } from "../../lib/queries";
+import { useRouteTour } from "../../hooks/use-route-tour";
+import { SpotlightTour } from "../../components/tour/spotlight-tour";
 import { notify } from "../../lib/notifications";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -33,6 +35,7 @@ function PresentationsIndex() {
   const importPptxMutation = useImportPptx();
   const exportMutation = useExportSlja();
   const [searchQuery, setSearchQuery] = useState("");
+  const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/presentations");
 
   const filtered = (presentations ?? []).filter((p) =>
     p.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -107,7 +110,7 @@ function PresentationsIndex() {
               ? t("presentations.importing")
               : t("presentations.import")}
           </Button>
-          <Button size="sm" onClick={handleCreate}>
+          <Button size="sm" onClick={handleCreate} data-tour="new-presentation">
             <Plus className="mr-2 h-4 w-4" />
             {t("presentations.new")}
           </Button>
@@ -142,7 +145,7 @@ function PresentationsIndex() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div data-tour="presentations-list" className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map((presentation) => (
             <PresentationCard
               key={presentation.id}
@@ -152,6 +155,10 @@ function PresentationsIndex() {
             />
           ))}
         </div>
+      )}
+
+      {showTour && steps.length > 0 && (
+        <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />
       )}
     </div>
   );

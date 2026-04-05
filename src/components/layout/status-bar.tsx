@@ -72,7 +72,7 @@ export function StatusBar() {
     : null;
 
   return (
-    <footer className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-surface px-3 text-xs text-muted-foreground">
+    <footer data-tour="status-bar" className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-surface px-3 text-xs text-muted-foreground">
       <span>
         {t("status.ready")}
         {version ? <span className="ml-2 opacity-60">v{version}</span> : null}
