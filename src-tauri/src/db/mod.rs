@@ -37,26 +37,8 @@ pub fn init_bible_db(bible_db_path: &Path) -> Result<Pool<SqliteConnectionManage
         )
         .unwrap_or(false);
     if !has_table {
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS bible_versions (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                name        TEXT    NOT NULL,
-                abbreviation TEXT   NOT NULL UNIQUE,
-                language    TEXT    NOT NULL DEFAULT 'pt',
-                is_builtin  INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE IF NOT EXISTS bible_verses (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                version_id  INTEGER NOT NULL REFERENCES bible_versions(id),
-                book        TEXT    NOT NULL,
-                chapter     INTEGER NOT NULL,
-                verse       INTEGER NOT NULL,
-                text        TEXT    NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_bible_verses_lookup
-                ON bible_verses(version_id, book, chapter, verse);",
-        )
-        .map_err(|e| AppError::Internal(format!("Failed to create bible schema: {e}")))?;
+        conn.execute_batch(crate::bible_builder::BIBLE_SCHEMA)
+            .map_err(|e| AppError::Internal(format!("Failed to create bible schema: {e}")))?;
         eprintln!("[app] Created empty bible schema — bible will be populated after pack sync");
     }
 
