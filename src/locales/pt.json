@@ -1577,6 +1577,13 @@
     "coverUpdated": "Capa atualizada"
   },
   "common": {
-    "back": "Voltar"
+    "back": "Voltar",
+    "skip": "Pular",
+    "done": "Concluir",
+    "next": "Próximo",
+    "file": "arquivo",
+    "files": "arquivos",
+    "pack": "pacote",
+    "packs": "pacotes"
   }
 }

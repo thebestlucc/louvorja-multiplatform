@@ -15,21 +15,9 @@ import { cancelPackSync } from "../../lib/tauri/pack-sync";
 import { catcher } from "../../lib/catcher";
 import { toast } from "sonner";
 import { ChevronRight, CheckCircle2, XCircle, Loader2, Clock, Download } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, formatBytes, LANG_DISPLAY } from "../../lib/utils";
 import type { PackSyncPlanItem } from "../../types/content-sync";
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`;
-  if (bytes < 1000 * 1000) return `${(bytes / 1000).toFixed(1)} KB`;
-  if (bytes < 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
-  return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
-}
-
-const LANG_DISPLAY: Record<string, string> = {
-  "pt-BR": "Portugues (Brasil)",
-  "es": "Espanol",
-  "en-US": "English (US)",
-};
 
 const FILE_TYPE_BADGE: Record<string, string> = {
   audio: "bg-blue-500/10 text-blue-600 dark:text-blue-400",

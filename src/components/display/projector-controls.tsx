@@ -17,7 +17,7 @@ export function ProjectorControls() {
   } = useMonitorsControl();
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" data-tour="projector-controls">
       {/* Projector toggle */}
       <button
         onClick={() => toggleProjector()}

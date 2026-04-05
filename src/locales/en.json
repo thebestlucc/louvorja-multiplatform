@@ -1577,6 +1577,13 @@
     "coverUpdated": "Cover updated"
   },
   "common": {
-    "back": "Back"
+    "back": "Back",
+    "skip": "Skip",
+    "done": "Done",
+    "next": "Next",
+    "file": "file",
+    "files": "files",
+    "pack": "pack",
+    "packs": "packs"
   }
 }

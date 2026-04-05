@@ -1577,6 +1577,13 @@
     "coverUpdated": "Portada actualizada"
   },
   "common": {
-    "back": "Volver"
+    "back": "Volver",
+    "skip": "Omitir",
+    "done": "Listo",
+    "next": "Siguiente",
+    "file": "archivo",
+    "files": "archivos",
+    "pack": "paquete",
+    "packs": "paquetes"
   }
 }

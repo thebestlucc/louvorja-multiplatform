@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { TourStep } from "../../lib/tour";
+import { useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TourStep } from "../../lib/onboarding";
 
 interface TooltipPosition {
   top: number;
@@ -12,19 +13,19 @@ interface TourTooltipProps {
   description: string;
   currentStep: number;
   totalSteps: number;
+  targetRect: DOMRect | null;
   onNext: () => void;
   onSkip: () => void;
 }
 
-export function TourTooltip({ step, title, description, currentStep, totalSteps, onNext, onSkip }: TourTooltipProps) {
+export function TourTooltip({ step, title, description, currentStep, totalSteps, targetRect, onNext, onSkip }: TourTooltipProps) {
+  const { t } = useTranslation();
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<TooltipPosition>({ top: 0, left: 0 });
 
-  useEffect(() => {
-    const target = document.querySelector(step.target);
-    if (!target || !tooltipRef.current) return;
+  useLayoutEffect(() => {
+    if (!targetRect || !tooltipRef.current) return;
 
-    const targetRect = target.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
     const gap = 12;
 
@@ -55,7 +56,7 @@ export function TourTooltip({ step, title, description, currentStep, totalSteps,
     top = Math.max(8, Math.min(top, window.innerHeight - tooltipRect.height - 8));
 
     setPosition({ top, left });
-  }, [step]);
+  }, [step, targetRect]);
 
   const isLast = currentStep === totalSteps - 1;
 
@@ -78,7 +79,7 @@ export function TourTooltip({ step, title, description, currentStep, totalSteps,
               onClick={onSkip}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              Skip
+              {t("common.skip")}
             </button>
           )}
           <button
@@ -86,7 +87,7 @@ export function TourTooltip({ step, title, description, currentStep, totalSteps,
             onClick={onNext}
             className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
           >
-            {isLast ? "Done" : "Next"}
+            {isLast ? t("common.done") : t("common.next")}
           </button>
         </div>
       </div>
