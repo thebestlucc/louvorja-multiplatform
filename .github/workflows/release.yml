@@ -123,26 +123,6 @@ jobs:
         with:
           name: frontend-dist
           path: dist
-      - name: Generate bible.db from bundled SQLite sources
-        shell: bash
-        run: cargo run --release --bin build_bible --manifest-path src-tauri/Cargo.toml
-      - name: Pre-build and lipo extra binaries for universal macOS
-        if: matrix.name == 'macos-universal'
-        shell: bash
-        run: |
-          # tauri-action lipo's only the main binary. Extra [[bin]] targets must be
-          # compiled for both arches and lipo'd manually before tauri-action bundles.
-          cargo build --release --bin build_bible \
-            --manifest-path src-tauri/Cargo.toml \
-            --target aarch64-apple-darwin
-          cargo build --release --bin build_bible \
-            --manifest-path src-tauri/Cargo.toml \
-            --target x86_64-apple-darwin
-          mkdir -p src-tauri/target/universal-apple-darwin/release
-          lipo -create -output \
-            src-tauri/target/universal-apple-darwin/release/build_bible \
-            src-tauri/target/aarch64-apple-darwin/release/build_bible \
-            src-tauri/target/x86_64-apple-darwin/release/build_bible
       - name: Inject updater endpoint and public key
         shell: bash
         env:
