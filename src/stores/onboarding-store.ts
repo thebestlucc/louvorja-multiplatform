@@ -1,20 +1,29 @@
-// src/stores/onboarding-store.ts
 import { create } from "zustand";
 
-type OnboardingMode = "fresh" | "import" | null;
-
 interface OnboardingState {
-  mode: OnboardingMode;
-  setMode: (mode: OnboardingMode) => void;
+  churchName: string;
+  selectedTheme: string;
+  tourRequested: boolean;
+  contentSkipped: boolean;
+  setChurchName: (name: string) => void;
+  setSelectedTheme: (theme: string) => void;
+  setTourRequested: (requested: boolean) => void;
+  setContentSkipped: (skipped: boolean) => void;
   reset: () => void;
 }
 
 const initialState = {
-  mode: null as OnboardingMode,
+  churchName: "",
+  selectedTheme: "",
+  tourRequested: true,
+  contentSkipped: false,
 };
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({
   ...initialState,
-  setMode: (mode) => set({ mode }),
+  setChurchName: (churchName) => set({ churchName }),
+  setSelectedTheme: (selectedTheme) => set({ selectedTheme }),
+  setTourRequested: (tourRequested) => set({ tourRequested }),
+  setContentSkipped: (contentSkipped) => set({ contentSkipped }),
   reset: () => set(initialState),
 }));

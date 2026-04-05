@@ -135,6 +135,7 @@ export function Sidebar() {
 
   return (
     <aside
+      data-tour="sidebar"
       className={cn(
         "flex flex-col border-r border-border bg-surface transition-all duration-200",
         sidebarOpen ? "w-60" : "w-14",

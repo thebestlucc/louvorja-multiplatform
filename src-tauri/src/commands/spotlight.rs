@@ -137,7 +137,7 @@ mod macos {
 ///
 /// This is an internal helper — do NOT register it as a Tauri command.
 pub fn create_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
-    tauri::WebviewWindowBuilder::new(
+    let builder = tauri::WebviewWindowBuilder::new(
         app,
         "spotlight",
         tauri::WebviewUrl::App("/spotlight".into()),
@@ -152,8 +152,13 @@ pub fn create_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     .skip_taskbar(true)
     .shadow(true)
     .transparent(true)
-    .visible_on_all_workspaces(true)
-    .visible(false)
+    .visible(false);
+
+    // visible_on_all_workspaces is macOS/Linux only — skip on Windows to avoid unsupported API calls.
+    #[cfg(not(target_os = "windows"))]
+    let builder = builder.visible_on_all_workspaces(true);
+
+    builder
     .build()
     .map_err(|e| AppError::Internal(format!("Failed to pre-create spotlight window: {e}")))?;
 
@@ -176,9 +181,30 @@ pub fn open_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     #[cfg(not(target_os = "macos"))]
     {
         if let Some(win) = app.get_webview_window("spotlight") {
-            let _ = win.show();
-            let _ = win.set_focus();
-            let _ = win.emit("spotlight-shown", ());
+            // Center on the primary monitor before showing.
+            if let Ok(Some(monitor)) = app.primary_monitor() {
+                let pos = monitor.position();
+                let size = monitor.size();
+                let scale = monitor.scale_factor();
+                let screen_w = size.width as f64 / scale;
+                let screen_h = size.height as f64 / scale;
+                let screen_x = pos.x as f64 / scale;
+                let screen_y = pos.y as f64 / scale;
+                let x = screen_x + (screen_w - SPOTLIGHT_W) / 2.0;
+                let y = screen_y + (screen_h - SPOTLIGHT_H) / 2.0;
+                let _ = win.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+            }
+
+            // On Windows, show() + set_focus() must be on a background thread and
+            // require a short settle delay — calling set_focus() immediately after
+            // show() from the IPC thread fails silently due to Windows focus-stealing
+            // prevention (SetForegroundWindow is blocked on non-foreground threads).
+            std::thread::spawn(move || {
+                let _ = win.show();
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let _ = win.set_focus();
+                let _ = win.emit("spotlight-shown", ());
+            });
         }
         Ok(())
     }

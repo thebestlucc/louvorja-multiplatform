@@ -368,40 +368,96 @@
     "utilities": "Utilidades"
   },
   "onboarding": {
-    "complete": {
-      "description": "Sus datos iniciales ya están listos.",
-      "finish": "Ir al panel",
-      "freshSummary": "Configuración completada. Puede descargar himnos del servidor en Configuración.",
-      "openHelp": "Abrir ayuda",
-      "title": "Configuración finalizada"
+    "title": "Bienvenido a LouvorJA",
+    "subtitle": "Vamos a configurar tu experiencia de adoración.",
+    "steps": {
+      "welcome": "Inicio",
+      "setup": "Configurar",
+      "content": "Contenido",
+      "monitors": "Monitores",
+      "ready": "Listo"
+    },
+    "welcome": {
+      "tagline": "Adoración simplificada",
+      "language": "Elige tu idioma",
+      "getStarted": "Empezar"
+    },
+    "setup": {
+      "title": "Personaliza tu experiencia",
+      "churchName": "Nombre de la iglesia",
+      "churchNamePlaceholder": "ej: Primera Iglesia Bautista",
+      "churchNameHint": "Opcional — se usa en superposiciones del proyector y streaming.",
+      "appearanceTitle": "Elige un tema",
+      "continue": "Continuar"
+    },
+    "content": {
+      "title": "Descargar colecciones de himnos",
+      "subtitle": "La Biblia ya está incluida. Selecciona paquetes de himnos para tu idioma.",
+      "download": "Descargar seleccionados",
+      "downloading": "Descargando…",
+      "continueInBackground": "Continuar en segundo plano",
+      "continue": "Continuar",
+      "skipTitle": "Omitir por ahora",
+      "skipWarning": "Los himnos y la música no estarán disponibles hasta que descargues los paquetes de contenido. Puedes hacerlo después en Configuración.",
+      "downloadComplete": "¡Descarga completa!",
+      "backgroundToast": "Descarga en segundo plano",
+      "loading": "Cargando paquetes disponibles…",
+      "upToDate": "Todos los paquetes de contenido ya están instalados."
     },
     "monitors": {
-      "description": "Asigne las pantallas de proyector y retorno para la operación.",
-      "distinctRequired": "El proyector y el retorno deben estar en monitores diferentes cuando hay más de un monitor conectado.",
-      "noneFound": "No se detectaron monitores. Puede omitir este paso y configurar luego en Configuración.",
-      "primary": "Principal",
+      "title": "Configuración de monitores",
+      "description": "Asigna pantallas de proyector y retorno para operación en vivo.",
+      "singleTitle": "Solo un monitor detectado",
+      "singleDescription": "Conecta un proyector o segundo monitor para usar la función de proyección.",
+      "singleHint": "Puedes configurar monitores en cualquier momento desde la barra de estado.",
       "projector": "Pantalla del proyector",
       "return": "Pantalla de retorno",
-      "saveAndContinue": "Guardar y continuar",
-      "skip": "Omitir por ahora",
+      "projectorHint": "Muestra letras y diapositivas a la congregación.",
+      "returnHint": "Muestra notas y la siguiente diapositiva al presentador.",
       "testProjector": "Probar proyector",
       "testReturn": "Probar retorno",
-      "title": "Configuración de monitores"
+      "primary": "Principal",
+      "distinctRequired": "El proyector y el retorno deben ser monitores diferentes cuando hay más de un monitor conectado.",
+      "saveAndContinue": "Guardar y continuar",
+      "skip": "Omitir por ahora",
+      "noneFound": "No se detectaron monitores. Puedes omitir este paso y configurar después en Configuración.",
+      "continue": "Continuar"
     },
-    "steps": {
-      "complete": "Finalizar",
-      "monitors": "Monitores",
-      "welcome": "Bienvenida"
+    "ready": {
+      "title": "¡Todo listo!",
+      "subtitle": "Esto es lo que puedes hacer con LouvorJA:",
+      "features": {
+        "hymns": "Himnos y Música",
+        "hymnsDesc": "Explora, busca y proyecta himnos con audio sincronizado",
+        "bible": "Biblia",
+        "bibleDesc": "Proyecta versículos directamente — ya incluida en la aplicación",
+        "presentations": "Presentaciones",
+        "presentationsDesc": "Crea diapositivas personalizadas con fondos, texto y medios",
+        "search": "Búsqueda Global",
+        "searchDesc": "Encuentra cualquier cosa al instante con Ctrl+K — himnos, versículos, presentaciones",
+        "projection": "Proyección en Vivo",
+        "projectionDesc": "Soporte multimomitor con proyector y pantalla de retorno"
+      },
+      "tourCheckbox": "Mostrar un tour rápido de la interfaz",
+      "finish": "Empezar a usar LouvorJA"
+    }
+  },
+  "tour": {
+    "sidebar": {
+      "title": "Navegación lateral",
+      "description": "Accede a himnos, biblia, presentaciones, servicios y configuración desde aquí."
     },
-    "subtitle": "Complete la configuración inicial antes de usarlo en vivo.",
-    "title": "Bienvenido a LouvorJA",
-    "welcome": {
-      "description": "Elija el idioma y configure las pantallas.",
-      "freshAction": "Continuar",
-      "freshDescription": "Configure las pantallas y comience a operar.",
-      "freshTitle": "Continuar con la configuración",
-      "language": "Idioma de la aplicación",
-      "title": "Configure su primer uso"
+    "search": {
+      "title": "Búsqueda global",
+      "description": "Presiona Ctrl+K en cualquier momento para encontrar himnos, versículos y presentaciones."
+    },
+    "projector": {
+      "title": "Controles del proyector",
+      "description": "Inicia y detén la proyección, alterna pantalla negra/logo desde la barra de estado."
+    },
+    "finish": {
+      "title": "¡Eso es todo!",
+      "description": "Explora y disfruta. Puedes repetir este tour desde el menú Ayuda."
     }
   },
   "playingNow": {
@@ -1519,5 +1575,8 @@
       "editCoverTitle": "Editar portada de la lista"
     },
     "coverUpdated": "Portada actualizada"
+  },
+  "common": {
+    "back": "Volver"
   }
 }

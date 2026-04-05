@@ -170,7 +170,7 @@ export function StatusBar() {
           </span>
         </button>
         <div className="mx-1 h-4 w-px bg-border" />
-        <ProjectorControls />
+        <div data-tour="projector-controls"><ProjectorControls /></div>
         <div className="mx-1 h-4 w-px bg-border" />
         <StatusBarUpdateIndicator />
         <button

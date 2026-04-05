@@ -43,8 +43,10 @@ import { Route as UtilitiesClockRouteImport } from './routes/utilities/clock'
 import { Route as ServicesServiceIdRouteImport } from './routes/services/$serviceId'
 import { Route as PresentationsPresentationIdRouteImport } from './routes/presentations/$presentationId'
 import { Route as OnboardingWelcomeRouteImport } from './routes/onboarding/welcome'
+import { Route as OnboardingSetupRouteImport } from './routes/onboarding/setup'
+import { Route as OnboardingReadyRouteImport } from './routes/onboarding/ready'
 import { Route as OnboardingMonitorsRouteImport } from './routes/onboarding/monitors'
-import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
+import { Route as OnboardingContentRouteImport } from './routes/onboarding/content'
 import { Route as HymnalHymnIdRouteImport } from './routes/hymnal/$hymnId'
 import { Route as CollectionsCollectionIdRouteImport } from './routes/collections/$collectionId'
 
@@ -220,14 +222,24 @@ const OnboardingWelcomeRoute = OnboardingWelcomeRouteImport.update({
   path: '/welcome',
   getParentRoute: () => OnboardingRouteRoute,
 } as any)
+const OnboardingSetupRoute = OnboardingSetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
+const OnboardingReadyRoute = OnboardingReadyRouteImport.update({
+  id: '/ready',
+  path: '/ready',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
 const OnboardingMonitorsRoute = OnboardingMonitorsRouteImport.update({
   id: '/monitors',
   path: '/monitors',
   getParentRoute: () => OnboardingRouteRoute,
 } as any)
-const OnboardingCompleteRoute = OnboardingCompleteRouteImport.update({
-  id: '/complete',
-  path: '/complete',
+const OnboardingContentRoute = OnboardingContentRouteImport.update({
+  id: '/content',
+  path: '/content',
   getParentRoute: () => OnboardingRouteRoute,
 } as any)
 const HymnalHymnIdRoute = HymnalHymnIdRouteImport.update({
@@ -259,8 +271,10 @@ export interface FileRoutesByFullPath {
   '/spotlight': typeof SpotlightRoute
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
-  '/onboarding/complete': typeof OnboardingCompleteRoute
+  '/onboarding/content': typeof OnboardingContentRoute
   '/onboarding/monitors': typeof OnboardingMonitorsRoute
+  '/onboarding/ready': typeof OnboardingReadyRoute
+  '/onboarding/setup': typeof OnboardingSetupRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
@@ -290,8 +304,10 @@ export interface FileRoutesByTo {
   '/spotlight': typeof SpotlightRoute
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
-  '/onboarding/complete': typeof OnboardingCompleteRoute
+  '/onboarding/content': typeof OnboardingContentRoute
   '/onboarding/monitors': typeof OnboardingMonitorsRoute
+  '/onboarding/ready': typeof OnboardingReadyRoute
+  '/onboarding/setup': typeof OnboardingSetupRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
@@ -331,8 +347,10 @@ export interface FileRoutesById {
   '/spotlight': typeof SpotlightRoute
   '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/hymnal/$hymnId': typeof HymnalHymnIdRoute
-  '/onboarding/complete': typeof OnboardingCompleteRoute
+  '/onboarding/content': typeof OnboardingContentRoute
   '/onboarding/monitors': typeof OnboardingMonitorsRoute
+  '/onboarding/ready': typeof OnboardingReadyRoute
+  '/onboarding/setup': typeof OnboardingSetupRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
   '/presentations/$presentationId': typeof PresentationsPresentationIdRoute
   '/services/$serviceId': typeof ServicesServiceIdRoute
@@ -373,8 +391,10 @@ export interface FileRouteTypes {
     | '/spotlight'
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
-    | '/onboarding/complete'
+    | '/onboarding/content'
     | '/onboarding/monitors'
+    | '/onboarding/ready'
+    | '/onboarding/setup'
     | '/onboarding/welcome'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
@@ -404,8 +424,10 @@ export interface FileRouteTypes {
     | '/spotlight'
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
-    | '/onboarding/complete'
+    | '/onboarding/content'
     | '/onboarding/monitors'
+    | '/onboarding/ready'
+    | '/onboarding/setup'
     | '/onboarding/welcome'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
@@ -444,8 +466,10 @@ export interface FileRouteTypes {
     | '/spotlight'
     | '/collections/$collectionId'
     | '/hymnal/$hymnId'
-    | '/onboarding/complete'
+    | '/onboarding/content'
     | '/onboarding/monitors'
+    | '/onboarding/ready'
+    | '/onboarding/setup'
     | '/onboarding/welcome'
     | '/presentations/$presentationId'
     | '/services/$serviceId'
@@ -725,6 +749,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingWelcomeRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
+    '/onboarding/setup': {
+      id: '/onboarding/setup'
+      path: '/setup'
+      fullPath: '/onboarding/setup'
+      preLoaderRoute: typeof OnboardingSetupRouteImport
+      parentRoute: typeof OnboardingRouteRoute
+    }
+    '/onboarding/ready': {
+      id: '/onboarding/ready'
+      path: '/ready'
+      fullPath: '/onboarding/ready'
+      preLoaderRoute: typeof OnboardingReadyRouteImport
+      parentRoute: typeof OnboardingRouteRoute
+    }
     '/onboarding/monitors': {
       id: '/onboarding/monitors'
       path: '/monitors'
@@ -732,11 +770,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingMonitorsRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
-    '/onboarding/complete': {
-      id: '/onboarding/complete'
-      path: '/complete'
-      fullPath: '/onboarding/complete'
-      preLoaderRoute: typeof OnboardingCompleteRouteImport
+    '/onboarding/content': {
+      id: '/onboarding/content'
+      path: '/content'
+      fullPath: '/onboarding/content'
+      preLoaderRoute: typeof OnboardingContentRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
     '/hymnal/$hymnId': {
@@ -796,15 +834,19 @@ const HymnalRouteRouteWithChildren = HymnalRouteRoute._addFileChildren(
 )
 
 interface OnboardingRouteRouteChildren {
-  OnboardingCompleteRoute: typeof OnboardingCompleteRoute
+  OnboardingContentRoute: typeof OnboardingContentRoute
   OnboardingMonitorsRoute: typeof OnboardingMonitorsRoute
+  OnboardingReadyRoute: typeof OnboardingReadyRoute
+  OnboardingSetupRoute: typeof OnboardingSetupRoute
   OnboardingWelcomeRoute: typeof OnboardingWelcomeRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
 }
 
 const OnboardingRouteRouteChildren: OnboardingRouteRouteChildren = {
-  OnboardingCompleteRoute: OnboardingCompleteRoute,
+  OnboardingContentRoute: OnboardingContentRoute,
   OnboardingMonitorsRoute: OnboardingMonitorsRoute,
+  OnboardingReadyRoute: OnboardingReadyRoute,
+  OnboardingSetupRoute: OnboardingSetupRoute,
   OnboardingWelcomeRoute: OnboardingWelcomeRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
 }

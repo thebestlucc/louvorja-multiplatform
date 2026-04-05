@@ -106,6 +106,7 @@ export function Header() {
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-5">
       <button
+        data-tour="search"
         type="button"
         onClick={openCommandPalette}
         className={cn(
