@@ -5,8 +5,6 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 
 - When reporting information to me, be extremely concise and sacrifice grammar for the sake of concision.
 
-## LouvorJA Multiplatform
-
 ## Project Overview
 
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
@@ -30,6 +28,10 @@ Roadmap and feature decisions are tracked in `docs/phase-*` folders (`PRD.md`, `
 | Audio | rodio 0.19 |
 | DnD | @dnd-kit/core + sortable + utilities |
 | Plugins | window-state, single-instance, global-shortcut, store, opener, clipboard-manager, autostart |
+
+## Prerequisites
+
+Node ≥ 20, pnpm ≥ 10, Rust stable (≥ 1.80). Tauri 2 requires system WebView (WebKitGTK on Linux, WebView2 on Windows — macOS uses built-in WKWebView).
 
 ## Commands
 
@@ -163,25 +165,9 @@ src-tauri/src/                # Backend (Rust)
 
 5. **Tauri plugin registration:** Use `pnpm tauri add <plugin>` — it adds Cargo dep, permissions config, AND `app.plugin(tauri_plugin_*::init())` automatically.
 
-6. **Windows IPC handler blocking:** On Windows, blocking operations (like `std::thread::sleep()`) in `#[tauri::command]` handlers hang the entire IPC bridge, causing `invoke()` calls to stay "Pending" forever with no status. **All long-running operations must spawn on separate threads:**
-   ```rust
-   #[tauri::command]
-   pub fn open_window(monitor_id: String, app: AppHandle) -> Result<(), AppError> {
-       // Spawn window ops on separate thread — never block IPC handler on Windows
-       let app_clone = app.clone();
-       std::thread::spawn(move || {
-           if let Err(e) = window_operation(&app_clone, &monitor_id) {
-               eprintln!("[app] window operation failed: {}", e);
-           }
-       });
-       Ok(()) // Return immediately
-   }
-   ```
-   This is a Windows-specific issue; macOS is more forgiving but best practice applies to both.
+6. **Windows IPC handler blocking:** Blocking ops (`sleep`, I/O) in `#[tauri::command]` hang the entire IPC bridge on Windows. **All long-running operations must `std::thread::spawn`** and return `Ok(())` immediately. See `commands/display.rs` `open_projector_window` for the pattern.
 
-7. **Projection window creation must be on a background thread:** `open_fullscreen_window()` in `display.rs` uses `sleep()` and a fullscreen retry loop. This MUST run via `std::thread::spawn` — blocking the IPC handler thread causes all `invoke()` calls to hang on any OS. The commands `open_projector_window` and `open_return_window` spawn a thread and return immediately.
-
-8. **`skip_taskbar(true)` hides from alt+tab:** Setting `.skip_taskbar(true)` on a `WebviewWindowBuilder` hides the window from the OS window switcher (alt+tab on Windows, Mission Control on macOS). Projector windows use `.skip_taskbar(false)`.
+7. **`skip_taskbar(true)` hides from alt+tab:** Projector windows use `.skip_taskbar(false)` so they appear in the OS window switcher.
 
 ### TypeScript / React
 
@@ -197,30 +183,9 @@ src-tauri/src/                # Backend (Rust)
    onSuccess: (_, vars) => queryClient.invalidateQueries({ queryKey: ["slides", vars.presentationId] }),
    ```
 
-5. **Stale closures in Zustand + setTimeout/useCallback:** When a callback captures Zustand state and is used after an async delay (e.g., `setTimeout`), the captured state is stale. Use `usePresentationStore.getState()` inside the callback for fresh reads:
-   ```ts
-   const goToSlide = useCallback(async (index: number) => {
-     const state = usePresentationStore.getState();  // fresh!
-     if (index >= 0 && index < state.slides.length) {
-       state.setActiveSlideIndex(index);
-       await projectSlide(state.slides[index]);
-     }
-   }, [projectSlide]);
-   ```
+5. **Stale closures in Zustand + setTimeout/useCallback:** Use `Store.getState()` inside async callbacks for fresh reads instead of captured state. See `use-slides.ts` `goToSlide`.
 
-6. **Dead key / IME composition (ç, ñ, accents on Mac):** When an input's value is bound to server-refetched data, a refetch mid-composition breaks the dead key sequence. Fix: use local state with a dirty ref that prevents server sync while typing:
-   ```ts
-   const [localValue, setLocalValue] = useState("");
-   const dirtyRef = useRef(false);
-   useEffect(() => {
-     if (serverData && !dirtyRef.current) setLocalValue(serverData.value);
-   }, [serverData]);
-   const handleChange = (val: string) => {
-     setLocalValue(val);
-     dirtyRef.current = true;
-     // debounced save, then dirtyRef.current = false
-   };
-   ```
+6. **Dead key / IME composition (ç, ñ, accents on Mac):** When input value is bound to server-refetched data, refetch mid-composition breaks dead keys. Fix: local state + `dirtyRef` that prevents server sync while typing. See `use-presentation.ts`.
 
 7. **Optimistic local state pattern:** For responsive typing in editors, don't bind inputs directly to TanStack Query data. Use a local `Record<id, EditedValue>` state merged with server data, with per-item debounced saves. See `use-presentation.ts` for the reference implementation.
 
@@ -253,12 +218,8 @@ src-tauri/src/                # Backend (Rust)
 - **Shared file utilities:** `getFileExt(path)` and `parseOnlineVideoNotes(notes)` live in `src/lib/utils.ts`. Module-level `IMAGE_EXTS`/`VIDEO_EXTS`/`AUDIO_EXTS` Sets are defined per-file (liturgy hook + service route) — not yet centralized.
 - **Play Service mode:** Uses `isPlayingService` + `activeServiceItemIndex` in the presentation store. Toolbar shows prev/next/stop controls. The `useEffect` on `activeServiceItemIndex` auto-projects the current item. Stop resets index to -1.
 - **Inline editing in lists:** Use local `useState` + `useRef` for focus management. Show save/cancel buttons (Check/X icons). Commit via `onEditItem` callback. Escape cancels, Enter saves.
-- **Multi-monitor pattern:** `open_fullscreen_window()` helper in `display.rs` for reusable fullscreen window creation. Commands `open_projector_window()` and `open_return_window()` **must spawn window ops on separate threads** to prevent IPC handler blocking on Windows. `useMonitorsControl()` hook exposes projector, return, and overlay controls. Status bar uses `<ProjectorControls />` with icon buttons + green/gray status dots.
-- **Overlay state:** Black/logo screen overlays managed in Rust state, synced via `"overlay-changed"` events. Projector view renders overlay layers with CSS fade transitions. Overlays are mutually exclusive (activating one deactivates the other).
-- **Return monitor:** Two-panel layout (70/30 split) showing current + next slide. Context data (next slide, index, total, title) sent via `setSlideContext()` alongside `setCurrentSlide()`, wrapped in `projectSlideWithContext()` helper in `use-slides.ts`.
+- **Overlay state:** Black/logo screen overlays managed in Rust state, synced via `"overlay-changed"` events. Overlays are mutually exclusive (activating one deactivates the other).
 - **Keyboard shortcuts:** B=black screen, L=logo screen, F5=projector, Shift+F5=return monitor, Escape=clear projection.
-- **Hymn projection gating:** The hymn detail page uses `isProjecting` boolean state to gate stanza/thumbnail clicks. When false, clicks only update `localActiveIndex` (UI highlight). When true, clicks call `goToSlide()` → projector/return/streaming. "Project" button starts, "Stop" button calls `clearCurrentSlide()`. See `$hymnId.tsx`.
-- **Global search in command palette:** The `CommandPalette` uses `shouldFilter={!hasQuery}` on `Command.Dialog` to disable cmdk's built-in filter when the user types a search query. Dynamic results from `searchHymns()` and `searchBible()` are fetched with 300ms debounce, shown in `Command.Group` sections. No TanStack Query caching — transient UI uses direct `await` calls.
 - **Windows audio init pattern:** `OutputStream::try_default()` (rodio/WASAPI) can **block forever** on Windows with no audio device or driver issues. Always initialize audio in a background thread with a timeout (`mpsc::channel` + `recv_timeout`) so Tauri's `setup()` never hangs. A hanging `setup()` blocks the event loop, causing all `invoke()` calls to be stuck in pending — appearing as "communication not working".
 - **Tauri v2 IPC bridge:** The bridge is `window.__TAURI_INTERNALS__`, NOT `window.__TAURI__`. The latter is only set when `withGlobalTauri: true` is configured. Using `window.__TAURI__` for debugging always shows "missing" in Tauri v2 and is misleading.
 - **Content DB optional-table pattern:** Content DBs (Delphi legacy SQLite) may or may not have optional tables (`lyrics`, `categories`, `categories_albums`). Always probe `sqlite_master` before building SQL: `fn table_exists(conn) -> bool { conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", ...) }`. Build SQL dynamically with `format!()` — do NOT use `CASE WHEN` guards in SQL (SQLite validates all table names at `prepare()` time even inside unreachable branches).
@@ -273,9 +234,6 @@ src-tauri/src/                # Backend (Rust)
 - **Presentation media player integration:** Standalone presentations (projected outside the queue) must call `useMediaPlayerStore.load(PresentationMediaItem)` to populate the store; otherwise `currentItem` stays null and `ControlBar` hides all controls. Fix: `ControlBar` shows slide navigation when `totalSlides` exists even if `currentItem` is null (split early-return guard into separate `hasTimeline`/`hasSlides` conditions). Slide navigation functions fall back to `usePresentationStore` when `currentItem` is null for backwards compatibility.
 - **Service-aware update guard:** `UpdateNotification` subscribes to `usePresentationStore` via `.subscribe()` + `getState()`. Suppresses banner when `isProjectorOpen || isPlayingService || activeServiceId !== null`. Status bar indicator uses lightweight pub-sub callback (`onUpdateDeferredChange`) instead of a full store.
 - **Pastoral error messaging:** `classifyUpdateError()` in `lib/update-errors.ts` pattern-matches error strings into 4 categories (network/disk/permission/generic), each with i18n keys for title/why/action/reassurance. Toasts use `duration: Infinity` so users must dismiss manually.
-- **Version display:** `getVersion()` from `@tauri-apps/api/app` called once in `useEffect`, shown in status bar left side as `v{version}`.
-- **Playing now screen:** The `/playing-now` route shows what's currently projected. It listens to Tauri events (`slide-changed`, `overlay-changed`, `slide-cleared`) directly (main process, events work). Controls call `useSlides().prevSlide()/nextSlide()` and `useAudio().togglePlayPause()`. Does NOT auto-open projection screens.
-- **Hymn 4 actions:** Hymn detail page has 4 explicit buttons: Cantado (sung mode + project), Playback (karaoke mode + project), Só slides (silent, no audio), Ver letra (LyricsModal). `LyricsModal` in `components/music/lyrics-modal.tsx` uses Radix `Dialog`.
 - **Legacy DB import:** `migrate_v13` in `migrations.rs` detects Delphi-schema tables (`musics`, `lyrics`, `albums`, `files`) and imports them into `hymns`. Idempotent: skips if `hymns` already has rows or if `musics` table is absent.
 - **Tauri plugin-store:** For NEW preferences only (UI state, layout). Existing SQLite settings stay in SQLite. Use `src/lib/store.ts` helpers (`getPreference`/`setPreference`/`deletePreference`). Add `store:default` to `desktop.json` capabilities.
 - **Clipboard:** Use `src/lib/clipboard.ts` `copyToClipboard()` — wraps `@tauri-apps/plugin-clipboard-manager`. Requires `clipboard-manager:allow-write-text` + `clipboard-manager:allow-read-text` in `desktop.json`. Never use `navigator.clipboard` directly (fails in Tauri webview without HTTPS).
