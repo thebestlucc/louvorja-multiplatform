@@ -385,7 +385,7 @@
     "setup": {
       "title": "Personalize your experience",
       "churchName": "Church name",
-      "churchNamePlaceholder": "e.g. First Baptist Church",
+      "churchNamePlaceholder": "e.g. Central Adventist Church",
       "churchNameHint": "Optional — used in projector overlays and streaming.",
       "appearanceTitle": "Choose a theme",
       "continue": "Continue"
