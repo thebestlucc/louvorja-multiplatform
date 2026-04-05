@@ -279,7 +279,9 @@
         }
       },
       "title": "Guided tour"
-    }
+    },
+    "restartTours": "Restart all tours",
+    "toursReset": "All tours have been reset. Visit each section to see them again."
   },
   "hymn": {
     "actionPlayback": "Playback",

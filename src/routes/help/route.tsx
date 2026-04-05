@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HelpCircle, Keyboard, LifeBuoy } from "lucide-react";
+import { HelpCircle, Keyboard, LifeBuoy, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { GuidedTour } from "../../components/help/guided-tour";
 import { openKeyboardShortcutsPanel } from "../../components/utilities/keyboard-shortcuts-panel";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { resetAllTours } from "../../lib/tour";
 
 export const Route = createFileRoute("/help")({
   component: HelpRoutePage,
@@ -12,6 +14,11 @@ export const Route = createFileRoute("/help")({
 
 function HelpRoutePage() {
   const { t } = useTranslation();
+
+  async function handleResetTours() {
+    await resetAllTours();
+    toast.success(t("help.toursReset"));
+  }
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-4">
@@ -41,6 +48,14 @@ function HelpRoutePage() {
             >
               <LifeBuoy className="mr-2 h-4 w-4" />
               {t("help.openDocs")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleResetTours()}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              {t("help.restartTours")}
             </Button>
           </div>
           <div id="help-documentation" className="rounded-md border border-border p-3 text-sm text-muted-foreground">
