@@ -34,14 +34,26 @@ fn resolve_hymn_paths(
     mut hymns: Vec<Hymn>,
     app_data_dir: &std::path::Path,
 ) -> Vec<Hymn> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static LOGGED_SAMPLE: AtomicBool = AtomicBool::new(false);
+
     for h in &mut hymns {
         if let Some(ref p) = h.audio_path {
+            let raw = p.clone();
             h.audio_path = Some(
                 app_data_dir
                     .join(p.trim_start_matches('/'))
                     .to_string_lossy()
                     .replace('\\', "/"),
             );
+            if !LOGGED_SAMPLE.swap(true, Ordering::Relaxed) {
+                let resolved = h.audio_path.as_deref().unwrap_or("");
+                let exists = std::path::Path::new(resolved).exists();
+                log::info!(
+                    "[resolve_collection_hymn_paths] app_data_dir={:?} | raw={} | resolved={} | exists={}",
+                    app_data_dir, raw, resolved, exists
+                );
+            }
         }
         if let Some(ref p) = h.playback_path {
             h.playback_path = Some(

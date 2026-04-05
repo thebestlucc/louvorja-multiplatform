@@ -250,6 +250,7 @@ pub fn run() {
             commands::pack_sync::start_pack_sync,
             commands::pack_sync::cancel_pack_sync,
             commands::pack_sync::clear_manifest_cache,
+            commands::pack_sync::diagnose_pack_paths,
             // YouTube
             commands::youtube::validate_youtube_api_key,
             commands::youtube::fetch_youtube_channel,

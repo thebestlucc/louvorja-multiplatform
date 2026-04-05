@@ -525,8 +525,22 @@ impl AudioPlayer {
     }
 
     fn load_audio_bytes(path: &str) -> Result<Arc<[u8]>, AppError> {
+        let p = std::path::Path::new(path);
+        if !p.exists() {
+            let parent_exists = p.parent().map(|d| d.exists()).unwrap_or(false);
+            log::error!(
+                "[audio] File not found: {} | parent dir exists: {} | parent: {:?}",
+                path,
+                parent_exists,
+                p.parent()
+            );
+            return Err(AppError::Internal(format!(
+                "Audio file not found: {}",
+                path
+            )));
+        }
         let bytes = std::fs::read(path)
-            .map_err(|e| AppError::Internal(format!("Failed to read audio file: {}", e)))?;
+            .map_err(|e| AppError::Internal(format!("Failed to read audio file '{}': {}", path, e)))?;
         Ok(Arc::<[u8]>::from(bytes))
     }
 

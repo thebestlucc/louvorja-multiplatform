@@ -545,6 +545,17 @@ async fn try_stream_extract_zip(
 
     let (actual_hash, extracted_files) = extract_result?;
 
+    // Log sample of extracted files to aid path debugging
+    if !extracted_files.is_empty() {
+        let sample: Vec<_> = extracted_files.iter().take(3).map(|p| format!("{:?}", p)).collect();
+        log::info!(
+            "[stream_extract] Extracted {} files to {:?}. Sample: [{}]",
+            extracted_files.len(),
+            dest_dir,
+            sample.join(", ")
+        );
+    }
+
     // Verify SHA-256 (skip if expected is empty).
     if !expected_sha256.is_empty() && actual_hash != expected_sha256 {
         // Cleanup all extracted files on hash mismatch.

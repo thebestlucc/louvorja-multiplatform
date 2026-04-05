@@ -207,6 +207,7 @@ allow = [
     "start_pack_sync",
     "cancel_pack_sync",
     "clear_manifest_cache",
+    "diagnose_pack_paths",
     "set_service_week_day",
     "move_service_item_to_parent",
     "count_category_usages",

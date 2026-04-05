@@ -4,6 +4,8 @@ use crate::pack_sync::{self, planner::PackSyncPlan};
 use crate::state::AppState;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use serde::Serialize;
+use specta::Type;
 use tauri::{AppHandle, Manager};
 
 const MANIFEST_CACHE_FILE: &str = "manifest_cache.json";
@@ -171,4 +173,128 @@ pub fn cancel_pack_sync(
         flag.store(true, std::sync::atomic::Ordering::Relaxed);
     }
     Ok(())
+}
+
+/// Diagnostic: lists top-level dirs and a sample of files under app_data_dir.
+/// Helps verify that pack extraction placed files where resolve_hymn_paths expects.
+#[derive(Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PackSyncDiagnostics {
+    pub app_data_dir: String,
+    pub top_level_entries: Vec<String>,
+    pub sample_music_files: Vec<String>,
+    pub sample_cover_files: Vec<String>,
+    pub content_db_sample_paths: Vec<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn diagnose_pack_paths(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<PackSyncDiagnostics, AppError> {
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // Top-level entries
+    let top_level_entries: Vec<String> = std::fs::read_dir(&app_data_dir)
+        .ok()
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .map(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    if is_dir { format!("{}/", name) } else { name }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Sample music files (first 5)
+    let sample_music_files = list_files_sample(&app_data_dir.join("musics"), 5);
+
+    // Sample cover files (first 5)
+    let sample_cover_files = list_files_sample(&app_data_dir.join("covers"), 5);
+
+    // Content DB sample paths: raw dir||'/'||name from first 3 hymns
+    let conn = state.db.get()?;
+    let content_db_sample_paths = if let Some((content_conn, lang)) = get_content_db_conn_for_diag(&state, &conn) {
+        let lang_short = crate::db::queries::content_sync::bcp47_to_lang_code(&lang);
+        let mut stmt = content_conn
+            .prepare(
+                "SELECT f.dir || '/' || f.name AS path
+                 FROM musics m
+                 LEFT JOIN files f ON f.id_file = m.id_file_music
+                 WHERE m.id_language = ?1 AND f.dir IS NOT NULL
+                 LIMIT 5"
+            )
+            .ok();
+        stmt.as_mut()
+            .and_then(|s| {
+                s.query_map([lang_short], |row| row.get::<_, String>(0))
+                    .ok()
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            })
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    Ok(PackSyncDiagnostics {
+        app_data_dir: app_data_dir.to_string_lossy().replace('\\', "/"),
+        top_level_entries,
+        sample_music_files,
+        sample_cover_files,
+        content_db_sample_paths,
+    })
+}
+
+fn get_content_db_conn_for_diag(
+    state: &AppState,
+    conn: &rusqlite::Connection,
+) -> Option<(
+    r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    String,
+)> {
+    let langs = crate::db::queries::content_sync::get_selected_languages(conn);
+    let lang = langs.into_iter().next()?;
+    let map = state.content_dbs.read().ok()?;
+    let pool = map.get(&lang)?.clone();
+    drop(map);
+    let pooled = pool.get().ok()?;
+    Some((pooled, lang))
+}
+
+fn list_files_sample(dir: &std::path::Path, max: usize) -> Vec<String> {
+    let mut result = Vec::new();
+    collect_files_recursive(dir, dir, max, &mut result);
+    result
+}
+
+fn collect_files_recursive(
+    root: &std::path::Path,
+    current: &std::path::Path,
+    max: usize,
+    result: &mut Vec<String>,
+) {
+    if result.len() >= max {
+        return;
+    }
+    let entries = match std::fs::read_dir(current) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        if result.len() >= max {
+            return;
+        }
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files_recursive(root, &path, max, result);
+        } else {
+            let rel = path.strip_prefix(root).unwrap_or(&path);
+            result.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
 }

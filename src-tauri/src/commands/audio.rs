@@ -441,5 +441,14 @@ fn resolve_audio_path(path: &str, app: &AppHandle) -> Result<String, AppError> {
     };
 
     let resolved = safe_path.resolve(candidate)?;
-    Ok(resolved.to_string_lossy().replace('\\', "/"))
+    let result = resolved.to_string_lossy().replace('\\', "/");
+
+    if !resolved.exists() {
+        log::warn!(
+            "[resolve_audio_path] File not found | input='{}' | resolved='{}' | app_data_dir={:?}",
+            path, result, app_data_dir
+        );
+    }
+
+    Ok(result)
 }
