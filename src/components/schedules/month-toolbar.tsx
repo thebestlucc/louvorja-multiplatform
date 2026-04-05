@@ -1,7 +1,15 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarCog, ChevronLeft, ChevronRight, Printer, Wand2 } from "lucide-react";
+import {
+  CalendarCog,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Printer,
+  Wand2,
+} from "lucide-react";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { PopoverContent } from "../ui/popover";
 import { MonthPatternPicker } from "./month-pattern-picker";
 
 interface MonthToolbarProps {
@@ -44,99 +52,113 @@ export function MonthToolbar({
   canPrint,
 }: MonthToolbarProps) {
   const { t } = useTranslation();
+  const [isPatternOpen, setIsPatternOpen] = useState(false);
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   const isBusy = isSaving || isGenerating;
-  const arePatternsBusy = Boolean(isSaving);
 
   return (
-    <Card className="border-border/80 bg-gradient-to-br from-surface to-surface/70 shadow-sm">
-      <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-1">
-          <CardTitle>{t("utilities.schedules.monthPicker.label")}</CardTitle>
-          <CardDescription>{t("utilities.schedules.description")}</CardDescription>
-        </div>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t("utilities.schedules.monthPicker.previous")}
+            disabled={isBusy}
+            onClick={onPreviousMonth}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
 
-        <div className="flex flex-col gap-3 sm:items-end">
-          <div className="flex flex-wrap items-center gap-2">
+          <span className="min-w-40 px-3 py-1.5 text-center text-base font-semibold capitalize">
+            {monthLabel}
+          </span>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t("utilities.schedules.monthPicker.next")}
+            disabled={isBusy}
+            onClick={onNextMonth}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+
+          {!isCurrentMonth && (
             <Button
               type="button"
               variant="outline"
-              size="icon"
-              aria-label={t("utilities.schedules.monthPicker.previous")}
-              disabled={isBusy}
-              onClick={onPreviousMonth}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="min-w-48 rounded-md border border-border/80 bg-background px-4 py-2 text-center text-sm font-semibold capitalize shadow-sm">
-              {monthLabel}
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={t("utilities.schedules.monthPicker.next")}
-              disabled={isBusy}
-              onClick={onNextMonth}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
               size="sm"
-              disabled={isBusy || isCurrentMonth}
+              disabled={isBusy}
               onClick={onCurrentMonth}
             >
               {t("utilities.schedules.monthPicker.current")}
             </Button>
-          </div>
+          )}
 
-          <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
-            <span>{t("utilities.schedules.daySelection.selectedDays", { count: selectedDates.length })}</span>
-          </div>
+          {selectedDates.length > 0 && (
+            <span className="ml-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+              {t("utilities.schedules.daySelection.selectedDays", { count: selectedDates.length })}
+            </span>
+          )}
         </div>
-      </CardHeader>
 
-      <CardContent className="space-y-4">
-        <MonthPatternPicker
-          year={year}
-          month={month}
-          selectedDates={selectedDates}
-          disabled={arePatternsBusy}
-          onToggleWeekdayPattern={onToggleWeekdayPattern}
-          onClearSelection={onClearSelection}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative inline-flex">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSaving}
+              onClick={() => setIsPatternOpen((v) => !v)}
+            >
+              {t("utilities.schedules.patterns.title")}
+              <ChevronDown className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+            {isPatternOpen && (
+              <PopoverContent align="end" className="w-52 p-1.5" onClose={() => setIsPatternOpen(false)}>
+                <MonthPatternPicker
+                  year={year}
+                  month={month}
+                  selectedDates={selectedDates}
+                  disabled={isSaving}
+                  onToggleWeekdayPattern={onToggleWeekdayPattern}
+                  onClearSelection={onClearSelection}
+                />
+              </PopoverContent>
+            )}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" disabled={isBusy} onClick={onOpenDepartmentManager}>
-            <CalendarCog className="mr-2 h-4 w-4" />
+          <Button type="button" variant="outline" size="sm" disabled={isBusy} onClick={onOpenDepartmentManager}>
+            <CalendarCog className="mr-1.5 h-3.5 w-3.5" />
             {t("utilities.schedules.departmentManagement.action")}
           </Button>
-          <Button type="button" disabled={isBusy || selectedDates.length === 0} onClick={onGenerate}>
-            <Wand2 className="mr-2 h-4 w-4" />
+
+          <Button type="button" size="sm" disabled={isBusy || selectedDates.length === 0} onClick={onGenerate}>
+            <Wand2 className="mr-1.5 h-3.5 w-3.5" />
             {t("utilities.schedules.generate.action")}
           </Button>
-          <Button type="button" variant="outline" disabled={isBusy || !canPrint} onClick={onOpenPrintPreview}>
-            <Printer className="mr-2 h-4 w-4" />
+
+          <Button type="button" variant="outline" size="sm" disabled={isBusy || !canPrint} onClick={onOpenPrintPreview}>
+            <Printer className="mr-1.5 h-3.5 w-3.5" />
             {t("utilities.schedules.print.action")}
           </Button>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <input
               type="checkbox"
               checked={overwriteManual}
               disabled={isBusy}
               onChange={(event) => onOverwriteManualChange(event.target.checked)}
-              className="h-4 w-4 rounded border-border"
+              className="h-3.5 w-3.5 rounded border-border"
             />
             <span>{t("utilities.schedules.generate.overwriteManual")}</span>
           </label>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
