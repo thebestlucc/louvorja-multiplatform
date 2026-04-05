@@ -13,6 +13,14 @@ export const Route = createFileRoute("/onboarding/ready")({
   component: OnboardingReadyPage,
 });
 
+const FEATURES = [
+  { icon: Music, titleKey: "onboarding.ready.features.hymns", descKey: "onboarding.ready.features.hymnsDesc" },
+  { icon: BookOpen, titleKey: "onboarding.ready.features.bible", descKey: "onboarding.ready.features.bibleDesc" },
+  { icon: LayoutGrid, titleKey: "onboarding.ready.features.presentations", descKey: "onboarding.ready.features.presentationsDesc" },
+  { icon: Search, titleKey: "onboarding.ready.features.search", descKey: "onboarding.ready.features.searchDesc" },
+  { icon: Monitor, titleKey: "onboarding.ready.features.projection", descKey: "onboarding.ready.features.projectionDesc" },
+] as const;
+
 function OnboardingReadyPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -48,14 +56,6 @@ function OnboardingReadyPage() {
     navigate({ to: "/" });
   };
 
-  const features = [
-    { icon: Music, titleKey: "onboarding.ready.features.hymns", descKey: "onboarding.ready.features.hymnsDesc" },
-    { icon: BookOpen, titleKey: "onboarding.ready.features.bible", descKey: "onboarding.ready.features.bibleDesc" },
-    { icon: LayoutGrid, titleKey: "onboarding.ready.features.presentations", descKey: "onboarding.ready.features.presentationsDesc" },
-    { icon: Search, titleKey: "onboarding.ready.features.search", descKey: "onboarding.ready.features.searchDesc" },
-    { icon: Monitor, titleKey: "onboarding.ready.features.projection", descKey: "onboarding.ready.features.projectionDesc" },
-  ];
-
   return (
     <div className="flex flex-col gap-6">
       <div className="text-center space-y-1">
@@ -65,12 +65,12 @@ function OnboardingReadyPage() {
 
       {/* 3-top + 2-bottom grid */}
       <div className="grid gap-3 sm:grid-cols-3">
-        {features.slice(0, 3).map((f) => (
+        {FEATURES.slice(0, 3).map((f) => (
           <FeatureCard key={f.titleKey} icon={f.icon} title={t(f.titleKey)} description={t(f.descKey)} />
         ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 max-w-lg mx-auto w-full">
-        {features.slice(3).map((f) => (
+        {FEATURES.slice(3).map((f) => (
           <FeatureCard key={f.titleKey} icon={f.icon} title={t(f.titleKey)} description={t(f.descKey)} />
         ))}
       </div>

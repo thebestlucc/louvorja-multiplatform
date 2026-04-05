@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { TOUR_STEPS, finishTour } from "../../lib/tour";
+import { TOUR_STEPS, completeTour } from "../../lib/onboarding";
 import { TourTooltip } from "./tour-tooltip";
 
 interface SpotlightTourProps {
@@ -19,6 +19,7 @@ export function SpotlightTour({ onComplete }: SpotlightTourProps) {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [cutout, setCutout] = useState<CutoutRect | null>(null);
+  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
 
   const step = TOUR_STEPS[currentIndex];
   const isFinishStep = step?.i18nKey === "tour.finish";
@@ -27,14 +28,17 @@ export function SpotlightTour({ onComplete }: SpotlightTourProps) {
   useEffect(() => {
     if (!step || isFinishStep) {
       setCutout(null);
+      setTargetRect(null);
       return;
     }
     const target = document.querySelector(step.target);
     if (!target) {
       setCutout(null);
+      setTargetRect(null);
       return;
     }
     const rect = target.getBoundingClientRect();
+    setTargetRect(rect);
     const padding = 8;
     setCutout({
       top: rect.top - padding,
@@ -45,7 +49,7 @@ export function SpotlightTour({ onComplete }: SpotlightTourProps) {
   }, [step, isFinishStep]);
 
   const handleComplete = useCallback(async () => {
-    await finishTour();
+    await completeTour();
     onComplete();
   }, [onComplete]);
 
@@ -89,6 +93,7 @@ export function SpotlightTour({ onComplete }: SpotlightTourProps) {
         description={t(`${step.i18nKey}.description`)}
         currentStep={currentIndex}
         totalSteps={TOUR_STEPS.length}
+        targetRect={targetRect}
         onNext={handleNext}
         onSkip={handleSkip}
       />

@@ -31,3 +31,16 @@ export function parseOnlineVideoNotes(notes: string | null): { videoId?: string;
   try { return JSON.parse(notes ?? "") as { videoId?: string; videoSource?: string }; }
   catch { return null; }
 }
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1000 * 1000) return `${(bytes / 1000).toFixed(1)} KB`;
+  if (bytes < 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
+  return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
+}
+
+export const LANG_DISPLAY: Record<string, string> = {
+  "pt-BR": "Português (Brasil)",
+  "en-US": "English (US)",
+  es: "Español",
+};

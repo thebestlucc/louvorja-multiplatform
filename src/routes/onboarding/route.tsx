@@ -15,6 +15,10 @@ const STEP_ORDER = [
   { to: "/onboarding/ready", key: "onboarding.steps.ready" },
 ] as const;
 
+const STEPPER_GRID_COLUMNS = Array.from({ length: STEP_ORDER.length }, (_, i) =>
+  i < STEP_ORDER.length - 1 ? "auto 1fr" : "auto",
+).join(" ");
+
 function OnboardingLayout() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -24,7 +28,7 @@ function OnboardingLayout() {
     <div className="flex min-h-screen flex-col bg-background">
       {/* Stepper header — uses a 9-column grid: circle, line, circle, line, ... circle */}
       <header className="mx-auto w-full max-w-3xl px-4 pt-8 pb-2 space-y-1.5">
-        <div className="grid items-center" style={{ gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto" }}>
+        <div className="grid items-center" style={{ gridTemplateColumns: STEPPER_GRID_COLUMNS }}>
           {STEP_ORDER.map((step, index) => {
             const isDone = currentStep > index;
             const isActive = currentStep === index;
@@ -57,7 +61,7 @@ function OnboardingLayout() {
           })}
         </div>
         {/* Labels — same 9-column grid, labels span the circle columns */}
-        <div className="grid" style={{ gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto" }}>
+        <div className="grid" style={{ gridTemplateColumns: STEPPER_GRID_COLUMNS }}>
           {STEP_ORDER.map((step, index) => {
             const isDone = currentStep > index;
             const isActive = currentStep === index;

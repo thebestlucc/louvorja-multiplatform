@@ -5,10 +5,11 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
+import { formatBytes, LANG_DISPLAY } from "../../lib/utils";
 import { usePlanPackSync, useStartPackSync } from "../../lib/queries/pack-sync";
 import { useContentSyncStore } from "../../stores/content-sync-store";
-import { useOnboardingStore } from "../../stores/onboarding-store";
 import { useThemeStore } from "../../stores/theme-store";
+
 
 
 export const Route = createFileRoute("/onboarding/content")({
@@ -22,18 +23,6 @@ const LANG_TO_BCP47: Record<string, string> = {
   es: "es",
 };
 
-const LANG_DISPLAY: Record<string, string> = {
-  "pt-BR": "Português (Brasil)",
-  "en-US": "English (US)",
-  es: "Español",
-};
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`;
-  if (bytes < 1000 * 1000) return `${(bytes / 1000).toFixed(1)} KB`;
-  if (bytes < 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
-  return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
-}
 
 function OnboardingContentPage() {
   const navigate = useNavigate();
@@ -87,12 +76,10 @@ function OnboardingContentPage() {
 
   const handleContinueInBackground = () => {
     toast.info(t("onboarding.content.backgroundToast"));
-    useOnboardingStore.getState().setContentSkipped(false);
     navigate({ to: "/onboarding/monitors" });
   };
 
   const handleSkip = () => {
-    useOnboardingStore.getState().setContentSkipped(true);
     navigate({ to: "/onboarding/monitors" });
   };
 
@@ -148,12 +135,12 @@ function OnboardingContentPage() {
                     <div key={item.packId} className="flex items-center justify-between px-3 py-2 text-sm">
                       <span className="font-medium text-foreground truncate">{item.packId}</span>
                       <span className="shrink-0 text-muted-foreground ml-2">
-                        {item.fileCount} {item.fileCount === 1 ? "file" : "files"} · {formatBytes(item.packSize)}
+                        {item.fileCount} {item.fileCount === 1 ? t("common.file") : t("common.files")} · {formatBytes(item.packSize)}
                       </span>
                     </div>
                   ))}
                   <div className="px-3 py-2 text-xs text-muted-foreground bg-muted/30">
-                    {items.length} {items.length === 1 ? "pack" : "packs"} · {formatBytes(totalSize)}
+                    {items.length} {items.length === 1 ? t("common.pack") : t("common.packs")} · {formatBytes(totalSize)}
                   </div>
                 </div>
               )}

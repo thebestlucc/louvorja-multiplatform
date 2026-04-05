@@ -21,7 +21,6 @@ function OnboardingSetupPage() {
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
-    useOnboardingStore.getState().setSelectedTheme(newTheme);
   };
 
   return (
@@ -58,7 +57,7 @@ function OnboardingSetupPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t("common.back")}
         </Button>
-        <Button onClick={() => navigate({ to: "/onboarding/content" as string })}>
+        <Button onClick={() => navigate({ to: "/onboarding/content" })}>
           {t("onboarding.setup.continue")}
         </Button>
       </div>
