@@ -63,7 +63,7 @@ export function TourTooltip({ step, title, description, currentStep, totalSteps,
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-[10001] w-72 rounded-xl border border-border bg-popover p-4 shadow-lg"
+      className="fixed z-[10001] w-72 rounded-xl border border-border bg-surface p-4 shadow-xl"
       style={{ top: position.top, left: position.left }}
     >
       <h4 className="text-sm font-semibold text-foreground">{title}</h4>

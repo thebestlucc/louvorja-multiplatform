@@ -17,6 +17,13 @@ import {
   ChevronRight,
   ChevronDown,
   Video,
+  Timer,
+  Clock3,
+  CalendarDays,
+  Library,
+  Shuffle,
+  CaseSensitive,
+  Type,
   type LucideIcon,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui-store";
@@ -55,8 +62,21 @@ const navItems: NavItem[] = [
   { to: "/bible", icon: BookOpen, labelKey: "nav.bible" },
   { to: "/presentations", icon: Presentation, labelKey: "nav.presentations" },
   { to: "/services", icon: ListChecks, labelKey: "nav.services" },
+  { to: "/schedules", icon: CalendarDays, labelKey: "nav.schedules" },
   { to: "/playing-now", icon: MonitorPlay, labelKey: "nav.playingNow" },
-  { to: "/utilities", icon: Wrench, labelKey: "nav.utilities" },
+  {
+    to: "/utilities",
+    icon: Wrench,
+    labelKey: "nav.utilities",
+    children: [
+      { to: "/utilities/timer", icon: Timer, labelKey: "utilities.nav.timer" },
+      { to: "/utilities/clock", icon: Clock3, labelKey: "utilities.nav.clock" },
+      { to: "/utilities/media-library", icon: Library, labelKey: "utilities.nav.mediaLibrary" },
+      { to: "/utilities/lottery", icon: Shuffle, labelKey: "utilities.nav.lottery" },
+      { to: "/utilities/text", icon: CaseSensitive, labelKey: "utilities.nav.text" },
+      { to: "/utilities/interactive-text", icon: Type, labelKey: "utilities.nav.interactiveText" },
+    ],
+  },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
   { to: "/help", icon: CircleHelp, labelKey: "nav.help" },
 ];

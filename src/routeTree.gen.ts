@@ -27,6 +27,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UtilitiesIndexRouteImport } from './routes/utilities/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
+import { Route as SchedulesIndexRouteImport } from './routes/schedules/index'
 import { Route as PresentationsIndexRouteImport } from './routes/presentations/index'
 import { Route as PlayingNowIndexRouteImport } from './routes/playing-now/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
@@ -35,7 +36,6 @@ import { Route as CollectionsIndexRouteImport } from './routes/collections/index
 import { Route as BibleIndexRouteImport } from './routes/bible/index'
 import { Route as UtilitiesTimerRouteImport } from './routes/utilities/timer'
 import { Route as UtilitiesTextRouteImport } from './routes/utilities/text'
-import { Route as UtilitiesSchedulesRouteImport } from './routes/utilities/schedules'
 import { Route as UtilitiesMediaLibraryRouteImport } from './routes/utilities/media-library'
 import { Route as UtilitiesLotteryRouteImport } from './routes/utilities/lottery'
 import { Route as UtilitiesInteractiveTextRouteImport } from './routes/utilities/interactive-text'
@@ -140,6 +140,11 @@ const ServicesIndexRoute = ServicesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ServicesRouteRoute,
 } as any)
+const SchedulesIndexRoute = SchedulesIndexRouteImport.update({
+  id: '/schedules/',
+  path: '/schedules/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PresentationsIndexRoute = PresentationsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -178,11 +183,6 @@ const UtilitiesTimerRoute = UtilitiesTimerRouteImport.update({
 const UtilitiesTextRoute = UtilitiesTextRouteImport.update({
   id: '/text',
   path: '/text',
-  getParentRoute: () => UtilitiesRouteRoute,
-} as any)
-const UtilitiesSchedulesRoute = UtilitiesSchedulesRouteImport.update({
-  id: '/schedules',
-  path: '/schedules',
   getParentRoute: () => UtilitiesRouteRoute,
 } as any)
 const UtilitiesMediaLibraryRoute = UtilitiesMediaLibraryRouteImport.update({
@@ -282,7 +282,6 @@ export interface FileRoutesByFullPath {
   '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
   '/utilities/media-library': typeof UtilitiesMediaLibraryRoute
-  '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
@@ -291,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/onboarding/': typeof OnboardingIndexRoute
   '/playing-now/': typeof PlayingNowIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
+  '/schedules/': typeof SchedulesIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/utilities/': typeof UtilitiesIndexRoute
@@ -315,7 +315,6 @@ export interface FileRoutesByTo {
   '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
   '/utilities/media-library': typeof UtilitiesMediaLibraryRoute
-  '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible': typeof BibleIndexRoute
@@ -324,6 +323,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingIndexRoute
   '/playing-now': typeof PlayingNowIndexRoute
   '/presentations': typeof PresentationsIndexRoute
+  '/schedules': typeof SchedulesIndexRoute
   '/services': typeof ServicesIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/utilities': typeof UtilitiesIndexRoute
@@ -358,7 +358,6 @@ export interface FileRoutesById {
   '/utilities/interactive-text': typeof UtilitiesInteractiveTextRoute
   '/utilities/lottery': typeof UtilitiesLotteryRoute
   '/utilities/media-library': typeof UtilitiesMediaLibraryRoute
-  '/utilities/schedules': typeof UtilitiesSchedulesRoute
   '/utilities/text': typeof UtilitiesTextRoute
   '/utilities/timer': typeof UtilitiesTimerRoute
   '/bible/': typeof BibleIndexRoute
@@ -367,6 +366,7 @@ export interface FileRoutesById {
   '/onboarding/': typeof OnboardingIndexRoute
   '/playing-now/': typeof PlayingNowIndexRoute
   '/presentations/': typeof PresentationsIndexRoute
+  '/schedules/': typeof SchedulesIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/utilities/': typeof UtilitiesIndexRoute
@@ -402,7 +402,6 @@ export interface FileRouteTypes {
     | '/utilities/interactive-text'
     | '/utilities/lottery'
     | '/utilities/media-library'
-    | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible/'
@@ -411,6 +410,7 @@ export interface FileRouteTypes {
     | '/onboarding/'
     | '/playing-now/'
     | '/presentations/'
+    | '/schedules/'
     | '/services/'
     | '/settings/'
     | '/utilities/'
@@ -435,7 +435,6 @@ export interface FileRouteTypes {
     | '/utilities/interactive-text'
     | '/utilities/lottery'
     | '/utilities/media-library'
-    | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible'
@@ -444,6 +443,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/playing-now'
     | '/presentations'
+    | '/schedules'
     | '/services'
     | '/settings'
     | '/utilities'
@@ -477,7 +477,6 @@ export interface FileRouteTypes {
     | '/utilities/interactive-text'
     | '/utilities/lottery'
     | '/utilities/media-library'
-    | '/utilities/schedules'
     | '/utilities/text'
     | '/utilities/timer'
     | '/bible/'
@@ -486,6 +485,7 @@ export interface FileRouteTypes {
     | '/onboarding/'
     | '/playing-now/'
     | '/presentations/'
+    | '/schedules/'
     | '/services/'
     | '/settings/'
     | '/utilities/'
@@ -507,6 +507,7 @@ export interface RootRouteChildren {
   ProjectorRoute: typeof ProjectorRoute
   ReturnRoute: typeof ReturnRoute
   SpotlightRoute: typeof SpotlightRoute
+  SchedulesIndexRoute: typeof SchedulesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -637,6 +638,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesIndexRouteImport
       parentRoute: typeof ServicesRouteRoute
     }
+    '/schedules/': {
+      id: '/schedules/'
+      path: '/schedules'
+      fullPath: '/schedules/'
+      preLoaderRoute: typeof SchedulesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/presentations/': {
       id: '/presentations/'
       path: '/'
@@ -691,13 +699,6 @@ declare module '@tanstack/react-router' {
       path: '/text'
       fullPath: '/utilities/text'
       preLoaderRoute: typeof UtilitiesTextRouteImport
-      parentRoute: typeof UtilitiesRouteRoute
-    }
-    '/utilities/schedules': {
-      id: '/utilities/schedules'
-      path: '/schedules'
-      fullPath: '/utilities/schedules'
-      preLoaderRoute: typeof UtilitiesSchedulesRouteImport
       parentRoute: typeof UtilitiesRouteRoute
     }
     '/utilities/media-library': {
@@ -911,7 +912,6 @@ interface UtilitiesRouteRouteChildren {
   UtilitiesInteractiveTextRoute: typeof UtilitiesInteractiveTextRoute
   UtilitiesLotteryRoute: typeof UtilitiesLotteryRoute
   UtilitiesMediaLibraryRoute: typeof UtilitiesMediaLibraryRoute
-  UtilitiesSchedulesRoute: typeof UtilitiesSchedulesRoute
   UtilitiesTextRoute: typeof UtilitiesTextRoute
   UtilitiesTimerRoute: typeof UtilitiesTimerRoute
   UtilitiesIndexRoute: typeof UtilitiesIndexRoute
@@ -922,7 +922,6 @@ const UtilitiesRouteRouteChildren: UtilitiesRouteRouteChildren = {
   UtilitiesInteractiveTextRoute: UtilitiesInteractiveTextRoute,
   UtilitiesLotteryRoute: UtilitiesLotteryRoute,
   UtilitiesMediaLibraryRoute: UtilitiesMediaLibraryRoute,
-  UtilitiesSchedulesRoute: UtilitiesSchedulesRoute,
   UtilitiesTextRoute: UtilitiesTextRoute,
   UtilitiesTimerRoute: UtilitiesTimerRoute,
   UtilitiesIndexRoute: UtilitiesIndexRoute,
@@ -948,6 +947,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectorRoute: ProjectorRoute,
   ReturnRoute: ReturnRoute,
   SpotlightRoute: SpotlightRoute,
+  SchedulesIndexRoute: SchedulesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -367,7 +367,8 @@
     "presentations": "Presentaciones",
     "services": "Liturgia",
     "settings": "Configuración",
-    "utilities": "Utilidades"
+    "utilities": "Utilidades",
+    "schedules": "Horarios"
   },
   "onboarding": {
     "title": "Bienvenido a LouvorJA",
@@ -1361,7 +1362,8 @@
       "overview": "Resumen",
       "schedules": "Horarios",
       "text": "Texto",
-      "timer": "Temporizador"
+      "timer": "Temporizador",
+      "interactiveText": "Texto Interactivo"
     },
     "overview": {
       "cards": {
