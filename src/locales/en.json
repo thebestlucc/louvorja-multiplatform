@@ -1461,6 +1461,8 @@
         "peoplePerDaySummary": "{{count}} per day",
         "repeatMembersInGroupedDates": "Repeat members across grouped dates",
         "repeatMembersInGroupedDatesHint": "When disabled, the preview and print output show one deduplicated member list for the consecutive date group.",
+        "description": "Description",
+        "descriptionHint": "Shown in the printed schedule.",
         "saveAndGenerate": "Save and generate schedule",
         "saveSuccess": "Department saved",
         "shuffleOnGenerate": "Randomize members on generate",

@@ -1,3 +1,7 @@
+import { useEffect, useRef } from "react";
+import { List, ListOrdered, Bold, Italic } from "lucide-react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 import {
@@ -25,6 +29,7 @@ export interface ScheduleDepartmentDraft {
   shuffleOnGenerate: boolean;
   groupDatesInPrint: boolean;
   repeatMembersInGroupedDates: boolean;
+  description: string;
   sortOrder: number;
   isActive: boolean;
   isSystem: boolean;
@@ -251,6 +256,14 @@ export function DepartmentForm({
             </span>
           </label>
 
+          <DescriptionEditor
+            value={draft.description}
+            disabled={disabled}
+            onChange={(value) => updateField("description", value)}
+            label={t("utilities.schedules.departmentManagement.description")}
+            hint={t("utilities.schedules.departmentManagement.descriptionHint")}
+          />
+
           <label className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-foreground">
             <input
               type="checkbox"
@@ -291,6 +304,7 @@ export function toScheduleDepartmentInput(draft: ScheduleDepartmentDraft): Sched
     shuffleOnGenerate: draft.shuffleOnGenerate,
     groupDatesInPrint: draft.groupDatesInPrint,
     repeatMembersInGroupedDates: draft.repeatMembersInGroupedDates,
+    description: draft.description.trim() || null,
     sortOrder: draft.sortOrder,
     isActive: draft.isActive,
   };
@@ -309,6 +323,7 @@ export function buildEmptyDepartmentDraft(sortOrder: number): ScheduleDepartment
     shuffleOnGenerate: false,
     groupDatesInPrint: false,
     repeatMembersInGroupedDates: true,
+    description: "",
     sortOrder,
     isActive: true,
     isSystem: false,
@@ -330,6 +345,133 @@ export function getRequiredLocalizedName(
   return draft.nameEn.trim();
 }
 
+function ToolbarButton({
+  active,
+  disabled,
+  onClick,
+  title,
+  children,
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DescriptionEditor({
+  value,
+  disabled,
+  onChange,
+  label,
+  hint,
+}: {
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  label: string;
+  hint: string;
+}) {
+  const isInternalUpdate = useRef(false);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        codeBlock: false,
+        code: false,
+        blockquote: false,
+        horizontalRule: false,
+        hardBreak: false,
+        strike: false,
+      }),
+    ],
+    content: value || "",
+    editable: !disabled,
+    onUpdate: ({ editor: e }) => {
+      isInternalUpdate.current = true;
+      const html = e.getHTML();
+      onChange(html === "<p></p>" ? "" : html);
+      isInternalUpdate.current = false;
+    },
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm max-w-none px-3 py-2 min-h-[5rem] text-sm text-foreground focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_p]:my-1",
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (editor && !isInternalUpdate.current && editor.getHTML() !== (value || "<p></p>")) {
+      editor.commands.setContent(value || "");
+    }
+  }, [editor, value]);
+
+  if (!editor) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-foreground">{label}</label>
+      <div className="overflow-hidden rounded-lg border border-border focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+        <div className="flex items-center gap-0.5 border-b border-border/60 bg-surface/50 px-1.5 py-1">
+          <ToolbarButton
+            active={editor.isActive("bold")}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            title="Bold"
+          >
+            <Bold className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            active={editor.isActive("italic")}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            title="Italic"
+          >
+            <Italic className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <div className="mx-1 h-4 w-px bg-border/60" />
+          <ToolbarButton
+            active={editor.isActive("bulletList")}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            title="Bullet list"
+          >
+            <List className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            active={editor.isActive("orderedList")}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            title="Numbered list"
+          >
+            <ListOrdered className="h-3.5 w-3.5" />
+          </ToolbarButton>
+        </div>
+        <EditorContent editor={editor} />
+      </div>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
 export function departmentDraftFromEntity(
   department: {
     id: number;
@@ -343,6 +485,7 @@ export function departmentDraftFromEntity(
     shuffleOnGenerate: boolean;
     groupDatesInPrint: boolean;
     repeatMembersInGroupedDates: boolean;
+    description: string | null;
     sortOrder: number;
     isSystem: boolean;
     isActive: boolean;
@@ -361,6 +504,7 @@ export function departmentDraftFromEntity(
     shuffleOnGenerate: department.shuffleOnGenerate,
     groupDatesInPrint: department.groupDatesInPrint,
     repeatMembersInGroupedDates: department.repeatMembersInGroupedDates,
+    description: department.description ?? "",
     sortOrder: department.sortOrder,
     isActive: department.isActive,
     isSystem: department.isSystem,

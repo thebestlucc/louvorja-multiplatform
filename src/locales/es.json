@@ -1461,6 +1461,8 @@
         "peoplePerDaySummary": "{{count}} por día",
         "repeatMembersInGroupedDates": "Repetir miembros en fechas agrupadas",
         "repeatMembersInGroupedDatesHint": "Cuando está desactivado, la vista previa y la impresión muestran una sola lista deduplicada de miembros para el grupo de fechas consecutivas.",
+        "description": "Descripción",
+        "descriptionHint": "Se muestra en el horario impreso.",
         "saveAndGenerate": "Guardar y generar horario",
         "saveSuccess": "Departamento guardado",
         "shuffleOnGenerate": "Aleatorizar miembros al generar el horario",

@@ -4,15 +4,15 @@ import { getScheduleDepartmentLabel } from "./schedule-departments";
 const MM_TO_PX = 96 / 25.4;
 const PRINT_PAGE_HEADER_HEIGHT_PX = 58;
 const DEFAULT_PRINT_PAGE_CONTENT_HEIGHT_PX = ((297 - 24) * MM_TO_PX) - PRINT_PAGE_HEADER_HEIGHT_PX;
-const PRINT_SECTION_BASE_HEIGHT_PX = 148;
-const PRINT_ENTRY_GAP_PX = 12;
-const PRINT_ENTRY_VERTICAL_CHROME_PX = 28;
-const PRINT_ENTRY_SUBDAY_GAP_PX = 10;
-const PRINT_ENTRY_LINE_HEIGHT_PX = 28;
-const PRINT_ENTRY_META_LINE_HEIGHT_PX = 20;
-const PRINT_ENTRY_DATE_RAIL_SINGLE_HEIGHT_PX = 84;
-const PRINT_ENTRY_DATE_RAIL_GROUPED_HEIGHT_PX = 118;
-const PRINT_ENTRY_CHARS_PER_LINE = 28;
+const PRINT_SECTION_BASE_HEIGHT_PX = 46;
+const PRINT_ENTRY_GAP_PX = 2;
+const PRINT_ENTRY_VERTICAL_CHROME_PX = 14;
+const PRINT_ENTRY_SUBDAY_GAP_PX = 5;
+const PRINT_ENTRY_LINE_HEIGHT_PX = 22;
+const PRINT_ENTRY_META_LINE_HEIGHT_PX = 16;
+const PRINT_ENTRY_DATE_RAIL_SINGLE_HEIGHT_PX = 24;
+const PRINT_ENTRY_DATE_RAIL_GROUPED_HEIGHT_PX = 42;
+const PRINT_ENTRY_CHARS_PER_LINE = 36;
 
 export interface SchedulePrintEntryDay {
   serviceDate: string;
@@ -34,6 +34,7 @@ export interface SchedulePrintSection {
   icon: string;
   dayCount: number;
   repeatMembersInGroupedDates: boolean;
+  description: string | null;
   entries: SchedulePrintEntry[];
   estimatedHeightPx: number;
 }
@@ -41,6 +42,8 @@ export interface SchedulePrintSection {
 export interface SchedulePrintPage {
   pageNumber: number;
   sections: SchedulePrintSection[];
+  bottomDescription: string | null;
+  bottomDescriptionColor: string | null;
 }
 
 export interface SchedulePrintPack {
@@ -134,11 +137,30 @@ function estimateEntryHeightPx(entry: SchedulePrintEntry, repeatMembersInGrouped
   return Math.max(leftColumnHeight, rightColumnHeight) + PRINT_ENTRY_VERTICAL_CHROME_PX;
 }
 
-function estimateSectionHeightPx(entries: SchedulePrintEntry[], repeatMembersInGroupedDates: boolean) {
+function estimateDescriptionHeightPx(description: string | null | undefined) {
+  if (!description || description.trim().length === 0) {
+    return 0;
+  }
+
+  const withBreaks = description.replace(/<\/(p|li|br)[^>]*>/gi, "\n");
+  const text = withBreaks.replace(/<[^>]*>/g, "").trim();
+  if (text.length === 0) {
+    return 0;
+  }
+
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  const wrappedLines = lines.reduce((total, line) => {
+    return total + Math.max(1, Math.ceil(line.length / 60));
+  }, 0);
+  return wrappedLines * 18 + 24;
+}
+
+function estimateSectionHeightPx(entries: SchedulePrintEntry[], repeatMembersInGroupedDates: boolean, description?: string | null) {
+  const descriptionHeight = estimateDescriptionHeightPx(description);
   return entries.reduce((total, entry, index) => {
     const gap = index === 0 ? 0 : PRINT_ENTRY_GAP_PX;
     return total + gap + estimateEntryHeightPx(entry, repeatMembersInGroupedDates);
-  }, PRINT_SECTION_BASE_HEIGHT_PX);
+  }, PRINT_SECTION_BASE_HEIGHT_PX + descriptionHeight);
 }
 
 function cloneEntryFromDays(days: SchedulePrintEntryDay[]): SchedulePrintEntry {
@@ -355,8 +377,9 @@ export function buildSchedulePrintPack(
         icon: department.icon,
         dayCount: entryDays.length,
         repeatMembersInGroupedDates: department.repeatMembersInGroupedDates,
+        description: department.description ?? null,
         entries,
-        estimatedHeightPx: estimateSectionHeightPx(entries, department.repeatMembersInGroupedDates),
+        estimatedHeightPx: estimateSectionHeightPx(entries, department.repeatMembersInGroupedDates, department.description),
       } satisfies SchedulePrintSection;
     })
     .filter((section) => section.dayCount > 0)
@@ -372,8 +395,31 @@ export function buildSchedulePrintPack(
   const pages: SchedulePrintPage[] = [];
   let currentPageSections: SchedulePrintSection[] = [];
   let usedHeightPx = 0;
+  let pendingDescription: string | null = null;
+  let pendingDescriptionColor: string | null = null;
+
+  function flushCurrentPage(attachDescription = true) {
+    if (currentPageSections.length === 0) {
+      return;
+    }
+
+    pages.push({
+      pageNumber: pages.length + 1,
+      sections: currentPageSections,
+      bottomDescription: attachDescription ? pendingDescription : null,
+      bottomDescriptionColor: attachDescription ? pendingDescriptionColor : null,
+    });
+    currentPageSections = [];
+    usedHeightPx = 0;
+    if (attachDescription) {
+      pendingDescription = null;
+      pendingDescriptionColor = null;
+    }
+  }
 
   for (const section of sections) {
+    flushCurrentPage();
+
     let remainingEntries = normalizeSectionEntriesForPagination(section, pageContentHeightPx);
 
     while (remainingEntries.length > 0) {
@@ -386,12 +432,7 @@ export function buildSchedulePrintPack(
       );
 
       if (!fragment) {
-        pages.push({
-          pageNumber: pages.length + 1,
-          sections: currentPageSections,
-        });
-        currentPageSections = [];
-        usedHeightPx = 0;
+        flushCurrentPage(false);
         continue;
       }
 
@@ -400,20 +441,27 @@ export function buildSchedulePrintPack(
       remainingEntries = fragment.remainingEntries;
 
       if (remainingEntries.length > 0) {
-        pages.push({
-          pageNumber: pages.length + 1,
-          sections: currentPageSections,
-        });
-        currentPageSections = [];
-        usedHeightPx = 0;
+        flushCurrentPage(false);
       }
+    }
+
+    // All entries for this department are done — set pending description
+    // It will be attached when this page is flushed (by next department or end)
+    if (section.description) {
+      pendingDescription = section.description;
+      pendingDescriptionColor = section.color;
     }
   }
 
-  if (currentPageSections.length > 0) {
+  flushCurrentPage();
+
+  if (pages.length === 0) {
+    // Edge case: no sections at all
     pages.push({
-      pageNumber: pages.length + 1,
-      sections: currentPageSections,
+      pageNumber: 1,
+      sections: [],
+      bottomDescription: null,
+      bottomDescriptionColor: null,
     });
   }
 

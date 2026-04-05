@@ -41,71 +41,23 @@ function formatPrintDate(value: string) {
   return `${day.padStart(2, "0")}/${month.padStart(2, "0")}`;
 }
 
-function formatPrintDayLabel(value: string, locale: string) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
+function createDayLabelFormatter(locale: string) {
+  const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
+
+  return (value: string) => {
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return { weekday: "", date: formatPrintDate(value) };
+    }
+
     return {
-      weekday: "",
+      weekday: weekdayFmt.format(date).replace(/,$/, ""),
       date: formatPrintDate(value),
     };
-  }
-
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" })
-    .format(date)
-    .replace(/,$/, "");
-
-  return {
-    weekday,
-    date: formatPrintDate(value),
   };
 }
 
-function PrintEntryDayDetails({
-  day,
-  accentBorder,
-}: {
-  day: SchedulePrintEntryDay;
-  accentBorder: string;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-start gap-2">
-        {day.label ? (
-          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-600">
-            {day.label}
-          </span>
-        ) : null}
-        {day.isResponsible ? (
-          <span
-            className="inline-flex rounded-full border bg-white px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-800"
-            style={{ borderColor: accentBorder }}
-          >
-            {t("utilities.schedules.print.responsibleBadge")}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-2 text-base leading-7 text-slate-700">
-        {day.assigneeNames.length > 0 ? (
-          day.assigneeNames.map((name, index) => (
-            <Fragment key={`${day.serviceDate}-${name}`}>
-              {index > 0 ? <span className="mx-2 text-slate-300">•</span> : null}
-              <span className="font-semibold text-slate-950">{name}</span>
-            </Fragment>
-          ))
-        ) : (
-          <span className="italic text-slate-400">
-            {t("utilities.schedules.print.unassigned")}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PrintGroupedMembersRow({
+function NamesDisplay({
   names,
   className,
 }: {
@@ -114,257 +66,255 @@ function PrintGroupedMembersRow({
 }) {
   const { t } = useTranslation();
 
-  return (
-    <div className={`min-w-0 text-sm leading-6 text-slate-700 ${className ?? ""}`}>
-      {names.length > 0 ? (
-        names.map((name, index) => (
-          <Fragment key={`grouped-members-${name}-${index}`}>
-            {index > 0 ? <span className="mx-2 text-slate-300">•</span> : null}
-            <span className="font-semibold text-slate-950">{name}</span>
-          </Fragment>
-        ))
-      ) : (
-        <span className="italic text-slate-400">
-          {t("utilities.schedules.print.unassigned")}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function PrintGroupedDistinctMembers({
-  entry,
-}: {
-  entry: SchedulePrintEntry;
-}) {
-  return (
-    <div className="flex h-full flex-col">
-      {entry.days.map((day, index) => (
-        <div
-          key={`grouped-members-${day.serviceDate}`}
-          className={`flex min-h-0 flex-1 items-center ${
-            index > 0 ? "border-t border-slate-200" : ""
-          }`}
-        >
-          <PrintGroupedMembersRow
-            names={day.assigneeNames}
-            className="w-full py-2 text-base leading-7"
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PrintGroupedDateRail({
-  startLabel,
-  endLabel,
-  dayCount,
-  alignToMembers,
-}: {
-  startLabel: { weekday: string; date: string };
-  endLabel: { weekday: string; date: string };
-  dayCount: number;
-  alignToMembers: boolean;
-}) {
-  if (!alignToMembers) {
+  if (names.length === 0) {
     return (
-      <>
-        <div className="flex items-baseline gap-1 whitespace-nowrap">
-          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
-            {startLabel.weekday}
-          </span>
-          <span className="text-base font-black tracking-[0.04em] text-slate-950">
-            {startLabel.date}
-          </span>
-        </div>
-        <div className="my-1.5 h-6 w-px rounded-full border-l border-dotted border-slate-400/70" />
-        <div className="flex items-baseline gap-1 whitespace-nowrap">
-          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
-            {endLabel.weekday}
-          </span>
-          <span className="text-base font-black tracking-[0.04em] text-slate-950">
-            {endLabel.date}
-          </span>
-        </div>
-      </>
+      <span className={`italic text-slate-400 ${className ?? ""}`}>
+        {t("utilities.schedules.print.unassigned")}
+      </span>
     );
   }
 
-  const rowCount = Math.max(2, dayCount);
-
   return (
-    <div
-      className="relative grid h-full w-full"
-      style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
-    >
-      <div
-        className="pointer-events-none absolute left-1/2 top-1/2 h-5 w-px -translate-x-1/2 -translate-y-1/2 border-l border-dotted border-slate-400/70"
-        style={{
-          maxHeight: "1.25rem",
-        }}
-      />
-
-      <div
-        className="flex items-center justify-center"
-        style={{ gridRow: "1 / 2" }}
-      >
-        <div className="flex items-baseline gap-1 whitespace-nowrap">
-          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
-            {startLabel.weekday}
-          </span>
-          <span className="text-base font-black tracking-[0.04em] text-slate-950">
-            {startLabel.date}
-          </span>
-        </div>
-      </div>
-
-      <div
-        className="flex items-center justify-center"
-        style={{ gridRow: `${rowCount} / ${rowCount + 1}` }}
-      >
-        <div className="flex items-baseline gap-1 whitespace-nowrap">
-          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-600">
-            {endLabel.weekday}
-          </span>
-          <span className="text-base font-black tracking-[0.04em] text-slate-950">
-            {endLabel.date}
-          </span>
-        </div>
-      </div>
-    </div>
+    <span className={className}>
+      {names.map((name, index) => (
+        <Fragment key={`name-${name}-${index}`}>
+          {index > 0 ? <span className="mx-1.5 text-slate-300">&middot;</span> : null}
+          <span className="font-semibold text-slate-900">{name}</span>
+        </Fragment>
+      ))}
+    </span>
   );
 }
 
 export function PrintDepartmentSection({ locale, section }: PrintDepartmentSectionProps) {
-  const { t } = useTranslation();
   const Icon = getScheduleDepartmentIcon(section.icon);
-  const formatDayLabel = useMemo(
-    () => (value: string) => formatPrintDayLabel(value, locale),
-    [locale],
-  );
-  const accentSoft = withAlpha(section.color, 0.12, "rgba(148, 163, 184, 0.12)");
-  const accentStrong = withAlpha(section.color, 0.2, "rgba(148, 163, 184, 0.2)");
-  const accentBorder = withAlpha(section.color, 0.28, "rgba(148, 163, 184, 0.28)");
-  const accentGradient =
-    `linear-gradient(135deg, ${withAlpha(section.color, 0.18, accentSoft)} 0%, ${
-      withAlpha(section.color, 0.08, "rgba(255, 255, 255, 0.88)")
-    } 45%, rgba(255, 255, 255, 0.98) 100%)`;
+  const formatDay = useMemo(() => createDayLabelFormatter(locale), [locale]);
+  const accentRule = withAlpha(section.color, 0.3, "rgba(148, 163, 184, 0.3)");
 
   return (
-    <article className="schedule-print-section rounded-3xl border border-slate-200/90 bg-white p-3">
-      <div className="px-1 pb-1">
-        <header
-          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 rounded-[1.25rem] border px-4 py-4"
-          style={{
-            background: accentGradient,
-            borderColor: accentBorder,
-          }}
+    <article
+      className="schedule-print-section border-l-[3px] pl-3"
+      style={{ borderLeftColor: section.color }}
+    >
+      <div className="flex items-center gap-2 pb-2">
+        <div
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white"
+          style={{ backgroundColor: section.color }}
         >
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.125rem] text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.55)]"
-            style={{ backgroundColor: section.color }}
-          >
-            <Icon className="h-6 w-6" />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-black uppercase tracking-[0.12em] text-slate-950">
-              {section.title}
-            </h3>
-            <div
-              className="mt-2 h-0.5 w-16 rounded-full"
-              style={{ backgroundColor: accentBorder }}
-            />
-          </div>
-
-          <div
-            className="inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-700"
-            style={{
-              backgroundColor: "rgba(255, 255, 255, 0.82)",
-              borderColor: accentBorder,
-            }}
-          >
-            {t("utilities.schedules.print.departmentDays", { count: section.dayCount })}
-          </div>
-        </header>
-
-        <div className="mt-3 space-y-2.5">
-          {section.entries.map((entry) => {
-            const startLabel = formatDayLabel(entry.startDate);
-            const endLabel = formatDayLabel(entry.endDate);
-            const isGroupedEntry = entry.days.length > 1;
-            const shouldShowRepeatedGroupSummary = isGroupedEntry && section.repeatMembersInGroupedDates;
-            const shouldShowDistinctGroupedMembers = isGroupedEntry && !section.repeatMembersInGroupedDates;
-
-            return (
-              <div
-                key={`${section.departmentId}-${entry.startDate}-${entry.endDate}`}
-                className={`grid overflow-hidden rounded-[1.125rem] border border-slate-200/90 bg-white ${
-                  isGroupedEntry
-                    ? "grid-cols-[7.4rem_minmax(0,1fr)]"
-                    : "grid-cols-[7.4rem_minmax(0,1fr)]"
-                }`}
-              >
-                <div
-                  className={`flex h-full flex-col items-center justify-center text-center ${
-                    isGroupedEntry ? "px-3 py-3" : "px-3 py-3"
-                  }`}
-                  style={{
-                    background: `linear-gradient(180deg, ${accentStrong} 0%, ${accentSoft} 100%)`,
-                    borderRight: `1px solid ${accentBorder}`,
-                  }}
-                >
-                  {isGroupedEntry ? (
-                    <PrintGroupedDateRail
-                      startLabel={startLabel}
-                      endLabel={endLabel}
-                      dayCount={entry.days.length}
-                      alignToMembers={shouldShowDistinctGroupedMembers}
-                    />
-                  ) : (
-                    <>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-600">
-                        {startLabel.weekday || "\u00A0"}
-                      </div>
-                      <div className="mt-1 text-lg font-black tracking-[0.08em] text-slate-950">
-                        {startLabel.date}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="min-w-0 px-4 py-3">
-                  {shouldShowRepeatedGroupSummary ? (
-                    <div className="flex h-full items-center">
-                      <PrintGroupedMembersRow
-                        names={collectEntryAssigneeNames(entry.days)}
-                        className="text-base leading-7"
-                      />
-                    </div>
-                  ) : shouldShowDistinctGroupedMembers ? (
-                    <PrintGroupedDistinctMembers entry={entry} />
-                  ) : (
-                    <div className="space-y-2.5">
-                      {entry.days.map((day, index) => (
-                        <div
-                          key={`${section.departmentId}-${entry.startDate}-${day.serviceDate}`}
-                          className={index > 0 ? "border-t border-slate-200 pt-2.5" : ""}
-                        >
-                          <PrintEntryDayDetails
-                            day={day}
-                            accentBorder={accentBorder}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          <Icon className="h-2.5 w-2.5" />
         </div>
+        <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-950">
+          {section.title}
+        </h3>
+        <div className="h-px flex-1" style={{ backgroundColor: accentRule }} />
       </div>
+
+      <div>
+        {section.entries.map((entry, entryIndex) => {
+          const startLabel = formatDay(entry.startDate);
+          const endLabel = formatDay(entry.endDate);
+          const isGrouped = entry.days.length > 1;
+          const showCollapsed = isGrouped && section.repeatMembersInGroupedDates;
+          const showDistinct = isGrouped && !section.repeatMembersInGroupedDates;
+
+          return (
+            <div
+              key={`${section.departmentId}-${entry.startDate}-${entry.endDate}`}
+              className={`py-1.5 ${entryIndex > 0 ? "border-t border-dashed border-slate-200" : ""}`}
+            >
+              {!isGrouped && entry.days[0] ? (
+                <SingleDateRow
+                  day={entry.days[0]}
+                  dateLabel={startLabel}
+                  accentColor={section.color}
+                />
+              ) : null}
+
+              {showCollapsed ? (
+                <GroupedCollapsedRow
+                  startLabel={startLabel}
+                  endLabel={endLabel}
+                  days={entry.days}
+                />
+              ) : null}
+
+              {showDistinct ? (
+                <GroupedDistinctRows
+                  entry={entry}
+                  startLabel={startLabel}
+                  endLabel={endLabel}
+                  formatDay={formatDay}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
     </article>
+  );
+}
+
+function InlineDateLabel({
+  weekday,
+  date,
+}: {
+  weekday: string;
+  date: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500">
+        {weekday || "\u00A0"}
+      </span>
+      <span className="text-sm font-black text-slate-900">{date}</span>
+    </span>
+  );
+}
+
+function MetaBadges({
+  day,
+  accentColor,
+}: {
+  day: SchedulePrintEntryDay;
+  accentColor: string;
+}) {
+  const { t } = useTranslation();
+  if (!day.label && !day.isResponsible) {
+    return null;
+  }
+
+  return (
+    <div className="mb-0.5 flex items-center gap-2">
+      {day.label ? (
+        <span className="rounded-full bg-slate-100 px-2 py-px text-[8px] font-medium text-slate-600">
+          {day.label}
+        </span>
+      ) : null}
+      {day.isResponsible ? (
+        <span
+          className="text-[8px] font-bold uppercase tracking-[0.18em]"
+          style={{ color: accentColor }}
+        >
+          {t("utilities.schedules.print.responsibleBadge")}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function SingleDateRow({
+  day,
+  dateLabel,
+  accentColor,
+}: {
+  day: SchedulePrintEntryDay;
+  dateLabel: { weekday: string; date: string };
+  accentColor: string;
+}) {
+  return (
+    <div>
+      <MetaBadges day={day} accentColor={accentColor} />
+      <div className="flex items-baseline gap-3">
+        <div className="w-20 shrink-0">
+          <InlineDateLabel weekday={dateLabel.weekday} date={dateLabel.date} />
+        </div>
+        <NamesDisplay names={day.assigneeNames} className="text-sm leading-6" />
+      </div>
+    </div>
+  );
+}
+
+function GroupedCollapsedRow({
+  startLabel,
+  endLabel,
+  days,
+}: {
+  startLabel: { weekday: string; date: string };
+  endLabel: { weekday: string; date: string };
+  days: SchedulePrintEntryDay[];
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-1">
+        <InlineDateLabel weekday={startLabel.weekday} date={startLabel.date} />
+        <span className="mx-0.5 text-[10px] text-slate-400">&mdash;</span>
+        <InlineDateLabel weekday={endLabel.weekday} date={endLabel.date} />
+      </div>
+      <div className="mt-1 pl-1">
+        <NamesDisplay
+          names={collectEntryAssigneeNames(days)}
+          className="text-sm leading-6"
+        />
+      </div>
+    </div>
+  );
+}
+
+function GroupedDistinctRows({
+  entry,
+  startLabel,
+  endLabel,
+  formatDay,
+}: {
+  entry: SchedulePrintEntry;
+  startLabel: { weekday: string; date: string };
+  endLabel: { weekday: string; date: string };
+  formatDay: (value: string) => { weekday: string; date: string };
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-1">
+        <InlineDateLabel weekday={startLabel.weekday} date={startLabel.date} />
+        <span className="mx-0.5 text-[10px] text-slate-400">&mdash;</span>
+        <InlineDateLabel weekday={endLabel.weekday} date={endLabel.date} />
+      </div>
+      <div className="mt-1.5 space-y-1 border-l-2 border-slate-200 pl-3">
+        {entry.days.map((day) => {
+          const dayLabel = formatDay(day.serviceDate);
+          return (
+            <div key={day.serviceDate} className="flex items-baseline gap-2">
+              <span className="w-11 shrink-0 text-[10px] font-bold text-slate-600">
+                {dayLabel.date}
+              </span>
+              <NamesDisplay names={day.assigneeNames} className="text-sm leading-6" />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Renders department description HTML at page bottom.
+ * Content is authored by the local desktop app user via Tiptap editor
+ * (not from untrusted external sources), so innerHTML is safe here.
+ */
+export function PrintDescriptionBlock({
+  html,
+  accentColor,
+}: {
+  html: string;
+  accentColor: string;
+}) {
+  const isEmpty = !html || html.replace(/<[^>]*>/g, "").trim().length === 0;
+  if (isEmpty) {
+    return null;
+  }
+
+  const panelBg = withAlpha(accentColor, 0.1, "rgba(148, 163, 184, 0.1)");
+
+  return (
+    <div
+      className="px-5 py-3.5"
+      style={{ borderTop: `3px solid ${accentColor}`, backgroundColor: panelBg }}
+    >
+      {/* eslint-disable-next-line react/no-danger -- content authored by local user via Tiptap */}
+      <div
+        className="schedule-print-description text-[10.5px] leading-[1.6] text-slate-700"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
   );
 }

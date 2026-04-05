@@ -192,6 +192,35 @@ body {
   page-break-inside: avoid;
 }
 
+.schedule-print-description ul,
+.schedule-print-description ol {
+  padding-left: 1rem;
+  margin: 2px 0;
+}
+
+.schedule-print-description ul { list-style-type: disc; }
+.schedule-print-description ol { list-style-type: decimal; }
+.schedule-print-description ul ul { list-style-type: circle; }
+.schedule-print-description ul ul ul { list-style-type: square; }
+
+.schedule-print-description li {
+  margin: 1px 0;
+  padding-left: 2px;
+}
+
+.schedule-print-description p {
+  margin: 2px 0;
+}
+
+.schedule-print-description strong {
+  font-weight: 700;
+  color: #334155;
+}
+
+.schedule-print-description em {
+  font-style: italic;
+}
+
 @media print {
   @page {
     size: A4 portrait;

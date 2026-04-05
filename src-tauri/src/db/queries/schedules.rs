@@ -22,6 +22,7 @@ fn map_schedule_department_row(row: &Row) -> Result<ScheduleDepartment, rusqlite
         shuffle_on_generate: row.get("shuffle_on_generate")?,
         group_dates_in_print: row.get("group_dates_in_print")?,
         repeat_members_in_grouped_dates: row.get("repeat_members_in_grouped_dates")?,
+        description: row.get("description")?,
         sort_order: row.get("sort_order")?,
         is_system: row.get("is_system")?,
         is_active: row.get("is_active")?,
@@ -158,7 +159,7 @@ pub fn list_schedule_departments(conn: &Connection) -> Result<Vec<ScheduleDepart
     let mut stmt = conn.prepare(
         "SELECT id, code, name_pt, name_en, name_es, icon, color, people_per_day,
                 shuffle_on_generate, group_dates_in_print, repeat_members_in_grouped_dates,
-                sort_order, is_system, is_active, created_at, updated_at
+                description, sort_order, is_system, is_active, created_at, updated_at
          FROM schedule_departments
          ORDER BY sort_order ASC, id ASC",
     )?;
@@ -242,8 +243,9 @@ pub fn upsert_schedule_department(
                  repeat_members_in_grouped_dates = ?10,
                  sort_order = ?11,
                  is_active = ?12,
+                 description = ?13,
                  updated_at = datetime('now')
-             WHERE id = ?13",
+             WHERE id = ?14",
             params![
                 code,
                 name_pt,
@@ -257,6 +259,7 @@ pub fn upsert_schedule_department(
                 input.repeat_members_in_grouped_dates,
                 input.sort_order,
                 input.is_active,
+                trim_opt(input.description.as_deref()),
                 id,
             ],
         )?;
@@ -294,8 +297,8 @@ pub fn upsert_schedule_department(
         conn.execute(
             "INSERT INTO schedule_departments (
                 code, name_pt, name_en, name_es, icon, color, people_per_day,
-                shuffle_on_generate, group_dates_in_print, repeat_members_in_grouped_dates, sort_order, is_system, is_active
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12)",
+                shuffle_on_generate, group_dates_in_print, repeat_members_in_grouped_dates, description, sort_order, is_system, is_active
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, ?13)",
             params![
                 code,
                 name_pt,
@@ -307,6 +310,7 @@ pub fn upsert_schedule_department(
                 input.shuffle_on_generate,
                 input.group_dates_in_print,
                 input.repeat_members_in_grouped_dates,
+                trim_opt(input.description.as_deref()),
                 input.sort_order,
                 input.is_active,
             ],

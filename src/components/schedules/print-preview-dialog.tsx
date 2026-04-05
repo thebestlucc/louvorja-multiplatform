@@ -33,7 +33,7 @@ import {
 } from "../ui/dialog";
 import { ScrollArea } from "../ui/scroll-area";
 import { getScheduleDepartmentIcon, getScheduleDepartmentLabel } from "./department-meta";
-import { PrintDepartmentSection } from "./print-department-section";
+import { PrintDepartmentSection, PrintDescriptionBlock } from "./print-department-section";
 import { cn } from "../../lib/utils";
 
 function mergeOrderedIds(currentIds: number[], printableIds: number[]) {
@@ -82,7 +82,7 @@ function SchedulePrintPages({
   showPageLabel?: boolean;
 }) {
   return pages.map((page) => (
-    <section key={page.pageNumber} className="schedule-print-page relative rounded-[1.75rem] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
+    <section key={page.pageNumber} className="schedule-print-page relative flex flex-col rounded-[1.75rem] bg-white text-slate-900 shadow-xl ring-1 ring-slate-200/70">
       {showPageLabel ? (
         <div className="schedule-print-page-label absolute right-[10mm] top-[6mm] text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
           {pageLabel(page.pageNumber)}
@@ -106,6 +106,14 @@ function SchedulePrintPages({
           />
         ))}
       </div>
+      {page.bottomDescription && page.bottomDescriptionColor ? (
+        <div className="mt-auto pt-4">
+          <PrintDescriptionBlock
+            html={page.bottomDescription}
+            accentColor={page.bottomDescriptionColor}
+          />
+        </div>
+      ) : null}
     </section>
   ));
 }
