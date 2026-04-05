@@ -123,6 +123,9 @@ jobs:
         with:
           name: frontend-dist
           path: dist
+      - name: Generate bible.db from bundled SQLite sources
+        shell: bash
+        run: cargo run --release --bin build_bible --manifest-path src-tauri/Cargo.toml
       - name: Pre-build and lipo extra binaries for universal macOS
         if: matrix.name == 'macos-universal'
         shell: bash
