@@ -15,13 +15,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { GripVertical, Minus, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ScheduleDayDepartment } from "../../lib/bindings";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import {
   Select,
   SelectContent,
@@ -156,16 +155,37 @@ export function DayDepartmentCard({
           </div>
         </div>
 
-        <div className="w-full max-w-32">
-          <Input
-            id={`people-per-day-${dayDepartment.id}`}
-            type="number"
-            min={1}
-            label={t("utilities.schedules.dayDetails.peoplePerDay")}
-            value={String(peoplePerDay)}
-            disabled={disabled}
-            onChange={(event) => handlePeoplePerDayChange(event.target.value)}
-          />
+        <div className="space-y-1">
+          <label htmlFor={`people-per-day-${dayDepartment.id}`} className="text-[10px] font-medium text-muted-foreground">
+            {t("utilities.schedules.dayDetails.peoplePerDay")}
+          </label>
+          <div className="flex items-center rounded-lg border border-border/80">
+            <button
+              type="button"
+              disabled={disabled || peoplePerDay <= 1}
+              onClick={() => handlePeoplePerDayChange(String(peoplePerDay - 1))}
+              className="flex h-8 w-8 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <input
+              id={`people-per-day-${dayDepartment.id}`}
+              type="text"
+              inputMode="numeric"
+              value={String(peoplePerDay)}
+              disabled={disabled}
+              onChange={(e) => handlePeoplePerDayChange(e.target.value)}
+              className="h-8 w-10 border-x border-border/80 bg-transparent text-center text-sm font-medium text-foreground outline-none disabled:opacity-50"
+            />
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => handlePeoplePerDayChange(String(peoplePerDay + 1))}
+              className="flex h-8 w-8 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 

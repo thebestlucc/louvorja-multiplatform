@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, Users2 } from "lucide-react";
-import { DayDetailsDialog } from "../../components/schedules/day-details-dialog";
+import { DayDetailsPanel } from "../../components/schedules/day-details-panel";
 import { DepartmentManagerDialog } from "../../components/schedules/department-manager-dialog";
 import { MonthCalendar } from "../../components/schedules/month-calendar";
 import { MonthToolbar } from "../../components/schedules/month-toolbar";
 import { PrintPreviewDialog } from "../../components/schedules/print-preview-dialog";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import type {
   ScheduleDay,
   ScheduleDayDepartment,
@@ -127,7 +125,6 @@ function UtilitiesSchedulesPage() {
   const { t, i18n } = useTranslation();
   const [currentMonth, setCurrentMonth] = useState(getInitialMonth);
   const [visibleMonth, setVisibleMonth] = useState<ScheduleMonthDetail | null>(null);
-  const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
   const [isDepartmentManagerOpen, setIsDepartmentManagerOpen] = useState(false);
   const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [overwriteManual, setOverwriteManual] = useState(false);
@@ -150,7 +147,7 @@ function UtilitiesSchedulesPage() {
 
   useEffect(() => {
     setVisibleMonth(scheduleMonth ?? null);
-  }, [currentMonth.month, currentMonth.year, scheduleMonth]);
+  }, [scheduleMonth]);
 
   const monthLabel = useMemo(
     () =>
@@ -174,7 +171,6 @@ function UtilitiesSchedulesPage() {
     () => activeDepartments.map((department) => department.id),
     [activeDepartments],
   );
-  const departmentCount = departments?.length ?? 0;
   const selectedDayCount = scheduleDays.length;
   const isSavingDays = saveScheduleMonthDays.isPending;
   const isBusy = isSavingDays
@@ -184,18 +180,6 @@ function UtilitiesSchedulesPage() {
     || updateScheduleDayDepartmentPeoplePerDay.isPending
     || resetScheduleDayDepartmentManualOverride.isPending;
   const isLoading = isMonthLoading || areDepartmentsLoading;
-  const activeDay = useMemo(
-    () => selectedDayDate
-      ? scheduleDays.find((day) => day.serviceDate === selectedDayDate) ?? null
-      : null,
-    [scheduleDays, selectedDayDate],
-  );
-
-  useEffect(() => {
-    if (selectedDayDate && !scheduleDays.some((day) => day.serviceDate === selectedDayDate)) {
-      setSelectedDayDate(null);
-    }
-  }, [scheduleDays, selectedDayDate]);
 
   const refreshMonthDetail = async () => {
     const result = await refetchScheduleMonth();
@@ -246,12 +230,6 @@ function UtilitiesSchedulesPage() {
 
   const handleSelectDate = (isoDate: string) => {
     if (isBusy) {
-      return;
-    }
-
-    const selectedDay = scheduleDays.find((day) => day.serviceDate === isoDate);
-    if (selectedDay) {
-      setSelectedDayDate(selectedDay.serviceDate);
       return;
     }
 
@@ -380,7 +358,6 @@ function UtilitiesSchedulesPage() {
       return;
     }
 
-    setSelectedDayDate(null);
     notify.success(t("utilities.schedules.dayDetails.removeSuccess"));
   };
 
@@ -487,11 +464,6 @@ function UtilitiesSchedulesPage() {
   return (
     <>
       <section className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-lg font-medium">{t("utilities.schedules.title")}</h2>
-          <p className="text-sm text-muted-foreground">{t("utilities.schedules.subtitle")}</p>
-        </div>
-
         <MonthToolbar
           year={currentMonth.year}
           month={currentMonth.month}
@@ -512,102 +484,37 @@ function UtilitiesSchedulesPage() {
           canPrint={scheduleDays.length > 0}
         />
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users2 className="h-4 w-4" />
-                {t("utilities.schedules.departmentManagement.title")}
-              </CardTitle>
-              <CardDescription>
-                {areDepartmentsLoading
-                  ? t("utilities.schedules.loading.departments")
-                  : departmentCount > 0
-                    ? t("utilities.schedules.departmentManagement.description")
-                    : t("utilities.schedules.emptyStates.noDepartments")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{departmentCount}</div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 lg:grid-cols-[1fr_minmax(320px,380px)]">
+          <div className="min-w-0">
+            <MonthCalendar
+              year={currentMonth.year}
+              month={currentMonth.month}
+              locale={i18n.language}
+              scheduleDays={scheduleDays}
+              disabled={isBusy || isLoading}
+              onSelectDate={handleSelectDate}
+            />
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="h-4 w-4" />
-                {t("utilities.schedules.daySelection.title")}
-              </CardTitle>
-              <CardDescription>
-                {isMonthLoading
-                  ? t("utilities.schedules.loading.month")
-                  : selectedDayCount > 0
-                    ? t("utilities.schedules.daySelection.description")
-                    : t("utilities.schedules.emptyStates.noDays")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">
-                {t("utilities.schedules.daySelection.selectedDays", {
-                  count: selectedDayCount,
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                {t("utilities.schedules.responsibleDepartment.title")}
-              </CardTitle>
-              <CardDescription>
-                {t("utilities.schedules.responsibleDepartment.description")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground">
-                {selectedDayCount > 0
-                  ? t("utilities.schedules.dayDetails.openHint")
-                  : t("utilities.schedules.responsibleDepartment.none")}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("utilities.schedules.daySelection.title")}</CardTitle>
-            <CardDescription>
-              {isLoading
-                ? t("utilities.schedules.loading.month")
-                : t("utilities.schedules.daySelection.description")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <div className="rounded-md border border-dashed px-4 py-8 text-sm text-muted-foreground">
-                {t("utilities.schedules.loading.month")}
-              </div>
-            ) : (
-              <>
-                {selectedDayCount === 0 ? (
-                  <div className="rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground">
-                    {t("utilities.schedules.emptyStates.noDays")}
-                  </div>
-                ) : null}
-
-                <MonthCalendar
-                  year={currentMonth.year}
-                  month={currentMonth.month}
-                  locale={i18n.language}
-                  scheduleDays={scheduleDays}
-                  disabled={isBusy}
-                  onSelectDate={handleSelectDate}
-                />
-              </>
+            {!isLoading && selectedDayCount === 0 && (
+              <p className="mt-3 text-center text-sm text-muted-foreground">
+                {t("utilities.schedules.emptyStates.noDays")}
+              </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+
+          <aside className="min-h-[28rem] overflow-hidden rounded-xl border border-border/60 bg-surface/30 lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)] lg:self-start">
+            <DayDetailsPanel
+              locale={i18n.language}
+              scheduleDays={scheduleDays}
+              departments={departments ?? []}
+              disabled={isBusy}
+              onSaveDaySettings={handleSaveDaySettings}
+              onRemoveDay={handleRemoveDay}
+              onSaveDayDepartmentManual={handleSaveDayDepartmentManual}
+              onResetDayDepartmentGenerated={handleResetDayDepartmentGenerated}
+            />
+          </aside>
+        </div>
       </section>
 
       <DepartmentManagerDialog
@@ -624,23 +531,6 @@ function UtilitiesSchedulesPage() {
             void refreshAllScheduleData();
           }
         }}
-      />
-
-      <DayDetailsDialog
-        open={selectedDayDate !== null}
-        locale={i18n.language}
-        day={activeDay}
-        departments={departments ?? []}
-        disabled={isBusy}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedDayDate(null);
-          }
-        }}
-        onSaveDaySettings={handleSaveDaySettings}
-        onRemoveDay={handleRemoveDay}
-        onSaveDayDepartmentManual={handleSaveDayDepartmentManual}
-        onResetDayDepartmentGenerated={handleResetDayDepartmentGenerated}
       />
 
       <PrintPreviewDialog

@@ -30,8 +30,8 @@ export function DayCell({ cell, locale, scheduleDay, disabled, onSelect }: DayCe
       className={cn(
         "flex min-h-28 w-full cursor-pointer flex-col rounded-xl border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50",
         cell.inCurrentMonth
-          ? "border-border/80 bg-background shadow-sm hover:border-primary/40 hover:bg-primary/5"
-          : "border-border/50 bg-surface/50 text-muted-foreground",
+          ? "border-border bg-background shadow-sm hover:border-primary/40 hover:bg-primary/5"
+          : "border-transparent bg-surface/30 text-muted-foreground/40 opacity-40",
         isSelected && "border-primary/60 bg-gradient-to-br from-primary/12 to-primary/4 shadow-md",
       )}
     >

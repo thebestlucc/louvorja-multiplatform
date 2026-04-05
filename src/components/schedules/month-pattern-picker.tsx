@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Eraser, Sparkles } from "lucide-react";
-import { Button } from "../ui/button";
+import { Eraser } from "lucide-react";
+import { cn } from "../../lib/utils";
 import { getWeekdayPatternDates } from "../../lib/schedules";
 
 interface MonthPatternPickerProps {
@@ -31,43 +31,44 @@ export function MonthPatternPicker({
   const selectedDateSet = useMemo(() => new Set(selectedDates), [selectedDates]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5" />
-        <span>{t("utilities.schedules.patterns.title")}</span>
-      </div>
+    <div className="flex flex-col gap-0.5">
+      {patternDefinitions.map((pattern) => {
+        const patternDates = getWeekdayPatternDates(year, month, pattern.weekday);
+        const isActive = patternDates.length > 0
+          && patternDates.every((date) => selectedDateSet.has(date));
 
-      <div className="flex flex-wrap gap-2">
-        {patternDefinitions.map((pattern) => {
-          const patternDates = getWeekdayPatternDates(year, month, pattern.weekday);
-          const isActive = patternDates.length > 0
-            && patternDates.every((date) => selectedDateSet.has(date));
+        return (
+          <button
+            key={pattern.weekday}
+            type="button"
+            disabled={disabled}
+            onClick={() => onToggleWeekdayPattern(pattern.weekday)}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
+              "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              "disabled:pointer-events-none disabled:opacity-50",
+              isActive
+                ? "bg-primary/10 font-medium text-primary"
+                : "text-foreground",
+            )}
+          >
+            {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+            <span>{t(pattern.labelKey)}</span>
+          </button>
+        );
+      })}
 
-          return (
-            <Button
-              key={pattern.weekday}
-              type="button"
-              size="sm"
-              variant={isActive ? "default" : "outline"}
-              disabled={disabled}
-              onClick={() => onToggleWeekdayPattern(pattern.weekday)}
-            >
-              {t(pattern.labelKey)}
-            </Button>
-          );
-        })}
+      <div className="my-1 h-px bg-border/60" />
 
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={disabled || selectedDates.length === 0}
-          onClick={onClearSelection}
-        >
-          <Eraser className="mr-2 h-3.5 w-3.5" />
-          {t("utilities.schedules.patterns.clear")}
-        </Button>
-      </div>
+      <button
+        type="button"
+        disabled={disabled || selectedDates.length === 0}
+        onClick={onClearSelection}
+        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+      >
+        <Eraser className="h-3.5 w-3.5" />
+        <span>{t("utilities.schedules.patterns.clear")}</span>
+      </button>
     </div>
   );
 }
