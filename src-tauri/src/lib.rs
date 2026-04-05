@@ -1,5 +1,6 @@
 mod archive;
 mod audio;
+pub mod bible_builder;
 mod commands;
 mod content_sync;
 mod db;
@@ -299,7 +300,11 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_denylist(&["spotlight", "projector", "return", "identify"])
+                .build(),
+        )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -319,24 +324,38 @@ pub fn run() {
             let pool = db::init_db(&app_data_dir)
                 .map_err(|e| format!("Failed to initialize database: {e}"))?;
 
-            // Initialize dedicated bible.db — copy from bundled resource on first launch.
-            // In dev mode resource_dir() points to target/debug/ (no bundled resources),
-            // so we fall back to the resources/ folder next to Cargo.toml.
+            // Initialize dedicated bible.db.
+            // Platform installer hooks (NSIS, deb, rpm) generate bible.db during
+            // installation. On macOS/AppImage (no install hooks) or if the installer
+            // hook failed, generate on first launch from bundled .sqlite sources.
             let bible_db_path = app_data_dir.join("bible.db");
             if !bible_db_path.exists() {
-                let resource_path = if cfg!(debug_assertions) {
-                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/bible.db")
+                let resource_dir = if cfg!(debug_assertions) {
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources")
                 } else {
-                    app.path().resource_dir()?.join("bible.db")
+                    app.path().resource_dir()?
                 };
-                if resource_path.exists() {
+                // Linux deb/rpm postinst generates bible.db in the resource dir
+                let resource_bible_db = resource_dir.join("bible.db");
+                if resource_bible_db.exists() {
+                    eprintln!("[app] Copying bible.db from install directory...");
                     let tmp_path = bible_db_path.with_extension("db.tmp");
-                    std::fs::copy(&resource_path, &tmp_path)
-                        .map_err(|e| format!("Failed to copy bible.db from {}: {e}", resource_path.display()))?;
+                    std::fs::copy(&resource_bible_db, &tmp_path)
+                        .map_err(|e| format!("Failed to copy bible.db: {e}"))?;
                     std::fs::rename(&tmp_path, &bible_db_path)
                         .map_err(|e| format!("Failed to install bible.db: {e}"))?;
                 } else {
-                    eprintln!("[app] bible.db resource not found at {} — skipping copy, bible features will be unavailable", resource_path.display());
+                    // macOS / AppImage / fallback: generate from bundled .sqlite files
+                    let bible_source_dir = resource_dir.join("bible");
+                    if bible_source_dir.exists() {
+                        eprintln!("[app] Generating bible.db from bundled sources (first launch)...");
+                        match bible_builder::build_bible_db(&bible_source_dir, &bible_db_path) {
+                            Ok(_) => eprintln!("[app] bible.db generated successfully"),
+                            Err(e) => eprintln!("[app] Failed to generate bible.db: {e} — bible features will be unavailable"),
+                        }
+                    } else {
+                        eprintln!("[app] Bible source files not found at {} — bible features will be unavailable", bible_source_dir.display());
+                    }
                 }
             }
             let bible_pool = db::init_bible_db(&bible_db_path)
