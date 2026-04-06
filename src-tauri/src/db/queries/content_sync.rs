@@ -533,9 +533,9 @@ pub fn get_content_sync_run(
     .map_err(AppError::Database)
 }
 
-// TODO(review): Add debug_assert!(!pack_id.is_empty()) to catch empty pack_id in dev - Business Logic Reviewer, 2026-03-19, Severity: Low
 /// Returns the locally cached version for a pack, or 0 if unknown.
 pub fn get_pack_local_version(conn: &Connection, pack_id: &str) -> Result<u32, AppError> {
+    debug_assert!(!pack_id.is_empty(), "pack_id must not be empty");
     // TODO(review): local_version stored as SQLite INTEGER (signed i64) but read as u32; add CHECK (local_version >= 0) to schema in a future migration to enforce at DB level - Nil-Safety Reviewer, 2026-03-19, Severity: Low
     conn.query_row(
         "SELECT local_version FROM content_sync_packs WHERE pack_id = ?1",
@@ -548,9 +548,9 @@ pub fn get_pack_local_version(conn: &Connection, pack_id: &str) -> Result<u32, A
     })
 }
 
-// TODO(review): Add debug_assert!(!pack_id.is_empty()) to catch empty pack_id in dev - Business Logic Reviewer, 2026-03-19, Severity: Low
 /// Upsert the extracted version for a pack.
 pub fn set_pack_local_version(conn: &Connection, pack_id: &str, version: u32) -> Result<(), AppError> {
+    debug_assert!(!pack_id.is_empty(), "pack_id must not be empty");
     conn.execute(
         "INSERT INTO content_sync_packs (pack_id, local_version, extracted_at)
          VALUES (?1, ?2, datetime('now'))
