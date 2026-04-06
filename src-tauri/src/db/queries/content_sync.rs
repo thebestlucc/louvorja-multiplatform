@@ -762,6 +762,16 @@ pub fn open_content_db_pool(path: &Path) -> Result<Pool<SqliteConnectionManager>
         .map_err(|e| AppError::Internal(format!("Content DB pool error: {}", e)))
 }
 
+/// Creates indexes on `musics(number)` and `musics(title)` if the table exists.
+/// Non-fatal: failures are silently ignored so a missing or read-only `musics` table
+/// does not prevent the DB from being opened.
+pub fn ensure_content_db_indexes(conn: &Connection) {
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_musics_number ON musics(number);
+         CREATE INDEX IF NOT EXISTS idx_musics_title  ON musics(title);",
+    );
+}
+
 pub fn list_content_sync_runs(
     conn: &Connection,
     limit: usize,

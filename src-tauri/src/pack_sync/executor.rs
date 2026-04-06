@@ -530,6 +530,7 @@ pub fn execute_pack_sync(
                 match new_pool.get() {
                     Ok(content_conn) => {
                         let _ = content_sync::init_content_db_fts(&content_conn, lang);
+                        content_sync::ensure_content_db_indexes(&content_conn);
                     }
                     Err(e) => {
                         log::warn!("[pack-sync] FTS init failed for {}: {}", lang, e);

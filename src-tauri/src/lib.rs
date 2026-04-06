@@ -450,6 +450,7 @@ pub fn run() {
                                     {
                                         if let Ok(conn) = p.get() {
                                             let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
+                                            crate::db::queries::content_sync::ensure_content_db_indexes(&conn);
                                         }
                                         // Capabilities inserted before pool so any concurrent reader that sees the pool
                                         // will also find a capability entry. If this write fails, the pool is still inserted
