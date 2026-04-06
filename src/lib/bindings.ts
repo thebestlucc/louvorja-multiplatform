@@ -1392,6 +1392,14 @@ async clearManifestCache() : Promise<Result<null, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+async diagnosePackPaths() : Promise<Result<PackSyncDiagnostics, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("diagnose_pack_paths") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async validateYoutubeApiKey(key: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("validate_youtube_api_key", { key }) };
@@ -1575,6 +1583,11 @@ export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: str
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number | null; createdAt: string; updatedAt: string }
+/**
+ * Lightweight projection of a hymn for list/search rendering.
+ * Excludes lyrics, chords, notes, lyrics_sync, and timestamps
+ * to reduce IPC payload size on the hymnal search screen.
+ */
 export type HymnListItem = { id: number; number: number | null; title: string; author: string | null; album: string | null; coverPath: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; apiMusicId: number | null }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
 export type ImageFit = "contain" | "cover" | "fill"
@@ -1608,6 +1621,11 @@ export type OnlineVideo = { id: number; idPlaylist: number; videoId: string; seq
  */
 export type OnlineVideoPlaylist = { id: number; idChannel: number | null; playlistId: string; title: string | null; description: string | null; images: string | null; status: string; error: string | null; coverPath: string | null; channelTitle: string | null; videoCount: number | null; isCustom: boolean }
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
+/**
+ * Diagnostic: lists top-level dirs and a sample of files under app_data_dir.
+ * Helps verify that pack extraction placed files where resolve_hymn_paths expects.
+ */
+export type PackSyncDiagnostics = { appDataDir: string; topLevelEntries: string[]; sampleMusicFiles: string[]; sampleCoverFiles: string[]; contentDbSamplePaths: string[] }
 export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
 export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; availableLanguages: string[]; selectedLanguages: string[] }
 export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[]; language: string }
