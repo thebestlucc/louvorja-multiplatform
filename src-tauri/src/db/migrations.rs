@@ -1729,21 +1729,21 @@ fn migrate_v41(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
-fn migrate_v43(conn: &Connection) -> Result<(), AppError> {
-    conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS idx_hymns_category ON hymns(category);
-         CREATE INDEX IF NOT EXISTS idx_hymns_album ON hymns(album);
-         CREATE INDEX IF NOT EXISTS idx_collections_api_album_id ON collections(api_album_id);",
-    )?;
-    Ok(())
-}
-
 fn migrate_v42(conn: &Connection) -> Result<(), AppError> {
     add_column_if_missing(
         conn,
         "schedule_departments",
         "description",
         "TEXT",
+    )?;
+    Ok(())
+}
+
+fn migrate_v43(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_hymns_category_number ON hymns(category, number);
+         CREATE INDEX IF NOT EXISTS idx_hymns_album_category ON hymns(album, category);
+         CREATE INDEX IF NOT EXISTS idx_collections_api_album_id ON collections(api_album_id);",
     )?;
     Ok(())
 }
@@ -1780,7 +1780,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 36);
+        assert_eq!(schema_version, 43);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1868,6 +1868,26 @@ mod tests {
                 "cleaning".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn v43_indexes_created() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        run_migrations(&conn).expect("run migrations");
+        for idx_name in [
+            "idx_hymns_category_number",
+            "idx_hymns_album_category",
+            "idx_collections_api_album_id",
+        ] {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
+                    rusqlite::params![idx_name],
+                    |row| row.get(0),
+                )
+                .expect("index query");
+            assert_eq!(count, 1, "missing index {idx_name}");
+        }
     }
 
     // FIXME(nitpick): content_sync_packs_table_created_on_v33 duplicates the smoke test's assertion — consider merging or expanding to verify column schema instead - Test Reviewer, 2026-03-19, Severity: Cosmetic
