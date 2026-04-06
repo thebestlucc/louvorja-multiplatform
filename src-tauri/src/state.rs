@@ -201,12 +201,26 @@ pub struct YtdlpRuntimeState {
     pub cancel_flags: std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
+/// Cached schema capabilities for a content DB.
+/// Probed once at open time so per-search sqlite_master queries are eliminated.
+#[derive(Debug, Clone)]
+pub struct ContentDbCapabilities {
+    pub has_fts: bool,
+    pub has_lyrics_table: bool,
+    pub has_categories: bool,
+    pub has_time_column: bool,
+    pub has_instrumental_time_column: bool,
+}
+
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
     pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
     /// Content DBs keyed by BCP 47 language tag (e.g. "pt-BR").
     /// Populated on startup (scan for content-*.db) and after each content sync.
     pub content_dbs: Arc<RwLock<HashMap<String, Pool<SqliteConnectionManager>>>>,
+    /// Cached capabilities for each content DB, keyed by the same BCP 47 tag.
+    /// Populated alongside `content_dbs`; read-only after insertion.
+    pub content_db_capabilities: Arc<RwLock<HashMap<String, ContentDbCapabilities>>>,
     pub timer: RwLock<TimerRuntimeState>,
     pub migration: Mutex<MigrationRuntimeState>,
     pub pack_sync: Mutex<PackSyncRuntimeState>,

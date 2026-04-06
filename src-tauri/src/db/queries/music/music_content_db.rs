@@ -1,9 +1,10 @@
 use crate::error::AppError;
+use crate::state::ContentDbCapabilities;
 use rusqlite::params;
 
 /// Returns true if the `lyrics` table exists in the given content DB.
 /// Used to build SQL dynamically so that `prepare()` never references a missing table.
-fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
+pub(crate) fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
     conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lyrics'",
         [],
@@ -13,12 +14,91 @@ fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
     .unwrap_or(false)
 }
 
+/// Returns true if both `categories` and `categories_albums` tables exist in the content DB.
+pub(crate) fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
+    let has_categories = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    let has_cat_albums = content_db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories_albums'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    has_categories && has_cat_albums
+}
+
+/// Probe all schema capabilities of a content DB in a single pass.
+/// Called once at DB open time; result is cached in `AppState::content_db_capabilities`.
+pub fn probe_content_db_capabilities(conn: &rusqlite::Connection) -> ContentDbCapabilities {
+    let has_lyrics = lyrics_table_exists(conn);
+
+    let has_time = if has_lyrics {
+        conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('lyrics') WHERE name='time'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let has_instrumental_time = if has_lyrics {
+        conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('lyrics') WHERE name='instrumental_time'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let has_fts = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    let has_categories = categories_tables_exist(conn);
+
+    ContentDbCapabilities {
+        has_fts,
+        has_lyrics_table: has_lyrics,
+        has_categories,
+        has_time_column: has_time,
+        has_instrumental_time_column: has_instrumental_time,
+    }
+}
+
 /// Returns the SQL fragment for the lyrics column.
 /// When the `lyrics` table exists it returns the correlated GROUP_CONCAT subquery
 /// using the given parameter placeholder (e.g. `?1` or `?2`).
 /// When the table is absent it returns `NULL`, keeping the rest of the query unchanged.
-fn lyrics_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
-    if lyrics_table_exists(conn) {
+///
+/// Uses cached `caps` when provided; falls back to live sqlite_master probe otherwise.
+fn lyrics_subquery(
+    conn: &rusqlite::Connection,
+    lang_param: &str,
+    caps: Option<&ContentDbCapabilities>,
+) -> String {
+    let has_lyrics = caps
+        .map(|c| c.has_lyrics_table)
+        .unwrap_or_else(|| lyrics_table_exists(conn));
+    if has_lyrics {
         format!(
             "(SELECT GROUP_CONCAT(lyric, char(10) || char(10)) \
              FROM (SELECT lyric FROM lyrics WHERE id_music = m.id_music AND id_language = {lang_param} ORDER BY \"order\"))"
@@ -38,32 +118,24 @@ fn lyrics_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
 /// to match the `#[serde(rename_all = "camelCase")]` on `SyncLyric`.
 ///
 /// Falls back to `NULL` for older content DBs that lack timing columns.
-fn lyrics_sync_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String {
-    if !lyrics_table_exists(conn) {
+///
+/// Uses cached `caps` when provided; falls back to live pragma probes otherwise.
+fn lyrics_sync_subquery(
+    conn: &rusqlite::Connection,
+    lang_param: &str,
+    caps: Option<&ContentDbCapabilities>,
+) -> String {
+    let (has_lyrics, has_time, has_instrumental) = match caps {
+        Some(c) => (c.has_lyrics_table, c.has_time_column, c.has_instrumental_time_column),
+        None => {
+            let probe = probe_content_db_capabilities(conn);
+            (probe.has_lyrics_table, probe.has_time_column, probe.has_instrumental_time_column)
+        }
+    };
+
+    if !has_lyrics || !has_time {
         return "NULL".to_string();
     }
-
-    let has_time = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('lyrics') WHERE name='time'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|c| c > 0)
-        .unwrap_or(false);
-
-    if !has_time {
-        return "NULL".to_string();
-    }
-
-    let has_instrumental = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('lyrics') WHERE name='instrumental_time'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|c| c > 0)
-        .unwrap_or(false);
 
     let inst_field = if has_instrumental {
         "'instrumentalTime', instrumental_time"
@@ -94,27 +166,6 @@ fn lyrics_sync_subquery(conn: &rusqlite::Connection, lang_param: &str) -> String
     )
 }
 
-/// Returns true if both `categories` and `categories_albums` tables exist in the content DB.
-fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
-    let has_categories = content_db
-        .query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|c| c > 0)
-        .unwrap_or(false);
-    let has_cat_albums = content_db
-        .query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories_albums'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|c| c > 0)
-        .unwrap_or(false);
-    has_categories && has_cat_albums
-}
-
 /// Returns SQL fragments `(join_clause, where_extra)` to restrict musics to those whose
 /// album is categorised as `'hymnal'`.
 ///
@@ -124,8 +175,16 @@ fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
 ///   albums with no category entry (safe fallback within the same DB)
 ///
 /// When the tables don't exist both strings are empty, leaving the query unchanged.
-fn hymnal_category_filter(content_db: &rusqlite::Connection) -> (String, String) {
-    if categories_tables_exist(content_db) {
+///
+/// Uses cached `caps` when provided; falls back to live sqlite_master probe otherwise.
+fn hymnal_category_filter(
+    content_db: &rusqlite::Connection,
+    caps: Option<&ContentDbCapabilities>,
+) -> (String, String) {
+    let has_cats = caps
+        .map(|c| c.has_categories)
+        .unwrap_or_else(|| categories_tables_exist(content_db));
+    if has_cats {
         let join = "LEFT JOIN categories_albums ca \
                         ON ca.id_album = a.id_album AND ca.id_language = m.id_language\n\
                     LEFT JOIN categories cat ON cat.id_category = ca.id_category"
@@ -139,15 +198,17 @@ fn hymnal_category_filter(content_db: &rusqlite::Connection) -> (String, String)
 
 /// Query hymnal from the content DB (downloaded legacy DB).
 /// Returns Hymn structs with file paths ready for app_data_dir resolution.
+/// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
 pub fn get_hymns_from_content_db(
     content_db: &rusqlite::Connection,
     lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let lyrics_col = lyrics_subquery(content_db, "?1");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?1");
-    let (cat_join, cat_where) = hymnal_category_filter(content_db);
+    let lyrics_col = lyrics_subquery(content_db, "?1", caps);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?1", caps);
+    let (cat_join, cat_where) = hymnal_category_filter(content_db, caps);
 
     let sql = format!(
         "SELECT
@@ -215,14 +276,16 @@ pub fn get_hymns_from_content_db(
 
 /// Search hymnal in the content DB using FTS5 (musics_fts table).
 /// Falls back to `get_hymns_from_content_db` when query is empty or FTS table is missing.
+/// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
 pub fn search_hymns_content_db(
     content_db: &rusqlite::Connection,
     query: &str,
     lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
-        return get_hymns_from_content_db(content_db, lang_bcp47);
+        return get_hymns_from_content_db(content_db, lang_bcp47, caps);
     }
 
     use crate::db::queries::content_sync::bcp47_to_lang_code;
@@ -231,9 +294,9 @@ pub fn search_hymns_content_db(
     // If query is a pure number prefix, search by track number using LIKE (FTS5 doesn't index integers).
     if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
         let number_prefix = format!("{}%", trimmed);
-        let lyrics_col = lyrics_subquery(content_db, "?2");
-        let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
-        let (cat_join, cat_where) = hymnal_category_filter(content_db);
+        let lyrics_col = lyrics_subquery(content_db, "?2", caps);
+        let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", caps);
+        let (cat_join, cat_where) = hymnal_category_filter(content_db, caps);
         let sql = format!(
             "SELECT
                 m.id_music AS id, am.track AS number, m.name AS title,
@@ -301,26 +364,30 @@ pub fn search_hymns_content_db(
         .collect::<Vec<_>>()
         .join(" ");
     if fts_query.is_empty() {
-        return get_hymns_from_content_db(content_db, lang_bcp47);
+        return get_hymns_from_content_db(content_db, lang_bcp47, caps);
     }
 
-    // Check if FTS table exists
-    let fts_exists: bool = content_db
-        .query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|c| c > 0)
-        .unwrap_or(false);
+    // Check if FTS table exists — use cache when available.
+    let fts_exists = caps
+        .map(|c| c.has_fts)
+        .unwrap_or_else(|| {
+            content_db
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .map(|c| c > 0)
+                .unwrap_or(false)
+        });
 
     if !fts_exists {
-        return get_hymns_from_content_db(content_db, lang_bcp47);
+        return get_hymns_from_content_db(content_db, lang_bcp47, caps);
     }
 
-    let lyrics_col = lyrics_subquery(content_db, "?2");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
-    let (cat_join, cat_where) = hymnal_category_filter(content_db);
+    let lyrics_col = lyrics_subquery(content_db, "?2", caps);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", caps);
+    let (cat_join, cat_where) = hymnal_category_filter(content_db, caps);
 
     let sql = format!(
         "SELECT
@@ -385,14 +452,16 @@ pub fn search_hymns_content_db(
 
 /// Return ALL music from the content DB (no hymnal category filter).
 /// Used by `search_all_music` which spans all categories.
+/// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
 pub fn get_all_music_from_content_db(
     content_db: &rusqlite::Connection,
     lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let lyrics_col = lyrics_subquery(content_db, "?1");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?1");
+    let lyrics_col = lyrics_subquery(content_db, "?1", caps);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?1", caps);
 
     let sql = format!(
         "SELECT
@@ -458,14 +527,16 @@ pub fn get_all_music_from_content_db(
 
 /// Search ALL music in the content DB (no hymnal category filter).
 /// Falls back to `get_all_music_from_content_db` when query is empty or FTS table is missing.
+/// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
 pub fn search_all_music_content_db(
     content_db: &rusqlite::Connection,
     query: &str,
     lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
-        return get_all_music_from_content_db(content_db, lang_bcp47);
+        return get_all_music_from_content_db(content_db, lang_bcp47, caps);
     }
 
     use crate::db::queries::content_sync::bcp47_to_lang_code;
@@ -474,8 +545,8 @@ pub fn search_all_music_content_db(
     // Numeric prefix → search by track number
     if trimmed.chars().all(|c| c.is_ascii_digit()) {
         let number_prefix = format!("{}%", trimmed);
-        let lyrics_col = lyrics_subquery(content_db, "?2");
-        let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
+        let lyrics_col = lyrics_subquery(content_db, "?2", caps);
+        let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", caps);
         let sql = format!(
             "SELECT
                 m.id_music AS id, am.track AS number, m.name AS title,
@@ -541,24 +612,29 @@ pub fn search_all_music_content_db(
         .collect::<Vec<_>>()
         .join(" ");
     if fts_query.is_empty() {
-        return get_all_music_from_content_db(content_db, lang_bcp47);
+        return get_all_music_from_content_db(content_db, lang_bcp47, caps);
     }
 
-    let fts_exists: bool = content_db
-        .query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
-            [],
-            |r| r.get::<_, i64>(0),
-        )
-        .map(|c| c > 0)
-        .unwrap_or(false);
+    // Use cached FTS capability when available.
+    let fts_exists = caps
+        .map(|c| c.has_fts)
+        .unwrap_or_else(|| {
+            content_db
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .map(|c| c > 0)
+                .unwrap_or(false)
+        });
 
     if !fts_exists {
-        return get_all_music_from_content_db(content_db, lang_bcp47);
+        return get_all_music_from_content_db(content_db, lang_bcp47, caps);
     }
 
-    let lyrics_col = lyrics_subquery(content_db, "?2");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
+    let lyrics_col = lyrics_subquery(content_db, "?2", caps);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", caps);
 
     let sql = format!(
         "SELECT
@@ -748,8 +824,8 @@ pub fn get_collection_hymns_from_content_db(
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let lyrics_col = lyrics_subquery(content_db, "?2");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
+    let lyrics_col = lyrics_subquery(content_db, "?2", None);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", None);
 
     let sql = format!(
         "SELECT
@@ -816,8 +892,8 @@ pub fn get_hymn_by_id_from_content_db(
 ) -> Result<crate::db::models::Hymn, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let lyrics_col = lyrics_subquery(content_db, "?2");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
+    let lyrics_col = lyrics_subquery(content_db, "?2", None);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", None);
 
     let sql = format!(
         "SELECT
@@ -894,8 +970,8 @@ pub fn get_hymns_by_album_from_content_db(
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let lyrics_col = lyrics_subquery(content_db, "?2");
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2");
+    let lyrics_col = lyrics_subquery(content_db, "?2", None);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", None);
 
     let sql = format!(
         "SELECT
@@ -1189,7 +1265,7 @@ mod content_db_tests {
     fn get_hymns_from_content_db_returns_list() {
         let conn = make_content_db();
         seed_basic(&conn);
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         assert_eq!(hymns.len(), 1);
         assert_eq!(hymns[0].title, "Santo");
         assert_eq!(hymns[0].album.as_deref(), Some("1992 - Brilha Jesus"));
@@ -1198,7 +1274,7 @@ mod content_db_tests {
     #[test]
     fn get_hymns_from_content_db_empty_db() {
         let conn = make_content_db();
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         assert!(hymns.is_empty());
     }
 
@@ -1239,7 +1315,7 @@ mod content_db_tests {
     fn get_hymns_from_content_db_returns_lyrics() {
         let conn = make_content_db();
         seed_basic(&conn);
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         assert_eq!(hymns.len(), 1);
         let lyrics = hymns[0].lyrics.as_deref().expect("lyrics should be Some");
         assert!(
@@ -1305,7 +1381,7 @@ mod content_db_tests {
              INSERT INTO categories_albums VALUES (2, 2, 'pt');",
         ).unwrap();
 
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         // Only the hymnal item (id=1, 'Santo') should be returned; 'Musica Pop' is excluded
         assert_eq!(hymns.len(), 1, "expected 1 hymnal item, got {}: {:?}", hymns.len(), hymns.iter().map(|h| &h.title).collect::<Vec<_>>());
         assert_eq!(hymns[0].title, "Santo");
@@ -1322,7 +1398,7 @@ mod content_db_tests {
              INSERT INTO albums_musics VALUES (2, 2, 1);",
         ).unwrap();
 
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         // No category filter → both songs returned
         assert_eq!(hymns.len(), 2, "expected 2 hymns when categories tables absent, got {}", hymns.len());
     }
@@ -1331,7 +1407,7 @@ mod content_db_tests {
     fn get_hymns_from_content_db_paths_are_correctly_concatenated() {
         let conn = make_content_db();
         seed_basic(&conn);
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         assert_eq!(hymns.len(), 1);
         // Raw paths (before resolve) should be concatenated dir + '/' + name
         assert_eq!(hymns[0].audio_path.as_deref(), Some("/musics/pt/BrilhaJesus/song01.mp3"));
@@ -1443,7 +1519,7 @@ mod content_db_tests {
     fn get_hymns_from_content_db_returns_lyrics_sync_when_time_columns_exist() {
         let conn = make_content_db_with_sync();
         seed_with_sync(&conn);
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         assert_eq!(hymns.len(), 1);
         assert!(hymns[0].lyrics_sync.is_some(), "lyrics_sync must be populated when time columns exist");
     }
@@ -1453,7 +1529,7 @@ mod content_db_tests {
         // make_content_db() creates lyrics without time columns → lyrics_sync stays NULL
         let conn = make_content_db();
         seed_basic(&conn);
-        let hymns = get_hymns_from_content_db(&conn, "pt-BR").unwrap();
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
         assert_eq!(hymns.len(), 1);
         assert_eq!(hymns[0].lyrics_sync, None, "lyrics_sync must be None when lyrics table has no time column");
     }

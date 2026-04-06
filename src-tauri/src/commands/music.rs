@@ -1,7 +1,6 @@
 use crate::db::models::{Album, Hymn, HymnWriteInput};
 use crate::error::AppError;
-use crate::state::AppState;
-
+use crate::state::{AppState, ContentDbCapabilities};
 
 /// Gets a PooledConnection from content_dbs for the first selected language.
 /// Returns None if no content DB is available.
@@ -19,6 +18,31 @@ fn get_content_db_conn(
     drop(map); // release lock before .get()
     let pooled = pool.get().ok()?;
     Some((pooled, lang))
+}
+
+/// Like `get_content_db_conn` but also returns the cached `ContentDbCapabilities`.
+/// The capabilities are cloned out before the lock is released, so they can be
+/// passed into query functions without holding any lock.
+fn get_content_db_conn_with_caps(
+    state: &AppState,
+    conn: &rusqlite::Connection,
+) -> Option<(
+    r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    String,
+    Option<ContentDbCapabilities>,
+)> {
+    let langs = crate::db::queries::content_sync::get_selected_languages(conn);
+    let lang = langs.into_iter().next()?;
+    let map = state.content_dbs.read().ok()?;
+    let pool = map.get(&lang)?.clone();
+    drop(map);
+    let caps = state
+        .content_db_capabilities
+        .read()
+        .ok()
+        .and_then(|m| m.get(&lang).cloned());
+    let pooled = pool.get().ok()?;
+    Some((pooled, lang, caps))
 }
 
 fn resolve_hymn_paths(
@@ -77,9 +101,13 @@ pub fn search_hymns(
     use tauri::Manager;
     let conn = state.db.get()?;
 
-    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
-        let hymns =
-            crate::db::queries::music::search_hymns_content_db(&content_conn, &query, &lang)?;
+    if let Some((content_conn, lang, caps)) = get_content_db_conn_with_caps(&state, &conn) {
+        let hymns = crate::db::queries::music::search_hymns_content_db(
+            &content_conn,
+            &query,
+            &lang,
+            caps.as_ref(),
+        )?;
         let app_data = app
             .path()
             .app_data_dir()
@@ -101,9 +129,13 @@ pub fn search_all_hymns(
     use tauri::Manager;
     let conn = state.db.get()?;
 
-    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
-        let hymns =
-            crate::db::queries::music::search_hymns_content_db(&content_conn, &query, &lang)?;
+    if let Some((content_conn, lang, caps)) = get_content_db_conn_with_caps(&state, &conn) {
+        let hymns = crate::db::queries::music::search_hymns_content_db(
+            &content_conn,
+            &query,
+            &lang,
+            caps.as_ref(),
+        )?;
         let app_data = app
             .path()
             .app_data_dir()
@@ -125,9 +157,13 @@ pub fn search_all_music(
     use tauri::Manager;
     let conn = state.db.get()?;
 
-    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
-        let hymns =
-            crate::db::queries::music::search_all_music_content_db(&content_conn, &query, &lang)?;
+    if let Some((content_conn, lang, caps)) = get_content_db_conn_with_caps(&state, &conn) {
+        let hymns = crate::db::queries::music::search_all_music_content_db(
+            &content_conn,
+            &query,
+            &lang,
+            caps.as_ref(),
+        )?;
         let app_data = app
             .path()
             .app_data_dir()
