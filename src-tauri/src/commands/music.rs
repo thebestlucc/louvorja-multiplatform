@@ -322,7 +322,7 @@ pub fn delete_hymn(id: i64, state: tauri::State<'_, AppState>) -> Result<(), App
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use crate::db::models::Hymn;
+    use crate::db::models::{Hymn, HymnListItem};
 
     fn make_hymn(audio: Option<&str>, cover: Option<&str>, playback: Option<&str>) -> Hymn {
         Hymn {
@@ -373,6 +373,58 @@ mod tests {
         let app_dir = PathBuf::from("/app/data");
         let hymns = vec![make_hymn(None, None, None)];
         let resolved = super::resolve_hymn_paths(hymns, &app_dir);
+        assert_eq!(resolved[0].audio_path, None);
+        assert_eq!(resolved[0].cover_path, None);
+        assert_eq!(resolved[0].playback_path, None);
+    }
+
+    fn make_hymn_list_item(
+        audio: Option<&str>,
+        cover: Option<&str>,
+        playback: Option<&str>,
+    ) -> HymnListItem {
+        HymnListItem {
+            id: 1,
+            number: Some(1),
+            title: "Test".to_string(),
+            author: None,
+            album: None,
+            cover_path: cover.map(str::to_string),
+            audio_path: audio.map(str::to_string),
+            playback_path: playback.map(str::to_string),
+            category: Some("hymnal".to_string()),
+            api_music_id: None,
+        }
+    }
+
+    #[test]
+    fn resolve_hymn_list_paths_strips_leading_slash() {
+        let app_dir = PathBuf::from("/app/data");
+        let items = vec![make_hymn_list_item(
+            Some("/musics/pt/song.mp3"),
+            Some("/covers/brj.jpg"),
+            Some("/musics/pt/song_inst.mp3"),
+        )];
+        let resolved = super::resolve_hymn_list_paths(items, &app_dir);
+        assert_eq!(
+            resolved[0].audio_path.as_deref(),
+            Some("/app/data/musics/pt/song.mp3")
+        );
+        assert_eq!(
+            resolved[0].cover_path.as_deref(),
+            Some("/app/data/covers/brj.jpg")
+        );
+        assert_eq!(
+            resolved[0].playback_path.as_deref(),
+            Some("/app/data/musics/pt/song_inst.mp3")
+        );
+    }
+
+    #[test]
+    fn resolve_hymn_list_paths_none_paths_remain_none() {
+        let app_dir = PathBuf::from("/app/data");
+        let items = vec![make_hymn_list_item(None, None, None)];
+        let resolved = super::resolve_hymn_list_paths(items, &app_dir);
         assert_eq!(resolved[0].audio_path, None);
         assert_eq!(resolved[0].cover_path, None);
         assert_eq!(resolved[0].playback_path, None);

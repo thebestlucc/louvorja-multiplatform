@@ -104,6 +104,8 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
     Ok(hymns)
 }
 
+/// Private: content DB uses different column aliases, so each content DB query
+/// constructs HymnListItem inline rather than calling this function.
 fn map_hymn_list_row(row: &Row) -> Result<HymnListItem, rusqlite::Error> {
     Ok(HymnListItem {
         id: row.get("id")?,
@@ -504,6 +506,44 @@ pub fn delete_hymn(conn: &Connection, id: i64) -> Result<(), AppError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrations::run_migrations;
+
+    fn open_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn search_hymns_list_empty_returns_only_hymnal() {
+        let conn = open_db();
+        conn.execute_batch(
+            "INSERT INTO hymns (id, number, title, category) VALUES (1, 1, 'Santo', 'hymnal');
+             INSERT INTO hymns (id, number, title, category) VALUES (2, 2, 'Pop Song', 'general');"
+        ).unwrap();
+        let items = search_hymns_list(&conn, "").unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Santo");
+        assert_eq!(items[0].id, 1);
+    }
+
+    #[test]
+    fn search_hymns_list_numeric_prefix_matches_track() {
+        let conn = open_db();
+        conn.execute_batch(
+            "INSERT INTO hymns (id, number, title, category) VALUES (1, 1, 'Hymn One', 'hymnal');
+             INSERT INTO hymns (id, number, title, category) VALUES (2, 10, 'Hymn Ten', 'hymnal');
+             INSERT INTO hymns (id, number, title, category) VALUES (3, 2, 'Hymn Two', 'hymnal');"
+        ).unwrap();
+        let items = search_hymns_list(&conn, "1").unwrap();
+        // "1" matches track 1 and track 10 via LIKE '1%'
+        assert_eq!(items.len(), 2);
+    }
 }
 
 #[allow(dead_code)]

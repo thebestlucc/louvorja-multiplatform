@@ -1818,6 +1818,50 @@ mod content_db_tests {
         assert!(!caps.has_instrumental_time_column, "partial schema must not have instrumental_time column");
     }
 
+    // ── HymnListItem content DB tests ─────────────────────────────────
+
+    #[test]
+    fn get_hymns_list_from_content_db_returns_list_items() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let items = get_hymns_list_from_content_db(&conn, "pt-BR", None).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Santo");
+        assert_eq!(items[0].id, 1);
+        assert_eq!(items[0].audio_path.as_deref(), Some("/musics/pt/BrilhaJesus/song01.mp3"));
+        assert_eq!(items[0].cover_path.as_deref(), Some("/covers/brj.jpg"));
+        assert_eq!(items[0].category.as_deref(), Some("hymnal"));
+        assert_eq!(items[0].api_music_id, Some(1));
+    }
+
+    #[test]
+    fn search_hymns_list_content_db_empty_delegates_to_list() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        let list_items = get_hymns_list_from_content_db(&conn, "pt-BR", None).unwrap();
+        let search_items = search_hymns_list_content_db(&conn, "", "pt-BR", None).unwrap();
+        assert_eq!(list_items.len(), search_items.len());
+        assert_eq!(list_items[0].id, search_items[0].id);
+        assert_eq!(list_items[0].title, search_items[0].title);
+    }
+
+    #[test]
+    fn search_hymns_list_content_db_fts_absent_caps_falls_back() {
+        let conn = make_content_db();
+        seed_basic(&conn);
+        // caps claiming no FTS → fallback to full list, not Err
+        let caps = crate::state::ContentDbCapabilities {
+            has_fts: false,
+            has_lyrics_table: false,
+            has_categories: false,
+            has_time_column: false,
+            has_instrumental_time_column: false,
+        };
+        let items = search_hymns_list_content_db(&conn, "Santo", "pt-BR", Some(&caps)).unwrap();
+        // Falls back to get_hymns_list_from_content_db → returns all items
+        assert!(!items.is_empty(), "must fallback to list, not error");
+    }
+
     #[test]
     fn get_hymns_from_content_db_honours_cached_caps() {
         // Create a DB that HAS a lyrics table
