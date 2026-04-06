@@ -1743,6 +1743,8 @@ fn migrate_v43(conn: &Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_hymns_category_number ON hymns(category, number);
          CREATE INDEX IF NOT EXISTS idx_hymns_album_category ON hymns(album, category);
+         -- TODO(review): idx_collections_api_album_id indexes a column with no current WHERE-clause usage.
+         -- Retained as anticipatory index for planned sync-by-api_album_id queries. - business-logic-reviewer, 2026-04-06, Severity: Medium
          CREATE INDEX IF NOT EXISTS idx_collections_api_album_id ON collections(api_album_id);",
     )?;
     Ok(())
