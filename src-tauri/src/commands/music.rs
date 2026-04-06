@@ -2,25 +2,7 @@ use crate::db::models::{Album, Hymn, HymnWriteInput};
 use crate::error::AppError;
 use crate::state::{AppState, ContentDbCapabilities};
 
-/// Gets a PooledConnection from content_dbs for the first selected language.
-/// Returns None if no content DB is available.
-fn get_content_db_conn(
-    state: &AppState,
-    conn: &rusqlite::Connection,
-) -> Option<(
-    r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
-    String,
-)> {
-    let langs = crate::db::queries::content_sync::get_selected_languages(conn);
-    let lang = langs.into_iter().next()?;
-    let map = state.content_dbs.read().ok()?;
-    let pool = map.get(&lang)?.clone(); // clone pool before dropping lock
-    drop(map); // release lock before .get()
-    let pooled = pool.get().ok()?;
-    Some((pooled, lang))
-}
-
-/// Like `get_content_db_conn` but also returns the cached `ContentDbCapabilities`.
+/// Gets a PooledConnection from content_dbs for the first selected language,
 /// The capabilities are cloned out before the lock is released, so they can be
 /// passed into query functions without holding any lock.
 fn get_content_db_conn_with_caps(
@@ -201,7 +183,7 @@ pub fn get_hymn(
 #[specta::specta]
 pub fn get_albums(state: tauri::State<'_, AppState>) -> Result<Vec<Album>, AppError> {
     let conn = state.db.get()?;
-    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+    if let Some((content_conn, lang, _caps)) = get_content_db_conn_with_caps(&state, &conn) {
         return crate::db::queries::music::get_albums_from_content_db(&content_conn, &lang);
     }
     crate::db::queries::music::get_albums(&conn)
@@ -216,7 +198,6 @@ pub fn get_hymns_by_album(
 ) -> Result<Vec<Hymn>, AppError> {
     use tauri::Manager;
     let conn = state.db.get()?;
-    // TODO(review): Consolidate get_content_db_conn and get_content_db_conn_with_caps — duplicated pool lookup. - code-reviewer, 2026-04-06, Severity: Medium
     if let Some((content_conn, lang, caps)) = get_content_db_conn_with_caps(&state, &conn) {
         let hymns = crate::db::queries::music::get_hymns_by_album_from_content_db(
             &content_conn,
