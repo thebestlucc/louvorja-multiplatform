@@ -4,6 +4,7 @@ import { Search, LayoutGrid, List as ListIcon, Star } from "lucide-react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { useHymnsList, useFavoriteHymns } from "../../lib/queries";
+import type { Hymn, HymnListItem } from "../../lib/bindings";
 import { HymnCard } from "./hymn-card";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWindowSize } from "react-use";
@@ -36,7 +37,7 @@ export function HymnSearch() {
   const isLoading = showFavoritesOnly ? isFavoritesLoading : isSearchLoading;
 
   // Filter or select source based on toggle
-  const hymns = showFavoritesOnly
+  const hymns: (Hymn | HymnListItem)[] | undefined = showFavoritesOnly
     ? favoriteHymns
     : searchResults;
 
