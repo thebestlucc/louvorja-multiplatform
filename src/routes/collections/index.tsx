@@ -156,6 +156,7 @@ function CollectionsIndex() {
 
   const handleDeleteCollection = useCallback(async (id: number) => {
     await deleteMutation.mutateAsync(id);
+  // TODO(review): dep array should be [deleteMutation.mutateAsync] for correct granularity — reviewer, 2026-04-06, Severity: Low
   }, [deleteMutation]);
 
   const handleProjectCollection = useCallback(async (collection: Collection) => {

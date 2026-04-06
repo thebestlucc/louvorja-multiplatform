@@ -454,6 +454,21 @@ pub fn search_hymns_content_db(
     Ok(hymns)
 }
 
+fn map_hymn_list_content_row(row: &rusqlite::Row<'_>) -> Result<crate::db::models::HymnListItem, rusqlite::Error> {
+    Ok(crate::db::models::HymnListItem {
+        id: row.get("id")?,
+        number: row.get("number")?,
+        title: row.get("title")?,
+        author: row.get("author")?,
+        album: row.get("album")?,
+        cover_path: row.get("cover_path")?,
+        audio_path: row.get("audio_path")?,
+        playback_path: row.get("playback_path")?,
+        category: row.get("category")?,
+        api_music_id: row.get("api_music_id")?,
+    })
+}
+
 /// Lightweight list-only query for content DB hymns.
 /// Returns `HymnListItem` (no lyrics, chords, notes, sync, timestamps).
 fn get_hymns_list_from_content_db(
@@ -491,20 +506,7 @@ fn get_hymns_list_from_content_db(
 
     let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
     let items = stmt
-        .query_map([lang_short], |row| {
-            Ok(crate::db::models::HymnListItem {
-                id: row.get("id")?,
-                number: row.get("number")?,
-                title: row.get("title")?,
-                author: row.get("author")?,
-                album: row.get("album")?,
-                cover_path: row.get("cover_path")?,
-                audio_path: row.get("audio_path")?,
-                playback_path: row.get("playback_path")?,
-                category: row.get("category")?,
-                api_music_id: row.get("api_music_id")?,
-            })
-        })
+        .query_map([lang_short], map_hymn_list_content_row)
         .map_err(AppError::Database)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(AppError::Database)?;
@@ -554,20 +556,7 @@ pub fn search_hymns_list_content_db(
         );
         let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
         let items = stmt
-            .query_map(params![number_prefix, lang_short], |row| {
-                Ok(crate::db::models::HymnListItem {
-                    id: row.get("id")?,
-                    number: row.get("number")?,
-                    title: row.get("title")?,
-                    author: row.get("author")?,
-                    album: row.get("album")?,
-                    cover_path: row.get("cover_path")?,
-                    audio_path: row.get("audio_path")?,
-                    playback_path: row.get("playback_path")?,
-                    category: row.get("category")?,
-                    api_music_id: row.get("api_music_id")?,
-                })
-            })
+            .query_map(params![number_prefix, lang_short], map_hymn_list_content_row)
             .map_err(AppError::Database)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(AppError::Database)?;
@@ -633,20 +622,7 @@ pub fn search_hymns_list_content_db(
 
     let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
     let items = stmt
-        .query_map(params![fts_query, lang_short], |row| {
-            Ok(crate::db::models::HymnListItem {
-                id: row.get("id")?,
-                number: row.get("number")?,
-                title: row.get("title")?,
-                author: row.get("author")?,
-                album: row.get("album")?,
-                cover_path: row.get("cover_path")?,
-                audio_path: row.get("audio_path")?,
-                playback_path: row.get("playback_path")?,
-                category: row.get("category")?,
-                api_music_id: row.get("api_music_id")?,
-            })
-        })
+        .query_map(params![fts_query, lang_short], map_hymn_list_content_row)
         .map_err(AppError::Database)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(AppError::Database)?;
