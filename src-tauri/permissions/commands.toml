@@ -7,6 +7,7 @@ description = "Allows all music related commands"
 allow = [
     "get_hymn",
     "search_hymns",
+    "search_hymns_list",
     "search_all_hymns",
     "search_all_music",
     "get_albums",
@@ -302,6 +303,7 @@ description = "Minimal commands needed for spotlight search window"
 [permission.commands]
 allow = [
     "search_hymns",
+    "search_hymns_list",
     "search_all_hymns",
     "search_collections",
     "search_bible",
