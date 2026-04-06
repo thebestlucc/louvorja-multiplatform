@@ -635,11 +635,7 @@ pub fn set_monitor_config(
     role: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::settings::set_monitor_config(
         &conn,
         &MonitorConfig { id: 0, monitor_id, role, enabled: true },
@@ -730,10 +726,6 @@ pub fn identify_monitors(app: AppHandle) -> Result<(), AppError> {
 pub fn get_monitor_configs(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<MonitorConfig>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::settings::get_monitor_configs(&conn)
 }

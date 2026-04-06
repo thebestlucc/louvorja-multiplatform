@@ -127,11 +127,7 @@ pub fn open_media_folder(app: AppHandle) -> Result<(), AppError> {
 fn load_ffprobe_settings(
     state: &tauri::State<'_, AppState>,
 ) -> Result<(bool, Option<String>), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
 
     let enabled = crate::db::queries::settings::get_setting(&conn, "video.ffprobeEnabled")
         .ok()

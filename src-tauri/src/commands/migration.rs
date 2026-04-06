@@ -359,11 +359,7 @@ fn execute_domain_import(
 ) -> Result<crate::migration::MigrationDomainReport, AppError> {
     let cancel_flag = get_cancel_flag(app, run_id)?;
     let app_state = app.state::<AppState>();
-    let (target_conn, err) = catcher(app_state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut target_conn = target_conn.unwrap();
+    let mut target_conn = app_state.db.get()?;
 
     match domain {
         MigrationDomain::Hymns => import_hymns_domain(
