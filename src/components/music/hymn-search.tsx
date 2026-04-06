@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Search, LayoutGrid, List as ListIcon, Star } from "lucide-react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { useHymns, useFavoriteHymns } from "../../lib/queries";
+import { useHymnsList, useFavoriteHymns } from "../../lib/queries";
 import { HymnCard } from "./hymn-card";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWindowSize } from "react-use";
@@ -30,7 +30,7 @@ export function HymnSearch() {
 
   const debouncedQuery = useDebouncedValue(query, 300);
 
-  const { data: searchResults, isLoading: isSearchLoading } = useHymns(debouncedQuery, { enabled: !showFavoritesOnly });
+  const { data: searchResults, isLoading: isSearchLoading } = useHymnsList(debouncedQuery, { enabled: !showFavoritesOnly });
   const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(debouncedQuery, { enabled: showFavoritesOnly });
 
   const isLoading = showFavoritesOnly ? isFavoritesLoading : isSearchLoading;
