@@ -10,18 +10,29 @@ pub enum DownloadResult {
     Skipped,
 }
 
-/// Returns true if the local file already exists with the expected size.
-/// When `expected_size` is None, always returns false (force download).
-pub fn should_skip_download(local_path: &Path, expected_size: Option<u64>) -> bool {
-    // TODO(review): Size-only dedup has no integrity guarantee — a corrupted file of
-    // the same size will be considered valid. Future work: add SHA-256 verification.
-    // - security-reviewer, 2026-03-19, Severity: Low
+/// Returns true if the local file already exists with the expected size
+/// AND matches the expected SHA-256 hash (when provided).
+pub fn should_skip_download(
+    local_path: &Path,
+    expected_size: Option<u64>,
+    expected_sha256: Option<&str>,
+) -> bool {
     let Some(expected) = expected_size else {
         return false;
     };
-    match std::fs::metadata(local_path) {
-        Ok(meta) => meta.len() == expected,
-        Err(_) => false,
+    let meta = match std::fs::metadata(local_path) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    if meta.len() != expected {
+        return false;
+    }
+    // Size matches — verify hash if provided
+    match expected_sha256 {
+        Some(hash) if !hash.is_empty() => {
+            verify_sha256_file(local_path, hash).unwrap_or(false)
+        }
+        _ => true, // No hash provided, size-only check (backwards compatible)
     }
 }
 
@@ -90,7 +101,7 @@ async fn download_bytes_to_path(
     local_path: &Path,
     expected_size: Option<u64>,
 ) -> Result<DownloadResult, AppError> {
-    if should_skip_download(local_path, expected_size) {
+    if should_skip_download(local_path, expected_size, None) {
         return Ok(DownloadResult::Skipped);
     }
 
@@ -586,7 +597,7 @@ mod tests {
         f.write_all(&[0u8; 1024]).unwrap();
         drop(f);
 
-        let result = should_skip_download(&path, Some(1024));
+        let result = should_skip_download(&path, Some(1024), None);
         assert!(result, "Should skip when local size matches expected");
     }
 
@@ -594,7 +605,7 @@ mod tests {
     fn no_skip_when_file_missing() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("missing.mp3");
-        let result = should_skip_download(&path, Some(1024));
+        let result = should_skip_download(&path, Some(1024), None);
         assert!(!result, "Should not skip when file is missing");
     }
 
@@ -603,7 +614,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("partial.mp3");
         std::fs::write(&path, [0u8; 512]).unwrap();
-        let result = should_skip_download(&path, Some(1024));
+        let result = should_skip_download(&path, Some(1024), None);
         assert!(!result, "Should not skip when size differs");
     }
 
@@ -612,7 +623,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("existing.mp3");
         std::fs::write(&path, [0u8; 512]).unwrap();
-        let result = should_skip_download(&path, None);
+        let result = should_skip_download(&path, None, None);
         assert!(!result, "Should not skip when expected_size is None (force download)");
     }
 
