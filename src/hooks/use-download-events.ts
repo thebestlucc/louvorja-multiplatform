@@ -15,30 +15,41 @@ export function useDownloadEvents() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const unlistenPromise = listen<YtdlpProgressPayload>(
-      "ytdlp-progress",
-      (event) => {
-        const { videoId, percent, status } = event.payload;
-        const store = useDownloadStore.getState();
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
 
-        if (status === "downloading") {
-          store.updateProgress(videoId, percent);
-        } else {
-          // Read playlistId before removing from store
-          const download = store.downloads[videoId];
-          store.completeDownload(videoId);
+    listen<YtdlpProgressPayload>("ytdlp-progress", (event) => {
+      const { videoId, percent, status } = event.payload;
+      const store = useDownloadStore.getState();
 
-          if (download) {
-            queryClient.invalidateQueries({
-              queryKey: ["youtube", "videos", download.playlistId],
-            });
-          }
+      if (status === "downloading") {
+        store.updateProgress(videoId, percent);
+      } else {
+        // Read playlistId before removing from store
+        const download = store.downloads[videoId];
+        store.completeDownload(videoId);
+
+        if (download) {
+          queryClient.invalidateQueries({
+            queryKey: ["youtube", "videos", download.playlistId],
+          });
         }
-      },
-    );
+      }
+    })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch((err) => {
+        console.error("[download-events] Failed to register ytdlp-progress listener:", err);
+      });
 
     return () => {
-      unlistenPromise.then((fn) => fn());
+      cancelled = true;
+      unlisten?.();
     };
   }, [queryClient]);
 }
