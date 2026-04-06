@@ -207,7 +207,14 @@ pub fn clear_database(
         let mut map = state
             .content_dbs
             .write()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "[settings] content_dbs RwLock was poisoned (a background thread panicked \
+                     while holding it). Recovering: {}",
+                    e
+                );
+                e.into_inner()
+            });
         map.clear();
     }
 
