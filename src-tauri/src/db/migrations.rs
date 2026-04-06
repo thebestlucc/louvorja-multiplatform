@@ -1870,7 +1870,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_migration_chain_stepwise_reaches_v35() {
+    fn fresh_migration_chain_stepwise_reaches_v35() -> Result<(), AppError> {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
 
         for (version, migration) in [
@@ -1917,8 +1917,10 @@ mod tests {
             (41, migrate_v41),
             (42, migrate_v42),
         ] {
-            migration(&conn)
-                .unwrap_or_else(|error| panic!("migration v{version} failed: {error:?}"));
+            migration(&conn).map_err(|error| {
+                AppError::Internal(format!("migration v{version} failed: {error:?}"))
+            })?;
         }
+        Ok(())
     }
 }
