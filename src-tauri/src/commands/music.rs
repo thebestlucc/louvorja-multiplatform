@@ -18,6 +18,10 @@ fn get_content_db_conn_with_caps(
     let map = state.content_dbs.read().ok()?;
     let pool = map.get(&lang)?.clone();
     drop(map);
+    // Two separate lock acquisitions by design: holding both simultaneously risks ABBA deadlock.
+    // In the narrow window between the two reads, a concurrent hot-swap could yield the new pool
+    // with old caps — the caller receives caps = None and falls back to live sqlite_master probes.
+    // This is the correct graceful-degradation behavior.
     let caps = state
         .content_db_capabilities
         .read()

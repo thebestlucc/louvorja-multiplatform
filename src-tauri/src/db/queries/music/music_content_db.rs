@@ -275,6 +275,9 @@ pub fn get_hymns_from_content_db(
     Ok(hymns)
 }
 
+// TODO(test): Add cached-caps honour test for search functions (Some(caps) with lying has_fts).
+// Currently only get_hymns_from_content_db has a cache-honoring test. - test-reviewer, 2026-04-06, Severity: Medium
+
 /// Search hymnal in the content DB using FTS5 (musics_fts table).
 /// Falls back to `get_hymns_from_content_db` when query is empty or FTS table is missing.
 /// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
@@ -1012,6 +1015,10 @@ pub fn get_hymns_by_album_from_content_db(
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
 }
+
+// TODO(review): Add caps: Option<&ContentDbCapabilities> parameter to skip per-call sqlite_master
+// probes. Requires updating collections.rs caller and moving get_content_db_conn_with_caps to a
+// shared module. Tracked as scope extension beyond T2. - code-reviewer, 2026-04-06, Severity: Medium
 
 /// Search content DB albums and their hymns/lyrics, returning `CollectionSearchResult`s.
 ///
