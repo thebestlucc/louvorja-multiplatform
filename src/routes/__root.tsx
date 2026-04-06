@@ -288,18 +288,21 @@ function RootLayout() {
   // Listen for pack-sync-progress events
   useEffect(() => {
     if (isBareRoute) return;
-    const unlisten = listen<PackSyncProgress>("pack-sync-progress", (event) => {
-      setPackSyncProgress(event.payload);
-      const status = event.payload.status;
-      if (status === "completed" || status === "completed_with_errors" || status === "failed" || status === "cancelled") {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
-        // Content DB was hot-swapped — refetch hymn/collection/album data
-        void queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
-        void queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
-      }
-    });
+    const unlisten = safeListen(
+      listen<PackSyncProgress>("pack-sync-progress", (event) => {
+        setPackSyncProgress(event.payload);
+        const status = event.payload.status;
+        if (status === "completed" || status === "completed_with_errors" || status === "failed" || status === "cancelled") {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+          // Content DB was hot-swapped — refetch hymn/collection/album data
+          void queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
+          void queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
+        }
+      }),
+      "pack-sync-progress",
+    );
     return () => { void unlisten.then((fn) => fn()); };
   }, [isBareRoute, setPackSyncProgress, queryClient]);
 
