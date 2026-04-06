@@ -264,6 +264,11 @@ function RootLayout() {
       const status = event.payload.status;
       if (status === "completed" || status === "completed_with_errors" || status === "failed" || status === "cancelled") {
         void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+        // Content DB was hot-swapped — refetch hymn/collection/album data
+        void queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
+        void queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
       }
     });
     return () => { void unlisten.then((fn) => fn()); };

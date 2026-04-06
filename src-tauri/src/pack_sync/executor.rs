@@ -547,6 +547,9 @@ pub fn execute_pack_sync(
         }
     }
 
+    // Notify frontend that content data changed so TanStack Query caches are invalidated.
+    let _ = app.emit("data-changed", ());
+
     // ── Post-sync: Reset manifest cache so next plan_pack_sync re-fetches ───
     // Clear the in-memory flag so the next plan call hits CDN instead of stale cache.
     if let Ok(mut runtime) = state.pack_sync.lock() {
