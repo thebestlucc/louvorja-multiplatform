@@ -456,8 +456,10 @@ pub fn run() {
                                                 cap_map.insert(lang.clone(), caps);
                                             }
                                         }
-                                        state.content_dbs.write().unwrap().insert(lang, p);
-                                        loaded_any = true;
+                                        if let Ok(mut map) = state.content_dbs.write() {
+                                            map.insert(lang, p);
+                                            loaded_any = true;
+                                        }
                                     }
                                 }
                             }

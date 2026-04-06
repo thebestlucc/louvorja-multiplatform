@@ -216,11 +216,13 @@ pub fn get_hymns_by_album(
 ) -> Result<Vec<Hymn>, AppError> {
     use tauri::Manager;
     let conn = state.db.get()?;
-    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+    // TODO(review): Consolidate get_content_db_conn and get_content_db_conn_with_caps — duplicated pool lookup. - code-reviewer, 2026-04-06, Severity: Medium
+    if let Some((content_conn, lang, caps)) = get_content_db_conn_with_caps(&state, &conn) {
         let hymns = crate::db::queries::music::get_hymns_by_album_from_content_db(
             &content_conn,
             &album,
             &lang,
+            caps.as_ref(),
         )?;
         let app_data = app
             .path()
