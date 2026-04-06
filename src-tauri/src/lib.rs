@@ -371,6 +371,9 @@ pub fn run() {
                 content_dbs: std::sync::Arc::new(std::sync::RwLock::new(
                     std::collections::HashMap::new(),
                 )),
+                content_db_capabilities: std::sync::Arc::new(std::sync::RwLock::new(
+                    std::collections::HashMap::new(),
+                )),
                 timer: RwLock::new(TimerRuntimeState::default()),
                 migration: Mutex::new(crate::migration::MigrationRuntimeState::default()),
                 pack_sync: Mutex::new(crate::state::PackSyncRuntimeState::default()),
@@ -446,6 +449,12 @@ pub fn run() {
                                     {
                                         if let Ok(conn) = p.get() {
                                             let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
+                                        }
+                                        if let Ok(cap_conn) = p.get() {
+                                            let caps = crate::db::queries::music::probe_content_db_capabilities(&cap_conn);
+                                            if let Ok(mut cap_map) = state.content_db_capabilities.write() {
+                                                cap_map.insert(lang.clone(), caps);
+                                            }
                                         }
                                         state.content_dbs.write().unwrap().insert(lang, p);
                                         loaded_any = true;
