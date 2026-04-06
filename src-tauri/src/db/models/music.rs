@@ -24,6 +24,26 @@ pub struct Hymn {
     pub updated_at: String,
 }
 
+/// Lightweight projection of a hymn for list/search rendering.
+/// Excludes lyrics, chords, notes, lyrics_sync, and timestamps
+/// to reduce IPC payload size on the hymnal search screen.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HymnListItem {
+    #[specta(type = i32)]
+    pub id: i64,
+    pub number: Option<i64>,
+    pub title: String,
+    pub author: Option<String>,
+    pub album: Option<String>,
+    pub cover_path: Option<String>,
+    pub audio_path: Option<String>,
+    pub playback_path: Option<String>,
+    pub category: Option<String>,
+    #[specta(type = i32)]
+    pub api_music_id: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct HymnWriteInput {
