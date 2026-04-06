@@ -53,6 +53,17 @@ export const Route = createRootRoute({
 
 const BARE_ROUTES = ["/projector", "/return", "/spotlight", "/identify"];
 
+/** Wraps a listen() promise to log errors instead of swallowing them silently. */
+function safeListen(
+  promise: Promise<() => void>,
+  eventName: string,
+): Promise<() => void> {
+  return promise.catch((err) => {
+    console.error(`[root] Failed to register listener for "${eventName}":`, err);
+    return () => {};
+  });
+}
+
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isBareRoute = usesBareLayout(pathname);
@@ -111,12 +122,15 @@ function RootLayout() {
 
     window.addEventListener("storage", onStorage);
 
-    const unlistenPromise = listen<SettingChangedPayload>("setting-changed", (event) => {
-      if (event.payload.key !== "app.language") {
-        return;
-      }
-      applyLanguage(event.payload.value);
-    }).catch(() => () => {});
+    const unlistenPromise = safeListen(
+      listen<SettingChangedPayload>("setting-changed", (event) => {
+        if (event.payload.key !== "app.language") {
+          return;
+        }
+        applyLanguage(event.payload.value);
+      }),
+      "setting-changed",
+    );
 
     return () => {
       window.removeEventListener("storage", onStorage);
@@ -125,10 +139,13 @@ function RootLayout() {
   }, [setLanguage]);
 
   useEffect(() => {
-    const unlistenPromise = listen("monitors-changed", () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.monitors.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
-    }).catch(() => () => {});
+    const unlistenPromise = safeListen(
+      listen("monitors-changed", () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.monitors.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
+      }),
+      "monitors-changed",
+    );
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
@@ -136,14 +153,17 @@ function RootLayout() {
   }, [queryClient]);
 
   useEffect(() => {
-    const unlistenPromise = listen("data-changed", () => {
-      // Invalidate search results and album listings (content changed)
-      // Avoid invalidating ["hymns"] prefix which would also refetch per-hymn detail/audioPath queries
-      queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
-      queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
-    }).catch(() => () => {});
+    const unlistenPromise = safeListen(
+      listen("data-changed", () => {
+        // Invalidate search results and album listings (content changed)
+        // Avoid invalidating ["hymns"] prefix which would also refetch per-hymn detail/audioPath queries
+        queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
+        queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
+        queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
+      }),
+      "data-changed",
+    );
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
@@ -151,9 +171,12 @@ function RootLayout() {
   }, [queryClient]);
 
   useEffect(() => {
-    const unlistenPromise = listen("streaming-status-changed", () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
-    }).catch(() => () => {});
+    const unlistenPromise = safeListen(
+      listen("streaming-status-changed", () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
+      }),
+      "streaming-status-changed",
+    );
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
@@ -173,19 +196,25 @@ function RootLayout() {
   const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
 
   useEffect(() => {
-    const unlistenProgress = listen<ContentSyncProgress>("content-sync-progress", (event) => {
-      const store = useContentSyncStore.getState();
-      if (!store.runId || event.payload.runId === store.runId) {
-        setContentSyncProgress(event.payload);
-      }
-    }).catch(() => () => {});
+    const unlistenProgress = safeListen(
+      listen<ContentSyncProgress>("content-sync-progress", (event) => {
+        const store = useContentSyncStore.getState();
+        if (!store.runId || event.payload.runId === store.runId) {
+          setContentSyncProgress(event.payload);
+        }
+      }),
+      "content-sync-progress",
+    );
 
-    const unlistenReport = listen<ContentSyncReport>("content-sync-report", (event) => {
-      const store = useContentSyncStore.getState();
-      if (!store.runId || event.payload.runId === store.runId) {
-        setContentSyncReport(event.payload);
-      }
-    }).catch(() => () => {});
+    const unlistenReport = safeListen(
+      listen<ContentSyncReport>("content-sync-report", (event) => {
+        const store = useContentSyncStore.getState();
+        if (!store.runId || event.payload.runId === store.runId) {
+          setContentSyncReport(event.payload);
+        }
+      }),
+      "content-sync-report",
+    );
 
     return () => {
       unlistenProgress.then((unlisten) => unlisten());
@@ -327,9 +356,12 @@ function RootLayout() {
 
   // Spotlight: navigate to a route selected in the detached spotlight window
   useEffect(() => {
-    const unlistenPromise = listen<string>("spotlight-navigated", (event) => {
-      void router.navigate({ to: event.payload as never });
-    }).catch(() => () => {});
+    const unlistenPromise = safeListen(
+      listen<string>("spotlight-navigated", (event) => {
+        void router.navigate({ to: event.payload as never });
+      }),
+      "spotlight-navigated",
+    );
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
@@ -338,28 +370,31 @@ function RootLayout() {
 
   // Spotlight: execute an action selected in the detached spotlight window
   useEffect(() => {
-    const unlistenPromise = listen<string>("spotlight-action", (event) => {
-      switch (event.payload) {
-        case "toggle-projector":
-          void toggleProjectorRef.current();
-          break;
-        case "toggle-return":
-          void toggleReturnRef.current();
-          break;
-        case "toggle-black":
-          void toggleBlackScreenRef.current();
-          break;
-        case "toggle-logo":
-          void toggleLogoScreenRef.current();
-          break;
-        case "clear-projection":
-          void stopProjectionAndSongAudio();
-          break;
-        case "open-shortcuts":
-          openKeyboardShortcutsPanel();
-          break;
-      }
-    }).catch(() => () => {});
+    const unlistenPromise = safeListen(
+      listen<string>("spotlight-action", (event) => {
+        switch (event.payload) {
+          case "toggle-projector":
+            void toggleProjectorRef.current();
+            break;
+          case "toggle-return":
+            void toggleReturnRef.current();
+            break;
+          case "toggle-black":
+            void toggleBlackScreenRef.current();
+            break;
+          case "toggle-logo":
+            void toggleLogoScreenRef.current();
+            break;
+          case "clear-projection":
+            void stopProjectionAndSongAudio();
+            break;
+          case "open-shortcuts":
+            openKeyboardShortcutsPanel();
+            break;
+        }
+      }),
+      "spotlight-action",
+    );
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
