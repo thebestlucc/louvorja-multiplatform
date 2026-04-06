@@ -610,6 +610,14 @@ pub fn run() {
                             let _ = w.emit("return-state-changed", false);
                             let _ = w.close();
                         }
+                        if let Some(w) = app.get_webview_window("spotlight") {
+                            let _ = w.close();
+                        }
+                        for w in app.webview_windows().values() {
+                            if w.label().starts_with("identity") {
+                                let _ = w.close();
+                            }
+                        }
 
                         // server.stop() joins background threads — run off the event loop
                         // to avoid blocking the main thread on shutdown.
@@ -625,6 +633,7 @@ pub fn run() {
                                     server.stop();
                                 }
                             }
+                            app_for_shutdown.exit(0);
                         });
                     }
                     _ => {}

@@ -1,6 +1,7 @@
 use crate::db::models::{Album, Hymn, HymnListItem, HymnWriteInput};
 use crate::error::AppError;
 use crate::state::{AppState, ContentDbCapabilities};
+use crate::utils::paths::resolve_content_path;
 
 /// Gets a PooledConnection from content_dbs for the first selected language,
 /// The capabilities are cloned out before the lock is released, so they can be
@@ -35,43 +36,15 @@ fn resolve_hymn_paths(
     mut hymns: Vec<Hymn>,
     app_data_dir: &std::path::Path,
 ) -> Vec<Hymn> {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    static LOGGED_SAMPLE: AtomicBool = AtomicBool::new(false);
-
     for h in &mut hymns {
         if let Some(ref p) = h.audio_path {
-            let raw = p.clone();
-            h.audio_path = Some(
-                app_data_dir
-                    .join(p.trim_start_matches('/'))
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
-            // Log the first resolved path to help diagnose path mismatches
-            if !LOGGED_SAMPLE.swap(true, Ordering::Relaxed) {
-                let resolved = h.audio_path.as_deref().unwrap_or("");
-                let exists = std::path::Path::new(resolved).exists();
-                log::info!(
-                    "[resolve_hymn_paths] app_data_dir={:?} | raw={} | resolved={} | exists={}",
-                    app_data_dir, raw, resolved, exists
-                );
-            }
+            h.audio_path = Some(resolve_content_path(app_data_dir, p));
         }
         if let Some(ref p) = h.playback_path {
-            h.playback_path = Some(
-                app_data_dir
-                    .join(p.trim_start_matches('/'))
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
+            h.playback_path = Some(resolve_content_path(app_data_dir, p));
         }
         if let Some(ref p) = h.cover_path {
-            h.cover_path = Some(
-                app_data_dir
-                    .join(p.trim_start_matches('/'))
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
+            h.cover_path = Some(resolve_content_path(app_data_dir, p));
         }
     }
     hymns
@@ -83,28 +56,13 @@ fn resolve_hymn_list_paths(
 ) -> Vec<HymnListItem> {
     for h in &mut items {
         if let Some(ref p) = h.audio_path {
-            h.audio_path = Some(
-                app_data_dir
-                    .join(p.trim_start_matches('/'))
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
+            h.audio_path = Some(resolve_content_path(app_data_dir, p));
         }
         if let Some(ref p) = h.playback_path {
-            h.playback_path = Some(
-                app_data_dir
-                    .join(p.trim_start_matches('/'))
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
+            h.playback_path = Some(resolve_content_path(app_data_dir, p));
         }
         if let Some(ref p) = h.cover_path {
-            h.cover_path = Some(
-                app_data_dir
-                    .join(p.trim_start_matches('/'))
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
+            h.cover_path = Some(resolve_content_path(app_data_dir, p));
         }
     }
     items
