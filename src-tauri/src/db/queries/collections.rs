@@ -482,12 +482,16 @@ pub fn get_collections(conn: &Connection, query: Option<&str>) -> Result<Vec<Col
                     c.api_album_id,
                     c.created_at,
                     c.updated_at,
-                    (
-                        (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
-                        + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
-                    ) AS song_count
+                    COALESCE(sc.song_count, 0) AS song_count
              FROM collections c
              JOIN collections_fts fts ON fts.collection_id = c.id
+             LEFT JOIN (
+                 SELECT collection_id, SUM(cnt) AS song_count FROM (
+                     SELECT collection_id, COUNT(1) AS cnt FROM collection_songs GROUP BY collection_id
+                     UNION ALL
+                     SELECT collection_id, COUNT(1) AS cnt FROM collection_hymns GROUP BY collection_id
+                 ) GROUP BY collection_id
+             ) sc ON sc.collection_id = c.id
              WHERE fts.collections_fts MATCH ?1
              ORDER BY c.updated_at DESC, c.name ASC",
         )?;
@@ -508,12 +512,15 @@ pub fn get_collections(conn: &Connection, query: Option<&str>) -> Result<Vec<Col
                 c.api_album_id,
                 c.created_at,
                 c.updated_at,
-                (
-                    (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
-                    + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
-                ) AS song_count
-         FROM collections
-         AS c
+                COALESCE(sc.song_count, 0) AS song_count
+         FROM collections AS c
+         LEFT JOIN (
+             SELECT collection_id, SUM(cnt) AS song_count FROM (
+                 SELECT collection_id, COUNT(1) AS cnt FROM collection_songs GROUP BY collection_id
+                 UNION ALL
+                 SELECT collection_id, COUNT(1) AS cnt FROM collection_hymns GROUP BY collection_id
+             ) GROUP BY collection_id
+         ) sc ON sc.collection_id = c.id
          ORDER BY c.updated_at DESC, c.name ASC",
     )?;
     let rows = stmt
@@ -534,11 +541,15 @@ pub fn get_collection_by_id(conn: &Connection, id: i64) -> Result<Collection, Ap
                 c.api_album_id,
                 c.created_at,
                 c.updated_at,
-                (
-                    (SELECT COUNT(1) FROM collection_songs cs WHERE cs.collection_id = c.id)
-                    + (SELECT COUNT(1) FROM collection_hymns ch WHERE ch.collection_id = c.id)
-                ) AS song_count
+                COALESCE(sc.song_count, 0) AS song_count
          FROM collections AS c
+         LEFT JOIN (
+             SELECT collection_id, SUM(cnt) AS song_count FROM (
+                 SELECT collection_id, COUNT(1) AS cnt FROM collection_songs WHERE collection_id = ?1
+                 UNION ALL
+                 SELECT collection_id, COUNT(1) AS cnt FROM collection_hymns WHERE collection_id = ?1
+             ) GROUP BY collection_id
+         ) sc ON sc.collection_id = c.id
          WHERE c.id = ?1",
         params![id],
         map_collection_row,
