@@ -37,8 +37,11 @@ fn set_background_io_priority() {
     use windows_sys::Win32::System::Threading::{
         GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
     };
-    unsafe {
-        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN as i32);
+    let result = unsafe {
+        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN as i32)
+    };
+    if result == 0 {
+        log::warn!("[pack-sync] Failed to set background I/O priority (Windows)");
     }
 }
 
@@ -47,40 +50,49 @@ fn clear_background_io_priority() {
     use windows_sys::Win32::System::Threading::{
         GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_END,
     };
-    unsafe {
-        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END as i32);
+    let result = unsafe {
+        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END as i32)
+    };
+    if result == 0 {
+        log::warn!("[pack-sync] Failed to clear background I/O priority (Windows)");
     }
 }
 
 #[cfg(target_os = "linux")]
 fn set_background_io_priority() {
-    use ioprio::{BePriorityLevel, Class, Priority, Target};
-    let _ = ioprio::set_priority(
+    use ioprio::{Class, Priority, Target};
+    if let Err(e) = ioprio::set_priority(
         Target::Process(ioprio::Pid::this()),
         Priority::new(Class::Idle),
-    );
+    ) {
+        log::warn!("[pack-sync] Failed to set background I/O priority (Linux): {e}");
+    }
 }
 
 #[cfg(target_os = "linux")]
 fn clear_background_io_priority() {
     use ioprio::{BePriorityLevel, Class, Priority, Target};
-    let _ = ioprio::set_priority(
+    if let Err(e) = ioprio::set_priority(
         Target::Process(ioprio::Pid::this()),
         Priority::new(Class::BestEffort(BePriorityLevel::lowest())),
-    );
+    ) {
+        log::warn!("[pack-sync] Failed to clear background I/O priority (Linux): {e}");
+    }
 }
 
 #[cfg(target_os = "macos")]
 fn set_background_io_priority() {
-    unsafe {
-        libc::setpriority(libc::PRIO_PROCESS, 0, 19);
+    let result = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, 19) };
+    if result != 0 {
+        log::warn!("[pack-sync] Failed to set background I/O priority (macOS): errno={}", std::io::Error::last_os_error());
     }
 }
 
 #[cfg(target_os = "macos")]
 fn clear_background_io_priority() {
-    unsafe {
-        libc::setpriority(libc::PRIO_PROCESS, 0, 0);
+    let result = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, 0) };
+    if result != 0 {
+        log::warn!("[pack-sync] Failed to clear background I/O priority (macOS): errno={}", std::io::Error::last_os_error());
     }
 }
 
@@ -200,7 +212,13 @@ pub fn execute_pack_sync(
 
     // Shadow with the resolved items vec for the rest of the function.
     let total = plan_items.len();
-    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
+    let app_data_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            log::error!("[pack-sync] Failed to resolve app data directory: {e}");
+            return;
+        }
+    };
     log::info!("[pack-sync] Extraction target: {:?}", app_data_dir);
 
     // Initialize per-pack statuses.
