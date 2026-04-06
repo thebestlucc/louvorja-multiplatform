@@ -4,18 +4,13 @@ use crate::db::models::{
 };
 use crate::error::AppError;
 use crate::state::AppState;
-use crate::utils::catcher::catcher;
 
 #[tauri::command]
 #[specta::specta]
 pub fn list_schedule_departments(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ScheduleDepartment>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::list_schedule_departments(&conn)
 }
 
@@ -25,11 +20,7 @@ pub fn save_schedule_department(
     input: ScheduleDepartmentInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<ScheduleDepartment, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::upsert_schedule_department(&conn, &input)
 }
 
@@ -39,11 +30,7 @@ pub fn delete_schedule_department(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::delete_schedule_department(&conn, id)
 }
 
@@ -53,11 +40,7 @@ pub fn reorder_schedule_departments(
     department_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::reorder_schedule_departments(&conn, &department_ids)
 }
 
@@ -68,11 +51,7 @@ pub fn replace_schedule_department_members(
     members: Vec<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::replace_department_members(&conn, department_id, &members)
 }
 
@@ -83,11 +62,7 @@ pub fn get_schedule_month(
     month: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<ScheduleMonthDetail, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::get_schedule_month_detail(&conn, year, month)
 }
 
@@ -99,11 +74,7 @@ pub fn save_schedule_month_days(
     days: Vec<ScheduleDayInput>,
     state: tauri::State<'_, AppState>,
 ) -> Result<ScheduleMonthDetail, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let schedule_month =
         crate::db::queries::schedules::get_or_create_schedule_month(&conn, year, month)?;
     crate::db::queries::schedules::replace_schedule_month_days(&conn, schedule_month.id, &days)?;
@@ -116,11 +87,7 @@ pub fn generate_schedule_month(
     input: ScheduleGenerationRequest,
     state: tauri::State<'_, AppState>,
 ) -> Result<ScheduleMonthDetail, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::generate_schedule_month(
         &conn,
         input.year,
@@ -136,11 +103,7 @@ pub fn set_schedule_day_responsible_department(
     responsible_department_id: Option<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::set_schedule_day_responsible_department(
         &conn,
         schedule_day_id,
@@ -154,11 +117,7 @@ pub fn save_schedule_day_assignments(
     input: ScheduleAssignmentInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::save_day_assignments(
         &conn,
         input.schedule_day_department_id,
@@ -173,11 +132,7 @@ pub fn update_schedule_day_department_people_per_day(
     people_per_day: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::update_schedule_day_department_people_per_day(
         &conn,
         schedule_day_department_id,
@@ -191,11 +146,7 @@ pub fn reset_schedule_day_department_manual_override(
     schedule_day_department_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::schedules::reset_schedule_day_department_manual_override(
         &conn,
         schedule_day_department_id,

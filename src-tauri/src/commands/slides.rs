@@ -9,11 +9,7 @@ use tauri::{AppHandle, Manager};
 #[tauri::command]
 #[specta::specta]
 pub fn get_presentations(state: tauri::State<'_, AppState>) -> Result<Vec<Presentation>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::get_presentations(&conn)
 }
 
@@ -23,11 +19,7 @@ pub fn get_presentation(
     id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Presentation, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::get_presentation_by_id(&conn, id)
 }
 
@@ -38,11 +30,7 @@ pub fn create_presentation(
     aspect_ratio: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<Presentation, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let id = crate::db::queries::slides::insert_presentation(&conn, &title, &aspect_ratio)?;
     crate::db::queries::slides::get_presentation_by_id(&conn, id)
 }
@@ -55,22 +43,14 @@ pub fn update_presentation(
     aspect_ratio: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::update_presentation(&conn, id, &title, &aspect_ratio)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn delete_presentation(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::delete_presentation(&conn, id)
 }
 
@@ -80,11 +60,7 @@ pub fn get_slides(
     presentation_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Slide>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::get_slides(&conn, presentation_id)
 }
 
@@ -95,11 +71,7 @@ pub fn create_slide(
     content: SlideContent,
     state: tauri::State<'_, AppState>,
 ) -> Result<Slide, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let slide_count = crate::db::queries::slides::count_slides(&conn, presentation_id)?;
     crate::db::queries::slides::create_slide(&conn, presentation_id, slide_count as i32, &content)
 }
@@ -111,11 +83,7 @@ pub fn update_slide(
     content: SlideContent,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::update_slide_content(&conn, id, &content)
 }
 
@@ -126,11 +94,7 @@ pub fn update_slide_notes(
     notes: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::update_slide_notes(&conn, id, &notes)
 }
 
@@ -141,11 +105,7 @@ pub fn update_slide_transition(
     transition: TransitionConfig,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::slides::update_slide_transition(&conn, id, &transition)
 }
 
@@ -171,11 +131,7 @@ pub fn import_pptx(
         .unwrap_or("Imported Presentation")
         .to_string();
 
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
 
     let pres_id = crate::db::queries::slides::insert_presentation(&conn, &title, "16:9")?;
 
@@ -200,11 +156,7 @@ pub fn export_pptx(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
 
     let presentation = crate::db::queries::slides::get_presentation_by_id(&conn, presentation_id)?;
     let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;
@@ -234,11 +186,7 @@ pub fn export_pptx(
 #[tauri::command]
 #[specta::specta]
 pub fn delete_slide(id: i64, state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut conn = conn.unwrap();
+    let mut conn = state.db.get()?;
     crate::db::queries::slides::delete_slide(&mut conn, id)
 }
 
@@ -249,11 +197,7 @@ pub fn reorder_slides(
     slide_ids: Vec<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut conn = conn.unwrap();
+    let mut conn = state.db.get()?;
     crate::db::queries::slides::update_slide_orders(&mut conn, presentation_id, &slide_ids)
 }
 
@@ -287,11 +231,7 @@ pub fn import_slja(
         }
     }
 
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let pres_id = crate::db::queries::slides::insert_presentation(
         &conn,
         &archive.manifest.title,
@@ -321,11 +261,7 @@ pub fn export_slja(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     let presentation = crate::db::queries::slides::get_presentation_by_id(&conn, presentation_id)?;
     let slides = crate::db::queries::slides::get_slides(&conn, presentation_id)?;
     let app_data_dir = app

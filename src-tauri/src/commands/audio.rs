@@ -391,11 +391,7 @@ pub fn get_sync_points(
     hymn_id: i64,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<SyncPoint>, AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let conn = conn.unwrap();
+    let conn = state.db.get()?;
     crate::db::queries::music::get_sync_points(&conn, hymn_id)
 }
 
@@ -406,11 +402,7 @@ pub fn save_sync_points(
     points: Vec<SyncPoint>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (conn, err) = catcher(state.db.get());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut conn = conn.unwrap();
+    let mut conn = state.db.get()?;
     crate::db::queries::music::save_sync_points(&mut conn, hymn_id, &points)
 }
 
