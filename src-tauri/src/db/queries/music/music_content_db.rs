@@ -4,7 +4,7 @@ use rusqlite::params;
 
 /// Returns true if the `lyrics` table exists in the given content DB.
 /// Used to build SQL dynamically so that `prepare()` never references a missing table.
-pub(crate) fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
+fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
     conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lyrics'",
         [],
@@ -15,7 +15,7 @@ pub(crate) fn lyrics_table_exists(conn: &rusqlite::Connection) -> bool {
 }
 
 /// Returns true if both `categories` and `categories_albums` tables exist in the content DB.
-pub(crate) fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
+fn categories_tables_exist(content_db: &rusqlite::Connection) -> bool {
     let has_categories = content_db
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='categories'",
@@ -125,7 +125,7 @@ fn lyrics_sync_subquery(
     lang_param: &str,
     caps: Option<&ContentDbCapabilities>,
 ) -> String {
-    // TODO(review): None fallback re-probes schema (3 queries). Only used by detail functions which are not hot-path. - business-logic-reviewer, 2026-04-06, Severity: Medium
+    // None fallback re-probes schema (3 queries). Intentional: detail functions are not hot-path.
     let (has_lyrics, has_time, has_instrumental) = match caps {
         Some(c) => (c.has_lyrics_table, c.has_time_column, c.has_instrumental_time_column),
         None => {

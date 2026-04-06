@@ -499,11 +499,16 @@ pub fn execute_pack_sync(
             continue;
         }
 
-        // Step 1: Remove old pool from state (releases file handles on Windows)
+        // Step 1: Remove old pool AND old caps from state (releases file handles on Windows).
+        // Caps are removed alongside the pool so no concurrent reader encounters
+        // (pool gone, stale caps still present).
         {
             // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
             let mut content_dbs = state.content_dbs.write().unwrap();
             content_dbs.remove(lang);
+        }
+        if let Ok(mut cap_map) = state.content_db_capabilities.write() {
+            cap_map.remove(lang);
         }
 
         // Step 2: Rename tmp -> dest (now safe on Windows since pool is dropped)
@@ -530,20 +535,20 @@ pub fn execute_pack_sync(
                         log::warn!("[pack-sync] FTS init failed for {}: {}", lang, e);
                     }
                 }
-                // Step 4: Hot-swap in AppState
-                {
-                    // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
-                    let mut content_dbs = state.content_dbs.write().unwrap();
-                    content_dbs.insert(lang.clone(), new_pool.clone());
-                }
-                // Step 4b: Refresh capability cache for this language so subsequent queries
-                // use the new DB's schema. Separate lock from Step 4 — if this write fails,
-                // callers degrade gracefully to live schema probes.
+                // Step 4: Probe capabilities from new pool before inserting it into content_dbs.
+                // Mirrors startup ordering invariant: caps inserted before pool so any concurrent
+                // reader that sees the pool will already find a capability entry.
                 if let Ok(cap_conn) = new_pool.get() {
                     let caps = crate::db::queries::music::probe_content_db_capabilities(&cap_conn);
                     if let Ok(mut cap_map) = state.content_db_capabilities.write() {
                         cap_map.insert(lang.clone(), caps);
                     }
+                }
+                // Step 4b: Insert new pool into content_dbs (caps are already up-to-date).
+                {
+                    // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
+                    let mut content_dbs = state.content_dbs.write().unwrap();
+                    content_dbs.insert(lang.clone(), new_pool.clone());
                 }
                 // Record the DB version so the planner knows it's current
                 let _ = settings::set_setting(
