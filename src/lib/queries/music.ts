@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   searchHymns,
+  searchHymnsList,
   searchAllHymns,
   searchAllMusic,
   getHymn,
@@ -21,6 +22,15 @@ export function useHymns(query: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.hymns.search(query),
     queryFn: () => searchHymns(query),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+  });
+}
+
+export function useHymnsList(query: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.hymns.search(query),
+    queryFn: () => searchHymnsList(query),
     enabled: options?.enabled ?? true,
     staleTime: 30_000,
   });

@@ -22,6 +22,14 @@ async searchHymns(query: string) : Promise<Result<Hymn[], AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+async searchHymnsList(query: string) : Promise<Result<HymnListItem[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_hymns_list", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async searchAllHymns(query: string) : Promise<Result<Hymn[], AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("search_all_hymns", { query }) };
@@ -1567,6 +1575,7 @@ export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: str
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number; createdAt: string; updatedAt: string }
+export type HymnListItem = { id: number; number: number | null; title: string; author: string | null; album: string | null; coverPath: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; apiMusicId: number }
 export type HymnWriteInput = { number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null }
 export type ImageFit = "contain" | "cover" | "fill"
 export type Liturgy = { id: number; title: string; date: string | null; notes: string | null; createdAt: string; updatedAt: string; itemCount: number; hymnCount: number; weekDay: number | null }

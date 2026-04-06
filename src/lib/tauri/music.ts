@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Hymn, Album, HymnWriteInput } from "../bindings";
+import type { Hymn, HymnListItem, Album, HymnWriteInput } from "../bindings";
 
 export async function tauriInvoke<T>(
   command: string,
@@ -11,6 +11,10 @@ export async function tauriInvoke<T>(
 // Music
 export async function searchHymns(query: string): Promise<Hymn[]> {
   return tauriInvoke<Hymn[]>("search_hymns", { query });
+}
+
+export async function searchHymnsList(query: string): Promise<HymnListItem[]> {
+  return tauriInvoke<HymnListItem[]>("search_hymns_list", { query });
 }
 
 export async function searchAllHymns(query: string): Promise<Hymn[]> {
