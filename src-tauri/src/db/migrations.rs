@@ -241,6 +241,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (42)", [])?;
     }
 
+    if current_version < 43 {
+        migrate_v43(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (43)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1724,6 +1729,15 @@ fn migrate_v41(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+fn migrate_v43(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_hymns_category ON hymns(category);
+         CREATE INDEX IF NOT EXISTS idx_hymns_album ON hymns(album);
+         CREATE INDEX IF NOT EXISTS idx_collections_api_album_id ON collections(api_album_id);",
+    )?;
+    Ok(())
+}
+
 fn migrate_v42(conn: &Connection) -> Result<(), AppError> {
     add_column_if_missing(
         conn,
@@ -1916,6 +1930,7 @@ mod tests {
             (40, migrate_v40),
             (41, migrate_v41),
             (42, migrate_v42),
+            (43, migrate_v43),
         ] {
             migration(&conn).map_err(|error| {
                 AppError::Internal(format!("migration v{version} failed: {error:?}"))
