@@ -424,6 +424,7 @@ pub fn run() {
                 std::thread::spawn(move || {
                     // Startup scan: open existing content-*.db files
                     let state = bg_handle.state::<AppState>();
+                    let mut loaded_any = false;
                     if let Ok(entries) = std::fs::read_dir(&bg_app_data_dir) {
                         for entry in entries.flatten() {
                             let path = entry.path();
@@ -447,10 +448,16 @@ pub fn run() {
                                             let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
                                         }
                                         state.content_dbs.write().unwrap().insert(lang, p);
+                                        loaded_any = true;
                                     }
                                 }
                             }
                         }
+                    }
+                    // Notify frontend so it refetches hymn/collection queries
+                    // that may have returned empty before DBs were ready.
+                    if loaded_any {
+                        let _ = bg_handle.emit("data-changed", ());
                     }
 
                     // Register global shortcuts from settings
