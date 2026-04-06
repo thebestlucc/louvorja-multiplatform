@@ -1,7 +1,6 @@
 use crate::db::models::{Presentation, Slide, SlideContent, TransitionConfig};
 use crate::error::AppError;
 use crate::state::AppState;
-use crate::utils::catcher::catcher;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use tauri::{AppHandle, Manager};
@@ -343,11 +342,7 @@ fn collect_video_media_files(
 }
 
 fn extract_video_path_from_content(content_json: &str) -> Option<String> {
-    let (value, err) = catcher(serde_json::from_str::<serde_json::Value>(content_json));
-    if err.is_some() {
-        return None;
-    }
-    let value = value.unwrap();
+    let value = serde_json::from_str::<serde_json::Value>(content_json).ok()?;
     let slide_type = value.get("type")?.as_str()?;
     if slide_type != "video" {
         return None;
@@ -369,11 +364,10 @@ fn remap_video_paths_in_content(
     content_json: &str,
     media_map: &HashMap<String, String>,
 ) -> Result<String, AppError> {
-    let (value, err) = catcher(serde_json::from_str::<serde_json::Value>(content_json));
-    if err.is_some() {
-        return Ok(content_json.to_string());
-    }
-    let mut value = value.unwrap();
+    let mut value = match serde_json::from_str::<serde_json::Value>(content_json) {
+        Ok(v) => v,
+        Err(_) => return Ok(content_json.to_string()),
+    };
 
     let slide_type = value
         .get("type")
