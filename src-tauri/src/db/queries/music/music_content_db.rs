@@ -125,6 +125,7 @@ fn lyrics_sync_subquery(
     lang_param: &str,
     caps: Option<&ContentDbCapabilities>,
 ) -> String {
+    // TODO(review): None fallback re-probes schema (3 queries). Only used by detail functions which are not hot-path. - business-logic-reviewer, 2026-04-06, Severity: Medium
     let (has_lyrics, has_time, has_instrumental) = match caps {
         Some(c) => (c.has_lyrics_table, c.has_time_column, c.has_instrumental_time_column),
         None => {
@@ -963,15 +964,17 @@ pub fn get_albums_from_content_db(
 }
 
 /// Returns hymns belonging to the named album from the content DB.
+/// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
 pub fn get_hymns_by_album_from_content_db(
     content_db: &rusqlite::Connection,
     album: &str,
     lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
-    let lyrics_col = lyrics_subquery(content_db, "?2", None);
-    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", None);
+    let lyrics_col = lyrics_subquery(content_db, "?2", caps);
+    let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", caps);
 
     let sql = format!(
         "SELECT
@@ -1247,7 +1250,7 @@ mod content_db_tests {
     fn get_hymns_by_album_from_content_db_returns_hymns() {
         let conn = make_content_db();
         seed_basic(&conn);
-        let hymns = get_hymns_by_album_from_content_db(&conn, "1992 - Brilha Jesus", "pt-BR").unwrap();
+        let hymns = get_hymns_by_album_from_content_db(&conn, "1992 - Brilha Jesus", "pt-BR", None).unwrap();
         assert_eq!(hymns.len(), 1);
         assert_eq!(hymns[0].title, "Santo");
         assert_eq!(hymns[0].number, Some(1));
@@ -1257,7 +1260,7 @@ mod content_db_tests {
     fn get_hymns_by_album_from_content_db_empty_for_unknown_album() {
         let conn = make_content_db();
         seed_basic(&conn);
-        let hymns = get_hymns_by_album_from_content_db(&conn, "Unknown Album", "pt-BR").unwrap();
+        let hymns = get_hymns_by_album_from_content_db(&conn, "Unknown Album", "pt-BR", None).unwrap();
         assert!(hymns.is_empty());
     }
 
@@ -1541,5 +1544,68 @@ mod content_db_tests {
         let hymns = get_collection_hymns_from_content_db(&conn, 1, "pt-BR").unwrap();
         assert_eq!(hymns.len(), 1);
         assert!(hymns[0].lyrics_sync.is_some(), "collection hymns must carry lyrics_sync");
+    }
+
+    // ── probe_content_db_capabilities tests ─────────────────────────────────
+
+    #[test]
+    fn probe_capabilities_bare_db() {
+        // In-memory DB with no tables at all → all fields false
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let caps = probe_content_db_capabilities(&conn);
+        assert!(!caps.has_fts, "bare DB must not have FTS");
+        assert!(!caps.has_lyrics_table, "bare DB must not have lyrics table");
+        assert!(!caps.has_categories, "bare DB must not have categories");
+        assert!(!caps.has_time_column, "bare DB must not have time column");
+        assert!(!caps.has_instrumental_time_column, "bare DB must not have instrumental_time column");
+    }
+
+    #[test]
+    fn probe_capabilities_full_schema() {
+        // DB with all optional tables and columns → all fields true
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE VIRTUAL TABLE musics_fts USING fts5(name);
+             CREATE TABLE lyrics (
+                id_lyric INTEGER PRIMARY KEY,
+                id_music INTEGER,
+                lyric TEXT,
+                \"order\" INTEGER,
+                show_slide INTEGER,
+                id_language TEXT,
+                time TEXT,
+                instrumental_time TEXT
+             );
+             CREATE TABLE categories (id_category INTEGER PRIMARY KEY, slug TEXT);
+             CREATE TABLE categories_albums (id_category INTEGER, id_album INTEGER, id_language TEXT);",
+        ).unwrap();
+        let caps = probe_content_db_capabilities(&conn);
+        assert!(caps.has_fts, "full schema must have FTS");
+        assert!(caps.has_lyrics_table, "full schema must have lyrics table");
+        assert!(caps.has_categories, "full schema must have categories");
+        assert!(caps.has_time_column, "full schema must have time column");
+        assert!(caps.has_instrumental_time_column, "full schema must have instrumental_time column");
+    }
+
+    #[test]
+    fn probe_capabilities_partial_schema() {
+        // DB with only the lyrics table (no time columns, no FTS, no categories) → partial
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE lyrics (
+                id_lyric INTEGER PRIMARY KEY,
+                id_music INTEGER,
+                lyric TEXT,
+                \"order\" INTEGER,
+                show_slide INTEGER,
+                id_language TEXT
+             );",
+        ).unwrap();
+        let caps = probe_content_db_capabilities(&conn);
+        assert!(!caps.has_fts, "partial schema must not have FTS");
+        assert!(caps.has_lyrics_table, "partial schema must have lyrics table");
+        assert!(!caps.has_categories, "partial schema must not have categories");
+        assert!(!caps.has_time_column, "partial schema must not have time column (no time column in lyrics)");
+        assert!(!caps.has_instrumental_time_column, "partial schema must not have instrumental_time column");
     }
 }

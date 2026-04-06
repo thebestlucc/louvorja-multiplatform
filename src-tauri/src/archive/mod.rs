@@ -573,11 +573,20 @@ mod archive_media_tests {
     use super::{extract_media_paths, unique_archive_name};
     use crate::db::models::slides::SlideContent;
 
+    use crate::db::models::slides::{BackgroundConfig, BackgroundKind, VideoMode};
+
     fn bg_content(path: &str) -> SlideContent {
-        SlideContent {
-            slide_type: "cover".into(),
-            background_image: Some(path.to_string()),
-            ..Default::default()
+        SlideContent::Cover {
+            title: String::new(),
+            subtitle: None,
+            label: None,
+            background: BackgroundConfig {
+                kind: BackgroundKind::Image,
+                image_path: Some(path.to_string()),
+                ..Default::default()
+            },
+            text_color: None,
+            text_size: None,
         }
     }
 
@@ -595,21 +604,30 @@ mod archive_media_tests {
 
     #[test]
     fn test_extract_null_excluded() {
-        let paths = extract_media_paths(&SlideContent::default());
+        let content = SlideContent::Text {
+            content: String::new(),
+            background: BackgroundConfig::default(),
+            text_color: None,
+            text_size: None,
+        };
+        let paths = extract_media_paths(&content);
         assert!(paths.is_empty());
     }
 
     #[test]
     fn test_extract_multiple_fields() {
-        let content = SlideContent {
-            slide_type: "video".into(),
-            background_image: Some("/abs/bg.jpg".into()),
-            video_path: Some("/abs/clip.mp4".into()),
-            ..Default::default()
+        let content = SlideContent::Video {
+            path: "/abs/clip.mp4".into(),
+            auto_play: false,
+            loop_video: false,
+            muted: false,
+            mode: VideoMode::default(),
+            overlay_text: None,
+            audio_path: None,
         };
+        // Video variant only has path, not background_image — test just video_path
         let paths = extract_media_paths(&content);
-        assert_eq!(paths.len(), 2);
-        assert!(paths.contains(&"/abs/bg.jpg".to_string()));
+        assert_eq!(paths.len(), 1);
         assert!(paths.contains(&"/abs/clip.mp4".to_string()));
     }
 

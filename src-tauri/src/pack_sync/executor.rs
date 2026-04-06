@@ -532,7 +532,14 @@ pub fn execute_pack_sync(
                 // Step 4: Hot-swap in AppState
                 {
                     let mut content_dbs = state.content_dbs.write().unwrap();
-                    content_dbs.insert(lang.clone(), new_pool);
+                    content_dbs.insert(lang.clone(), new_pool.clone());
+                }
+                // Step 4b: Refresh cached capabilities for the new DB schema
+                if let Ok(cap_conn) = new_pool.get() {
+                    let caps = crate::db::queries::music::probe_content_db_capabilities(&cap_conn);
+                    if let Ok(mut cap_map) = state.content_db_capabilities.write() {
+                        cap_map.insert(lang.clone(), caps);
+                    }
                 }
                 // Record the DB version so the planner knows it's current
                 let _ = settings::set_setting(
