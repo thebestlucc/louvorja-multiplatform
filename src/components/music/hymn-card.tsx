@@ -6,14 +6,20 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddLiturgyItem, useFavoriteIds } from "../../lib/queries";
-import type { Hymn } from "../../lib/bindings";
+import type { Hymn, HymnListItem } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 import { LyricsModal } from "./lyrics-modal";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { FavoriteButton } from "./favorite-button";
+import { catcher } from "../../lib/catcher";
+import { getHymn } from "../../lib/tauri";
+
+function isFullHymn(h: Hymn | HymnListItem): h is Hymn {
+  return "lyrics" in h;
+}
 
 interface HymnCardProps {
-  hymn: Hymn;
+  hymn: Hymn | HymnListItem;
   view?: "grid" | "list";
 }
 
@@ -22,13 +28,22 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
   const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
   const addItemMutation = useAddLiturgyItem();
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [lyricsHymn, setLyricsHymn] = useState<Hymn | null>(null);
   const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
   const { data: favoriteIds } = useFavoriteIds("hymn");
   const isFav = favoriteIds?.has(hymn.id);
 
   const hasAudio = Boolean(hymn.audioPath);
   const hasPlayback = Boolean(hymn.playbackPath);
-  const hasLyrics = Boolean(hymn.lyrics);
+  const hasLyrics = isFullHymn(hymn) && Boolean(hymn.lyrics);
+
+  /** Resolve a full Hymn for playback / lyrics (lazy-fetches if we only have HymnListItem). */
+  async function getFullHymn(): Promise<Hymn | null> {
+    if (isFullHymn(hymn)) return hymn;
+    const [full, err] = await catcher(getHymn(hymn.id), { notify: true });
+    if (err) return null;
+    return full;
+  }
 
   const handleAddToService = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -47,7 +62,45 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
   const handleShowLyrics = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setLyricsOpen(true);
+    if (isFullHymn(hymn)) {
+      setLyricsHymn(hymn);
+      setLyricsOpen(true);
+    } else {
+      void (async () => {
+        const full = await getFullHymn();
+        if (full) {
+          setLyricsHymn(full);
+          setLyricsOpen(true);
+        }
+      })();
+    }
+  };
+
+  const onSlidesOnly = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void (async () => {
+      const full = await getFullHymn();
+      if (full) void handleStartSlidesOnly(full);
+    })();
+  };
+
+  const onCantado = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void (async () => {
+      const full = await getFullHymn();
+      if (full) void handleStartCantado(full);
+    })();
+  };
+
+  const onPlayback = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void (async () => {
+      const full = await getFullHymn();
+      if (full) void handleStartPlayback(full);
+    })();
   };
 
   if (view === "list") {
@@ -80,13 +133,13 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
             <div className="text-muted-foreground truncate">
               {hymn.album || <span className="text-muted-foreground/50">-</span>}
             </div>
-            
+
             <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pr-2 pointer-events-auto">
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartSlidesOnly(hymn); }}
+                onClick={onSlidesOnly}
                 title={t("hymn.actionSlidesOnly")}
               >
                 <MonitorPlay className="h-4 w-4" />
@@ -96,7 +149,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
+                  onClick={onCantado}
                   title={t("hymn.actionSung")}
                 >
                   <Play className="h-4 w-4" />
@@ -107,7 +160,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}
+                  onClick={onPlayback}
                   title={t("hymn.actionPlayback")}
                 >
                   <Music className="h-4 w-4" />
@@ -139,7 +192,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
             </div>
           </div>
         </div>
-        <LyricsModal hymn={hymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />
+        {lyricsHymn && <LyricsModal hymn={lyricsHymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />}
       </>
     );
   }
@@ -153,7 +206,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
           title={hymn.title}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        
+
         {/* Main Click Area */}
         <Link to="/hymnal/$hymnId" params={{ hymnId: String(hymn.id) }} className="absolute inset-0 z-0" />
 
@@ -176,7 +229,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
               size="icon"
               variant="outline"
               className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartSlidesOnly(hymn); }}
+              onClick={onSlidesOnly}
               title={t("hymn.actionSlidesOnly")}
             >
               <MonitorPlay className="h-4 w-4" />
@@ -186,7 +239,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                 size="icon"
                 variant="outline"
                 className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
+                onClick={onCantado}
                 title={t("hymn.actionSung")}
               >
                 <Play className="h-4 w-4" />
@@ -197,7 +250,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
                 size="icon"
                 variant="outline"
                 className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartPlayback(hymn); }}
+                onClick={onPlayback}
                 title={t("hymn.actionPlayback")}
               >
                 <Music className="h-4 w-4" />
@@ -236,7 +289,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
           </div>
         )}
       </div>
-      
+
       <Link to="/hymnal/$hymnId" params={{ hymnId: String(hymn.id) }} className="px-1 flex-1 flex flex-col group/text">
         <p className="line-clamp-2 font-medium text-sm leading-tight text-foreground group-hover/text:text-primary transition-colors" title={hymn.title}>
           {hymn.title}
@@ -245,7 +298,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{hymn.album}</p>
         )}
       </Link>
-      <LyricsModal hymn={hymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />
+      {lyricsHymn && <LyricsModal hymn={lyricsHymn} open={lyricsOpen} onOpenChange={setLyricsOpen} />}
     </div>
   );
 });
