@@ -1,4 +1,4 @@
-use crate::db::models::{Album, Hymn};
+use crate::db::models::{Album, Hymn, HymnListItem};
 use crate::error::AppError;
 use rusqlite::{params, Connection, Row};
 
@@ -102,6 +102,80 @@ pub fn search_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppErro
         .query_map(params![fts_query], map_hymn_row)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(hymns)
+}
+
+fn map_hymn_list_row(row: &Row) -> Result<HymnListItem, rusqlite::Error> {
+    Ok(HymnListItem {
+        id: row.get("id")?,
+        number: row.get("number")?,
+        title: row.get("title")?,
+        author: row.get("author")?,
+        album: row.get("album")?,
+        cover_path: row.get("cover_path")?,
+        audio_path: row.get("audio_path")?,
+        playback_path: row.get("playback_path")?,
+        category: row.get("category")?,
+        api_music_id: row.get("api_music_id")?,
+    })
+}
+
+/// Lightweight search returning only the fields needed for list rendering.
+/// Skips lyrics, chords, notes, lyrics_sync, and timestamps.
+pub fn search_hymns_list(conn: &Connection, query: &str) -> Result<Vec<HymnListItem>, AppError> {
+    let trimmed = query.trim();
+
+    if trimmed.is_empty() {
+        let mut stmt = conn.prepare_cached(
+            "SELECT h.id, h.number, h.title, h.author, h.album,
+                    h.cover_path, h.audio_path, h.playback_path,
+                    h.category, h.api_music_id
+             FROM hymns h
+             WHERE h.category = 'hymnal'
+             ORDER BY h.number, h.title"
+        )?;
+        let items = stmt
+            .query_map([], map_hymn_list_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(items);
+    }
+
+    // Numeric prefix → search by number
+    if trimmed.chars().all(|c| c.is_ascii_digit()) {
+        let number_prefix = format!("{}%", trimmed);
+        let mut stmt = conn.prepare_cached(
+            "SELECT h.id, h.number, h.title, h.author, h.album,
+                    h.cover_path, h.audio_path, h.playback_path,
+                    h.category, h.api_music_id
+             FROM hymns h
+             WHERE CAST(h.number AS TEXT) LIKE ?1
+             AND h.category = 'hymnal'
+             ORDER BY h.number"
+        )?;
+        let items = stmt
+            .query_map(params![number_prefix], map_hymn_list_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(items);
+    }
+
+    // Text search via FTS5
+    let Some(fts_query) = build_fts_prefix_query(trimmed) else {
+        return Ok(vec![]);
+    };
+
+    let mut stmt = conn.prepare_cached(
+        "SELECT h.id, h.number, h.title, h.author, h.album,
+                h.cover_path, h.audio_path, h.playback_path,
+                h.category, h.api_music_id
+         FROM hymns h
+         JOIN hymns_fts ON hymns_fts.rowid = h.id
+         WHERE hymns_fts MATCH ?1
+         AND h.category = 'hymnal'
+         ORDER BY rank"
+    )?;
+    let items = stmt
+        .query_map(params![fts_query], map_hymn_list_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(items)
 }
 
 pub fn search_all_hymns(conn: &Connection, query: &str) -> Result<Vec<Hymn>, AppError> {
