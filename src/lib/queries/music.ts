@@ -20,7 +20,7 @@ import { queryKeys } from "./keys";
 
 export function useHymns(query: string, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: queryKeys.hymns.search(query),
+    queryKey: queryKeys.hymns.searchFull(query),
     queryFn: () => searchHymns(query),
     enabled: options?.enabled ?? true,
     staleTime: 30_000,
@@ -97,10 +97,14 @@ export function useUpdateHymn() {
     onSuccess: (updatedHymn, vars) => {
       // Update detail cache directly — no IPC round-trip needed
       queryClient.setQueryData(queryKeys.hymns.detail(vars.id), updatedHymn);
-      // Invalidate active search results only — not the entire hymns namespace
+      // Invalidate active search results (both list and full) — not the entire hymns namespace
       queryClient.invalidateQueries({
         queryKey: queryKeys.hymns.search(""),
         exact: false, // matches all search variants
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.hymns.searchFull(""),
+        exact: false,
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
     },
@@ -114,10 +118,14 @@ export function useDeleteHymn() {
     onSuccess: (_, id) => {
       // Remove stale detail cache for deleted hymn
       queryClient.removeQueries({ queryKey: queryKeys.hymns.detail(id) });
-      // Invalidate active search results only — not the entire hymns namespace
+      // Invalidate active search results (both list and full) — not the entire hymns namespace
       queryClient.invalidateQueries({
         queryKey: queryKeys.hymns.search(""),
         exact: false, // matches all search variants
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.hymns.searchFull(""),
+        exact: false,
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
     },

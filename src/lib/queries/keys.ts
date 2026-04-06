@@ -2,6 +2,7 @@ export const queryKeys = {
   hymns: {
     all: ["hymns"] as const,
     search: (query: string) => ["hymns", "search", query] as const,
+    searchFull: (query: string) => ["hymns", "search-full", query] as const,
     detail: (id: number) => ["hymns", id] as const,
     byAlbum: (album: string) => ["hymns", "album", album] as const,
     audioPath: (id: number) => ["hymns", id, "audioPath"] as const,
