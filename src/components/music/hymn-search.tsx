@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useDeferredValue } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, LayoutGrid, List as ListIcon, Star } from "lucide-react";
 import { Input } from "../ui/input";
@@ -9,7 +9,6 @@ import { HymnCard } from "./hymn-card";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWindowSize } from "react-use";
 import { cn } from "../../lib/utils";
-import { useDebouncedValue } from "../../hooks/use-debounced-value";
 import { getPreference, setPreference } from "../../lib/store";
 
 const VIEW_PREF_KEY = "hymnal.viewType";
@@ -29,10 +28,11 @@ export function HymnSearch() {
     void setPreference(VIEW_PREF_KEY, v);
   };
 
-  const debouncedQuery = useDebouncedValue(query, 300);
+  const deferredQuery = useDeferredValue(query);
+  const isPending = query !== deferredQuery;
 
-  const { data: searchResults, isLoading: isSearchLoading } = useHymnsList(debouncedQuery, { enabled: !showFavoritesOnly });
-  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(debouncedQuery, { enabled: showFavoritesOnly });
+  const { data: searchResults, isLoading: isSearchLoading } = useHymnsList(deferredQuery, { enabled: !showFavoritesOnly });
+  const { data: favoriteHymns, isLoading: isFavoritesLoading } = useFavoriteHymns(deferredQuery, { enabled: showFavoritesOnly });
 
   const isLoading = showFavoritesOnly ? isFavoritesLoading : isSearchLoading;
 
@@ -122,16 +122,16 @@ export function HymnSearch() {
         <p className="text-sm text-muted-foreground">{t("hymnal.loading")}</p>
       )}
 
-      {hymns && hymns.length === 0 && debouncedQuery && (
+      {hymns && hymns.length === 0 && deferredQuery && (
         <p className="text-sm text-muted-foreground">{t("hymnal.noResults")}</p>
       )}
 
-      {hymns && hymns.length === 0 && !debouncedQuery && showFavoritesOnly && (
+      {hymns && hymns.length === 0 && !deferredQuery && showFavoritesOnly && (
         <p className="text-sm text-muted-foreground">{t("favorites.empty")}</p>
       )}
 
       {hymns && hymns.length > 0 && (
-        <div className={view === "list" ? "rounded-lg border border-border bg-card overflow-hidden" : ""}>
+        <div className={cn(view === "list" ? "rounded-lg border border-border bg-card overflow-hidden" : "", isPending && "opacity-60 transition-opacity")}>
           {view === "list" && (
             <div className="grid grid-cols-[80px_2fr_1fr_120px] gap-4 px-4 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider">
               <div className="pl-2">{t("hymnal.number", "ID")}</div>
