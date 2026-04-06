@@ -59,8 +59,15 @@ impl VideoServer {
     }
 
     pub fn set_media_root(&mut self, root: PathBuf) {
-        let canonical = root.canonicalize().unwrap_or_else(|_| root.clone());
-        println!("[video-server] media_root set to '{}'", canonical.display());
+        let canonical = root.canonicalize().unwrap_or_else(|e| {
+            log::warn!(
+                "[video-server] Cannot canonicalize media_root '{}': {e}. \
+                 Using raw path — directory may not exist yet.",
+                root.display()
+            );
+            root.clone()
+        });
+        log::debug!("[video-server] media_root set to '{}'", canonical.display());
         self.media_root = Some(canonical);
     }
 
