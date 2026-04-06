@@ -121,9 +121,11 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   useEffect(() => {
     if (!enabled) return;
 
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     import("@tauri-apps/api/event").then(({ listen }) => {
+      if (cancelled) return;
       listen<string>("global-shortcut", (event) => {
         switch (event.payload) {
           case "slides-next":
@@ -143,12 +145,17 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
             break;
         }
       }).then((fn) => {
-        unlisten = fn;
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
       });
     });
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
-  }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen]);
+  }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen, openKeyboardShortcutsPanel]);
 }
