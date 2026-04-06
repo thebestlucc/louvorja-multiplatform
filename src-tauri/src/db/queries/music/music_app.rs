@@ -544,6 +544,25 @@ mod tests {
         // "1" matches track 1 and track 10 via LIKE '1%'
         assert_eq!(items.len(), 2);
     }
+
+    #[test]
+    fn search_hymns_list_text_query_uses_fts() {
+        let conn = open_db();
+        conn.execute_batch(
+            "INSERT INTO hymns (id, number, title, category) VALUES (1, 1, 'Santo', 'hymnal');
+             INSERT INTO hymns_fts(rowid, title) VALUES (1, 'Santo');"
+        ).unwrap();
+        let items = search_hymns_list(&conn, "santo").unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Santo");
+    }
+
+    #[test]
+    fn search_hymns_list_special_chars_returns_empty() {
+        let conn = open_db();
+        let items = search_hymns_list(&conn, "!!!").unwrap();
+        assert!(items.is_empty());
+    }
 }
 
 #[allow(dead_code)]

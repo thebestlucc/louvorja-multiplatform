@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
@@ -33,6 +33,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
   const { data: favoriteIds } = useFavoriteIds("hymn");
   const isFav = favoriteIds?.has(hymn.id);
 
+  const fetchingRef = useRef(false);
   const hasAudio = Boolean(hymn.audioPath);
   const hasPlayback = Boolean(hymn.playbackPath);
   const hasLyrics = isFullHymn(hymn) ? Boolean((hymn as Hymn).lyrics) : true;
@@ -40,7 +41,10 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
   /** Resolve a full Hymn for playback / lyrics (lazy-fetches if we only have HymnListItem). */
   async function getFullHymn(): Promise<Hymn | null> {
     if (isFullHymn(hymn)) return hymn;
+    if (fetchingRef.current) return null;
+    fetchingRef.current = true;
     const [full, err] = await catcher(getHymn(hymn.id), { notify: true });
+    fetchingRef.current = false;
     if (err) return null;
     return full;
   }
