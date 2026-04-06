@@ -446,14 +446,26 @@ fn resolve_video_path(decoded: &str, media_root: &Path) -> Result<PathBuf, Strin
     let path = Path::new(decoded);
 
     if path.is_absolute() {
-        // Absolute paths: allow any file on the filesystem (loopback-only server)
-        if !path.exists() {
-            return Err(format!("absolute path does not exist: '{}'", path.display()));
+        // Absolute paths must still be within media_root.
+        // Reject paths outside this boundary to prevent arbitrary file access.
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve absolute path: {e}"))?;
+        let media_canon = media_root
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve media_root: {e}"))?;
+
+        if !canonical.starts_with(&media_canon) {
+            return Err(format!(
+                "absolute path '{}' is outside media_root '{}'",
+                canonical.display(),
+                media_canon.display()
+            ));
         }
-        if !path.is_file() {
-            return Err(format!("absolute path is not a file: '{}'", path.display()));
+        if !canonical.is_file() {
+            return Err(format!("not a file: '{}'", canonical.display()));
         }
-        Ok(path.to_path_buf())
+        Ok(canonical)
     } else {
         // Relative paths: resolve under media_root
         let joined = media_root.join(path);
