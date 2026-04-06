@@ -450,6 +450,9 @@ pub fn run() {
                                         if let Ok(conn) = p.get() {
                                             let _ = crate::db::queries::content_sync::init_content_db_fts(&conn, &lang);
                                         }
+                                        // Capabilities inserted before pool so any concurrent reader that sees the pool
+                                        // will also find a capability entry. If this write fails, the pool is still inserted
+                                        // below and callers fall back to live sqlite_master probes (correct, slower).
                                         if let Ok(cap_conn) = p.get() {
                                             let caps = crate::db::queries::music::probe_content_db_capabilities(&cap_conn);
                                             if let Ok(mut cap_map) = state.content_db_capabilities.write() {

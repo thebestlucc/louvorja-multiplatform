@@ -184,7 +184,7 @@ pub fn get_hymn(
 ) -> Result<Hymn, AppError> {
     use tauri::Manager;
     let conn = state.db.get()?;
-    if let Some((content_conn, lang)) = get_content_db_conn(&state, &conn) {
+    if let Some((content_conn, lang, _caps)) = get_content_db_conn_with_caps(&state, &conn) {
         let hymns = vec![
             crate::db::queries::music::get_hymn_by_id_from_content_db(&content_conn, id, &lang)?
         ];

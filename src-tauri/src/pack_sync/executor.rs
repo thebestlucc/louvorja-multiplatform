@@ -501,6 +501,7 @@ pub fn execute_pack_sync(
 
         // Step 1: Remove old pool from state (releases file handles on Windows)
         {
+            // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
             let mut content_dbs = state.content_dbs.write().unwrap();
             content_dbs.remove(lang);
         }
@@ -531,10 +532,13 @@ pub fn execute_pack_sync(
                 }
                 // Step 4: Hot-swap in AppState
                 {
+                    // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
                     let mut content_dbs = state.content_dbs.write().unwrap();
                     content_dbs.insert(lang.clone(), new_pool.clone());
                 }
-                // Step 4b: Refresh cached capabilities for the new DB schema
+                // Step 4b: Refresh capability cache for this language so subsequent queries
+                // use the new DB's schema. Separate lock from Step 4 — if this write fails,
+                // callers degrade gracefully to live schema probes.
                 if let Ok(cap_conn) = new_pool.get() {
                     let caps = crate::db::queries::music::probe_content_db_capabilities(&cap_conn);
                     if let Ok(mut cap_map) = state.content_db_capabilities.write() {

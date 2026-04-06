@@ -825,6 +825,7 @@ pub fn get_collection_hymns_from_content_db(
 ) -> Result<Vec<crate::db::models::Hymn>, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
+    // caps = None intentionally: detail queries are not hot-path; per-call schema probe cost is acceptable.
     let lyrics_col = lyrics_subquery(content_db, "?2", None);
     let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", None);
 
@@ -893,6 +894,7 @@ pub fn get_hymn_by_id_from_content_db(
 ) -> Result<crate::db::models::Hymn, AppError> {
     use crate::db::queries::content_sync::bcp47_to_lang_code;
     let lang_short = bcp47_to_lang_code(lang_bcp47);
+    // caps = None intentionally: detail queries are not hot-path; per-call schema probe cost is acceptable.
     let lyrics_col = lyrics_subquery(content_db, "?2", None);
     let lyrics_sync_col = lyrics_sync_subquery(content_db, "?2", None);
 
@@ -1607,5 +1609,32 @@ mod content_db_tests {
         assert!(!caps.has_categories, "partial schema must not have categories");
         assert!(!caps.has_time_column, "partial schema must not have time column (no time column in lyrics)");
         assert!(!caps.has_instrumental_time_column, "partial schema must not have instrumental_time column");
+    }
+
+    #[test]
+    fn get_hymns_from_content_db_honours_cached_caps() {
+        // Create a DB that HAS a lyrics table
+        let conn = make_content_db();
+        seed_basic(&conn);
+
+        // Sanity: without caps (live probe), lyrics are returned
+        let hymns_live = get_hymns_from_content_db(&conn, "pt-BR", None).unwrap();
+        assert!(hymns_live[0].lyrics.is_some(), "live probe must find lyrics");
+
+        // Supply LYING caps claiming lyrics table is absent — if cache is honoured, lyrics = None
+        let lying_caps = crate::state::ContentDbCapabilities {
+            has_fts: false,
+            has_lyrics_table: false, // deliberately wrong
+            has_categories: false,
+            has_time_column: false,
+            has_instrumental_time_column: false,
+        };
+        let hymns = get_hymns_from_content_db(&conn, "pt-BR", Some(&lying_caps))
+            .expect("query succeeds");
+        assert!(!hymns.is_empty(), "should return the test hymn");
+        assert_eq!(
+            hymns[0].lyrics, None,
+            "lyrics must be None when caps claims no lyrics table — proves cache is honoured not ignored"
+        );
     }
 }
