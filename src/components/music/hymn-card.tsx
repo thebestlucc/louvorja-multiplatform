@@ -35,7 +35,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCard
 
   const hasAudio = Boolean(hymn.audioPath);
   const hasPlayback = Boolean(hymn.playbackPath);
-  const hasLyrics = isFullHymn(hymn) && Boolean(hymn.lyrics);
+  const hasLyrics = isFullHymn(hymn) ? Boolean((hymn as Hymn).lyrics) : true;
 
   /** Resolve a full Hymn for playback / lyrics (lazy-fetches if we only have HymnListItem). */
   async function getFullHymn(): Promise<Hymn | null> {
