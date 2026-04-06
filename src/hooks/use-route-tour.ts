@@ -8,16 +8,17 @@ export function useRouteTour(routePath: string) {
   useEffect(() => {
     if (!steps.length) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     void isRouteTourCompleted(routePath).then((completed) => {
       if (!completed && !cancelled) {
-        const timer = setTimeout(() => setShowTour(true), 1000);
-        return () => clearTimeout(timer);
+        timer = setTimeout(() => setShowTour(true), 1000);
       }
     });
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [routePath, steps.length]);
 
