@@ -40,6 +40,8 @@
   },
   "model": "sonnet",
   "enabledPlugins": {
-    "rust-skills@rust-skills": true
+    "rust-skills@rust-skills": true,
+    "superpowers@claude-plugins-official": true,
+    "claude-mem@thedotmack": true
   }
 }

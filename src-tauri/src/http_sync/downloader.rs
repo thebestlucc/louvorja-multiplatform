@@ -224,7 +224,17 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
             .by_index(i)
             .map_err(|e| AppError::Internal(format!("ZIP entry {} failed: {}", i, e)))?;
 
-        let entry_name = entry.name().to_string();
+        let raw_entry_name = entry.name().to_string();
+        // Normalize entry name to NFC. ZIP files from macOS use NFD filenames;
+        // without normalization, extracted files have NFD names that don't match
+        // the NFC paths stored in content DBs (both look identical but differ in bytes).
+        #[cfg(target_os = "windows")]
+        let entry_name = {
+            use unicode_normalization::UnicodeNormalization;
+            raw_entry_name.nfc().collect::<String>()
+        };
+        #[cfg(not(target_os = "windows"))]
+        let entry_name = raw_entry_name;
         // Skip directory entries
         if entry_name.ends_with('/') || entry_name.ends_with('\\') {
             continue;
@@ -458,7 +468,15 @@ async fn try_stream_extract_zip(
         loop {
             match zip::read::read_zipfile_from_stream(&mut tee) {
                 Ok(Some(mut entry)) => {
-                    let entry_name = entry.name().to_string();
+                    let raw_entry_name = entry.name().to_string();
+                    // Normalize entry name to NFC (see extract_zip for rationale).
+                    #[cfg(target_os = "windows")]
+                    let entry_name = {
+                        use unicode_normalization::UnicodeNormalization;
+                        raw_entry_name.nfc().collect::<String>()
+                    };
+                    #[cfg(not(target_os = "windows"))]
+                    let entry_name = raw_entry_name;
                     if entry_name.ends_with('/') || entry_name.ends_with('\\') {
                         // Consume the entry (should have no data, but drain anyway)
                         let _ = std::io::copy(&mut entry, &mut std::io::sink());
