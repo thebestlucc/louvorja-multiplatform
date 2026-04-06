@@ -40,6 +40,9 @@ pub struct HymnListItem {
     pub audio_path: Option<String>,
     pub playback_path: Option<String>,
     pub category: Option<String>,
+    // TODO(review): #[specta(type = i32)] on Option<i64> drops the Option wrapper —
+    // generates non-nullable `number` in TS. Fix: use #[specta(type = Option<i32>)].
+    // Pre-existing same issue in Hymn struct. Track: api_music_id TS binding correctness.
     #[specta(type = i32)]
     pub api_music_id: Option<i64>,
 }

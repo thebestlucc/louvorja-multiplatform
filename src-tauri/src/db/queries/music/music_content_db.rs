@@ -1863,6 +1863,20 @@ mod content_db_tests {
     }
 
     #[test]
+    fn search_hymns_list_content_db_numeric_prefix_matches_track() {
+        let conn = make_content_db();
+        seed_basic(&conn); // inserts track 1
+        // Insert a second track (track 10) to test "1%" prefix matching both
+        conn.execute_batch(
+            "INSERT INTO musics VALUES (2, 'Aleluia', 'pt', NULL, NULL, NULL, '', '');
+             INSERT INTO albums_musics VALUES (1, 2, 10);"
+        ).unwrap();
+        let items = search_hymns_list_content_db(&conn, "1", "pt-BR", None).unwrap();
+        // track 1 and track 10 both match LIKE '1%'
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
     fn get_hymns_from_content_db_honours_cached_caps() {
         // Create a DB that HAS a lyrics table
         let conn = make_content_db();
