@@ -1,4 +1,4 @@
-use crate::db::models::{Album, Hymn, HymnWriteInput};
+use crate::db::models::{Album, Hymn, HymnListItem, HymnWriteInput};
 use crate::error::AppError;
 use crate::state::{AppState, ContentDbCapabilities};
 
@@ -77,6 +77,39 @@ fn resolve_hymn_paths(
     hymns
 }
 
+fn resolve_hymn_list_paths(
+    mut items: Vec<HymnListItem>,
+    app_data_dir: &std::path::Path,
+) -> Vec<HymnListItem> {
+    for h in &mut items {
+        if let Some(ref p) = h.audio_path {
+            h.audio_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+        if let Some(ref p) = h.playback_path {
+            h.playback_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+        if let Some(ref p) = h.cover_path {
+            h.cover_path = Some(
+                app_data_dir
+                    .join(p.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+    }
+    items
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn search_hymns(
@@ -103,6 +136,33 @@ pub fn search_hymns(
 
     // Fallback to main DB
     crate::db::queries::music::search_hymns(&conn, &query)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn search_hymns_list(
+    app: tauri::AppHandle,
+    query: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<HymnListItem>, AppError> {
+    use tauri::Manager;
+    let conn = state.db.get()?;
+
+    if let Some((content_conn, lang, caps)) = get_content_db_conn_with_caps(&state, &conn) {
+        let items = crate::db::queries::music::search_hymns_list_content_db(
+            &content_conn,
+            &query,
+            &lang,
+            caps.as_ref(),
+        )?;
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        return Ok(resolve_hymn_list_paths(items, &app_data));
+    }
+
+    crate::db::queries::music::search_hymns_list(&conn, &query)
 }
 
 #[tauri::command]

@@ -68,6 +68,7 @@ pub fn run() {
             // Music
             commands::music::get_hymn,
             commands::music::search_hymns,
+            commands::music::search_hymns_list,
             commands::music::search_all_hymns,
             commands::music::search_all_music,
             commands::music::get_albums,
