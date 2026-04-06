@@ -454,6 +454,206 @@ pub fn search_hymns_content_db(
     Ok(hymns)
 }
 
+/// Lightweight list-only query for content DB hymns.
+/// Returns `HymnListItem` (no lyrics, chords, notes, sync, timestamps).
+fn get_hymns_list_from_content_db(
+    content_db: &rusqlite::Connection,
+    lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
+) -> Result<Vec<crate::db::models::HymnListItem>, AppError> {
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+    let (cat_join, cat_where) = hymnal_category_filter(content_db, caps);
+
+    let sql = format!(
+        "SELECT
+            m.id_music                    AS id,
+            am.track                      AS number,
+            m.name                        AS title,
+            NULL                          AS author,
+            a.name                        AS album,
+            fi.dir || '/' || fi.name      AS cover_path,
+            fa.dir || '/' || fa.name      AS audio_path,
+            fp.dir || '/' || fp.name      AS playback_path,
+            'hymnal'                      AS category,
+            m.id_music                    AS api_music_id
+         FROM musics m
+         LEFT JOIN albums_musics am ON am.id_music = m.id_music
+         LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         {cat_join}
+         LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+         WHERE m.id_language = ?1
+           {cat_where}
+         ORDER BY a.name, am.track"
+    );
+
+    let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
+    let items = stmt
+        .query_map([lang_short], |row| {
+            Ok(crate::db::models::HymnListItem {
+                id: row.get("id")?,
+                number: row.get("number")?,
+                title: row.get("title")?,
+                author: row.get("author")?,
+                album: row.get("album")?,
+                cover_path: row.get("cover_path")?,
+                audio_path: row.get("audio_path")?,
+                playback_path: row.get("playback_path")?,
+                category: row.get("category")?,
+                api_music_id: row.get("api_music_id")?,
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+
+    Ok(items)
+}
+
+/// Lightweight search for content DB returning `HymnListItem`.
+/// Mirrors `search_hymns_content_db` but skips lyrics, chords, sync, timestamps.
+pub fn search_hymns_list_content_db(
+    content_db: &rusqlite::Connection,
+    query: &str,
+    lang_bcp47: &str,
+    caps: Option<&ContentDbCapabilities>,
+) -> Result<Vec<crate::db::models::HymnListItem>, AppError> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return get_hymns_list_from_content_db(content_db, lang_bcp47, caps);
+    }
+
+    use crate::db::queries::content_sync::bcp47_to_lang_code;
+    let lang_short = bcp47_to_lang_code(lang_bcp47);
+
+    // Numeric prefix → search by track number
+    if trimmed.chars().all(|c| c.is_ascii_digit()) {
+        let number_prefix = format!("{}%", trimmed);
+        let (cat_join, cat_where) = hymnal_category_filter(content_db, caps);
+        let sql = format!(
+            "SELECT
+                m.id_music AS id, am.track AS number, m.name AS title,
+                NULL AS author, a.name AS album,
+                fi.dir || '/' || fi.name AS cover_path,
+                fa.dir || '/' || fa.name AS audio_path,
+                fp.dir || '/' || fp.name AS playback_path,
+                'hymnal' AS category, m.id_music AS api_music_id
+             FROM musics m
+             LEFT JOIN albums_musics am ON am.id_music = m.id_music
+             LEFT JOIN albums        a  ON a.id_album  = am.id_album
+             {cat_join}
+             LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+             LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+             LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+             WHERE CAST(am.track AS TEXT) LIKE ?1
+               AND m.id_language = ?2
+               {cat_where}
+             ORDER BY am.track"
+        );
+        let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
+        let items = stmt
+            .query_map(params![number_prefix, lang_short], |row| {
+                Ok(crate::db::models::HymnListItem {
+                    id: row.get("id")?,
+                    number: row.get("number")?,
+                    title: row.get("title")?,
+                    author: row.get("author")?,
+                    album: row.get("album")?,
+                    cover_path: row.get("cover_path")?,
+                    audio_path: row.get("audio_path")?,
+                    playback_path: row.get("playback_path")?,
+                    category: row.get("category")?,
+                    api_music_id: row.get("api_music_id")?,
+                })
+            })
+            .map_err(AppError::Database)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::Database)?;
+        return Ok(items);
+    }
+
+    // Sanitize query for FTS5
+    let sanitized: String = trimmed
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>();
+    let fts_query: String = sanitized
+        .split_whitespace()
+        .map(|t| format!("{}*", t))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if fts_query.is_empty() {
+        return get_hymns_list_from_content_db(content_db, lang_bcp47, caps);
+    }
+
+    // Check FTS availability
+    let fts_exists = caps
+        .map(|c| c.has_fts)
+        .unwrap_or_else(|| {
+            content_db
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='musics_fts'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .map(|c| c > 0)
+                .unwrap_or(false)
+        });
+
+    if !fts_exists {
+        return get_hymns_list_from_content_db(content_db, lang_bcp47, caps);
+    }
+
+    let (cat_join, cat_where) = hymnal_category_filter(content_db, caps);
+
+    let sql = format!(
+        "SELECT
+            m.id_music AS id, am.track AS number, m.name AS title,
+            NULL AS author, a.name AS album,
+            fi.dir || '/' || fi.name AS cover_path,
+            fa.dir || '/' || fa.name AS audio_path,
+            fp.dir || '/' || fp.name AS playback_path,
+            'hymnal' AS category, m.id_music AS api_music_id
+         FROM musics_fts
+         JOIN musics m ON musics_fts.rowid = m.id_music
+         LEFT JOIN albums_musics am ON am.id_music = m.id_music
+         LEFT JOIN albums        a  ON a.id_album  = am.id_album
+         {cat_join}
+         LEFT JOIN files         fa ON fa.id_file  = m.id_file_music
+         LEFT JOIN files         fp ON fp.id_file  = m.id_file_instrumental_music
+         LEFT JOIN files         fi ON fi.id_file  = m.id_file_image
+         WHERE musics_fts MATCH ?1
+           AND m.id_language = ?2
+           {cat_where}
+         ORDER BY rank
+         LIMIT 50"
+    );
+
+    let mut stmt = content_db.prepare(&sql).map_err(AppError::Database)?;
+    let items = stmt
+        .query_map(params![fts_query, lang_short], |row| {
+            Ok(crate::db::models::HymnListItem {
+                id: row.get("id")?,
+                number: row.get("number")?,
+                title: row.get("title")?,
+                author: row.get("author")?,
+                album: row.get("album")?,
+                cover_path: row.get("cover_path")?,
+                audio_path: row.get("audio_path")?,
+                playback_path: row.get("playback_path")?,
+                category: row.get("category")?,
+                api_music_id: row.get("api_music_id")?,
+            })
+        })
+        .map_err(AppError::Database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::Database)?;
+
+    Ok(items)
+}
+
 /// Return ALL music from the content DB (no hymnal category filter).
 /// Used by `search_all_music` which spans all categories.
 /// Pass `caps` from `AppState::content_db_capabilities` to skip sqlite_master probes.
