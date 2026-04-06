@@ -196,13 +196,12 @@ export function usePresentation2({ presentationId }: UsePresentationOptions) {
     [presentationId, updatePresentationMutation],
   );
 
-  // Cleanup all timers on unmount
+  // Clean up pending debounce timers on unmount
   useEffect(() => {
+    const timers = saveTimersRef.current;
     return () => {
-      const timers = saveTimersRef.current;
-      for (const id of Object.keys(timers).map(Number)) {
-        clearTimeout(timers[id]);
-      }
+      Object.values(timers).forEach((t) => clearTimeout(t));
+      saveTimersRef.current = {};
     };
   }, []);
 
