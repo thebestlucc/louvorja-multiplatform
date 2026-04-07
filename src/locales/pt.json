@@ -1225,7 +1225,9 @@
       "stop": "Parar reprodução",
       "restart": "Reiniciar reprodução",
       "volumeUp": "Aumentar volume",
-      "volumeDown": "Diminuir volume"
+      "volumeDown": "Diminuir volume",
+      "prevSlide": "Slide anterior (reprodução)",
+      "nextSlide": "Próximo slide (reprodução)"
     },
     "noResults": "Nenhum atalho encontrado.",
     "searchPlaceholder": "Pesquisar atalhos...",

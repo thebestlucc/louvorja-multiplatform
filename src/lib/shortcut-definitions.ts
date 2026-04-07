@@ -75,7 +75,19 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     id: "playback-play-pause",
     category: "playback",
     labelKey: "shortcuts.items.playPause",
-    defaultLocal: "p",
+    defaultLocal: " ",
+  },
+  {
+    id: "playback-prev-slide",
+    category: "playback",
+    labelKey: "shortcuts.items.prevSlide",
+    defaultLocal: "ArrowLeft",
+  },
+  {
+    id: "playback-next-slide",
+    category: "playback",
+    labelKey: "shortcuts.items.nextSlide",
+    defaultLocal: "ArrowRight",
   },
   {
     id: "playback-mute",
@@ -87,13 +99,13 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     id: "playback-prev-item",
     category: "playback",
     labelKey: "shortcuts.items.prevItem",
-    defaultLocal: "[",
+    defaultLocal: "Alt+ArrowLeft",
   },
   {
     id: "playback-next-item",
     category: "playback",
     labelKey: "shortcuts.items.nextItem",
-    defaultLocal: "]",
+    defaultLocal: "Alt+ArrowRight",
   },
   {
     id: "playback-stop",
