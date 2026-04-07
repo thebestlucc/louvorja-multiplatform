@@ -1221,7 +1221,11 @@
       "toggleBlack": "Alternar tela preta",
       "toggleLogo": "Alternar tela de logo",
       "toggleProjector": "Alternar janela do projetor",
-      "toggleReturn": "Alternar janela de retorno"
+      "toggleReturn": "Alternar janela de retorno",
+      "stop": "Parar reprodução",
+      "restart": "Reiniciar reprodução",
+      "volumeUp": "Aumentar volume",
+      "volumeDown": "Diminuir volume"
     },
     "noResults": "Nenhum atalho encontrado.",
     "searchPlaceholder": "Pesquisar atalhos...",

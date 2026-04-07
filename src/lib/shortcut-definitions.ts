@@ -95,6 +95,30 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     labelKey: "shortcuts.items.nextItem",
     defaultLocal: "]",
   },
+  {
+    id: "playback-stop",
+    category: "playback",
+    labelKey: "shortcuts.items.stop",
+    defaultLocal: "s",
+  },
+  {
+    id: "playback-restart",
+    category: "playback",
+    labelKey: "shortcuts.items.restart",
+    defaultLocal: "r",
+  },
+  {
+    id: "playback-volume-up",
+    category: "playback",
+    labelKey: "shortcuts.items.volumeUp",
+    defaultLocal: "ArrowUp",
+  },
+  {
+    id: "playback-volume-down",
+    category: "playback",
+    labelKey: "shortcuts.items.volumeDown",
+    defaultLocal: "ArrowDown",
+  },
 ];
 
 export const SHORTCUT_CATEGORY_ORDER: ShortcutDefinition["category"][] = [

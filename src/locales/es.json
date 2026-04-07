@@ -1221,7 +1221,11 @@
       "toggleBlack": "Alternar pantalla negra",
       "toggleLogo": "Alternar pantalla de logo",
       "toggleProjector": "Alternar ventana del proyector",
-      "toggleReturn": "Alternar ventana de retorno"
+      "toggleReturn": "Alternar ventana de retorno",
+      "stop": "Detener reproducción",
+      "restart": "Reiniciar reproducción",
+      "volumeUp": "Subir volumen",
+      "volumeDown": "Bajar volumen"
     },
     "noResults": "No se encontraron atajos.",
     "searchPlaceholder": "Buscar atajos...",
