@@ -5,7 +5,24 @@ import {
   getAllSettings,
   clearDatabase,
 } from "../tauri";
+import { getPreference, setPreference } from "../store";
 import { queryKeys } from "./keys";
+
+export function useStorePreference<T>(key: string, fallback: T) {
+  return useQuery({
+    queryKey: queryKeys.storePrefs.detail(key),
+    queryFn: () => getPreference<T>(key, fallback),
+    staleTime: Infinity,
+  });
+}
+
+export function useSetStorePreference<T>(key: string) {
+  const queryClient = useQueryClient();
+  return (value: T) => {
+    queryClient.setQueryData(queryKeys.storePrefs.detail(key), value);
+    void setPreference(key, value);
+  };
+}
 
 export function useSetting(key: string) {
   return useQuery({
@@ -47,6 +64,9 @@ export function useClearDatabase() {
       queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.bible.versions });
       queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
+      // Remove pack sync plan cache so the next check reflects the cleared state
+      // (selected_languages is wiped by clear_database; stale cache would show "up to date")
+      queryClient.removeQueries({ queryKey: queryKeys.packSyncPlan });
     },
   });
 }

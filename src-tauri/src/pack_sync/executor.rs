@@ -287,7 +287,51 @@ pub fn execute_pack_sync(
 
                 let mut succeeded = false;
 
-                for attempt in 0..=MAX_RETRIES {
+                // ── Pre-check: skip download if files already exist locally ──────
+                // Handles the case where DB records were cleared but extracted files
+                // survived (e.g., remove_dir_all failed silently on Windows due to
+                // file locking). Verifies presence + size instead of re-downloading.
+                let skip_download = if is_content_db {
+                    // Content-DB: dest file already on disk → Phase 3 will reuse it.
+                    app_data.join(format!("content-{}.db", item.language)).exists()
+                } else if !item.files.is_empty() {
+                    // ZIP pack: every manifest file must exist at the correct size.
+                    item.files.iter().all(|f| {
+                        let rel = f.path.trim_start_matches('/').replace('/', std::path::MAIN_SEPARATOR_STR);
+                        let local = app_data.join(&rel);
+                        if f.size > 0 {
+                            local.metadata().map(|m| m.len() == f.size).unwrap_or(false)
+                        } else {
+                            local.exists()
+                        }
+                    })
+                } else {
+                    false
+                };
+
+                if skip_download {
+                    log::info!("[pack-sync] {} already on disk — skipping download", item.pack_id);
+                    if !is_content_db {
+                        // ZIP pack: persist the extracted version so the planner
+                        // won't re-schedule this pack on the next check.
+                        let app_db = app_clone.clone();
+                        let pack_id_db = item.pack_id.clone();
+                        let pack_ver_db = item.pack_version;
+                        let _ = tokio::task::spawn_blocking(move || {
+                            if let Some(st) = app_db.try_state::<AppState>() {
+                                if let Ok(db_conn) = st.db.get() {
+                                    let _ = crate::db::queries::content_sync::set_pack_extracted_version(
+                                        &db_conn,
+                                        &pack_id_db,
+                                        pack_ver_db,
+                                    );
+                                }
+                            }
+                        }).await;
+                    }
+                    // Content-DB: Phase 3 detects no tmp file but dest exists → reuses it.
+                    statuses.lock().unwrap().insert(item.pack_id.clone(), "done".to_string());
+                } else { for attempt in 0..=MAX_RETRIES {
                     // Check cancel flag before each attempt.
                     if cancel.load(Ordering::Relaxed) {
                         break;
@@ -428,6 +472,7 @@ pub fn execute_pack_sync(
                         .unwrap()
                         .insert(item.pack_id.clone(), "failed".to_string());
                 }
+                } // close else (download path)
 
                 let done = count.fetch_add(1, Ordering::Relaxed) + 1;
                 let percent = (done as f64 / download_total as f64) * 100.0;
@@ -494,8 +539,10 @@ pub fn execute_pack_sync(
 
         let lang = &item.language;
         let tmp_path = app_data_dir.join(format!("{}.db.tmp", item.pack_id));
+        let dest_path = app_data_dir.join(format!("content-{}.db", lang));
 
-        if !tmp_path.exists() {
+        // Skip if neither the tmp file nor the final dest exists.
+        if !tmp_path.exists() && !dest_path.exists() {
             continue;
         }
 
@@ -511,17 +558,23 @@ pub fn execute_pack_sync(
             cap_map.remove(lang);
         }
 
-        // Step 2: Rename tmp -> dest (now safe on Windows since pool is dropped)
-        let dest = match content_sync::save_content_db(&tmp_path, lang, &app_data_dir) {
-            Ok(p) => p,
-            Err(e) => {
-                log::warn!("[pack-sync] Failed to save content DB for {}: {}", lang, e);
-                pack_statuses
-                    .lock()
-                    .unwrap()
-                    .insert(item.pack_id.clone(), "failed".to_string());
-                continue;
+        // Step 2: Rename tmp -> dest (now safe on Windows since pool is dropped).
+        // If no tmp file exists the DB was already on disk (skip_download path) — reuse it.
+        let dest = if tmp_path.exists() {
+            match content_sync::save_content_db(&tmp_path, lang, &app_data_dir) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::warn!("[pack-sync] Failed to save content DB for {}: {}", lang, e);
+                    pack_statuses
+                        .lock()
+                        .unwrap()
+                        .insert(item.pack_id.clone(), "failed".to_string());
+                    continue;
+                }
             }
+        } else {
+            log::info!("[pack-sync] Content DB {} already on disk — reusing existing file", lang);
+            dest_path
         };
 
         // Step 3: Open new pool and initialise FTS5 index

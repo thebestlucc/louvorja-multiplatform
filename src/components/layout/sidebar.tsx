@@ -24,6 +24,14 @@ import {
   Shuffle,
   CaseSensitive,
   Type,
+  Sliders,
+  Palette,
+  Keyboard,
+  Monitor,
+  Wifi,
+  RefreshCw,
+  Film,
+  Database,
   type LucideIcon,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui-store";
@@ -56,6 +64,7 @@ const navItems: NavItem[] = [
     labelKey: "nav.collections",
     children: [
       { to: "/collections", icon: FolderOpen, labelKey: "nav.collectionsItems" },
+      { to: "/collections", icon: Library, labelKey: "nav.customCollections", search: { tab: "custom" } },
       { to: "/collections", icon: Video, labelKey: "nav.onlineVideos", search: { tab: "online-videos" } },
     ],
   },
@@ -77,7 +86,21 @@ const navItems: NavItem[] = [
       { to: "/utilities/interactive-text", icon: Type, labelKey: "utilities.nav.interactiveText" },
     ],
   },
-  { to: "/settings", icon: Settings, labelKey: "nav.settings" },
+  {
+    to: "/settings",
+    icon: Settings,
+    labelKey: "nav.settings",
+    children: [
+      { to: "/settings", icon: Sliders, labelKey: "settings.tabs.general" },
+      { to: "/settings", icon: Palette, labelKey: "settings.tabs.appearance", search: { tab: "appearance" } },
+      { to: "/settings", icon: Keyboard, labelKey: "settings.tabs.shortcuts", search: { tab: "shortcuts" } },
+      { to: "/settings", icon: Monitor, labelKey: "settings.tabs.monitor", search: { tab: "monitor" } },
+      { to: "/settings", icon: Wifi, labelKey: "settings.tabs.streaming", search: { tab: "streaming" } },
+      { to: "/settings", icon: RefreshCw, labelKey: "settings.tabs.sync", search: { tab: "sync" } },
+      { to: "/settings", icon: Film, labelKey: "settings.tabs.youtube", search: { tab: "youtube" } },
+      { to: "/settings", icon: Database, labelKey: "settings.tabs.data", search: { tab: "data" } },
+    ],
+  },
   { to: "/help", icon: CircleHelp, labelKey: "nav.help" },
 ];
 

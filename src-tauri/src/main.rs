@@ -42,8 +42,7 @@ fn main() {
             Ok(_) => std::process::exit(0),
             Err(e) => {
                 eprintln!("[build-bible] ERROR: {e}");
-                // Non-fatal: app will regenerate on first launch
-                std::process::exit(0);
+                std::process::exit(1);
             }
         }
     }

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback } from "react";
+import { useState, useMemo, useRef, useDeferredValue, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
 import { Input } from "../ui/input";
@@ -8,27 +8,24 @@ import { ViewToggle } from "./view-toggle";
 import { useResponsiveColumns, GRID_COLS_CLASS } from "../../hooks/use-responsive-columns";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../../lib/utils";
-import { getPreference, setPreference } from "../../lib/store";
+import { useStorePreference, useSetStorePreference } from "../../lib/queries/settings";
 
 const VIEW_PREF_KEY = "hymnal.viewType";
 
 export function HymnSearch() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"list" | "grid">("list");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  const { data: view } = useStorePreference<"list" | "grid">(VIEW_PREF_KEY, "list");
+  const setStoredView = useSetStorePreference<"list" | "grid">(VIEW_PREF_KEY);
 
   // Buttons highlight instantly via `view`; the virtualizer uses `renderView`
   // which defers the heavy re-render so the toggle feels snappy.
-  const renderView = useDeferredValue(view);
-
-  useEffect(() => {
-    void getPreference<"list" | "grid">(VIEW_PREF_KEY, "list").then(setView);
-  }, []);
+  const renderView = useDeferredValue(view ?? "list");
 
   const handleSetView = (v: "list" | "grid") => {
-    setView(v);
-    void setPreference(VIEW_PREF_KEY, v);
+    setStoredView(v);
   };
 
   const deferredQuery = useDeferredValue(query);
@@ -82,7 +79,7 @@ export function HymnSearch() {
           />
         </div>
         <ViewToggle
-          view={view}
+          view={view ?? "list"}
           onSetView={handleSetView}
           showFavoritesOnly={showFavoritesOnly}
           onToggleFavorites={() => setShowFavoritesOnly(!showFavoritesOnly)}
@@ -102,7 +99,7 @@ export function HymnSearch() {
           <p className="text-sm text-muted-foreground">{t("favorites.empty")}</p>
         )}
 
-        {hymns && hymns.length > 0 && (
+        {hymns && hymns.length > 0 && view !== undefined && (
           <>
             {/* Sticky table header — outside card border so sticky positioning works */}
             {renderView === "list" && (
