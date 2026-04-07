@@ -52,6 +52,7 @@
     "books": "Livros",
     "chapters": "Capítulos",
     "comparison": "Comparação de Versões",
+    "switchToVersion": "Mudar para {{version}}",
     "copyVerse": "Copiar versiculo",
     "loading": "Carregando...",
     "newTestament": "Novo Testamento",
