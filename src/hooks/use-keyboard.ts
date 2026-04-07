@@ -60,6 +60,12 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         return;
       }
 
+      // On /playing-now, Space/ArrowLeft/ArrowRight are handled by usePlayingNowKeyboard
+      const isPlayingNowRoute = window.location.pathname.startsWith("/playing-now");
+      if (isPlayingNowRoute && (e.key === " " || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        return;
+      }
+
       if (matchesShortcutCombo(e, shortcutsHelpLocalCombo)) {
         e.preventDefault();
         openKeyboardShortcutsPanel();

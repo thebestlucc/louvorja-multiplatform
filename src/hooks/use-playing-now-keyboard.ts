@@ -10,6 +10,8 @@ interface PlayingNowActions {
   pause: () => void;
   stop: () => void;
   restart: () => void;
+  prevSlide: () => void;
+  nextSlide: () => void;
   prevItem: () => void;
   nextItem: () => void;
   setVolume: (volume: number) => void;
@@ -17,15 +19,17 @@ interface PlayingNowActions {
 
 /**
  * Keyboard shortcuts active only on the /playing-now route.
- * P = play/pause, S = stop, R = restart, M = mute/unmute,
- * [ = prev item, ] = next item, ArrowUp = volume up, ArrowDown = volume down.
+ * Space/P = play/pause, S = stop, R = restart, M = mute/unmute,
+ * ArrowLeft = prev slide, ArrowRight = next slide,
+ * Alt+ArrowLeft/[ = prev queue item, Alt+ArrowRight/] = next queue item,
+ * ArrowUp = volume up, ArrowDown = volume down.
  */
-export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, nextItem, setVolume }: PlayingNowActions) {
+export function usePlayingNowKeyboard({ play, pause, stop, restart, prevSlide, nextSlide, prevItem, nextItem, setVolume }: PlayingNowActions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      if (matchesShortcutCombo(e, "p")) {
+      if (matchesShortcutCombo(e, "p") || matchesShortcutCombo(e, " ")) {
         e.preventDefault();
         const status = useMediaPlayerStore.getState().status;
         if (status === "playing") pause();
@@ -40,12 +44,18 @@ export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, ne
         e.preventDefault();
         const audioState = useAudioStore.getState();
         void audioState.setOutputMuted(!audioState.outputMuted);
-      } else if (matchesShortcutCombo(e, "[")) {
+      } else if (matchesShortcutCombo(e, "Alt+ArrowLeft") || matchesShortcutCombo(e, "[")) {
         e.preventDefault();
         prevItem();
-      } else if (matchesShortcutCombo(e, "]")) {
+      } else if (matchesShortcutCombo(e, "Alt+ArrowRight") || matchesShortcutCombo(e, "]")) {
         e.preventDefault();
         nextItem();
+      } else if (matchesShortcutCombo(e, "ArrowLeft")) {
+        e.preventDefault();
+        prevSlide();
+      } else if (matchesShortcutCombo(e, "ArrowRight")) {
+        e.preventDefault();
+        nextSlide();
       } else if (matchesShortcutCombo(e, "ArrowUp")) {
         e.preventDefault();
         const vol = useAudioStore.getState().volume;
@@ -59,5 +69,5 @@ export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, ne
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [play, pause, stop, restart, prevItem, nextItem, setVolume]);
+  }, [play, pause, stop, restart, prevSlide, nextSlide, prevItem, nextItem, setVolume]);
 }

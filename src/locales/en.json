@@ -1225,7 +1225,9 @@
       "stop": "Stop playback",
       "restart": "Restart playback",
       "volumeUp": "Volume up",
-      "volumeDown": "Volume down"
+      "volumeDown": "Volume down",
+      "prevSlide": "Previous slide (playback)",
+      "nextSlide": "Next slide (playback)"
     },
     "noResults": "No shortcuts found.",
     "searchPlaceholder": "Search shortcuts...",

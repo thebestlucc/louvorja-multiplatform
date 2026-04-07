@@ -1225,7 +1225,9 @@
       "stop": "Detener reproducción",
       "restart": "Reiniciar reproducción",
       "volumeUp": "Subir volumen",
-      "volumeDown": "Bajar volumen"
+      "volumeDown": "Bajar volumen",
+      "prevSlide": "Diapositiva anterior (reproducción)",
+      "nextSlide": "Siguiente diapositiva (reproducción)"
     },
     "noResults": "No se encontraron atajos.",
     "searchPlaceholder": "Buscar atajos...",
