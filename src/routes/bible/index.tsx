@@ -617,6 +617,10 @@ function BibleIndex() {
               book={bible.currentBook}
               chapter={bible.currentChapter}
               selectedVerses={bible.selectedVerses}
+              onSelectVersion={(versionId) => {
+                bible.setVersion(versionId);
+                setShowComparison(false);
+              }}
             />
           </div>
         </DialogContent>

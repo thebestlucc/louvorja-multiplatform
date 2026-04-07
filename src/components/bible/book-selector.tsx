@@ -78,7 +78,7 @@ function NavGrid({
   if (total <= 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="text-[10px] text-muted-foreground/50">{emptyLabel}</span>
+        <span className="text-xs text-muted-foreground/50">{emptyLabel}</span>
       </div>
     );
   }
@@ -100,7 +100,7 @@ function NavGrid({
         onClick={() => onPageChange(page - 1)}
         className="flex cursor-pointer items-center justify-center rounded-sm bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       >
-        <ChevronsLeft className="h-3 w-3" />
+        <ChevronsLeft className="h-6 w-6" />
       </button>
     ) : (
       <div key="prev-empty" />
@@ -126,7 +126,7 @@ function NavGrid({
         onClick={() => onPageChange(page + 1)}
         className="flex cursor-pointer items-center justify-center rounded-sm bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       >
-        <ChevronsRight className="h-3 w-3" />
+        <ChevronsRight className="h-6 w-6" />
       </button>
     ) : (
       <div key="next-empty" />
@@ -275,8 +275,8 @@ export function BookSelector({
                   hasSelection && !selected && available && "opacity-50 saturate-50",
                 )}
               >
-                <span className="text-[11px] font-extrabold leading-none">{book.abbr}</span>
-                <span className="w-full truncate text-center text-[7px] leading-none opacity-80">
+                <span className="text-2xl font-extrabold leading-none">{book.abbr}</span>
+                <span className="w-full truncate text-center text-base leading-none opacity-80">
                   {localizedName}
                 </span>
               </button>
@@ -289,7 +289,7 @@ export function BookSelector({
       <div className="flex min-h-0 flex-1 gap-1">
         {/* Chapters */}
         <div className="flex min-h-0 w-1/2 flex-col gap-0.5">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t("bible.chapters")}
           </span>
           <div className="min-h-0 flex-1">
@@ -310,7 +310,7 @@ export function BookSelector({
                     ref={(el) => setChapterRef(ch, el)}
                     onClick={() => onSelectChapter(ch)}
                     className={cn(
-                      "flex cursor-pointer items-center justify-center rounded-sm text-xs font-semibold transition-colors",
+                      "flex cursor-pointer items-center justify-center rounded-sm text-2xl font-bold transition-colors",
                       isSelected && selectedEntry
                         ? `text-white ${chapterLabel}`
                         : "border border-border bg-card hover:bg-accent hover:text-accent-foreground",
@@ -326,7 +326,7 @@ export function BookSelector({
 
         {/* Verses */}
         <div className="flex min-h-0 w-1/2 flex-col gap-0.5">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {localizedCurrentBook && currentChapter > 0
               ? `${localizedCurrentBook} ${currentChapter}`
               : t("bible.verses")}
@@ -350,7 +350,7 @@ export function BookSelector({
                     onClick={(ev) => onSelectVerse(v, ev.shiftKey)}
                     onDoubleClick={() => onDoubleClickVerse(v)}
                     className={cn(
-                      "flex cursor-pointer items-center justify-center rounded-sm text-xs font-medium transition-colors",
+                      "flex cursor-pointer items-center justify-center rounded-sm text-2xl font-semibold transition-colors",
                       isSelected && selectedEntry
                         ? `text-white ${chapterLabel}`
                         : "border border-border bg-card hover:bg-accent hover:text-accent-foreground",

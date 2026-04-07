@@ -7,9 +7,11 @@ interface VersionComparisonItemProps {
   book: string;
   chapter: number;
   selectedVerses: number[];
+  onSelect?: (versionId: number) => void;
 }
 
-function VersionComparisonItem({ version, book, chapter, selectedVerses }: VersionComparisonItemProps) {
+function VersionComparisonItem({ version, book, chapter, selectedVerses, onSelect }: VersionComparisonItemProps) {
+  const { t } = useTranslation();
   const { data: verses } = useVerses(version.id, book, chapter);
 
   const verseSet = new Set(selectedVerses);
@@ -18,7 +20,12 @@ function VersionComparisonItem({ version, book, chapter, selectedVerses }: Versi
   if (filtered.length === 0) return null;
 
   return (
-    <div className="space-y-1 rounded-lg border p-3">
+    <button
+      type="button"
+      onClick={() => onSelect?.(version.id)}
+      className="w-full cursor-pointer space-y-1 rounded-lg border p-3 text-left transition-colors hover:bg-accent/50"
+      title={t("bible.switchToVersion", { version: version.abbreviation })}
+    >
       <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
         {version.abbreviation}
       </h4>
@@ -30,7 +37,7 @@ function VersionComparisonItem({ version, book, chapter, selectedVerses }: Versi
           </span>
         ))}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -39,6 +46,7 @@ interface VersionComparisonProps {
   book: string;
   chapter: number;
   selectedVerses: number[];
+  onSelectVersion?: (versionId: number) => void;
 }
 
 export function VersionComparison({
@@ -46,6 +54,7 @@ export function VersionComparison({
   book,
   chapter,
   selectedVerses,
+  onSelectVersion,
 }: VersionComparisonProps) {
   const { t } = useTranslation();
   const { data: versions } = useBibleVersions();
@@ -66,6 +75,7 @@ export function VersionComparison({
           book={book}
           chapter={chapter}
           selectedVerses={selectedVerses}
+          onSelect={onSelectVersion}
         />
       ))}
     </div>
