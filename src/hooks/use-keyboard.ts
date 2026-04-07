@@ -3,12 +3,14 @@ import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
+import { useAudioStore } from "../stores/audio-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useSetting } from "../lib/queries";
 import { matchesShortcutCombo, normalizeShortcutCombo } from "../lib/shortcut-definitions";
 import { spotlightOpen } from "../lib/tauri";
+import { emit } from "@tauri-apps/api/event";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const { nextSlide, prevSlide } = useSlides();
@@ -60,12 +62,6 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         return;
       }
 
-      // On /playing-now, Space/ArrowLeft/ArrowRight are handled by usePlayingNowKeyboard
-      const isPlayingNowRoute = window.location.pathname.startsWith("/playing-now");
-      if (isPlayingNowRoute && (e.key === " " || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-        return;
-      }
-
       if (matchesShortcutCombo(e, shortcutsHelpLocalCombo)) {
         e.preventDefault();
         openKeyboardShortcutsPanel();
@@ -73,8 +69,29 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       }
 
       switch (e.key) {
+        case " ": {
+          e.preventDefault();
+          const mpState = useMediaPlayerStore.getState();
+          if (mpState.status === "playing") {
+            if (mpState.timelineSource === "audio") {
+              void useAudioStore.getState().pause();
+            } else if (mpState.timelineSource === "video") {
+              void emit("video-control", { action: "pause" });
+            }
+            mpState.setStatus("paused");
+          } else if (mpState.status === "paused") {
+            if (mpState.timelineSource === "audio") {
+              void useAudioStore.getState().resume();
+            } else if (mpState.timelineSource === "video") {
+              void emit("video-control", { action: "play" });
+            }
+            mpState.setStatus("playing");
+          } else {
+            nextSlide();
+          }
+          break;
+        }
         case "ArrowRight":
-        case " ":
         case "PageDown":
           e.preventDefault();
           nextSlide();
