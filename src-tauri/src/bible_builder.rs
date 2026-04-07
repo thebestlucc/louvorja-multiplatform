@@ -90,13 +90,24 @@ pub fn build_bible_db(input_dir: &Path, output_path: &Path) -> Result<bool, Box<
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
 
-        let src = Connection::open_with_flags(
+        let src = match Connection::open_with_flags(
             source_path,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )?;
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[bible_builder] Skipping {} — could not open: {}", file_name, e);
+                continue;
+            }
+        };
 
-        let verse_count: i64 =
-            src.query_row("SELECT COUNT(*) FROM verse", [], |r| r.get(0))?;
+        let verse_count: i64 = match src.query_row("SELECT COUNT(*) FROM verse", [], |r| r.get(0)) {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("[bible_builder] Skipping {} — missing verse table: {}", file_name, e);
+                continue;
+            }
+        };
 
         if verse_count < 1000 {
             eprintln!(
@@ -106,17 +117,29 @@ pub fn build_bible_db(input_dir: &Path, output_path: &Path) -> Result<bool, Box<
             continue;
         }
 
-        let abbreviation: String = src.query_row(
+        let abbreviation: String = match src.query_row(
             "SELECT value FROM metadata WHERE key='name'",
             [],
             |r| r.get(0),
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[bible_builder] Skipping {} — missing name metadata: {}", file_name, e);
+                continue;
+            }
+        };
 
-        let copyright: String = src.query_row(
+        let copyright: String = match src.query_row(
             "SELECT value FROM metadata WHERE key='copyright'",
             [],
             |r| r.get(0),
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[bible_builder] Skipping {} — missing copyright metadata: {}", file_name, e);
+                continue;
+            }
+        };
 
         let full_name = strip_year_suffix(&copyright);
 
@@ -163,6 +186,16 @@ pub fn build_bible_db(input_dir: &Path, output_path: &Path) -> Result<bool, Box<
         tx.commit()?;
 
         total_verses += verse_count as u64;
+    }
+
+    if total_verses == 0 {
+        drop(db);
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(format!(
+            "No valid Bible translations found in {}",
+            input_dir.display()
+        )
+        .into());
     }
 
     eprintln!(

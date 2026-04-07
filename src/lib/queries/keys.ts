@@ -69,6 +69,9 @@ export const queryKeys = {
   syncPoints: {
     byHymn: (hymnId: number) => ["syncPoints", hymnId] as const,
   },
+  storePrefs: {
+    detail: (key: string) => ["store-pref", key] as const,
+  },
   utilities: {
     timerState: ["utilities", "timerState"] as const,
   },

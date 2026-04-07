@@ -66,7 +66,12 @@ function CollectionsIndex() {
   const { bindHymnToPlaybackQueue } = useHymnPlayback();
   const addToQueue = useQueueStore((state) => state.addToQueue);
 
-  const [tab, setTab] = useState<"albums" | "custom">("albums");
+  const [tab, setTab] = useState<"albums" | "custom">(routeSearch.tab === "custom" ? "custom" : "albums");
+
+  useEffect(() => {
+    if (routeSearch.tab === "custom") setTab("custom");
+    else if (!routeSearch.tab) setTab("albums");
+  }, [routeSearch.tab]);
   const [view, setView] = useState<"list" | "grid">("grid");
   const renderView = useDeferredValue(view);
 
@@ -425,7 +430,7 @@ function CollectionsIndex() {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => { void router.navigate({ to: "/collections" }); setTab("albums"); }}
+            onClick={() => { void router.navigate({ to: "/collections", search: {} }); }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2",
               !isOnlineVideos && tab === "albums" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
@@ -435,7 +440,7 @@ function CollectionsIndex() {
           </button>
           <button
             type="button"
-            onClick={() => { void router.navigate({ to: "/collections" }); setTab("custom"); }}
+            onClick={() => { void router.navigate({ to: "/collections", search: { tab: "custom" } }); }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2",
               !isOnlineVideos && tab === "custom" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
