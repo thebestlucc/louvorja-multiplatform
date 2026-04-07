@@ -20,7 +20,8 @@ allow = [
     "get_favorites",
     "get_favorite_hymns",
     "get_favorite_collections",
-    "is_favorite"
+    "is_favorite",
+    "get_all_favorite_ids"
 ]
 
 [[permission]]

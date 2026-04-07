@@ -3,8 +3,10 @@ import { createFileRoute, useRouter, getRouteApi } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next";
 import { OnlineVideosTab } from "../../components/online-videos/online-videos-tab";
 import { PlaylistDetail } from "../../components/online-videos/playlist-detail";
-import { FolderOpen, Loader2, Plus, LayoutGrid, List as ListIcon, Upload } from "lucide-react";
+import { FolderOpen, Loader2, Plus, Upload } from "lucide-react";
 import { CollectionCard } from "../../components/music/collection-card";
+import { ViewToggle } from "../../components/music/view-toggle";
+import { useResponsiveColumns, GRID_COLS_CLASS } from "../../hooks/use-responsive-columns";
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -14,7 +16,7 @@ import {
   useCollections,
   useCreateCollection,
   useDeleteCollection,
-  useFavoriteCollections,
+  useFavoriteIds,
   useImportCollectionSong,
 } from "../../lib/queries";
 import type { Collection } from "../../lib/bindings";
@@ -24,7 +26,6 @@ import { parseSlideRow } from "../../types/presentation";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
-import { Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,6 @@ import {
 } from "../../components/ui/dialog";
 import { cn } from "../../lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useMedia } from "react-use";
 import { useRouteTour } from "../../hooks/use-route-tour";
 import { SpotlightTour } from "../../components/tour/spotlight-tour";
 
@@ -50,13 +50,13 @@ function CollectionsIndex() {
   const router = useRouter();
   const routeSearch = parentRoute.useSearch();
 
-  // All hooks must be unconditional — no early returns before this block
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  const { data, isLoading: isAllLoading } = useCollections(deferredSearch, { enabled: !showFavoritesOnly });
-  const { data: favoriteCollections, isLoading: isFavoritesLoading } = useFavoriteCollections(deferredSearch, { enabled: showFavoritesOnly });
+  const { data, isLoading: isAllLoading } = useCollections(deferredSearch);
+  const { data: rawFavoriteIds } = useFavoriteIds("collection");
+  const favoriteIds = useMemo(() => new Set(rawFavoriteIds ?? []), [rawFavoriteIds]);
   const createMutation = useCreateCollection();
   const deleteMutation = useDeleteCollection();
   const importSongMutation = useImportCollectionSong();
@@ -68,6 +68,7 @@ function CollectionsIndex() {
 
   const [tab, setTab] = useState<"albums" | "custom">("albums");
   const [view, setView] = useState<"list" | "grid">("grid");
+  const renderView = useDeferredValue(view);
 
   useEffect(() => {
     void getPreference<"list" | "grid">("collections.viewType", "grid").then(setView);
@@ -102,15 +103,15 @@ function CollectionsIndex() {
     !yearInvalid &&
     !createMutation.isPending;
 
-  const isLoading = showFavoritesOnly ? isFavoritesLoading : isAllLoading;
+  const isLoading = isAllLoading;
 
   const filtered = useMemo(() => {
-    const source = showFavoritesOnly ? (favoriteCollections || []) : (data || []);
-    
+    if (!data) return [];
+    const source = showFavoritesOnly ? data.filter((c) => favoriteIds.has(c.id)) : data;
     return source.filter((entry) =>
       tab === "albums" ? entry.sourceType === "api" : entry.sourceType !== "api"
     );
-  }, [data, favoriteCollections, tab, showFavoritesOnly]);
+  }, [data, favoriteIds, tab, showFavoritesOnly]);
 
   const resetCreateForm = () => {
     setName("");
@@ -181,7 +182,7 @@ function CollectionsIndex() {
         );
         for (const contents of slideArrays) allSlides.push(...contents);
       }
-      
+
       if (allSlides.length > 0) {
         setCurrentPresentation(null);
         setPresentationSlides(allSlides);
@@ -234,7 +235,7 @@ function CollectionsIndex() {
   const handleCreate = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     if (!canSubmit) return;
-    
+
     await catcher(async () => {
       const collection = await createMutation.mutateAsync({
         name: normalizedName,
@@ -258,19 +259,20 @@ function CollectionsIndex() {
     }, { notify: true, fallbackMessage: t("collections.saveFailed", { error: "" }) });
   };
 
-  const isXl = useMedia("(min-width: 1280px)", false);
-  const isLg = useMedia("(min-width: 1024px)", false);
-  const isMd = useMedia("(min-width: 768px)", false);
-  const isSm = useMedia("(min-width: 640px)", false);
-
-  const columns = view === "list" ? 1 : isXl ? 6 : isLg ? 5 : isMd ? 4 : isSm ? 3 : 2;
+  const columns = useResponsiveColumns(renderView);
   const rowCount = Math.ceil(filtered.length / columns);
-  const listRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const estimateSize = useCallback(
+    () => (renderView === "list" ? 64 : 280),
+    [renderView],
+  );
 
   const virtualizer = useVirtualizer({
     count: rowCount,
-    getScrollElement: () => document.getElementById("main-scroll-area"),
-    estimateSize: () => (view === "list" ? 64 : 280),
+    getScrollElement,
+    estimateSize,
     overscan: 5,
     gap: 16,
   });
@@ -279,8 +281,8 @@ function CollectionsIndex() {
   const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/collections");
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6" ref={listRef}>
-      <div className="flex items-center justify-between gap-4">
+    <div className="mx-auto flex h-full max-w-6xl flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("nav.collections")}</h1>
           <p className="text-sm text-muted-foreground">{t("collections.subtitle")}</p>
@@ -419,7 +421,7 @@ function CollectionsIndex() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between border-b border-border pb-2" data-tour="collections-tabs">
+      <div className="flex shrink-0 items-center justify-between border-b border-border pb-2" data-tour="collections-tabs">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -453,33 +455,12 @@ function CollectionsIndex() {
           </button>
         </div>
         {!isOnlineVideos && (
-          <div className="flex items-center gap-2 bg-muted/20 p-1 rounded-md border">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "h-8 w-8 transition-all",
-                showFavoritesOnly ? "text-yellow-500 shadow-sm bg-yellow-500/5" : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              title={t("favorites.title")}
-            >
-              <Star className={cn("h-4 w-4", showFavoritesOnly && "fill-current")} />
-            </Button>
-            <div className="w-px h-4 bg-border mx-1" />
-            <Button variant="ghost" size="icon" className={cn(
-              "h-8 w-8 transition-all",
-              view === "list" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )} onClick={() => handleSetView("list")} title="List view">
-              <ListIcon className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className={cn(
-              "h-8 w-8 transition-all",
-              view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )} onClick={() => handleSetView("grid")} title="Grid view">
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-          </div>
+          <ViewToggle
+            view={view}
+            onSetView={handleSetView}
+            showFavoritesOnly={showFavoritesOnly}
+            onToggleFavorites={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          />
         )}
       </div>
 
@@ -491,75 +472,86 @@ function CollectionsIndex() {
       )}
 
       {/* Collections tab content (albums / custom) */}
-      {!isOnlineVideos && <>
-      <Input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder={t("collections.searchPlaceholder")}
-      />
+      {!isOnlineVideos && (
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <Input
+            className="shrink-0"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t("collections.searchPlaceholder")}
+          />
 
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">{t("hymnal.loading")}</p>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-10">
-          <FolderOpen className="h-10 w-10 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">{t("collections.empty")}</p>
-        </div>
-      ) : (
-        <div className={view === "list" ? "rounded-lg border border-border bg-card overflow-hidden" : ""}>
-          {view === "list" && (
-            <div className="grid grid-cols-[2fr_1fr_100px_160px] gap-4 px-4 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:grid">
-              <div className="pl-2">{t("collections.name", "Name")}</div>
-              <div>{t("collections.year", "Year")}</div>
-              <div>{t("collections.songs", "Songs")}</div>
-              <div className="text-right pr-2">{t("table.actions", "Actions")}</div>
-            </div>
-          )}
-          <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
-            {virtualizer.getVirtualItems().map((virtualRow) => {
-              const startIndex = virtualRow.index * columns;
-              const rowItems = filtered.slice(startIndex, startIndex + columns);
-
-              return (
-                <div
-                  key={virtualRow.key}
-                  ref={virtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  <div
-                    className={cn(
-                      view === "grid" 
-                        ? "grid gap-4 h-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" 
-                        : "flex flex-col"
-                    )}
-                  >
-                    {rowItems.map((collection) => (
-                      <CollectionCard
-                        key={collection.id}
-                        collection={collection}
-                        view={view}
-                        onProject={handleProjectCollection}
-                        onPlaySongs={handlePlayCollectionSongs}
-                        onPlayPlayback={handlePlayCollectionPlayback}
-                        onDelete={handleDeleteCollection}
-                        deleteFallbackMessage={t("collections.deleteFailed", { error: "" })}
-                      />
-                    ))}
-                </div>
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">{t("hymnal.loading")}</p>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-10">
+                <FolderOpen className="h-10 w-10 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">{t("collections.empty")}</p>
               </div>
-            );
-          })}
-        </div>
+            ) : (
+              <>
+                {renderView === "list" && (
+                  <div className="sticky top-0 z-10 hidden sm:grid grid-cols-[2fr_1fr_100px_160px] gap-4 rounded-t-lg border border-b-0 border-border bg-muted px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <div className="pl-2">{t("collections.name", "Name")}</div>
+                    <div>{t("collections.year", "Year")}</div>
+                    <div>{t("collections.songs", "Songs")}</div>
+                    <div className="text-right pr-2">{t("table.actions", "Actions")}</div>
+                  </div>
+                )}
+
+                <div className={cn(
+                  renderView === "list" ? "rounded-b-lg border border-t-0 border-border bg-card" : "",
+                )}>
+                  <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
+                    {virtualizer.getVirtualItems().map((virtualRow) => {
+                      const startIndex = virtualRow.index * columns;
+                      const rowItems = filtered.slice(startIndex, startIndex + columns);
+
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          ref={virtualizer.measureElement}
+                          data-index={virtualRow.index}
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <div
+                            className={cn(
+                              renderView === "grid"
+                                ? cn(GRID_COLS_CLASS, "h-full")
+                                : "flex flex-col"
+                            )}
+                          >
+                            {rowItems.map((collection) => (
+                              <CollectionCard
+                                key={collection.id}
+                                collection={collection}
+                                view={renderView}
+                                favoriteIds={favoriteIds}
+                                onProject={handleProjectCollection}
+                                onPlaySongs={handlePlayCollectionSongs}
+                                onPlayPlayback={handlePlayCollectionPlayback}
+                                onDelete={handleDeleteCollection}
+                                deleteFallbackMessage={t("collections.deleteFailed", { error: "" })}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
-      </>}
 
       {showTour && steps.length > 0 && (
         <SpotlightTour steps={steps} onComplete={handleComplete} onSkip={handleSkip} />

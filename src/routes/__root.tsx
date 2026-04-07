@@ -155,12 +155,11 @@ function RootLayout() {
   useEffect(() => {
     const unlistenPromise = safeListen(
       listen("data-changed", () => {
-        // Invalidate search results and album listings (content changed)
-        // Avoid invalidating ["hymns"] prefix which would also refetch per-hymn detail/audioPath queries
-        queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
-        queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
-        queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
+        // Invalidate content caches after pack sync (favorites unaffected by sync)
+        queryClient.invalidateQueries({ queryKey: ["hymns"], exact: false });
+        queryClient.invalidateQueries({ queryKey: ["music"], exact: false });
+        queryClient.invalidateQueries({ queryKey: ["collections"], exact: false });
+        queryClient.invalidateQueries({ queryKey: ["albums"], exact: false });
       }),
       "data-changed",
     );

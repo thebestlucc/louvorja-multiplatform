@@ -324,6 +324,8 @@
     "deleteFailed": "Could not delete hymn: {{error}}",
     "editHint": "Update hymn metadata and lyrics without leaving this screen.",
     "editTitle": "Edit hymn",
+    "gridView": "Grid view",
+    "listView": "List view",
     "loading": "Loading...",
     "lyricsPlaceholder": "Lyrics",
     "noAlbums": "No albums found",

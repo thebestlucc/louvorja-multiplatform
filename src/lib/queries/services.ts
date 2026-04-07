@@ -179,7 +179,7 @@ export function useFavorites(itemType: string) {
   return useQuery({
     queryKey: queryKeys.favorites.all(itemType),
     queryFn: () => getFavorites(itemType),
-    staleTime: 60_000,
+    staleTime: Infinity,
   });
 }
 
@@ -188,7 +188,7 @@ export function useFavoriteHymns(query?: string, options?: { enabled?: boolean }
     queryKey: queryKeys.favorites.all("hymn", query),
     queryFn: () => getFavoriteHymns(query),
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 }
 
@@ -197,7 +197,7 @@ export function useFavoriteCollections(query?: string, options?: { enabled?: boo
     queryKey: queryKeys.favorites.all("collection", query),
     queryFn: () => getFavoriteCollections(query),
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 }
 
@@ -206,7 +206,7 @@ export function useIsFavorite(itemType: string, itemId: number, options?: { enab
     queryKey: queryKeys.favorites.isFavorite(itemType, itemId),
     queryFn: () => isFavorite(itemType, itemId),
     enabled: (options?.enabled ?? true) && itemId > 0,
-    staleTime: 60_000,
+    staleTime: Infinity,
   });
 }
 
@@ -229,7 +229,6 @@ export function useFavoriteIds(itemType: string) {
   return useQuery({
     queryKey: queryKeys.favorites.allIds(itemType),
     queryFn: () => getAllFavoriteIds(itemType),
-    staleTime: 30_000,
-    select: (ids) => new Set(ids),
+    staleTime: Infinity,
   });
 }
