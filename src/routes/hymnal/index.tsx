@@ -13,12 +13,12 @@ function HymnalIndex() {
   const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/hymnal");
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="mx-auto flex h-full max-w-5xl flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">{t("nav.hymnal")}</h1>
       </div>
 
-      <div data-tour="hymnal-list">
+      <div data-tour="hymnal-list" className="min-h-0 flex-1">
         <HymnSearch />
       </div>
 

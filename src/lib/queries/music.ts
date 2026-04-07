@@ -23,7 +23,7 @@ export function useHymns(query: string, options?: { enabled?: boolean }) {
     queryKey: queryKeys.hymns.searchFull(query),
     queryFn: () => searchHymns(query),
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 }
 
@@ -32,7 +32,7 @@ export function useHymnsList(query: string, options?: { enabled?: boolean }) {
     queryKey: queryKeys.hymns.search(query),
     queryFn: () => searchHymnsList(query),
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 }
 
@@ -40,7 +40,7 @@ export function useAllHymns(query: string) {
   return useQuery({
     queryKey: ["hymns", "search-all", query],
     queryFn: () => searchAllHymns(query),
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 }
 
@@ -48,7 +48,7 @@ export function useAllMusic(query: string) {
   return useQuery({
     queryKey: ["music", "all", query],
     queryFn: () => searchAllMusic(query),
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 }
 
@@ -66,7 +66,7 @@ export function useHymn(id: number) {
     queryKey: queryKeys.hymns.detail(id),
     queryFn: () => getHymn(id),
     enabled: id > 0,
-    staleTime: 60_000,
+    staleTime: Infinity,
     gcTime: 10 * 60_000,
   });
 }

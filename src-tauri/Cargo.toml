@@ -13,7 +13,7 @@ default-run = "lja_multiplatform"
 
 [lib]
 name = "louvorja_multiplatform"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.5.3", features = [] }

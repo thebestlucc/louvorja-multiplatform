@@ -19,6 +19,7 @@ function getCreationYear(createdAt: string): number | null {
 interface CollectionCardProps {
   collection: Collection;
   view: "list" | "grid";
+  favoriteIds?: Set<number>;
   onProject: (collection: Collection) => Promise<void>;
   onPlaySongs: (collection: Collection) => Promise<void>;
   onPlayPlayback: (collection: Collection) => Promise<void>;
@@ -29,6 +30,7 @@ interface CollectionCardProps {
 export const CollectionCard = React.memo(function CollectionCard({
   collection,
   view,
+  favoriteIds,
   onProject,
   onPlaySongs,
   onPlayPlayback,
@@ -38,6 +40,7 @@ export const CollectionCard = React.memo(function CollectionCard({
   const { t } = useTranslation();
   const cover = collection.coverPath ?? collection.autoCoverPath;
   const creationYear = collection.year ?? getCreationYear(collection.createdAt);
+  const isFav = favoriteIds?.has(collection.id) ?? false;
 
   if (view === "list") {
     return (
@@ -66,7 +69,7 @@ export const CollectionCard = React.memo(function CollectionCard({
           </div>
 
           <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pr-0 sm:pr-2 pointer-events-auto w-full sm:w-auto mt-2 sm:mt-0 border-t sm:border-t-0 pt-2 sm:pt-0">
-            <FavoriteButton itemType="collection" itemId={collection.id} size="icon" className="h-8 w-8" />
+            <FavoriteButton itemType="collection" itemId={collection.id} isFavoriteOverride={isFav} size="icon" className="h-8 w-8" />
             {/* TODO(review): title attributes should use t() for i18n — reviewer, 2026-04-06, Severity: Low */}
             <Button
               variant="ghost"
@@ -129,6 +132,7 @@ export const CollectionCard = React.memo(function CollectionCard({
           <FavoriteButton
             itemType="collection"
             itemId={collection.id}
+            isFavoriteOverride={isFav}
             size="icon"
             variant="outline"
             className="h-8 w-8 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-md border-white/10"

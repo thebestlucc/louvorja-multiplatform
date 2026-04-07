@@ -324,6 +324,8 @@
     "deleteFailed": "No se pudo eliminar el himno: {{error}}",
     "editHint": "Actualice metadatos y letra sin salir de esta pantalla.",
     "editTitle": "Editar himno",
+    "gridView": "Vista de cuadrícula",
+    "listView": "Vista de lista",
     "loading": "Cargando...",
     "lyricsPlaceholder": "Letra",
     "noAlbums": "No se encontraron álbumes",

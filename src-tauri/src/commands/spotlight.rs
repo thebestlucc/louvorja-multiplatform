@@ -158,13 +158,26 @@ pub fn create_spotlight_window(app: &AppHandle) -> Result<(), AppError> {
     #[cfg(not(target_os = "windows"))]
     let builder = builder.visible_on_all_workspaces(true);
 
-    builder
-    .build()
-    .map_err(|e| AppError::Internal(format!("Failed to pre-create spotlight window: {e}")))?;
+    let _win = builder
+        .build()
+        .map_err(|e| AppError::Internal(format!("Failed to pre-create spotlight window: {e}")))?;
 
     // Convert to NSPanel immediately after build (macOS only).
     #[cfg(target_os = "macos")]
     macos::setup_spotlight_panel(app)?;
+
+    // On Windows, hide the spotlight window when it loses focus.
+    // macOS handles this via NSPanel's window_did_resign_key handler above.
+    // Linux window managers hide floating windows on blur without extra setup.
+    #[cfg(target_os = "windows")]
+    {
+        let win_for_blur = _win.clone();
+        _win.on_window_event(move |event| {
+            if let tauri::WindowEvent::Focused(false) = event {
+                let _ = win_for_blur.hide();
+            }
+        });
+    }
 
     Ok(())
 }

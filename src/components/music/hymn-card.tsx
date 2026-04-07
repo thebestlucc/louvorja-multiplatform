@@ -5,7 +5,7 @@ import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { useAddLiturgyItem, useFavoriteIds } from "../../lib/queries";
+import { useAddLiturgyItem } from "../../lib/queries";
 import type { Hymn, HymnListItem } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
 import { LyricsModal } from "./lyrics-modal";
@@ -21,17 +21,17 @@ function isFullHymn(h: Hymn | HymnListItem): h is Hymn {
 interface HymnCardProps {
   hymn: Hymn | HymnListItem;
   view?: "grid" | "list";
+  favoriteIds?: Set<number>;
 }
 
-export const HymnCard = memo(function HymnCard({ hymn, view = "grid" }: HymnCardProps) {
+export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteIds }: HymnCardProps) {
   const { t } = useTranslation();
   const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
   const addItemMutation = useAddLiturgyItem();
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsHymn, setLyricsHymn] = useState<Hymn | null>(null);
   const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
-  const { data: favoriteIds } = useFavoriteIds("hymn");
-  const isFav = favoriteIds?.has(hymn.id);
+  const isFav = favoriteIds?.has(hymn.id) ?? false;
 
   const fetchingRef = useRef(false);
   const hasAudio = Boolean(hymn.audioPath);
