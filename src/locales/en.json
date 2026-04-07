@@ -1221,7 +1221,11 @@
       "toggleBlack": "Toggle black screen",
       "toggleLogo": "Toggle logo screen",
       "toggleProjector": "Toggle projector window",
-      "toggleReturn": "Toggle return window"
+      "toggleReturn": "Toggle return window",
+      "stop": "Stop playback",
+      "restart": "Restart playback",
+      "volumeUp": "Volume up",
+      "volumeDown": "Volume down"
     },
     "noResults": "No shortcuts found.",
     "searchPlaceholder": "Search shortcuts...",
