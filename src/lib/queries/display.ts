@@ -45,8 +45,9 @@ export function useSetShortcut() {
     },
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({
-        queryKey: ["setting", `shortcut.${vars.id}.${vars.layer}`],
+        queryKey: queryKeys.settings.detail(`shortcut.${vars.id}.${vars.layer}`),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
     },
   });
 }

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useMediaPlayer } from "../../hooks/use-media-player";
@@ -6,6 +6,7 @@ import { usePlaybackCoordinator } from "../../hooks/use-playback-coordinator";
 import { usePlayingNowKeyboard } from "../../hooks/use-playing-now-keyboard";
 import { useAudioStore } from "../../stores/audio-store";
 import { useDisplayStore } from "../../stores/display-store";
+import { navigateBible } from "../../lib/tauri/bible";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { SlidePanel } from "../../components/playing-now/slide-panel";
 import { QueuePanel } from "../../components/playing-now/queue-panel";
@@ -49,6 +50,24 @@ function PlayingNowScreen() {
   const volume = useAudioStore((s) => s.volume);
   const outputMuted = useAudioStore((s) => s.outputMuted);
   const isProjectorOpen = useDisplayStore((s) => s.projectorWindowOpen);
+  const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
+  const bibleContext = useDisplayStore((s) => s.bibleContext);
+  const navigate = useNavigate();
+
+  const isBibleProjection = currentProjectionType === "bible" && bibleContext !== null;
+
+  const handleGoToBible = () => {
+    if (bibleContext) {
+      void navigate({
+        to: "/bible",
+        search: {
+          book: bibleContext.book,
+          chapter: bibleContext.chapter,
+          verse: bibleContext.verseNumber,
+        },
+      });
+    }
+  };
 
   // Fallback to presentation-store slides when media-player-store has none
   // (e.g. when projecting a standalone presentation without going through the queue)
@@ -100,8 +119,8 @@ function PlayingNowScreen() {
             onStop={actions.stop}
             onRestart={actions.restart}
             onSeek={actions.seek}
-            onPrevSlide={actions.prevSlide}
-            onNextSlide={actions.nextSlide}
+            onPrevSlide={isBibleProjection ? () => void navigateBible("prev") : actions.prevSlide}
+            onNextSlide={isBibleProjection ? () => void navigateBible("next") : actions.nextSlide}
             onVolumeChange={actions.setVolume}
             onMuteToggle={() => {
               const s = useAudioStore.getState();
@@ -111,6 +130,8 @@ function PlayingNowScreen() {
             onNextItem={actions.nextItem}
             currentMode={currentMode}
             onModeChange={actions.switchMode}
+            isBibleProjection={isBibleProjection}
+            onGoToBible={handleGoToBible}
           />
           </div>
         </div>

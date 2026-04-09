@@ -21,6 +21,9 @@ import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-sho
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useMediaPlayerStore } from "../stores/media-player-store";
+import { useDisplayStore } from "../stores/display-store";
+import type { SlideContent } from "../lib/bindings";
+import type { BibleContext } from "../stores/display-store";
 import { deletePreference } from "../lib/store";
 import { Button } from "../components/ui/button";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
@@ -304,6 +307,26 @@ function RootLayout() {
     );
     return () => { void unlisten.then((fn) => fn()); };
   }, [isBareRoute, setPackSyncProgress, queryClient]);
+
+  // Global Bible context + slides sync — keeps Playing Now preview + sidebar updated
+  // even when the /bible route is unmounted (e.g. user navigated to Playing Now)
+  useEffect(() => {
+    if (isBareRoute) return;
+    const unlistenContext = safeListen(
+      listen<BibleContext & { allSlides?: SlideContent[] }>("bible-context-changed", (event) => {
+        const { allSlides, ...ctx } = event.payload;
+        useDisplayStore.getState().setBibleContext(ctx);
+        // Sync all split parts to presentationStore for sidebar thumbnails
+        if (allSlides && allSlides.length > 0) {
+          usePresentationStore.setState({ slides: allSlides, activeSlideIndex: ctx.partIndex ?? 0 });
+        }
+      }),
+      "bible-context-changed",
+    );
+    return () => {
+      void unlistenContext.then((fn) => fn());
+    };
+  }, [isBareRoute]);
 
   usePlaybackCoordinator();
   useDownloadEvents();

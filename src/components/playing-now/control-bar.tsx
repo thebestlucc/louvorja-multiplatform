@@ -14,6 +14,7 @@ import {
   Mic,
   Music2,
   MonitorPlay,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
@@ -43,6 +44,8 @@ interface ControlBarProps {
   onNextItem: () => void;
   currentMode?: "sung" | "karaoke" | "silent";
   onModeChange?: (mode: "sung" | "karaoke" | "silent") => void;
+  isBibleProjection?: boolean;
+  onGoToBible?: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -74,6 +77,8 @@ export function ControlBar({
   onNextItem,
   currentMode,
   onModeChange,
+  isBibleProjection,
+  onGoToBible,
 }: ControlBarProps) {
   const { t } = useTranslation();
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
@@ -84,7 +89,7 @@ export function ControlBar({
   const isActive = isPlaying || status === "paused";
 
   // Nothing to show at all
-  if (!currentItem && totalSlides === 0) return null;
+  if (!currentItem && totalSlides === 0 && !isBibleProjection) return null;
 
   return (
     <div className="flex flex-col gap-1 border-t border-border bg-background px-4 py-2">
@@ -119,7 +124,7 @@ export function ControlBar({
       <div className="flex items-center justify-between">
         {/* Left: playback controls */}
         <div className="flex items-center gap-1">
-          {hasSlides && (
+          {!isBibleProjection && hasSlides && (
             <Button
               variant="ghost"
               size="icon"
@@ -157,7 +162,7 @@ export function ControlBar({
             </>
           )}
 
-          {hasSlides && (
+          {!isBibleProjection && hasSlides && (
             <Button
               variant="ghost"
               size="icon"
@@ -212,6 +217,28 @@ export function ControlBar({
               >
                 <MonitorPlay className="h-3 w-3" />
               </Button>
+            </div>
+          )}
+
+          {isBibleProjection && (
+            <div className="ml-2 flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevSlide} aria-label="Previous verse">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextSlide} aria-label="Next verse">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              {onGoToBible && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onGoToBible}
+                  title={t("playingNow.goToBible")}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           )}
 

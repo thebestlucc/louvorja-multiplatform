@@ -71,6 +71,7 @@
     "projectionPreview": "Vista previa",
     "projectionBackground": "Fondo",
     "projectionTypography": "Tipografía",
+    "projectionFontFamily": "Fuente",
     "projectionFontSize": "Tamaño",
     "projectionTextColor": "Color",
     "projectionTextShadow": "Sombra de texto",
@@ -571,7 +572,8 @@
     "modeKaraoke": "Karaoke",
     "modeSilent": "Solo diapositivas",
     "videoTargetProjector": "Reproducir video en proyector",
-    "videoTargetReturn": "Reproducir video en pantalla de retorno"
+    "videoTargetReturn": "Reproducir video en pantalla de retorno",
+    "goToBible": "Ir a la Biblia"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",
@@ -1146,9 +1148,13 @@
       "cancel": "Cancelar",
       "clear": "Limpiar",
       "conflict": "Ya usado por: {{action}}",
+      "actionLabel": "Acción",
       "description": "Personaliza y gestiona tus atajos de teclado para navegar y realizar acciones más rápido.",
       "globalLabel": "Global",
+      "globalTooltip": "Los atajos globales funcionan en todo el sistema, incluso cuando LouvorJA está en segundo plano o otra ventana está activa. Útil al proyectar desde otra aplicación.",
+      "holdKeyHint": "Presiona una tecla no modificadora…",
       "localLabel": "En App",
+      "localTooltip": "Los atajos \"En App\" solo funcionan cuando LouvorJA es la ventana activa (en foco). No se activan al usar otra aplicación.",
       "record": "Grabar",
       "recording": "Grabando...",
       "unset": "---"
