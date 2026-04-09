@@ -1,5 +1,6 @@
 mod archive;
 mod audio;
+mod bible;
 pub mod bible_builder;
 mod commands;
 mod content_sync;
@@ -366,6 +367,23 @@ pub fn run() {
             let bible_pool = db::init_bible_db(&bible_db_path)
                 .map_err(|e| format!("Failed to initialize bible database: {e}"))?;
 
+            let mut font_system = cosmic_text::FontSystem::new();
+            if let Ok(resource_dir) = app.path().resource_dir() {
+                let fonts_dir = resource_dir.join("fonts");
+                if fonts_dir.exists() {
+                    if let Ok(entries) = std::fs::read_dir(&fonts_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.extension().map(|e| e == "ttf").unwrap_or(false) {
+                                if let Ok(data) = std::fs::read(&path) {
+                                    font_system.db_mut().load_font_data(data);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             app.manage(AppState {
                 db: pool.clone(),
                 bible_db: bible_pool,
@@ -387,6 +405,15 @@ pub fn run() {
                 return_open: AtomicBool::new(false),
                 slide_context: RwLock::new(None),
                 global_shortcuts: RwLock::new(std::collections::HashMap::new()),
+                bible_projection: Mutex::new(state::BibleProjectionState {
+                    font_system,
+                    current: None,
+                    next: None,
+                    prev: None,
+                    context: None,
+                    projector_size: None,
+                    part_index: 0,
+                }),
             });
 
             // Manage a disabled AudioState immediately (non-blocking).
