@@ -1,4 +1,4 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use crate::error::AppError;
 use crate::display::monitor::{stable_monitor_id, parse_monitor_id, parse_legacy_monitor_index};
 use tauri::utils::config::BackgroundThrottlingPolicy;
@@ -60,6 +60,13 @@ pub fn open_fullscreen_window(
     let logical_y = position.y as f64 / scale;
     let logical_w = size.width as f64 / scale;
     let logical_h = size.height as f64 / scale;
+
+    if label == "projector" {
+        if let Ok(mut bible_state) = app.state::<crate::state::AppState>().bible_projection.lock() {
+            // Store logical (CSS) pixel dimensions — cosmic-text uses the same unit space as CSS font sizes
+            bible_state.projector_size = Some((logical_w as u32, logical_h as u32));
+        }
+    }
 
     let window = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App(url.into()))
         .title(title)

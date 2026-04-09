@@ -1,9 +1,11 @@
 use crate::audio::AudioPlayer;
+use crate::bible::text_split::VerseSplitResult;
 use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::migration::MigrationRuntimeState;
 use crate::streaming::StreamingServer;
 use crate::video_server::VideoServer;
+use cosmic_text::FontSystem;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use serde::Serialize;
@@ -212,6 +214,23 @@ pub struct ContentDbCapabilities {
     pub has_instrumental_time_column: bool,
 }
 
+pub struct BibleNavContext {
+    pub version_id: i64,
+    pub book: String,
+    pub chapter: i32,
+    pub verse: i32,
+}
+
+pub struct BibleProjectionState {
+    pub font_system: FontSystem,
+    pub current: Option<VerseSplitResult>,
+    pub next: Option<VerseSplitResult>,
+    pub prev: Option<VerseSplitResult>,
+    pub context: Option<BibleNavContext>,
+    pub projector_size: Option<(u32, u32)>,
+    pub part_index: usize,
+}
+
 pub struct AppState {
     pub db: Pool<SqliteConnectionManager>,
     pub bible_db: Pool<SqliteConnectionManager>, // dedicated bible database
@@ -235,6 +254,7 @@ pub struct AppState {
     /// Maps action IDs to their currently registered global shortcut string.
     /// Used by update_global_shortcut to unregister before re-registering.
     pub global_shortcuts: RwLock<HashMap<String, String>>,
+    pub bible_projection: Mutex<BibleProjectionState>,
 }
 
 pub struct AudioState {

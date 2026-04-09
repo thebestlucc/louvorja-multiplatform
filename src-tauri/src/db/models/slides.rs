@@ -153,6 +153,7 @@ pub struct BibleMode {
     pub ref_position: RefPosition,
     pub text_shadow: bool,
     pub gradient: Option<GradientOverlay>,
+    pub font_family: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]

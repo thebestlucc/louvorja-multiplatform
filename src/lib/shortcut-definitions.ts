@@ -136,6 +136,11 @@ export type ShortcutKeyboardEventLike = Pick<
 >;
 
 function normalizeShortcutKey(key: string, layer: ShortcutLayer): string {
+  // Space key is " " — must detect before trim destroys it
+  if (key === " " || key.toLowerCase() === "space") {
+    return layer === "local" ? " " : "Space";
+  }
+
   const trimmed = key.trim();
   const lower = trimmed.toLowerCase();
 
@@ -149,8 +154,6 @@ function normalizeShortcutKey(key: string, layer: ShortcutLayer): string {
         return "ArrowUp";
       case "down":
         return "ArrowDown";
-      case "space":
-        return " ";
       case "esc":
         return "Escape";
       default:
@@ -169,9 +172,6 @@ function normalizeShortcutKey(key: string, layer: ShortcutLayer): string {
       return "Up";
     case "arrowdown":
       return "Down";
-    case "space":
-    case "":
-      return "Space";
     case "esc":
       return "Escape";
     default:
@@ -212,6 +212,10 @@ export function normalizeShortcutCombo(
   combo: string,
   layer: ShortcutLayer,
 ): string {
+  // Space key " " would be destroyed by trim — detect it early
+  if (combo === " ") {
+    return layer === "local" ? " " : "Space";
+  }
   if (!combo.trim()) return "";
 
   let hasCommand = false;
@@ -278,7 +282,10 @@ export function matchesShortcutCombo(
 // Resolve a stored combo string into display label array for <kbd> chips.
 // e.g. "Shift+F5" → ["Shift", "F5"], "Meta+k" → ["Cmd/Ctrl", "K"]
 export function comboToDisplayKeys(combo: string): string[] {
-  return normalizeShortcutCombo(combo, combo.includes("CmdOrCtrl") ? "global" : "local")
+  const normalized = normalizeShortcutCombo(combo, combo.includes("CmdOrCtrl") ? "global" : "local");
+  // Space key " " is a single char — don't split on "+"
+  if (normalized === " ") return ["Space"];
+  return normalized
     .split("+")
     .map((part) => {
     switch (part.toLowerCase()) {

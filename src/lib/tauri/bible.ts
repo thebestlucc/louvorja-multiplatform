@@ -33,3 +33,22 @@ export async function importBibleVersion(
 name: string, abbreviation: string, language: string, versesJson: string): Promise<number> {
   return tauriInvoke<number>("import_bible_version", { name, abbreviation, language, versesJson });
 }
+
+export async function navigateBible(direction: "next" | "prev"): Promise<void> {
+  await invoke("navigate_bible", { direction });
+}
+
+export async function projectBibleVerse(
+  versionId: number,
+  book: string,
+  chapter: number,
+  start: number,
+  end: number,
+  settingsJson?: string,
+): Promise<void> {
+  await invoke("project_bible_verse", { versionId, book, chapter, start, end, settingsJson: settingsJson ?? null });
+}
+
+export async function clearBibleProjection(): Promise<void> {
+  await invoke("clear_bible_projection", {});
+}

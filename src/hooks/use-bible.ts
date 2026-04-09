@@ -2,39 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { catcher } from "../lib/catcher";
 import { getPreference, setPreference } from "../lib/store";
 import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
-import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
-import type { SlideContent } from "../lib/bindings";
-import { projectSlideWithType, clearActivePlayback } from "../lib/projection-playback";
+import { clearCurrentSlide } from "../lib/tauri";
+import { clearActivePlayback } from "../lib/projection-playback";
+import { projectBibleVerse, clearBibleProjection } from "../lib/tauri/bible";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 
-import {
-  type BibleProjectionSettings,
-  buildBibleSlideContent,
-} from "../components/bible/projection-settings";
-
-const DEFAULT_BG: import("../lib/bindings").BackgroundConfig = {
-  kind: "solid",
-  color: "#1a1a2e",
-  imagePath: null,
-  gradientStart: null,
-  gradientEnd: null,
-  gradientAngle: null,
-  opacity: null,
-};
-
-function makeBibleSlide(text: string, reference: string): SlideContent {
-  return {
-    slideType: "bible",
-    text,
-    reference,
-    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null },
-    background: DEFAULT_BG,
-    text_color: null,
-    text_size: null,
-  };
-}
+import type { BibleProjectionSettings } from "../components/bible/projection-settings";
 
 export function useBible(projectionSettings?: BibleProjectionSettings) {
   const [currentVersionId, setCurrentVersionId] = useState(0);
@@ -56,12 +31,29 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
 
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
   const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
-  const setPresentationSlides = usePresentationStore((s) => s.setSlides);
-  const setActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
+  const setBibleContext = useDisplayStore((s) => s.setBibleContext);
   const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
   const addToQueue = useQueueStore((s) => s.addToQueue);
 
+  // Note: Bible slide-changed + context sync listeners are now global in __root.tsx
+  // so they persist even when the /bible route unmounts (e.g. user on Playing Now)
+
+  const bibleContext = useDisplayStore((s) => s.bibleContext);
   const isProjecting = currentProjectionType === "bible";
+
+  // Sync local state with bibleContext when it changes externally
+  // (e.g. user navigated verses from Playing Now, then returned to Bible route)
+  useEffect(() => {
+    if (!bibleContext || !isProjecting) return;
+    const { book: ctxBook, chapter: ctxChapter, verseNumber } = bibleContext;
+    // Only sync if the context differs from local state (avoids loops)
+    if (ctxBook && ctxBook !== currentBook) setCurrentBook(ctxBook);
+    if (ctxChapter && ctxChapter !== currentChapter) setCurrentChapter(ctxChapter);
+    if (verseNumber && !selectedVerses.includes(verseNumber)) {
+      setSelectedVerses([verseNumber]);
+      setLastSelectedVerse(verseNumber);
+    }
+  }, [bibleContext, isProjecting]); // intentionally exclude local state from deps to avoid loops
 
   const setVersion = (id: number) => {
     setCurrentVersionId(id);
@@ -112,26 +104,6 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     const sorted = [...effectiveVerses].sort((a, b) => a - b);
     const range = sorted.length === 1 ? String(sorted[0]) : `${sorted[0]}-${sorted[sorted.length - 1]}`;
     const title = `${currentBook} ${currentChapter}:${range}`;
-    const verseSet = new Set(sorted);
-    const versesToProject = verses.filter((v) => verseSet.has(v.verse));
-
-    const ps = projectionSettings;
-
-    const slides: SlideContent[] = ps
-      ? versesToProject.map((v) =>
-          buildBibleSlideContent(
-            v.text,
-            `${currentBook} ${currentChapter}:${v.verse}`,
-            ps,
-          ),
-        )
-      : versesToProject.map((v) =>
-          makeBibleSlide(v.text, `${currentBook} ${currentChapter}:${v.verse}`),
-        );
-
-    setCurrentPresentation(null);
-    setPresentationSlides(slides);
-    setActiveSlideIndex(0);
 
     addToQueue([{
       id: crypto.randomUUID(),
@@ -139,25 +111,48 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
       type: "projection"
     }], true);
 
-    await catcher(async () => {
-      await projectSlideWithType(slides[0], "bible");
-      await setSlideContext({
-        next: slides.length > 1 ? slides[1] : null,
-        index: 0,
-        total: slides.length,
-        title,
-        currentSlideStartMs: null,
-        nextSlideStartMs: null,
-        audioDurationMs: null,
-      });
-    }, { notify: true });
-  }, [currentBook, currentChapter, verses, selectedVerses, setActiveSlideIndex, setCurrentPresentation, setPresentationSlides, projectionSettings]);
+    // Build settings JSON for Rust (includes mode, background, text styling, font)
+    const ps = projectionSettings;
+    const settingsJson = ps ? JSON.stringify({
+      mode: {
+        alignment: ps.textAlign ?? "center",
+        refPosition: ps.referencePosition === "bottom" ? "bottom" : "top",
+        textShadow: ps.textShadow ?? false,
+        gradient: ps.backgroundGradient ? {
+          angle: ps.backgroundGradient.angle,
+          startColor: ps.backgroundGradient.from,
+          endColor: ps.backgroundGradient.to,
+        } : null,
+        fontFamily: ps.fontFamily === "__system__" ? null : (ps.fontFamily ?? null),
+      },
+      background: {
+        kind: ps.backgroundImage ? "image" : ps.backgroundGradient ? "gradient" : "solid",
+        color: ps.backgroundGradient ? ps.backgroundGradient.from : (ps.backgroundColor ?? "#1a1a2e"),
+        imagePath: ps.backgroundImage ?? null,
+        gradientStart: ps.backgroundGradient?.from ?? null,
+        gradientEnd: ps.backgroundGradient?.to ?? null,
+        gradientAngle: ps.backgroundGradient?.angle ?? null,
+        opacity: null,
+      },
+      textColor: ps.textColor ?? null,
+      textSize: ps.textSize ?? null,
+      fontFamily: ps.fontFamily === "__system__" ? null : (ps.fontFamily ?? null),
+    }) : undefined;
+
+    // Project via Rust — initializes split cache + cosmic-text measurement
+    await catcher(
+      projectBibleVerse(currentVersionId, currentBook, currentChapter, sorted[0], sorted[0], settingsJson),
+      { notify: true },
+    );
+  }, [currentVersionId, currentBook, currentChapter, selectedVerses, projectionSettings]);
 
   const startBibleProjection = useCallback(async () => {
     await clearActivePlayback();
     setCurrentProjectionType("bible");
+    setCurrentPresentation(null);
     await projectSelectedVersesRange();
-  }, [projectSelectedVersesRange, setCurrentProjectionType]);
+    // Note: bibleContext is set by the Rust "bible-context-changed" event listener above
+  }, [projectSelectedVersesRange, setCurrentProjectionType, setCurrentPresentation]);
 
   const updateBibleProjection = useCallback(async (overrideVerses?: number[]) => {
     if (isProjecting) {
@@ -169,8 +164,10 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     const [, error] = await catcher(clearCurrentSlide(), { notify: true });
     if (!error) {
       setCurrentProjectionType(null);
+      setBibleContext(null);
+      void catcher(clearBibleProjection());
     }
-  }, [setCurrentProjectionType]);
+  }, [setCurrentProjectionType, setBibleContext]);
 
   return {
     versions,
@@ -191,6 +188,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     selectVerseRange,
     lastSelectedVerse,
     isProjecting,
+    bibleContext,
     startBibleProjection,
     stopBibleProjection,
     updateBibleProjection,

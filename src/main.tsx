@@ -7,6 +7,7 @@ import { routeTree } from "./routeTree.gen";
 import { SpotlightWindow } from "./routes/spotlight";
 import { ProjectorView } from "./components/slides/projector-view";
 import { ReturnPage } from "./routes/return";
+import "./styles/fonts.css";
 import "./lib/i18n";
 import { catcherSync } from "./lib/catcher";
 

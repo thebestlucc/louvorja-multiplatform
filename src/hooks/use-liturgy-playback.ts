@@ -22,7 +22,7 @@ function buildSlideData(item: ServiceItem): SlideContent {
     case "hymn":
       return { slideType: "lyrics", text: item.notes ?? "", label: null, background: bg, text_color: null, text_size: null };
     case "bible":
-      return { slideType: "bible", text: item.notes ?? "", reference: item.title, mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null }, background: bg, text_color: null, text_size: null };
+      return { slideType: "bible", text: item.notes ?? "", reference: item.title, mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null, fontFamily: null }, background: bg, text_color: null, text_size: null };
     case "annotation":
       return { slideType: "text", content: item.notes ?? "", background: bg, text_color: null, text_size: null };
     case "file": {

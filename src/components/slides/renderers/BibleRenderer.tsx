@@ -9,6 +9,7 @@ type BibleSlide = Extract<SlideContent, { slideType: "bible" }>;
 interface BibleRendererProps {
   slide: BibleSlide;
   mode: SlideRenderMode;
+  globalFontFamily?: string;
 }
 
 /** Default BibleMode when the mode field is missing or is a legacy string. */
@@ -17,6 +18,7 @@ const DEFAULT_BIBLE_MODE: BibleMode = {
   refPosition: "top",
   textShadow: false,
   gradient: null,
+  fontFamily: null,
 };
 
 /**
@@ -54,7 +56,7 @@ function resolveBibleMode(mode: BibleMode | string | null | undefined): BibleMod
   return DEFAULT_BIBLE_MODE;
 }
 
-export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
+export function BibleRenderer({ slide, mode: renderMode, globalFontFamily }: BibleRendererProps) {
   const isProjector = renderMode === "projector";
   const isReturn = renderMode === "return-current" || renderMode === "return-next";
   const isThumbnail = renderMode === "thumbnail";
@@ -68,6 +70,9 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
   const textAlign = bibleMode.alignment;
   const refPosition = bibleMode.refPosition;
   const hasTextShadow = bibleMode.textShadow;
+  // Bible-specific font > global appearance font > serif fallback
+  const resolvedGlobal = globalFontFamily && globalFontFamily !== "__system__" ? globalFontFamily : undefined;
+  const fontFamily = bibleMode.fontFamily ?? resolvedGlobal;
 
   const resolvedBgImage = useImageSrc(
     bg.kind === "image" ? bg.imagePath : null,
@@ -136,6 +141,7 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
         opacity: 0.6,
         textShadow: textShadowValue,
         textAlign,
+        ...(fontFamily ? { fontFamily } : {}),
       }}
     >
       {reference}
@@ -152,7 +158,7 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
       className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden"
       style={{
         ...(resolvedBgImage ? {} : containerBg),
-        padding: isThumbnail ? "4px 8px" : isProjector ? "48px 80px" : "24px 40px",
+        padding: isThumbnail ? "4px 8px" : isProjector ? "10%" : "24px 40px",
       }}
     >
       {resolvedBgImage && (
@@ -176,12 +182,13 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
         {(slide.text ?? "").split("\n").map((line, i) => (
           <p
             key={i}
-            className="whitespace-pre-line font-serif leading-relaxed"
+            className={cn("whitespace-pre-line leading-relaxed", !fontFamily && "font-serif")}
             style={{
               fontSize: `${verseFontSize}px`,
               color: txtColor,
               textShadow: textShadowValue,
               lineHeight: isProjector ? 1.5 : 1.4,
+              ...(fontFamily ? { fontFamily } : {}),
             }}
           >
             {line}

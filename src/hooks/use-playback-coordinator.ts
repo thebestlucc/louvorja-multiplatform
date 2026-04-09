@@ -140,9 +140,11 @@ export function usePlaybackCoordinator() {
         await stopAudio();
       }
 
-      // 7. Project first slide
-      useDisplayStore.getState().setCurrentProjectionType("hymn");
-      await projectSlideIndex(0);
+      // 7. Project first slide (only for hymn items — Bible/other projections manage their own type)
+      if (item.hymn) {
+        useDisplayStore.getState().setCurrentProjectionType("hymn");
+        await projectSlideIndex(0);
+      }
 
     }, { notify: true });  }, [items, setSyncPoints, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
 

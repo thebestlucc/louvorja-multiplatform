@@ -39,7 +39,8 @@
     "createUpdaterArtifacts": false,
     "targets": "all",
     "resources": [
-      "resources/bible/*.sqlite"
+      "resources/bible/*.sqlite",
+      "fonts/*.ttf"
     ],
     "windows": {
       "nsis": {

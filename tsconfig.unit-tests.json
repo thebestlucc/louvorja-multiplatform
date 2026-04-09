@@ -32,6 +32,7 @@
     "tests/stores/video-player-store.test.ts",
     "tests/components/playing-queue.test.tsx",
     "tests/asset-url.test.ts",
+    "tests/shortcut-settings.test.ts",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
