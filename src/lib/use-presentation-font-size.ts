@@ -27,6 +27,11 @@ export interface ProjectionDisplaySettings {
 export const FONT_FAMILY_OPTIONS = [
   { value: "__system__", label: "System Default" },
   { value: "Inter", label: "Inter" },
+  { value: "Montserrat", label: "Montserrat" },
+  { value: "Open Sans", label: "Open Sans" },
+  { value: "Lato", label: "Lato" },
+  { value: "Roboto", label: "Roboto" },
+  { value: "Playfair Display", label: "Playfair Display" },
   { value: "Arial", label: "Arial" },
   { value: "Verdana", label: "Verdana" },
   { value: "Georgia", label: "Georgia" },
