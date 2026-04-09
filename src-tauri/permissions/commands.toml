@@ -59,7 +59,8 @@ allow = [
     "project_bible_verse",
     "import_bible_version",
     "navigate_bible_verse",
-    "navigate_bible"
+    "navigate_bible",
+    "clear_bible_projection"
 ]
 
 [[permission]]

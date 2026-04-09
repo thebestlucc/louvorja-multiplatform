@@ -106,75 +106,124 @@ pub fn project_bible_verse(
     chapter: i64,
     start: i64,
     end: i64,
+    settings_json: Option<String>,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
+    let _ = end; // Split cache uses single verse (start); end kept for API compat
     let conn = state.bible_db.get()?;
 
-    let verses =
-        crate::db::queries::bible::get_verse_range(&conn, version_id, &book, chapter, start, end)?;
+    // Parse optional projection settings from a single JSON object
+    let settings: serde_json::Value = settings_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or(serde_json::Value::Null);
 
-    let text = verses
-        .iter()
-        .map(|v| format!("{} {}", v.verse, v.text))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let mut mode: BibleMode = settings.get("mode")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
 
-    let reference = if start == end {
-        format!("{} {}:{}", book, chapter, start)
-    } else {
-        format!("{} {}:{}-{}", book, chapter, start, end)
+    let font_family = settings.get("fontFamily")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let text_color: Option<String> = settings.get("textColor")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let text_size: Option<i32> = settings.get("textSize")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+
+    // Apply font_family override into mode if provided
+    if let Some(ref ff) = font_family {
+        mode.font_family = Some(ff.clone());
+    }
+
+    let background: BackgroundConfig = settings.get("background")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_else(|| BackgroundConfig {
+            kind: BackgroundKind::Solid,
+            color: Some("#1a1a2e".to_string()),
+            ..Default::default()
+        });
+
+    // Lock bible_projection to initialize split cache
+    let (slide_to_project, context_payload) = {
+        let mut bp = state
+            .bible_projection
+            .lock()
+            .map_err(|e| AppError::Internal(format!("Bible projection lock poisoned: {}", e)))?;
+
+        // Split the starting verse
+        let current_split = fetch_and_split_verse(
+            &conn,
+            &mut bp,
+            version_id,
+            &book,
+            chapter,
+            start,
+            &mode,
+            &background,
+            text_color.as_deref(),
+            text_size,
+        )?
+        .ok_or_else(|| AppError::Internal("Verse not found in DB".into()))?;
+
+        // Pre-fetch adjacent verses
+        let books = crate::db::queries::bible::get_books(&conn, version_id)?;
+
+        let next_adj = get_adjacent_verse(&conn, version_id, &book, chapter, start, "next", &books)?;
+        let next_split = if let Some((nb, nc, nv)) = next_adj {
+            fetch_and_split_verse(
+                &conn, &mut bp, version_id, &nb, nc, nv,
+                &mode, &background, text_color.as_deref(), text_size,
+            )?
+        } else {
+            None
+        };
+
+        let prev_adj = get_adjacent_verse(&conn, version_id, &book, chapter, start, "prev", &books)?;
+        let prev_split = if let Some((pb, pc, pv)) = prev_adj {
+            fetch_and_split_verse(
+                &conn, &mut bp, version_id, &pb, pc, pv,
+                &mode, &background, text_color.as_deref(), text_size,
+            )?
+        } else {
+            None
+        };
+
+        // Set bible projection state
+        bp.part_index = 0;
+        bp.context = Some(BibleNavContext {
+            version_id,
+            book: book.clone(),
+            chapter: chapter as i32,
+            verse: start as i32,
+        });
+        bp.current = Some(current_split);
+        bp.next = next_split;
+        bp.prev = prev_split;
+
+        let cur = bp.current.as_ref().unwrap();
+        let slide = cur.parts[0].clone();
+        let payload = serde_json::json!({
+            "versionId": version_id,
+            "book": book,
+            "chapter": chapter,
+            "verseNumber": start,
+            "partIndex": 0,
+            "totalParts": cur.parts.len(),
+        });
+
+        (slide, payload)
     };
-
-    let slide_data = SlideContent::Bible {
-        reference: reference.clone(),
-        text,
-        mode: BibleMode::default(),
-        background: BackgroundConfig { kind: BackgroundKind::Solid, color: Some("#1a1a2e".to_string()), ..Default::default() },
-        text_color: None,
-        text_size: None,
-    };
+    // Mutex dropped here
 
     drop(conn);
 
-    // Update current slide state
-    {
-        let (current, err) = catcher(state.current_slide.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut current = current.unwrap();
-        *current = Some(slide_data.clone());
-    }
-
-    let slide_context = SlideContext {
-        next: None,
-        index: 0,
-        total: 1,
-        title: reference.clone(),
-        current_slide_start_ms: None,
-        next_slide_start_ms: None,
-        audio_duration_ms: None,
-    };
-    {
-        let (context, err) = catcher(state.slide_context.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut context = context.unwrap();
-        *context = Some(slide_context.clone());
-    }
-
-    // Emit to projector window
-    app.emit("slide-changed", &slide_data)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    app.emit("slide-context", &slide_context)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-
     let streaming_state = app.state::<StreamingState>();
-    if let Ok(server) = streaming_state.server.lock() {
-        broadcast_bible_stream_payloads(&server, &slide_data, &reference);
-    }
+    project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload)?;
 
     Ok(())
 }
@@ -712,6 +761,21 @@ pub fn navigate_bible(
 
     project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload)?;
 
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_bible_projection(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let mut bible_state = state.bible_projection.lock()
+        .map_err(|_| AppError::Internal("Bible state lock poisoned".into()))?;
+    bible_state.current = None;
+    bible_state.next = None;
+    bible_state.prev = None;
+    bible_state.context = None;
+    bible_state.part_index = 0;
     Ok(())
 }
 

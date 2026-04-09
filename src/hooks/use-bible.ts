@@ -5,6 +5,7 @@ import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContent } from "../lib/bindings";
 import { projectSlideWithType, clearActivePlayback } from "../lib/projection-playback";
+import { clearBibleProjection } from "../lib/tauri/bible";
 import { useDisplayStore, type BibleContext } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
@@ -204,6 +205,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     if (!error) {
       setCurrentProjectionType(null);
       setBibleContext(null);
+      void catcher(clearBibleProjection());
     }
   }, [setCurrentProjectionType, setBibleContext]);
 
