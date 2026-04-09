@@ -1,8 +1,11 @@
+use crate::bible::text_split::{split_verse, SplitParams, VerseSplitResult};
 use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, SlideContext, Verse};
 use crate::db::models::slides::{BibleMode, BackgroundConfig, BackgroundKind};
 use crate::error::AppError;
-use crate::state::{AppState, StreamingState};
+use crate::state::{AppState, BibleNavContext, BibleProjectionState, StreamingState};
 use crate::utils::catcher::catcher;
+use r2d2::PooledConnection;
+use r2d2_sqlite::SqliteConnectionManager;
 use tauri::{AppHandle, Emitter, Manager};
 
 fn broadcast_bible_stream_payloads(
@@ -351,6 +354,363 @@ pub fn navigate_bible_verse(
     if let Ok(server) = streaming_state.server.lock() {
         broadcast_bible_stream_payloads(&server, &slide_data, &new_reference);
     }
+
+    Ok(())
+}
+
+/// Fetch a verse from the DB and split it using cosmic-text measurement.
+fn fetch_and_split_verse(
+    conn: &PooledConnection<SqliteConnectionManager>,
+    bible_state: &mut BibleProjectionState,
+    version_id: i64,
+    book: &str,
+    chapter: i64,
+    verse: i64,
+    mode: &BibleMode,
+    background: &BackgroundConfig,
+    text_color: Option<&str>,
+    text_size: Option<i32>,
+) -> Result<Option<VerseSplitResult>, AppError> {
+    let verses = crate::db::queries::bible::get_verse_range(
+        conn, version_id, book, chapter, verse, verse,
+    )?;
+
+    if verses.is_empty() {
+        return Ok(None);
+    }
+
+    let v = &verses[0];
+    let verse_text = format!("{} {}", v.verse, v.text);
+    let reference = format!("{} {}:{}", book, chapter, verse);
+
+    let (w, h) = bible_state.projector_size.unwrap_or((1920, 1080));
+
+    let font_family = mode
+        .font_family
+        .as_deref()
+        .unwrap_or("Inter")
+        .to_string();
+    let font_size = text_size.map(|s| s as f32).unwrap_or(48.0);
+
+    let params = SplitParams {
+        font_family,
+        font_size,
+        width: w,
+        height: h,
+        ..SplitParams::default()
+    };
+
+    let result = split_verse(
+        &mut bible_state.font_system,
+        &verse_text,
+        &reference,
+        verse as i32,
+        &params,
+        mode,
+        background,
+        text_color,
+        text_size,
+    );
+
+    Ok(Some(result))
+}
+
+/// Find the next or previous verse, handling chapter and book boundaries.
+/// Returns (new_book, new_chapter, new_verse) or None at Bible boundaries.
+fn get_adjacent_verse(
+    conn: &PooledConnection<SqliteConnectionManager>,
+    version_id: i64,
+    book: &str,
+    chapter: i64,
+    verse: i64,
+    direction: &str,
+    books: &[Book],
+) -> Result<Option<(String, i64, i64)>, AppError> {
+    let book_idx = books
+        .iter()
+        .position(|b| b.name == book)
+        .ok_or_else(|| AppError::Internal(format!("Book '{}' not found", book)))?;
+
+    if direction == "next" {
+        let max_verse: i64 = conn.query_row(
+            "SELECT COALESCE(MAX(verse), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2 AND chapter = ?3",
+            rusqlite::params![version_id, book, chapter],
+            |row| row.get(0),
+        )?;
+
+        if verse < max_verse {
+            return Ok(Some((book.to_string(), chapter, verse + 1)));
+        }
+        let max_chapter = books[book_idx].chapter_count as i64;
+        if chapter < max_chapter {
+            return Ok(Some((book.to_string(), chapter + 1, 1)));
+        }
+        if book_idx + 1 < books.len() {
+            return Ok(Some((books[book_idx + 1].name.clone(), 1, 1)));
+        }
+        Ok(None) // End of Bible
+    } else {
+        // "prev"
+        if verse > 1 {
+            return Ok(Some((book.to_string(), chapter, verse - 1)));
+        }
+        if chapter > 1 {
+            let prev_chapter = chapter - 1;
+            let max_verse: i64 = conn.query_row(
+                "SELECT COALESCE(MAX(verse), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2 AND chapter = ?3",
+                rusqlite::params![version_id, book, prev_chapter],
+                |row| row.get(0),
+            )?;
+            return Ok(Some((book.to_string(), prev_chapter, max_verse)));
+        }
+        if book_idx > 0 {
+            let prev_book = &books[book_idx - 1];
+            let prev_chapter = prev_book.chapter_count as i64;
+            let max_verse: i64 = conn.query_row(
+                "SELECT COALESCE(MAX(verse), 0) FROM bible_verses WHERE version_id = ?1 AND book = ?2 AND chapter = ?3",
+                rusqlite::params![version_id, prev_book.name, prev_chapter],
+                |row| row.get(0),
+            )?;
+            return Ok(Some((prev_book.name.clone(), prev_chapter, max_verse)));
+        }
+        Ok(None) // Start of Bible
+    }
+}
+
+/// Project a split slide part: update state, emit events, broadcast to streaming.
+fn project_split_slide(
+    app: &AppHandle,
+    state: &AppState,
+    streaming_state: &StreamingState,
+    slide: &SlideContent,
+    context_payload: serde_json::Value,
+) -> Result<(), AppError> {
+    // Update current_slide
+    {
+        let (current, err) = catcher(state.current_slide.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut current = current.unwrap();
+        *current = Some(slide.clone());
+    }
+
+    let reference = slide.title().unwrap_or("").to_string();
+
+    let slide_context = SlideContext {
+        next: None,
+        index: 0,
+        total: 1,
+        title: reference.clone(),
+        current_slide_start_ms: None,
+        next_slide_start_ms: None,
+        audio_duration_ms: None,
+    };
+    {
+        let (ctx, err) = catcher(state.slide_context.write());
+        if let Some(e) = err {
+            return Err(e);
+        }
+        let mut ctx = ctx.unwrap();
+        *ctx = Some(slide_context.clone());
+    }
+
+    app.emit("slide-changed", slide)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    app.emit("slide-context", &slide_context)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    app.emit("bible-context-changed", &context_payload)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+    if let Ok(server) = streaming_state.server.lock() {
+        broadcast_bible_stream_payloads(&server, slide, &reference);
+    }
+
+    Ok(())
+}
+
+/// Navigate bible projection with split-aware navigation.
+/// Navigates within split parts first (next/prev part of same verse),
+/// then jumps to the next/prev verse (with splitting) at boundaries.
+#[tauri::command]
+#[specta::specta]
+pub fn navigate_bible(
+    direction: String,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
+) -> Result<(), AppError> {
+    let conn = state.bible_db.get()?;
+
+    // Collect everything we need under the bible_projection lock, then drop it
+    // before calling project_split_slide (which locks current_slide / slide_context).
+    let (slide_to_project, context_payload) = {
+        let mut bp = state
+            .bible_projection
+            .lock()
+            .map_err(|e| AppError::Internal(format!("Bible projection lock poisoned: {}", e)))?;
+
+        let ctx = bp.context.as_ref().ok_or_else(|| {
+            AppError::Internal("No bible navigation context set".into())
+        })?;
+        let version_id = ctx.version_id;
+        let book = ctx.book.clone();
+        let chapter = ctx.chapter as i64;
+        let verse = ctx.verse as i64;
+
+        let total_parts = bp.current.as_ref().ok_or_else(|| {
+            AppError::Internal("No current split result".into())
+        })?.parts.len();
+        let part_index = bp.part_index;
+
+        // Try navigating within current split parts
+        if direction == "next" && part_index + 1 < total_parts {
+            let new_index = part_index + 1;
+            bp.part_index = new_index;
+            let slide = bp.current.as_ref().unwrap().parts[new_index].clone();
+            let payload = serde_json::json!({
+                "versionId": version_id,
+                "book": book,
+                "chapter": chapter,
+                "verseNumber": verse,
+                "partIndex": new_index,
+                "totalParts": total_parts,
+            });
+            (slide, payload)
+        } else if direction == "prev" && part_index > 0 {
+            let new_index = part_index - 1;
+            bp.part_index = new_index;
+            let slide = bp.current.as_ref().unwrap().parts[new_index].clone();
+            let payload = serde_json::json!({
+                "versionId": version_id,
+                "book": book,
+                "chapter": chapter,
+                "verseNumber": verse,
+                "partIndex": new_index,
+                "totalParts": total_parts,
+            });
+            (slide, payload)
+        } else {
+            // At boundary — need to jump to adjacent verse
+            let books = crate::db::queries::bible::get_books(&conn, version_id)?;
+
+            let adjacent = get_adjacent_verse(
+                &conn, version_id, &book, chapter, verse, &direction, &books,
+            )?;
+
+            let (new_book, new_chapter, new_verse) = match adjacent {
+                Some(v) => v,
+                None => return Ok(()), // At Bible boundary, do nothing
+            };
+
+            // Extract mode/background/text_color/text_size from the current first part
+            let (mode, background, text_color, text_size): (BibleMode, BackgroundConfig, Option<String>, Option<i32>) = {
+                let cur = bp.current.as_ref().unwrap();
+                let first_part = &cur.parts[0];
+                match first_part {
+                    SlideContent::Bible {
+                        mode,
+                        background,
+                        text_color,
+                        text_size,
+                        ..
+                    } => (
+                        mode.clone(),
+                        background.clone(),
+                        text_color.clone(),
+                        *text_size,
+                    ),
+                    _ => (
+                        BibleMode::default(),
+                        BackgroundConfig {
+                            kind: BackgroundKind::Solid,
+                            color: Some("#1a1a2e".to_string()),
+                            ..Default::default()
+                        },
+                        None,
+                        None,
+                    ),
+                }
+            };
+
+            // Split the new verse
+            let new_split = fetch_and_split_verse(
+                &conn,
+                &mut bp,
+                version_id,
+                &new_book,
+                new_chapter,
+                new_verse,
+                &mode,
+                &background,
+                text_color.as_deref(),
+                text_size,
+            )?
+            .ok_or_else(|| AppError::Internal("Adjacent verse not found in DB".into()))?;
+
+            // Shift cache and set part_index
+            if direction == "next" {
+                bp.prev = bp.current.take();
+                bp.current = Some(new_split);
+                // Pre-fetch next
+                let next_adj = get_adjacent_verse(
+                    &conn, version_id, &new_book, new_chapter, new_verse, "next", &books,
+                )?;
+                bp.next = if let Some((nb, nc, nv)) = next_adj {
+                    fetch_and_split_verse(
+                        &conn, &mut bp, version_id, &nb, nc, nv,
+                        &mode, &background, text_color.as_deref(), text_size,
+                    )?
+                } else {
+                    None
+                };
+                bp.part_index = 0;
+            } else {
+                bp.next = bp.current.take();
+                bp.current = Some(new_split);
+                // Pre-fetch prev
+                let prev_adj = get_adjacent_verse(
+                    &conn, version_id, &new_book, new_chapter, new_verse, "prev", &books,
+                )?;
+                bp.prev = if let Some((pb, pc, pv)) = prev_adj {
+                    fetch_and_split_verse(
+                        &conn, &mut bp, version_id, &pb, pc, pv,
+                        &mode, &background, text_color.as_deref(), text_size,
+                    )?
+                } else {
+                    None
+                };
+                // For "prev", start at last part
+                let cur = bp.current.as_ref().unwrap();
+                bp.part_index = cur.parts.len().saturating_sub(1);
+            }
+
+            // Update context
+            bp.context = Some(BibleNavContext {
+                version_id,
+                book: new_book.clone(),
+                chapter: new_chapter as i32,
+                verse: new_verse as i32,
+            });
+
+            let cur = bp.current.as_ref().unwrap();
+            let slide = cur.parts[bp.part_index].clone();
+            let payload = serde_json::json!({
+                "versionId": version_id,
+                "book": new_book,
+                "chapter": new_chapter,
+                "verseNumber": new_verse,
+                "partIndex": bp.part_index,
+                "totalParts": cur.parts.len(),
+            });
+            (slide, payload)
+        }
+    };
+    // Mutex dropped here
+
+    drop(conn);
+
+    project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload)?;
 
     Ok(())
 }
