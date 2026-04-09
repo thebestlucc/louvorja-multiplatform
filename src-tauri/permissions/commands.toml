@@ -58,7 +58,8 @@ allow = [
     "search_bible_global",
     "project_bible_verse",
     "import_bible_version",
-    "navigate_bible_verse"
+    "navigate_bible_verse",
+    "navigate_bible"
 ]
 
 [[permission]]
@@ -129,7 +130,8 @@ allow = [
     "set_monitor_config",
     "get_monitor_configs",
     "set_slide_on_projector",
-    "set_slide_on_return"
+    "set_slide_on_return",
+    "broadcast_projection_display"
 ]
 
 [[permission]]
