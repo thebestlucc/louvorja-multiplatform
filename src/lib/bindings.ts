@@ -262,9 +262,9 @@ async searchBibleGlobal(query: string) : Promise<Result<BibleSearchResult[], App
     else return { status: "error", error: e  as any };
 }
 },
-async projectBibleVerse(versionId: number, book: string, chapter: number, start: number, end: number) : Promise<Result<null, AppErrorResponse>> {
+async projectBibleVerse(versionId: number, book: string, chapter: number, start: number, end: number, settingsJson: string | null) : Promise<Result<null, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("project_bible_verse", { versionId, book, chapter, start, end }) };
+    return { status: "ok", data: await TAURI_INVOKE("project_bible_verse", { versionId, book, chapter, start, end, settingsJson }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -287,6 +287,27 @@ async importBibleVersion(name: string, abbreviation: string, language: string, v
 async navigateBibleVerse(direction: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("navigate_bible_verse", { direction }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Navigate bible projection with split-aware navigation.
+ * Navigates within split parts first (next/prev part of same verse),
+ * then jumps to the next/prev verse (with splitting) at boundaries.
+ */
+async navigateBible(direction: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("navigate_bible", { direction }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async clearBibleProjection() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_bible_projection") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

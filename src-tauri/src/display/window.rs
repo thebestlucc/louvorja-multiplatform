@@ -63,7 +63,8 @@ pub fn open_fullscreen_window(
 
     if label == "projector" {
         if let Ok(mut bible_state) = app.state::<crate::state::AppState>().bible_projection.lock() {
-            bible_state.projector_size = Some((size.width, size.height));
+            // Store logical (CSS) pixel dimensions — cosmic-text uses the same unit space as CSS font sizes
+            bible_state.projector_size = Some((logical_w as u32, logical_h as u32));
         }
     }
 

@@ -23,6 +23,10 @@ interface VerseDisplayProps {
   onOpenCompare?: () => void;
   isProjecting?: boolean;
   onProject?: () => void;
+  /** Split slide parts for the projected verse (from presentationStore) */
+  splitSlides?: import("../../lib/bindings").SlideContent[];
+  /** Active split part index */
+  activeSplitIndex?: number;
 }
 
 export function VerseDisplay({
@@ -38,6 +42,8 @@ export function VerseDisplay({
   onOpenCompare,
   isProjecting,
   onProject,
+  splitSlides,
+  activeSplitIndex,
 }: VerseDisplayProps) {
   const { t, i18n } = useTranslation();
   const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
@@ -200,6 +206,33 @@ export function VerseDisplay({
       <div className="mt-1 flex-1 space-y-px overflow-y-auto">
         {verses.map((v) => {
           const isSelected = selectedSet.has(v.verse);
+          // When this verse is projected and has split parts, show each part separately
+          const hasSplitParts = isSelected && isProjecting && splitSlides && splitSlides.length > 1;
+
+          if (hasSplitParts) {
+            return splitSlides.map((slide, partIdx) => {
+              const slideText = slide.slideType === "bible" ? slide.text : "";
+              const isActivePart = partIdx === (activeSplitIndex ?? 0);
+              return (
+                <div
+                  key={`${v.verse}-part-${partIdx}`}
+                  ref={partIdx === 0 ? (el) => setVerseRef(v.verse, el) : undefined}
+                  className={cn(
+                    "rounded px-2.5 py-1.5 text-sm leading-relaxed transition-colors",
+                    isActivePart
+                      ? "bg-primary/18 text-foreground ring-1 ring-primary/40"
+                      : "bg-primary/6 text-foreground/70",
+                  )}
+                >
+                  <span className="mr-2 inline-block min-w-[1.5rem] text-right text-xs font-bold tabular-nums text-primary">
+                    {v.verse}<span className="text-[9px] text-muted-foreground ml-0.5">({partIdx + 1}/{splitSlides.length})</span>
+                  </span>
+                  <span>{slideText}</span>
+                </div>
+              );
+            });
+          }
+
           return (
             <div
               key={v.verse}

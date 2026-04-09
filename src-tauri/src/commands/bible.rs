@@ -8,6 +8,31 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// BibleRenderer projector font scale factor (base * SCALE, min MIN_FONT)
+const PROJECTOR_FONT_SCALE: f32 = 1.6;
+const MIN_PROJECTOR_FONT_SIZE: f32 = 32.0;
+const DEFAULT_PROJECTOR_FONT_SIZE: f32 = 48.0;
+/// Padding as fraction of window dimension (matches BibleRenderer CSS `padding: 10%`)
+const BIBLE_PADDING_RATIO: f32 = 0.10;
+
+fn build_bible_context_payload(
+    version_id: i64,
+    book: &str,
+    chapter: i64,
+    verse: i64,
+    part_index: usize,
+    total_parts: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "versionId": version_id,
+        "book": book,
+        "chapter": chapter,
+        "verseNumber": verse,
+        "partIndex": part_index,
+        "totalParts": total_parts,
+    })
+}
+
 fn broadcast_bible_stream_payloads(
     server: &crate::streaming::StreamingServer,
     slide_data: &SlideContent,
@@ -149,7 +174,7 @@ pub fn project_bible_verse(
         });
 
     // Lock bible_projection to initialize split cache
-    let (slide_to_project, context_payload) = {
+    let (slide_to_project, context_payload, all_parts) = {
         let mut bp = state
             .bible_projection
             .lock()
@@ -207,23 +232,17 @@ pub fn project_bible_verse(
 
         let cur = bp.current.as_ref().unwrap();
         let slide = cur.parts[0].clone();
-        let payload = serde_json::json!({
-            "versionId": version_id,
-            "book": book,
-            "chapter": chapter,
-            "verseNumber": start,
-            "partIndex": 0,
-            "totalParts": cur.parts.len(),
-        });
+        let all_parts = cur.parts.clone();
+        let payload = build_bible_context_payload(version_id, &book, chapter, start, 0, cur.parts.len());
 
-        (slide, payload)
+        (slide, payload, all_parts)
     };
     // Mutex dropped here
 
     drop(conn);
 
     let streaming_state = app.state::<StreamingState>();
-    project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload)?;
+    project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload, &all_parts, 0)?;
 
     Ok(())
 }
@@ -353,7 +372,7 @@ pub fn navigate_bible_verse(
     }
 
     let v = &verses[0];
-    let text = format!("{} {}", v.verse, v.text);
+    let text = v.text.clone();
     let new_reference = format!("{} {}:{}", new_book, new_chapter, new_verse);
 
     let slide_data = SlideContent::Bible {
@@ -429,7 +448,7 @@ fn fetch_and_split_verse(
     }
 
     let v = &verses[0];
-    let verse_text = format!("{} {}", v.verse, v.text);
+    let verse_text = v.text.clone();
     let reference = format!("{} {}:{}", book, chapter, verse);
 
     let (w, h) = bible_state.projector_size.unwrap_or((1920, 1080));
@@ -439,13 +458,23 @@ fn fetch_and_split_verse(
         .as_deref()
         .unwrap_or("Inter")
         .to_string();
-    let font_size = text_size.map(|s| s as f32).unwrap_or(48.0);
+    let font_size = text_size
+        .map(|s| {
+            let base = (s as f32).clamp(12.0, 120.0);
+            (base * PROJECTOR_FONT_SCALE).max(MIN_PROJECTOR_FONT_SIZE)
+        })
+        .unwrap_or(DEFAULT_PROJECTOR_FONT_SIZE);
+
+    let h_padding = w as f32 * BIBLE_PADDING_RATIO;
+    let v_padding = h as f32 * BIBLE_PADDING_RATIO;
 
     let params = SplitParams {
         font_family,
         font_size,
         width: w,
         height: h,
+        h_padding,
+        v_padding,
         ..SplitParams::default()
     };
 
@@ -527,12 +556,16 @@ fn get_adjacent_verse(
 }
 
 /// Project a split slide part: update state, emit events, broadcast to streaming.
+/// `all_parts` contains all slide parts for the current verse (for sidebar thumbnails).
+/// `part_index` is the index of the currently projected part within `all_parts`.
 fn project_split_slide(
     app: &AppHandle,
     state: &AppState,
     streaming_state: &StreamingState,
     slide: &SlideContent,
     context_payload: serde_json::Value,
+    all_parts: &[SlideContent],
+    part_index: usize,
 ) -> Result<(), AppError> {
     // Update current_slide
     {
@@ -546,10 +579,25 @@ fn project_split_slide(
 
     let reference = slide.title().unwrap_or("").to_string();
 
+    // Determine "next" slide for the return monitor preview:
+    // If there's a next part in the current split, use that.
+    // Otherwise, the caller doesn't provide the next verse's parts here,
+    // but we can check if there's a next part in all_parts.
+    let next_slide = if part_index + 1 < all_parts.len() {
+        Some(all_parts[part_index + 1].clone())
+    } else {
+        // At last part of verse — try to get next verse's first part from bible_projection cache
+        if let Ok(bp) = state.bible_projection.lock() {
+            bp.next.as_ref().and_then(|n| n.parts.first().cloned())
+        } else {
+            None
+        }
+    };
+
     let slide_context = SlideContext {
-        next: None,
-        index: 0,
-        total: 1,
+        next: next_slide,
+        index: part_index as i32,
+        total: all_parts.len() as i32,
         title: reference.clone(),
         current_slide_start_ms: None,
         next_slide_start_ms: None,
@@ -568,7 +616,11 @@ fn project_split_slide(
         .map_err(|e| AppError::Tauri(e.to_string()))?;
     app.emit("slide-context", &slide_context)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
-    app.emit("bible-context-changed", &context_payload)
+    // Include all parts so the frontend can show them in the sidebar
+    let mut ctx = context_payload;
+    ctx["allSlides"] = serde_json::to_value(all_parts).unwrap_or_default();
+    ctx["partIndex"] = serde_json::json!(part_index);
+    app.emit("bible-context-changed", &ctx)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     if let Ok(server) = streaming_state.server.lock() {
@@ -593,7 +645,7 @@ pub fn navigate_bible(
 
     // Collect everything we need under the bible_projection lock, then drop it
     // before calling project_split_slide (which locks current_slide / slide_context).
-    let (slide_to_project, context_payload) = {
+    let (slide_to_project, context_payload, all_parts, active_part_index) = {
         let mut bp = state
             .bible_projection
             .lock()
@@ -613,32 +665,21 @@ pub fn navigate_bible(
         let part_index = bp.part_index;
 
         // Try navigating within current split parts
-        if direction == "next" && part_index + 1 < total_parts {
-            let new_index = part_index + 1;
-            bp.part_index = new_index;
-            let slide = bp.current.as_ref().unwrap().parts[new_index].clone();
-            let payload = serde_json::json!({
-                "versionId": version_id,
-                "book": book,
-                "chapter": chapter,
-                "verseNumber": verse,
-                "partIndex": new_index,
-                "totalParts": total_parts,
-            });
-            (slide, payload)
+        let within_part = if direction == "next" && part_index + 1 < total_parts {
+            Some(part_index + 1)
         } else if direction == "prev" && part_index > 0 {
-            let new_index = part_index - 1;
+            Some(part_index - 1)
+        } else {
+            None
+        };
+
+        if let Some(new_index) = within_part {
             bp.part_index = new_index;
-            let slide = bp.current.as_ref().unwrap().parts[new_index].clone();
-            let payload = serde_json::json!({
-                "versionId": version_id,
-                "book": book,
-                "chapter": chapter,
-                "verseNumber": verse,
-                "partIndex": new_index,
-                "totalParts": total_parts,
-            });
-            (slide, payload)
+            let cur = bp.current.as_ref().unwrap();
+            let slide = cur.parts[new_index].clone();
+            let parts = cur.parts.clone();
+            let payload = build_bible_context_payload(version_id, &book, chapter, verse, new_index, total_parts);
+            (slide, payload, parts, new_index)
         } else {
             // At boundary — need to jump to adjacent verse
             let books = crate::db::queries::bible::get_books(&conn, version_id)?;
@@ -743,23 +784,18 @@ pub fn navigate_bible(
             });
 
             let cur = bp.current.as_ref().unwrap();
-            let slide = cur.parts[bp.part_index].clone();
-            let payload = serde_json::json!({
-                "versionId": version_id,
-                "book": new_book,
-                "chapter": new_chapter,
-                "verseNumber": new_verse,
-                "partIndex": bp.part_index,
-                "totalParts": cur.parts.len(),
-            });
-            (slide, payload)
+            let idx = bp.part_index;
+            let slide = cur.parts[idx].clone();
+            let parts = cur.parts.clone();
+            let payload = build_bible_context_payload(version_id, &new_book, new_chapter, new_verse, idx, cur.parts.len());
+            (slide, payload, parts, idx)
         }
     };
     // Mutex dropped here
 
     drop(conn);
 
-    project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload)?;
+    project_split_slide(&app, &state, &streaming_state, &slide_to_project, context_payload, &all_parts, active_part_index)?;
 
     Ok(())
 }
