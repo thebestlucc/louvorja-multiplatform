@@ -89,7 +89,7 @@ export function ControlBar({
   const isActive = isPlaying || status === "paused";
 
   // Nothing to show at all
-  if (!currentItem && totalSlides === 0) return null;
+  if (!currentItem && totalSlides === 0 && !isBibleProjection) return null;
 
   return (
     <div className="flex flex-col gap-1 border-t border-border bg-background px-4 py-2">
