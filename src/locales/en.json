@@ -572,7 +572,8 @@
     "modeKaraoke": "Karaoke",
     "modeSilent": "Slides only",
     "videoTargetProjector": "Play video on projector",
-    "videoTargetReturn": "Play video on return screen"
+    "videoTargetReturn": "Play video on return screen",
+    "goToBible": "Go to Bible"
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",

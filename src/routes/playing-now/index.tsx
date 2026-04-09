@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useMediaPlayer } from "../../hooks/use-media-player";
@@ -49,6 +49,24 @@ function PlayingNowScreen() {
   const volume = useAudioStore((s) => s.volume);
   const outputMuted = useAudioStore((s) => s.outputMuted);
   const isProjectorOpen = useDisplayStore((s) => s.projectorWindowOpen);
+  const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
+  const bibleContext = useDisplayStore((s) => s.bibleContext);
+  const navigate = useNavigate();
+
+  const isBibleProjection = currentProjectionType === "bible" && bibleContext !== null;
+
+  const handleGoToBible = () => {
+    if (bibleContext) {
+      void navigate({
+        to: "/bible",
+        search: {
+          book: bibleContext.book,
+          chapter: bibleContext.chapter,
+          verse: bibleContext.verseNumber,
+        },
+      });
+    }
+  };
 
   // Fallback to presentation-store slides when media-player-store has none
   // (e.g. when projecting a standalone presentation without going through the queue)
@@ -111,6 +129,8 @@ function PlayingNowScreen() {
             onNextItem={actions.nextItem}
             currentMode={currentMode}
             onModeChange={actions.switchMode}
+            isBibleProjection={isBibleProjection}
+            onGoToBible={handleGoToBible}
           />
           </div>
         </div>

@@ -572,7 +572,8 @@
     "modeKaraoke": "Playback",
     "modeSilent": "Só slides",
     "videoTargetProjector": "Reproduzir vídeo no projetor",
-    "videoTargetReturn": "Reproduzir vídeo na tela de retorno"
+    "videoTargetReturn": "Reproduzir vídeo na tela de retorno",
+    "goToBible": "Ir para Bíblia"
   },
   "presentations": {
     "aspectRatio": "Proporção",
