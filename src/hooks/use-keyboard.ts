@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useSlides } from "./use-slides";
 import { useMonitorsControl } from "./use-monitors";
 import { usePresentationStore } from "../stores/presentation-store";
@@ -9,24 +9,34 @@ import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useDisplayStore } from "../stores/display-store";
 import { navigateBible } from "../lib/tauri";
-import { useSetting } from "../lib/queries";
-import { matchesShortcutCombo, normalizeShortcutCombo } from "../lib/shortcut-definitions";
+import { useAllSettings } from "../lib/queries";
+import {
+  SHORTCUT_DEFINITIONS,
+  matchesShortcutCombo,
+  normalizeShortcutCombo,
+} from "../lib/shortcut-definitions";
 import { spotlightOpen } from "../lib/tauri";
 import { emit } from "@tauri-apps/api/event";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const { nextSlide, prevSlide } = useSlides();
   const { toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen } = useMonitorsControl();
-  const { data: spotlightShortcutSetting } = useSetting("shortcut.app-command-palette.local");
-  const { data: shortcutsHelpSetting } = useSetting("shortcut.app-shortcuts-help.local");
-  const spotlightLocalCombo = normalizeShortcutCombo(
-    spotlightShortcutSetting?.value ?? "Meta+k",
-    "local",
-  );
-  const shortcutsHelpLocalCombo = normalizeShortcutCombo(
-    shortcutsHelpSetting?.value ?? "Meta+/",
-    "local",
-  );
+  const { data: allSettings = [] } = useAllSettings({ enabled });
+
+  // Build resolved map: actionId -> normalized local combo
+  const shortcutMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const def of SHORTCUT_DEFINITIONS) {
+      if (!def.defaultLocal) continue;
+      const settingKey = `shortcut.${def.id}.local`;
+      const saved = allSettings.find((s) => s.key === settingKey);
+      const combo = saved?.value
+        ? normalizeShortcutCombo(saved.value, "local")
+        : normalizeShortcutCombo(def.defaultLocal, "local");
+      map[def.id] = combo;
+    }
+    return map;
+  }, [allSettings]);
 
   const clearPresentation = useCallback(() => {
     usePresentationStore.getState().setSlides([]);
@@ -43,12 +53,14 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (matchesShortcutCombo(e, spotlightLocalCombo)) {
+      // Spotlight gets priority — works even in text inputs
+      if (matchesShortcutCombo(e, shortcutMap["app-command-palette"] ?? "Meta+k")) {
         e.preventDefault();
         void spotlightOpen();
         return;
       }
 
+      // Skip other shortcuts when focus is in a text field
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -58,8 +70,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
 
       const isBibleRoute = window.location.pathname.startsWith("/bible");
       const isBibleProjecting = useDisplayStore.getState().currentProjectionType === "bible";
-      // On the Bible route, let arrow keys through to the global handler when projecting
-      // (navigateBible handles prev/next), but block them when NOT projecting (grid nav handles them)
+      // On Bible route when NOT projecting, let arrow/space through for grid navigation
       if (
         isBibleRoute && !isBibleProjecting &&
         (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "PageDown" || e.key === "PageUp" || e.key === " ")
@@ -67,15 +78,21 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         return;
       }
 
-      if (matchesShortcutCombo(e, shortcutsHelpLocalCombo)) {
-        e.preventDefault();
-        openKeyboardShortcutsPanel();
-        return;
-      }
+      // Find which action matches this key event
+      const matchedAction = Object.entries(shortcutMap).find(
+        ([, combo]) => matchesShortcutCombo(e, combo),
+      );
+      if (!matchedAction) return;
 
-      switch (e.key) {
-        case " ": {
-          e.preventDefault();
+      const [actionId] = matchedAction;
+      e.preventDefault();
+
+      switch (actionId) {
+        case "app-shortcuts-help":
+          openKeyboardShortcutsPanel();
+          break;
+
+        case "playback-play-pause": {
           const mpState = useMediaPlayerStore.getState();
           if (mpState.status === "playing") {
             if (mpState.timelineSource === "audio") {
@@ -96,9 +113,8 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
           }
           break;
         }
-        case "ArrowRight":
-        case "PageDown": {
-          e.preventDefault();
+
+        case "slides-next": {
           const projType = useDisplayStore.getState().currentProjectionType;
           if (projType === "bible") {
             void navigateBible("next");
@@ -107,9 +123,8 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
           }
           break;
         }
-        case "ArrowLeft":
-        case "PageUp": {
-          e.preventDefault();
+
+        case "slides-prev": {
           const projType = useDisplayStore.getState().currentProjectionType;
           if (projType === "bible") {
             void navigateBible("prev");
@@ -118,26 +133,24 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
           }
           break;
         }
-        case "Escape":
-          e.preventDefault();
+
+        case "slides-clear":
           clearPresentation();
           break;
-        case "F5":
-          e.preventDefault();
-          if (e.shiftKey) {
-            toggleReturn();
-          } else {
-            toggleProjector();
-          }
+
+        case "display-projector":
+          toggleProjector();
           break;
-        case "b":
-        case "B":
-          e.preventDefault();
+
+        case "display-return":
+          toggleReturn();
+          break;
+
+        case "display-black":
           toggleBlackScreen();
           break;
-        case "l":
-        case "L":
-          e.preventDefault();
+
+        case "display-logo":
           toggleLogoScreen();
           break;
       }
@@ -154,10 +167,10 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
     toggleBlackScreen,
     toggleLogoScreen,
     clearPresentation,
-    spotlightLocalCombo,
-    shortcutsHelpLocalCombo,
+    shortcutMap,
   ]);
 
+  // Global shortcuts (OS-level) — dispatched by Rust via events
   useEffect(() => {
     if (!enabled) return;
 
@@ -203,5 +216,5 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       cancelled = true;
       unlisten?.();
     };
-  }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen, openKeyboardShortcutsPanel]);
+  }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen]);
 }

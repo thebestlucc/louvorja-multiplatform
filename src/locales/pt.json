@@ -1148,9 +1148,13 @@
       "cancel": "Cancelar",
       "clear": "Limpar",
       "conflict": "Já usado por: {{action}}",
+      "actionLabel": "Ação",
       "description": "Personalize e gerencie seus atalhos de teclado para navegar e executar ações mais rapidamente.",
       "globalLabel": "Global",
+      "globalTooltip": "Atalhos globais funcionam em todo o sistema, mesmo quando o LouvorJA está em segundo plano ou outra janela está ativa. Útil ao projetar a partir de outro app.",
+      "holdKeyHint": "Pressione uma tecla não modificadora…",
       "localLabel": "No App",
+      "localTooltip": "Atalhos \"No App\" só funcionam quando o LouvorJA é a janela ativa (em foco). Não disparam ao usar outro aplicativo.",
       "record": "Gravar",
       "recording": "Gravando...",
       "unset": "---"

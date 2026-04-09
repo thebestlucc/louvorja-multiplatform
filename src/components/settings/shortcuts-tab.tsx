@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, X, Circle } from "lucide-react";
+import { RotateCcw, Circle, Info } from "lucide-react";
 import {
   SHORTCUT_DEFINITIONS,
   SHORTCUT_CATEGORY_ORDER,
@@ -13,8 +13,35 @@ import {
   useSetting,
   useSetShortcut,
 } from "../../lib/queries";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
-// A single shortcut recording cell (local or global layer)
+// Fixed column widths keep every row perfectly aligned — any combo up to
+// "Cmd/Ctrl + Shift + K" (~148px) fits comfortably inside 11rem (176px).
+const SHORTCUT_CELL_WIDTH = "w-44";
+const GRID_TEMPLATE = "grid-cols-[1fr_11rem_11rem]";
+
+// ---------------------------------------------------------------------------
+// Column-label tooltip
+// ---------------------------------------------------------------------------
+function ColumnLabel({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span className="inline-flex w-fit cursor-help items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground">
+          {label}
+          <Info className="h-3 w-3" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ShortcutCell – one recording slot (local OR global layer)
+// ---------------------------------------------------------------------------
 function ShortcutCell({
   def,
   layer,
@@ -37,15 +64,21 @@ function ShortcutCell({
     : defaultCombo;
 
   const [recording, setRecording] = useState(false);
+  const [holdingModifiers, setHoldingModifiers] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
 
   const startRecording = useCallback(() => {
     setRecording(true);
+    setHoldingModifiers(false);
     setConflict(null);
   }, []);
 
-  const stopRecording = useCallback(() => setRecording(false), []);
+  const stopRecording = useCallback(() => {
+    setRecording(false);
+    setHoldingModifiers(false);
+  }, []);
 
+  // Keyboard capture while recording
   useEffect(() => {
     if (!recording) return;
 
@@ -58,10 +91,18 @@ function ShortcutCell({
         return;
       }
 
-      const combo = keyboardEventToShortcutCombo(e, layer);
-      if (!combo) return;
+      const rawCombo = keyboardEventToShortcutCombo(e, layer);
+      if (!rawCombo) {
+        // Modifier-only press (Shift, Alt, Meta, Control) — signal the user
+        // to press a non-modifier key rather than silently ignoring.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+          setHoldingModifiers(true);
+        }
+        return;
+      }
+      const combo = normalizeShortcutCombo(rawCombo, layer);
 
-      // Conflict check: scan all bindings in the same layer
+      // Conflict check within same layer
       const layerSuffix = `.${layer}`;
       const conflictEntry = Object.entries(allCurrentBindings).find(
         ([key, val]) =>
@@ -83,93 +124,99 @@ function ShortcutCell({
       stopRecording();
     };
 
+    // Reset the "holding modifiers" hint when all modifiers are released
+    const keyupHandler = (e: KeyboardEvent) => {
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        setHoldingModifiers(false);
+      }
+    };
+
     window.addEventListener("keydown", handler, { capture: true });
-    return () => window.removeEventListener("keydown", handler, { capture: true });
+    window.addEventListener("keyup", keyupHandler, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", handler, { capture: true });
+      window.removeEventListener("keyup", keyupHandler, { capture: true });
+    };
   }, [recording, allCurrentBindings, def.id, layer, stopRecording, setShortcut, t]);
 
-  // If this shortcut has no layer slot, render empty
+  // No slot for this layer (e.g. no global default)
   if (!defaultCombo) {
-    return <div className="w-28" />;
+    return (
+      <div className={`flex h-8 ${SHORTCUT_CELL_WIDTH} items-center text-sm text-muted-foreground/40`}>
+        &mdash;
+      </div>
+    );
   }
+
+  const isCustomized = currentCombo && currentCombo !== defaultCombo;
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        {recording ? (
-          <span className="flex items-center gap-1.5 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-            <Circle className="h-2 w-2 animate-pulse fill-primary" />
-            {t("settings.shortcuts.recording")}
+      {recording ? (
+        /* Recording state — with modifier-only hint */
+        <button
+          onClick={stopRecording}
+          className={`flex h-8 ${SHORTCUT_CELL_WIDTH} cursor-pointer items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10`}
+        >
+          <Circle className="h-2 w-2 flex-shrink-0 animate-pulse fill-primary" />
+          <span className="truncate">
+            {holdingModifiers
+              ? t("settings.shortcuts.holdKeyHint")
+              : t("settings.shortcuts.recording")}
           </span>
-        ) : (
-          <>
-            <div className="flex min-w-[5rem] gap-1">
-              {currentCombo ? (
-                comboToDisplayKeys(currentCombo).map((k) => (
-                  <kbd
-                    key={k}
-                    className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                  >
-                    {k}
-                  </kbd>
-                ))
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  {t("settings.shortcuts.unset")}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={startRecording}
-              className="flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
-            >
-              <Plus className="h-3 w-3" />
-              {t("settings.shortcuts.record")}
-            </button>
-            {currentCombo && currentCombo !== defaultCombo && (
-              <button
-                onClick={() => {
-                  setShortcut.mutate({ id: def.id, layer, value: defaultCombo });
-                  setConflict(null);
-                }}
-                className="rounded p-1 text-muted-foreground hover:text-foreground"
-                title="Reset to default"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+        </button>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          {/* Key badges — clickable to start recording */}
+          <button
+            onClick={startRecording}
+            className={`flex h-8 ${SHORTCUT_CELL_WIDTH} cursor-pointer items-center gap-1 overflow-visible rounded-md border border-border bg-surface/50 px-2 transition-colors hover:border-primary/40 hover:bg-surface`}
+            title={t("settings.shortcuts.record")}
+          >
+            {currentCombo ? (
+              comboToDisplayKeys(currentCombo).map((k, i) => (
+                <kbd
+                  key={`${k}-${i}`}
+                  className="flex-shrink-0 rounded border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-foreground/80"
+                >
+                  {k}
+                </kbd>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {t("settings.shortcuts.unset")}
+              </span>
             )}
-          </>
-        )}
-      </div>
+          </button>
+
+          {/* Reset to default */}
+          {isCustomized && (
+            <button
+              onClick={() => {
+                setShortcut.mutate({ id: def.id, layer, value: defaultCombo });
+                setConflict(null);
+              }}
+              className="flex h-6 w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground"
+              title={t("settings.shortcuts.clear")}
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
       {conflict && <p className="text-xs text-destructive">{conflict}</p>}
     </div>
   );
 }
 
-// A full action row: label + local cell + global cell
-function ShortcutActionRow({
-  def,
-  allCurrentBindings,
-}: {
-  def: (typeof SHORTCUT_DEFINITIONS)[number];
-  allCurrentBindings: Record<string, string>;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <div className="grid grid-cols-[1fr_auto_auto] items-start gap-x-6 gap-y-1 rounded-md border border-border bg-background px-4 py-3">
-      <span className="self-start pt-1 text-sm text-foreground">{t(def.labelKey)}</span>
-      <ShortcutCell def={def} layer="local" allCurrentBindings={allCurrentBindings} />
-      <ShortcutCell def={def} layer="global" allCurrentBindings={allCurrentBindings} />
-    </div>
-  );
-}
-
+// ---------------------------------------------------------------------------
+// ShortcutsTab – main tab content
+// ---------------------------------------------------------------------------
 export function ShortcutsTab() {
   const { t } = useTranslation();
   const { data: allSettings = [] } = useAllSettings();
 
-  // Build a flat map of default bindings for conflict detection.
-  // Key format: "id.layer" → combo string.
+  // Build conflict-detection map: "id.layer" -> normalized combo
   const allCurrentBindings = {
     ...Object.fromEntries(
       SHORTCUT_DEFINITIONS.flatMap((def) => {
@@ -204,6 +251,7 @@ export function ShortcutsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h2 className="text-lg font-semibold text-foreground">{t("shortcuts.title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -211,13 +259,7 @@ export function ShortcutsTab() {
         </p>
       </div>
 
-      {/* Column headers */}
-      <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 px-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        <span>Action</span>
-        <span className="w-32 text-center">{t("settings.shortcuts.localLabel")}</span>
-        <span className="w-32 text-center">{t("settings.shortcuts.globalLabel")}</span>
-      </div>
-
+      {/* Category sections */}
       {SHORTCUT_CATEGORY_ORDER.map((category) => {
         const defs = SHORTCUT_DEFINITIONS.filter((d) => d.category === category);
         if (defs.length === 0) return null;
@@ -227,13 +269,35 @@ export function ShortcutsTab() {
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {t(`shortcuts.categories.${category}`)}
             </h3>
-            <div className="space-y-2">
-              {defs.map((def) => (
-                <ShortcutActionRow
-                  key={def.id}
-                  def={def}
-                  allCurrentBindings={allCurrentBindings}
+
+            <div className="rounded-lg border border-border bg-card">
+              {/* Column headers */}
+              <div className={`grid ${GRID_TEMPLATE} items-center gap-x-4 border-b border-border px-4 py-2`}>
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("settings.shortcuts.actionLabel")}
+                </span>
+                <ColumnLabel
+                  label={t("settings.shortcuts.localLabel")}
+                  tooltip={t("settings.shortcuts.localTooltip")}
                 />
+                <ColumnLabel
+                  label={t("settings.shortcuts.globalLabel")}
+                  tooltip={t("settings.shortcuts.globalTooltip")}
+                />
+              </div>
+
+              {/* Rows */}
+              {defs.map((def, idx) => (
+                <div
+                  key={def.id}
+                  className={`grid ${GRID_TEMPLATE} items-center gap-x-4 px-4 py-2.5 ${
+                    idx < defs.length - 1 ? "border-b border-border/50" : ""
+                  }`}
+                >
+                  <span className="text-sm text-foreground">{t(def.labelKey)}</span>
+                  <ShortcutCell def={def} layer="local" allCurrentBindings={allCurrentBindings} />
+                  <ShortcutCell def={def} layer="global" allCurrentBindings={allCurrentBindings} />
+                </div>
               ))}
             </div>
           </section>
