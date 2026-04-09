@@ -35,8 +35,9 @@ impl Default for SplitParams {
     }
 }
 
-/// Measure the height of `text` when laid out at the given font/size/width.
-fn measure_text_height(
+/// Measure the height of `text` using cosmic-text layout engine.
+/// Returns 0.0 if measurement fails (e.g., font not found, no layout runs).
+fn measure_text_height_cosmic(
     font_system: &mut FontSystem,
     text: &str,
     font_family: &str,
@@ -46,7 +47,7 @@ fn measure_text_height(
 ) -> f32 {
     let metrics = Metrics::new(font_size, line_height);
     let mut buffer = Buffer::new(font_system, metrics);
-    buffer.set_size(font_system, Some(max_width), None);
+    buffer.set_size(font_system, Some(max_width), Some(100_000.0));
 
     let family = if font_family == "__system__" {
         Family::SansSerif
@@ -57,11 +58,54 @@ fn measure_text_height(
     buffer.set_text(font_system, text, attrs, Shaping::Advanced);
     buffer.shape_until_scroll(font_system, false);
 
-    buffer
-        .layout_runs()
-        .last()
-        .map(|run| run.line_y + line_height)
-        .unwrap_or(0.0)
+    let mut total = 0.0_f32;
+    let mut last_y = -1.0_f32;
+    for run in buffer.layout_runs() {
+        if run.line_y != last_y {
+            total = run.line_y + line_height;
+            last_y = run.line_y;
+        }
+    }
+    total
+}
+
+/// Heuristic text height estimation based on character count.
+/// Used as fallback when cosmic-text returns 0 or suspiciously low values.
+/// Approximates average character width as ~0.55 * font_size for proportional fonts.
+fn estimate_text_height_heuristic(
+    text: &str,
+    font_size: f32,
+    line_height: f32,
+    max_width: f32,
+) -> f32 {
+    let avg_char_width = font_size * 0.55;
+    let chars_per_line = (max_width / avg_char_width).max(1.0);
+    let char_count = text.chars().count() as f32;
+    let estimated_lines = (char_count / chars_per_line).ceil().max(1.0);
+    estimated_lines * line_height
+}
+
+/// Measure text height using cosmic-text with heuristic fallback.
+/// Takes the MAXIMUM of both measurements to be conservative (avoid overflow).
+fn measure_text_height(
+    font_system: &mut FontSystem,
+    text: &str,
+    font_family: &str,
+    font_size: f32,
+    line_height: f32,
+    max_width: f32,
+) -> f32 {
+    let cosmic = measure_text_height_cosmic(
+        font_system, text, font_family, font_size, line_height, max_width,
+    );
+
+    // Trust cosmic-text when it returns a reasonable value (> 1 line height).
+    // Fall back to heuristic when cosmic returns suspiciously low (font not found, shaping failed).
+    if cosmic > line_height {
+        cosmic
+    } else {
+        estimate_text_height_heuristic(text, font_size, line_height, max_width)
+    }
 }
 
 /// Split a verse into parts that fit the projection area.
@@ -104,7 +148,8 @@ pub fn split_verse(
     let mut start = 0;
 
     while start < words.len() {
-        let target_height = available_height * 0.90;
+        // Target 85% of available height for safety margin (CSS rendering may differ)
+        let target_height = available_height * 0.85;
         let mut lo = start + 1;
         let mut hi = words.len();
         let mut best = start + 1;

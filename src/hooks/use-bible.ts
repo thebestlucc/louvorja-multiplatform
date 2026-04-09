@@ -5,8 +5,7 @@ import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { clearCurrentSlide } from "../lib/tauri";
 import { clearActivePlayback } from "../lib/projection-playback";
 import { projectBibleVerse, clearBibleProjection } from "../lib/tauri/bible";
-import type { SlideContent } from "../lib/bindings";
-import { useDisplayStore, type BibleContext } from "../stores/display-store";
+import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 
@@ -36,47 +35,25 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
   const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
   const addToQueue = useQueueStore((s) => s.addToQueue);
 
-  // Listen for bible context changes + slide updates from Rust navigate_bible/project_bible_verse
-  useEffect(() => {
-    let cancelled = false;
-    let unlistenContext: (() => void) | undefined;
-    let unlistenSlide: (() => void) | undefined;
+  // Note: Bible slide-changed + context sync listeners are now global in __root.tsx
+  // so they persist even when the /bible route unmounts (e.g. user on Playing Now)
 
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      if (cancelled) return;
-
-      // Update bibleContext when Rust emits navigation changes
-      listen<BibleContext>("bible-context-changed", (event) => {
-        if (!cancelled) {
-          setBibleContext(event.payload);
-        }
-      }).then((fn) => {
-        if (cancelled) fn();
-        else unlistenContext = fn;
-      });
-
-      // Sync slide to presentationStore so Playing Now preview works
-      listen<SlideContent>("slide-changed", (event) => {
-        if (cancelled) return;
-        const projType = useDisplayStore.getState().currentProjectionType;
-        if (projType === "bible" && event.payload) {
-          usePresentationStore.getState().setSlides([event.payload]);
-          usePresentationStore.getState().setActiveSlideIndex(0);
-        }
-      }).then((fn) => {
-        if (cancelled) fn();
-        else unlistenSlide = fn;
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      unlistenContext?.();
-      unlistenSlide?.();
-    };
-  }, [setBibleContext]);
-
+  const bibleContext = useDisplayStore((s) => s.bibleContext);
   const isProjecting = currentProjectionType === "bible";
+
+  // Sync local state with bibleContext when it changes externally
+  // (e.g. user navigated verses from Playing Now, then returned to Bible route)
+  useEffect(() => {
+    if (!bibleContext || !isProjecting) return;
+    const { book: ctxBook, chapter: ctxChapter, verseNumber } = bibleContext;
+    // Only sync if the context differs from local state (avoids loops)
+    if (ctxBook && ctxBook !== currentBook) setCurrentBook(ctxBook);
+    if (ctxChapter && ctxChapter !== currentChapter) setCurrentChapter(ctxChapter);
+    if (verseNumber && !selectedVerses.includes(verseNumber)) {
+      setSelectedVerses([verseNumber]);
+      setLastSelectedVerse(verseNumber);
+    }
+  }, [bibleContext, isProjecting]); // intentionally exclude local state from deps to avoid loops
 
   const setVersion = (id: number) => {
     setCurrentVersionId(id);
@@ -211,6 +188,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     selectVerseRange,
     lastSelectedVerse,
     isProjecting,
+    bibleContext,
     startBibleProjection,
     stopBibleProjection,
     updateBibleProjection,

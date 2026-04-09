@@ -124,7 +124,7 @@ export function ControlBar({
       <div className="flex items-center justify-between">
         {/* Left: playback controls */}
         <div className="flex items-center gap-1">
-          {hasSlides && (
+          {!isBibleProjection && hasSlides && (
             <Button
               variant="ghost"
               size="icon"
@@ -162,7 +162,7 @@ export function ControlBar({
             </>
           )}
 
-          {hasSlides && (
+          {!isBibleProjection && hasSlides && (
             <Button
               variant="ghost"
               size="icon"
@@ -220,17 +220,25 @@ export function ControlBar({
             </div>
           )}
 
-          {isBibleProjection && onGoToBible && (
+          {isBibleProjection && (
             <div className="ml-2 flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onGoToBible}
-                title={t("playingNow.goToBible")}
-              >
-                <BookOpen className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevSlide} aria-label="Previous verse">
+                <ChevronLeft className="h-4 w-4" />
               </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextSlide} aria-label="Next verse">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              {onGoToBible && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onGoToBible}
+                  title={t("playingNow.goToBible")}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           )}
 

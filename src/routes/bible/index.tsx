@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../componen
 import { Link } from "@tanstack/react-router";
 import { Monitor, Square, Settings2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { usePresentationStore } from "../../stores/presentation-store";
 
 const PERIODIC_FALLBACK_ORDER_OFFSET = 1000;
 
@@ -44,6 +45,8 @@ function BibleIndex() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showComparison, setShowComparison] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const presentationSlides = usePresentationStore((s) => s.slides);
+  const activeSplitIndex = usePresentationStore((s) => s.activeSlideIndex);
   const deepLinkApplied = useRef(false);
   const pendingVerseNavigationRef = useRef<PendingVerseNavigation | null>(null);
   const shiftAnchorRef = useRef<number | null>(null);
@@ -347,6 +350,12 @@ function BibleIndex() {
       // Verse grid
       if (!currentBook || currentChapter <= 0 || verses.length === 0) return;
 
+      // When Bible is projecting, let the global handler (use-keyboard.ts) handle
+      // arrow keys via navigateBible — don't do grid navigation
+      if (isProjecting && (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "PageDown" || e.key === "PageUp")) {
+        return; // Global handler will call navigateBible()
+      }
+
       const verseCount = verses.length;
       const selectedTail = selectedVerses[selectedVerses.length - 1];
       const clampedLast = lastSelectedVerse && lastSelectedVerse > 0
@@ -538,6 +547,8 @@ function BibleIndex() {
                 onOpenCompare={bible.versions.length > 1 ? () => setShowComparison(true) : undefined}
                 isProjecting={bible.isProjecting}
                 onProject={handleProjectFromVerseDisplay}
+                splitSlides={bible.isProjecting ? presentationSlides : undefined}
+                activeSplitIndex={bible.isProjecting ? activeSplitIndex : undefined}
               />
             ) : (
               <div className="flex h-full items-center justify-center">

@@ -40,7 +40,7 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
         ...(globalFontFamily && globalFontFamily !== "__system__" ? { fontFamily: globalFontFamily } : {}),
       } as React.CSSProperties}
     >
-      {renderSlideContent(slide, renderMode, globalFontSize)}
+      {renderSlideContent(slide, renderMode, globalFontSize, globalFontFamily)}
     </div>
   );
 }
@@ -49,6 +49,7 @@ function renderSlideContent(
   slide: SlideContent | null,
   renderMode: SlideRenderMode,
   globalFontSize: number,
+  globalFontFamily?: string,
 ): React.ReactNode {
   if (!slide) return <PauseRenderer />;
 
@@ -64,7 +65,7 @@ function renderSlideContent(
     case "video":
       return <VideoRenderer slide={slide} mode={renderMode} />;
     case "bible":
-      return <BibleRenderer slide={slide} mode={renderMode} />;
+      return <BibleRenderer slide={slide} mode={renderMode} globalFontFamily={globalFontFamily} />;
     case "onlineVideo":
       return <OnlineVideoRenderer slide={slide} mode={renderMode} />;
     case "pause":

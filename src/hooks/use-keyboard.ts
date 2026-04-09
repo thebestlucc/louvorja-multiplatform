@@ -57,8 +57,11 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       }
 
       const isBibleRoute = window.location.pathname.startsWith("/bible");
+      const isBibleProjecting = useDisplayStore.getState().currentProjectionType === "bible";
+      // On the Bible route, let arrow keys through to the global handler when projecting
+      // (navigateBible handles prev/next), but block them when NOT projecting (grid nav handles them)
       if (
-        isBibleRoute &&
+        isBibleRoute && !isBibleProjecting &&
         (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "PageDown" || e.key === "PageUp" || e.key === " ")
       ) {
         return;
