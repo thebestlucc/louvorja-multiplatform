@@ -43,7 +43,7 @@ function makeLyricsSlide(text: string): SlideContent {
 }
 
 function makeBibleSlide(text: string, reference: string): SlideContent {
-  return { slideType: "bible", text, reference, mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null }, background: defaultBackground(), text_color: null, text_size: null };
+  return { slideType: "bible", text, reference, mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null, fontFamily: null }, background: defaultBackground(), text_color: null, text_size: null };
 }
 
 function makeImageSlide(path: string): SlideContent {

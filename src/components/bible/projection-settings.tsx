@@ -32,6 +32,7 @@ export interface BibleProjectionSettings {
   textAlign: "left" | "center" | "right";
   showReference: boolean;
   referencePosition: "top" | "bottom";
+  fontFamily: string;
 }
 
 const DEFAULT_SETTINGS: BibleProjectionSettings = {
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: BibleProjectionSettings = {
   textAlign: "center",
   showReference: true,
   referencePosition: "top",
+  fontFamily: "__system__",
 };
 
 const STORE_KEY = "bibleProjectionSettings";
@@ -139,6 +141,7 @@ export function buildBibleSlideContent(
       refPosition: (settings.referencePosition === "bottom" ? "bottom" : "top") as import("../../lib/bindings").RefPosition,
       textShadow: settings.textShadow ?? false,
       gradient,
+      fontFamily: settings.fontFamily === "__system__" ? null : settings.fontFamily,
     },
     background: {
       kind: settings.backgroundImage ? "image" : settings.backgroundGradient ? "gradient" : "solid",
