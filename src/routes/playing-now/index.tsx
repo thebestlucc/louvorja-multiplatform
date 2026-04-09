@@ -6,6 +6,7 @@ import { usePlaybackCoordinator } from "../../hooks/use-playback-coordinator";
 import { usePlayingNowKeyboard } from "../../hooks/use-playing-now-keyboard";
 import { useAudioStore } from "../../stores/audio-store";
 import { useDisplayStore } from "../../stores/display-store";
+import { navigateBible } from "../../lib/tauri/bible";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { SlidePanel } from "../../components/playing-now/slide-panel";
 import { QueuePanel } from "../../components/playing-now/queue-panel";
@@ -118,8 +119,8 @@ function PlayingNowScreen() {
             onStop={actions.stop}
             onRestart={actions.restart}
             onSeek={actions.seek}
-            onPrevSlide={actions.prevSlide}
-            onNextSlide={actions.nextSlide}
+            onPrevSlide={isBibleProjection ? () => void navigateBible("prev") : actions.prevSlide}
+            onNextSlide={isBibleProjection ? () => void navigateBible("next") : actions.nextSlide}
             onVolumeChange={actions.setVolume}
             onMuteToggle={() => {
               const s = useAudioStore.getState();
