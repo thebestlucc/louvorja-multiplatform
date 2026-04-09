@@ -7,6 +7,8 @@ import { useAudioStore } from "../stores/audio-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useMediaPlayerStore } from "../stores/media-player-store";
+import { useDisplayStore } from "../stores/display-store";
+import { navigateBible } from "../lib/tauri";
 import { useSetting } from "../lib/queries";
 import { matchesShortcutCombo, normalizeShortcutCombo } from "../lib/shortcut-definitions";
 import { spotlightOpen } from "../lib/tauri";
@@ -92,15 +94,27 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
           break;
         }
         case "ArrowRight":
-        case "PageDown":
+        case "PageDown": {
           e.preventDefault();
-          nextSlide();
+          const projType = useDisplayStore.getState().currentProjectionType;
+          if (projType === "bible") {
+            void navigateBible("next");
+          } else {
+            nextSlide();
+          }
           break;
+        }
         case "ArrowLeft":
-        case "PageUp":
+        case "PageUp": {
           e.preventDefault();
-          prevSlide();
+          const projType = useDisplayStore.getState().currentProjectionType;
+          if (projType === "bible") {
+            void navigateBible("prev");
+          } else {
+            prevSlide();
+          }
           break;
+        }
         case "Escape":
           e.preventDefault();
           clearPresentation();
@@ -151,12 +165,18 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       if (cancelled) return;
       listen<string>("global-shortcut", (event) => {
         switch (event.payload) {
-          case "slides-next":
-            nextSlide();
+          case "slides-next": {
+            const projType = useDisplayStore.getState().currentProjectionType;
+            if (projType === "bible") void navigateBible("next");
+            else nextSlide();
             break;
-          case "slides-prev":
-            prevSlide();
+          }
+          case "slides-prev": {
+            const projType = useDisplayStore.getState().currentProjectionType;
+            if (projType === "bible") void navigateBible("prev");
+            else prevSlide();
             break;
+          }
           case "display-black":
             toggleBlackScreen();
             break;

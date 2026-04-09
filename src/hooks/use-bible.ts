@@ -5,7 +5,7 @@ import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { setSlideContext, clearCurrentSlide } from "../lib/tauri";
 import type { SlideContent } from "../lib/bindings";
 import { projectSlideWithType, clearActivePlayback } from "../lib/projection-playback";
-import { useDisplayStore } from "../stores/display-store";
+import { useDisplayStore, type BibleContext } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 
@@ -56,10 +56,34 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
 
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
   const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
+  const setBibleContext = useDisplayStore((s) => s.setBibleContext);
   const setPresentationSlides = usePresentationStore((s) => s.setSlides);
   const setActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
   const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
   const addToQueue = useQueueStore((s) => s.addToQueue);
+
+  // Listen for bible context changes from Rust navigate_bible command
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      if (cancelled) return;
+      listen<BibleContext>("bible-context-changed", (event) => {
+        if (!cancelled) {
+          setBibleContext(event.payload);
+        }
+      }).then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [setBibleContext]);
 
   const isProjecting = currentProjectionType === "bible";
 
@@ -157,7 +181,17 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     await clearActivePlayback();
     setCurrentProjectionType("bible");
     await projectSelectedVersesRange();
-  }, [projectSelectedVersesRange, setCurrentProjectionType]);
+    if (selectedVerses.length > 0) {
+      setBibleContext({
+        versionId: currentVersionId,
+        book: currentBook,
+        chapter: currentChapter,
+        verseNumber: selectedVerses[0],
+        partIndex: 0,
+        totalParts: 1,
+      });
+    }
+  }, [projectSelectedVersesRange, setCurrentProjectionType, setBibleContext, selectedVerses, currentVersionId, currentBook, currentChapter]);
 
   const updateBibleProjection = useCallback(async (overrideVerses?: number[]) => {
     if (isProjecting) {
@@ -169,8 +203,9 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     const [, error] = await catcher(clearCurrentSlide(), { notify: true });
     if (!error) {
       setCurrentProjectionType(null);
+      setBibleContext(null);
     }
-  }, [setCurrentProjectionType]);
+  }, [setCurrentProjectionType, setBibleContext]);
 
   return {
     versions,

@@ -14,6 +14,7 @@ import {
   Mic,
   Music2,
   MonitorPlay,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
@@ -43,6 +44,8 @@ interface ControlBarProps {
   onNextItem: () => void;
   currentMode?: "sung" | "karaoke" | "silent";
   onModeChange?: (mode: "sung" | "karaoke" | "silent") => void;
+  isBibleProjection?: boolean;
+  onGoToBible?: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -74,6 +77,8 @@ export function ControlBar({
   onNextItem,
   currentMode,
   onModeChange,
+  isBibleProjection,
+  onGoToBible,
 }: ControlBarProps) {
   const { t } = useTranslation();
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
@@ -211,6 +216,20 @@ export function ControlBar({
                 title={t("playingNow.modeSilent")}
               >
                 <MonitorPlay className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+
+          {isBibleProjection && onGoToBible && (
+            <div className="ml-2 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onGoToBible}
+                title={t("playingNow.goToBible")}
+              >
+                <BookOpen className="h-4 w-4" />
               </Button>
             </div>
           )}
