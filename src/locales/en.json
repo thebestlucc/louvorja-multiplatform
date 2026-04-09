@@ -71,6 +71,7 @@
     "projectionPreview": "Preview",
     "projectionBackground": "Background",
     "projectionTypography": "Typography",
+    "projectionFontFamily": "Font",
     "projectionFontSize": "Size",
     "projectionTextColor": "Color",
     "projectionTextShadow": "Text shadow",
