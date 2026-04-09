@@ -85,7 +85,7 @@ async function projectBibleVerse(result: BibleSearchResult) {
     slideType: "bible",
     text: verse.text,
     reference: `${bookName} ${verse.chapter}:${verse.verse}`,
-    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null },
+    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null, fontFamily: null },
     background: _SPOT_DEFAULT_BG,
     text_color: null,
     text_size: null,

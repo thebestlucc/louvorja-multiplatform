@@ -17,6 +17,7 @@ const DEFAULT_BIBLE_MODE: BibleMode = {
   refPosition: "top",
   textShadow: false,
   gradient: null,
+  fontFamily: null,
 };
 
 /**
@@ -68,6 +69,7 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
   const textAlign = bibleMode.alignment;
   const refPosition = bibleMode.refPosition;
   const hasTextShadow = bibleMode.textShadow;
+  const fontFamily = bibleMode.fontFamily ?? undefined;
 
   const resolvedBgImage = useImageSrc(
     bg.kind === "image" ? bg.imagePath : null,
@@ -136,6 +138,7 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
         opacity: 0.6,
         textShadow: textShadowValue,
         textAlign,
+        ...(fontFamily ? { fontFamily } : {}),
       }}
     >
       {reference}
@@ -182,6 +185,7 @@ export function BibleRenderer({ slide, mode: renderMode }: BibleRendererProps) {
               color: txtColor,
               textShadow: textShadowValue,
               lineHeight: isProjector ? 1.5 : 1.4,
+              ...(fontFamily ? { fontFamily } : {}),
             }}
           >
             {line}

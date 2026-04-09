@@ -29,7 +29,7 @@ function makeBibleSlide(text: string, reference: string): SlideContent {
     slideType: "bible",
     text,
     reference,
-    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null },
+    mode: { alignment: "center", refPosition: "bottom", textShadow: false, gradient: null, fontFamily: null },
     background: DEFAULT_BG,
     text_color: null,
     text_size: null,
