@@ -37,3 +37,7 @@ name: string, abbreviation: string, language: string, versesJson: string): Promi
 export async function navigateBible(direction: "next" | "prev"): Promise<void> {
   await invoke("navigate_bible", { direction });
 }
+
+export async function clearBibleProjection(): Promise<void> {
+  await invoke("clear_bible_projection", {});
+}

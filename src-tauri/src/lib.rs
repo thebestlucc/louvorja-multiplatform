@@ -105,6 +105,7 @@ pub fn run() {
             commands::bible::import_bible_version,
             commands::bible::navigate_bible_verse,
             commands::bible::navigate_bible,
+            commands::bible::clear_bible_projection,
             // Favorites
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
