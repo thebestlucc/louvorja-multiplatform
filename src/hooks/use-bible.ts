@@ -5,7 +5,9 @@ import { useBibleVersions, useBooks, useVerses } from "../lib/queries";
 import { clearCurrentSlide } from "../lib/tauri";
 import { clearActivePlayback } from "../lib/projection-playback";
 import { projectBibleVerse, clearBibleProjection } from "../lib/tauri/bible";
+import type { SlideContent } from "../lib/bindings";
 import { useDisplayStore, type BibleContext } from "../stores/display-store";
+import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 
 import type { BibleProjectionSettings } from "../components/bible/projection-settings";
@@ -31,28 +33,46 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
   const currentProjectionType = useDisplayStore((s) => s.currentProjectionType);
   const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
   const setBibleContext = useDisplayStore((s) => s.setBibleContext);
+  const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
   const addToQueue = useQueueStore((s) => s.addToQueue);
 
-  // Listen for bible context changes from Rust navigate_bible command
+  // Listen for bible context changes + slide updates from Rust navigate_bible/project_bible_verse
   useEffect(() => {
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    let unlistenContext: (() => void) | undefined;
+    let unlistenSlide: (() => void) | undefined;
 
     import("@tauri-apps/api/event").then(({ listen }) => {
       if (cancelled) return;
+
+      // Update bibleContext when Rust emits navigation changes
       listen<BibleContext>("bible-context-changed", (event) => {
         if (!cancelled) {
           setBibleContext(event.payload);
         }
       }).then((fn) => {
         if (cancelled) fn();
-        else unlisten = fn;
+        else unlistenContext = fn;
+      });
+
+      // Sync slide to presentationStore so Playing Now preview works
+      listen<SlideContent>("slide-changed", (event) => {
+        if (cancelled) return;
+        const projType = useDisplayStore.getState().currentProjectionType;
+        if (projType === "bible" && event.payload) {
+          usePresentationStore.getState().setSlides([event.payload]);
+          usePresentationStore.getState().setActiveSlideIndex(0);
+        }
+      }).then((fn) => {
+        if (cancelled) fn();
+        else unlistenSlide = fn;
       });
     });
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlistenContext?.();
+      unlistenSlide?.();
     };
   }, [setBibleContext]);
 
@@ -152,18 +172,10 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
   const startBibleProjection = useCallback(async () => {
     await clearActivePlayback();
     setCurrentProjectionType("bible");
+    setCurrentPresentation(null);
     await projectSelectedVersesRange();
-    if (selectedVerses.length > 0) {
-      setBibleContext({
-        versionId: currentVersionId,
-        book: currentBook,
-        chapter: currentChapter,
-        verseNumber: selectedVerses[0],
-        partIndex: 0,
-        totalParts: 1,
-      });
-    }
-  }, [projectSelectedVersesRange, setCurrentProjectionType, setBibleContext, selectedVerses, currentVersionId, currentBook, currentChapter]);
+    // Note: bibleContext is set by the Rust "bible-context-changed" event listener above
+  }, [projectSelectedVersesRange, setCurrentProjectionType, setCurrentPresentation]);
 
   const updateBibleProjection = useCallback(async (overrideVerses?: number[]) => {
     if (isProjecting) {
