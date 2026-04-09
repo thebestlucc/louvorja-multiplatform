@@ -1148,9 +1148,13 @@
       "cancel": "Cancel",
       "clear": "Clear",
       "conflict": "Already used by: {{action}}",
+      "actionLabel": "Action",
       "description": "Customize and manage your keyboard shortcuts to navigate and perform actions faster.",
       "globalLabel": "Global",
+      "globalTooltip": "Global shortcuts work system-wide, even when LouvorJA is running in the background or another window is focused. Useful when projecting from another app.",
+      "holdKeyHint": "Hold a non-modifier key…",
       "localLabel": "In-App",
+      "localTooltip": "In-app shortcuts only work when LouvorJA is the active (focused) window. They won't trigger when you're using another app.",
       "record": "Record",
       "recording": "Recording...",
       "unset": "---"
