@@ -21,6 +21,7 @@ import {
   FolderOpen,
   X,
 } from "lucide-react";
+import { FONT_FAMILY_OPTIONS } from "../../lib/use-presentation-font-size";
 
 export interface BibleProjectionSettings {
   backgroundColor: string;
@@ -392,6 +393,22 @@ export function ProjectionSettings({
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {t("bible.projectionTypography")}
         </span>
+
+        {/* Font Family */}
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">{t("bible.projectionFontFamily")}</label>
+          <select
+            value={settings.fontFamily}
+            onChange={(e) => onChange({ ...settings, fontFamily: e.target.value })}
+            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+          >
+            {FONT_FAMILY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value} style={{ fontFamily: opt.value === "__system__" ? undefined : opt.value }}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Font Size */}
         <div className="flex items-center gap-2">
