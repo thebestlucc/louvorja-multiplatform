@@ -63,6 +63,7 @@ sha2 = "0.10"
 bytes = "1"
 memmap2 = "0.9"
 unicode-normalization = "0.1"
+cosmic-text = "0.12"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "a3122e894383aa068ec5365a42994e3ac94ba1b6" }
