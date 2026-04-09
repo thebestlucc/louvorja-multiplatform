@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import type { MonitorInfo } from "../types/settings";
 
+export interface BibleContext {
+  versionId: number;
+  book: string;
+  chapter: number;
+  verseNumber: number;
+  partIndex: number;
+  totalParts: number;
+}
+
 interface DisplayState {
   monitors: MonitorInfo[];
   monitorAssignments: Record<string, string>;
@@ -16,6 +25,8 @@ interface DisplayState {
   setBlackScreen: (v: boolean) => void;
   setLogoScreen: (v: boolean) => void;
   setCurrentProjectionType: (type: "bible" | "hymn" | "presentation" | "utility" | "service" | null) => void;
+  bibleContext: BibleContext | null;
+  setBibleContext: (ctx: BibleContext | null) => void;
 }
 
 export const useDisplayStore = create<DisplayState>((set) => ({
@@ -36,4 +47,6 @@ export const useDisplayStore = create<DisplayState>((set) => ({
   setBlackScreen: (v) => set({ isBlackScreen: v }),
   setLogoScreen: (v) => set({ isLogoScreen: v }),
   setCurrentProjectionType: (type) => set({ currentProjectionType: type }),
+  bibleContext: null,
+  setBibleContext: (ctx) => set({ bibleContext: ctx }),
 }));
