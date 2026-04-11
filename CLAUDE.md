@@ -352,27 +352,6 @@ src-tauri/src/                # Backend (Rust)
   - **Sidebar collapsible sub-items:** `NavItem.children` array, expand/collapse state in `useUIStore`, hover popover in collapsed mode via Radix `Popover`.
   - **Collections route tab bar:** Conditional tab bar shown on `/collections` and `/collections/online-videos` index pages (not on detail pages). Static `online-videos` route takes priority over `$collectionId` dynamic segment.
 
-## Phase Status
-
-| Phase | Spec | Status |
-|-------|------|--------|
-| 0 | Foundation (01) | COMPLETE |
-| 1 | Music & Lyrics (02) | COMPLETE |
-| 2 | Audio Playback (03) | COMPLETE |
-| 3 | Presentation Editor (04) | COMPLETE |
-| 4 | Bible (05) | COMPLETE |
-| 5 | Liturgy/Services (06) | COMPLETE |
-| 6 | Multi-Monitor (07) | COMPLETE |
-| 7 | Streaming (08) | COMPLETE |
-| 8 | Video/Multimedia (09) | COMPLETE |
-| 9 | Utilities & Polish (10) | Pending |
-| 10 | Migration & Deploy (11) | Pending |
-| 11 | Projection Overhaul | COMPLETE |
-| 12 | Monitor Screen Assignment | COMPLETE |
-| — | Playing Queue | COMPLETE |
-| — | Pack Sync (CDN) | IN PROGRESS |
-| — | Online Videos (YouTube) | COMPLETE |
-
 ## Self-Improvement Protocol
 
 After completing any task (feature, bugfix, refactor), Claude MUST:
