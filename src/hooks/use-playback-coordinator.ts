@@ -151,11 +151,14 @@ export function usePlaybackCoordinator() {
   // Effect: React to queue index changes
   useEffect(() => {
     if (currentIndex >= 0 && currentIndex < items.length) {
-      void playItem(currentIndex);
+      playItem(currentIndex);
     } else if (currentIndex === -1) {
       _lastPlayedIndex = null;
+      // Queue ended — stop audio and clear Playing Now
+      stopAudio();
+      useMediaPlayerStore.getState().unload();
     }
-  }, [currentIndex, items.length, playItem]);
+  }, [currentIndex, items.length, playItem, stopAudio]);
 
   // Effect: Register Auto-Next callback
   useEffect(() => {

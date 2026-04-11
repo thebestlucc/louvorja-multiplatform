@@ -287,6 +287,8 @@ src-tauri/src/                # Backend (Rust)
 
 8. **Package manager/tooling:** This project uses **pnpm** for frontend commands. Do not use `npm` or `deno` in this repo.
 
+9. **Never use the `void` operator before function calls.** It is noise — just call the function directly. If a linter complains about floating promises, fix the root cause (add `await`, use `.catch()`, or restructure) rather than silencing it with `void`.
+
 10. **Unit tests for Tauri-dependent stores:** Stub Tauri IPC *before* importing the store: `(globalThis as any).window = { __TAURI_INTERNALS__: { invoke: () => Promise.resolve(null) } };` — required because plugin-store calls `invoke` at module load. See `tests/stores/slide-passer-store.test.ts`.
 
 9. **Conditional hooks in root layout:** Never call hooks after an early `return`. For bare routes (`/projector`, `/return`), pass `{ enabled: false }` to hooks instead of calling them conditionally — `useKeyboard({ enabled: !isBareRoute })` always called, conditionally active.
