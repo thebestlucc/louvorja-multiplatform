@@ -4,6 +4,7 @@ import { buildMonthGrid, toIsoDate } from "../../lib/schedules";
 import { useMediaLibraryItemDates } from "../../lib/queries";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -65,24 +66,36 @@ export function DateSelector({ categoryId, selectedDate, onSelectDate }: DateSel
             <Calendar className="h-3 w-3" />
             {t("actions.today")}
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 cursor-pointer" 
-            onClick={handlePrev}
-            disabled={!isCategorySelected}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 cursor-pointer" 
-            onClick={handleNext}
-            disabled={!isCategorySelected}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 cursor-pointer"
+                onClick={handlePrev}
+                disabled={!isCategorySelected}
+                aria-label="Previous months"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Previous months</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 cursor-pointer"
+                onClick={handleNext}
+                disabled={!isCategorySelected}
+                aria-label="Next months"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Next months</TooltipContent>
+          </Tooltip>
         </div>
       </div>
       

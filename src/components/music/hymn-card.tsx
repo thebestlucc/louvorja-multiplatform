@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useAddLiturgyItem } from "../../lib/queries";
 import type { Hymn, HymnListItem } from "../../lib/bindings";
@@ -139,58 +140,83 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
             </div>
 
             <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pr-2 pointer-events-auto">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={onSlidesOnly}
-                title={t("hymn.actionSlidesOnly")}
-              >
-                <MonitorPlay className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={onSlidesOnly}
+                    aria-label={t("hymn.actionSlidesOnly")}
+                  >
+                    <MonitorPlay className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{t("hymn.actionSlidesOnly")}</TooltipContent>
+              </Tooltip>
               {hasAudio && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={onCantado}
-                  title={t("hymn.actionSung")}
-                >
-                  <Play className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={onCantado}
+                      aria-label={t("hymn.actionSung")}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t("hymn.actionSung")}</TooltipContent>
+                </Tooltip>
               )}
               {hasPlayback && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={onPlayback}
-                  title={t("hymn.actionPlayback")}
-                >
-                  <Music className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={onPlayback}
+                      aria-label={t("hymn.actionPlayback")}
+                    >
+                      <Music className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t("hymn.actionPlayback")}</TooltipContent>
+                </Tooltip>
               )}
               {hasLyrics && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={handleShowLyrics}
-                  title={t("hymn.actionShowLyrics")}
-                >
-                  <BookOpen className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={handleShowLyrics}
+                      aria-label={t("hymn.actionShowLyrics")}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t("hymn.actionShowLyrics")}</TooltipContent>
+                </Tooltip>
               )}
               {activeLiturgyId && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                  onClick={handleAddToService}
-                  title={t("services.addToService")}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      onClick={handleAddToService}
+                      aria-label={t("services.addToService")}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t("services.addToService")}</TooltipContent>
+                </Tooltip>
               )}
               <FavoriteButton itemType="hymn" itemId={hymn.id} size="icon" className="h-8 w-8" isFavoriteOverride={isFav} />
             </div>
@@ -229,58 +255,83 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
         {/* Action Overlay (Bottom) */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex flex-col justify-end p-3 z-10">
           <div className="flex items-center justify-center gap-1.5 translate-y-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-              onClick={onSlidesOnly}
-              title={t("hymn.actionSlidesOnly")}
-            >
-              <MonitorPlay className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                  onClick={onSlidesOnly}
+                  aria-label={t("hymn.actionSlidesOnly")}
+                >
+                  <MonitorPlay className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("hymn.actionSlidesOnly")}</TooltipContent>
+            </Tooltip>
             {hasAudio && (
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-                onClick={onCantado}
-                title={t("hymn.actionSung")}
-              >
-                <Play className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                    onClick={onCantado}
+                    aria-label={t("hymn.actionSung")}
+                  >
+                    <Play className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("hymn.actionSung")}</TooltipContent>
+              </Tooltip>
             )}
             {hasPlayback && (
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-                onClick={onPlayback}
-                title={t("hymn.actionPlayback")}
-              >
-                <Music className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                    onClick={onPlayback}
+                    aria-label={t("hymn.actionPlayback")}
+                  >
+                    <Music className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("hymn.actionPlayback")}</TooltipContent>
+              </Tooltip>
             )}
             {hasLyrics && (
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
-                onClick={handleShowLyrics}
-                title={t("hymn.actionShowLyrics")}
-              >
-                <BookOpen className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                    onClick={handleShowLyrics}
+                    aria-label={t("hymn.actionShowLyrics")}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("hymn.actionShowLyrics")}</TooltipContent>
+              </Tooltip>
             )}
             {activeLiturgyId && (
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background text-primary border-transparent"
-                onClick={handleAddToService}
-                title={t("services.addToService")}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background text-primary border-transparent"
+                    onClick={handleAddToService}
+                    aria-label={t("services.addToService")}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("services.addToService")}</TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>

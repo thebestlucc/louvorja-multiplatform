@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { getPreference, setPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
@@ -74,9 +75,14 @@ export function QueuePanel({ className }: QueuePanelProps) {
         className="absolute inset-0 flex flex-col items-center pt-2 transition-opacity duration-200"
         style={{ opacity: collapsed ? 1 : 0, pointerEvents: collapsed ? "auto" : "none" }}
       >
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleCollapsed}>
-          <PanelRight className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleCollapsed} aria-label="Show queue panel">
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Show queue panel</TooltipContent>
+        </Tooltip>
         <span className="writing-vertical-lr mt-2 text-xs text-muted-foreground">
           {t("playingNow.queue")} ({items.length})
         </span>
@@ -94,25 +100,35 @@ export function QueuePanel({ className }: QueuePanelProps) {
           </span>
           <div className="flex items-center gap-0.5">
             {items.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={clearQueue}
-                aria-label={t("playingNow.clearQueue")}
-                title={t("playingNow.clearQueue")}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={clearQueue}
+                    aria-label={t("playingNow.clearQueue")}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("playingNow.clearQueue")}</TooltipContent>
+              </Tooltip>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={toggleCollapsed}
-            >
-              <PanelRightClose className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={toggleCollapsed}
+                  aria-label="Hide queue panel"
+                >
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Hide queue panel</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -207,17 +223,23 @@ function QueueItemRow({
         )}
       </div>
       {onRemove && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-        >
-          <X className="h-3 w-3" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
+              aria-label="Remove from queue"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Remove from queue</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

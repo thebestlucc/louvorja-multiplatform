@@ -9,6 +9,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { PopoverContent } from "../ui/popover";
 import { MonthPatternPicker } from "./month-pattern-picker";
 
@@ -61,31 +62,41 @@ export function MonthToolbar({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={t("utilities.schedules.monthPicker.previous")}
-            disabled={isBusy}
-            onClick={onPreviousMonth}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t("utilities.schedules.monthPicker.previous")}
+                disabled={isBusy}
+                onClick={onPreviousMonth}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("utilities.schedules.monthPicker.previous")}</TooltipContent>
+          </Tooltip>
 
           <span className="min-w-40 px-3 py-1.5 text-center text-base font-semibold capitalize">
             {monthLabel}
           </span>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={t("utilities.schedules.monthPicker.next")}
-            disabled={isBusy}
-            onClick={onNextMonth}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t("utilities.schedules.monthPicker.next")}
+                disabled={isBusy}
+                onClick={onNextMonth}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("utilities.schedules.monthPicker.next")}</TooltipContent>
+          </Tooltip>
 
           {!isCurrentMonth && (
             <Button

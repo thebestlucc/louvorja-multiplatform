@@ -4,6 +4,7 @@ import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 
 interface PlayingQueueViewProps {
   items: QueueItem[];
@@ -36,20 +37,26 @@ export function PlayingQueueView({ items, currentIndex, onItemClick, onRemoveIte
             <span className="flex-1 truncate">{item.hymn?.title || item.title || "Unknown"}</span>
             <span className="text-[10px] opacity-70 uppercase font-bold">{item.type}</span>
           </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
-              index === currentIndex ? "text-primary-foreground hover:bg-white/20" : "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemoveItem?.(index);
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
+                  index === currentIndex ? "text-primary-foreground hover:bg-white/20" : "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveItem?.(index);
+                }}
+                aria-label="Remove from queue"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Remove from queue</TooltipContent>
+          </Tooltip>
         </div>
       ))}
     </div>

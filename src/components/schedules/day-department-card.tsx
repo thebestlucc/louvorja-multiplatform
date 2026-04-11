@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import type { ScheduleDayDepartment } from "../../lib/bindings";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -160,14 +161,20 @@ export function DayDepartmentCard({
             {t("utilities.schedules.dayDetails.peoplePerDay")}
           </label>
           <div className="flex items-center rounded-lg border border-border/80">
-            <button
-              type="button"
-              disabled={disabled || peoplePerDay <= 1}
-              onClick={() => handlePeoplePerDayChange(String(peoplePerDay - 1))}
-              className="flex h-8 w-8 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={disabled || peoplePerDay <= 1}
+                  onClick={() => handlePeoplePerDayChange(String(peoplePerDay - 1))}
+                  aria-label="Decrease count"
+                  className="flex h-8 w-8 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Decrease count</TooltipContent>
+            </Tooltip>
             <input
               id={`people-per-day-${dayDepartment.id}`}
               type="text"
@@ -177,14 +184,20 @@ export function DayDepartmentCard({
               onChange={(e) => handlePeoplePerDayChange(e.target.value)}
               className="h-8 w-10 border-x border-border/80 bg-transparent text-center text-sm font-medium text-foreground outline-none disabled:opacity-50"
             />
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => handlePeoplePerDayChange(String(peoplePerDay + 1))}
-              className="flex h-8 w-8 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => handlePeoplePerDayChange(String(peoplePerDay + 1))}
+                  aria-label="Increase count"
+                  className="flex h-8 w-8 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Increase count</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -307,9 +320,14 @@ function SortableAssigneeRow({
 
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">{name}</span>
 
-      <Button type="button" variant="ghost" size="icon" onClick={onRemove} disabled={disabled}>
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove} disabled={disabled} aria-label="Remove assignee">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Remove assignee</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
