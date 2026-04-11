@@ -5,6 +5,7 @@ import { useMediaLibraryCategories, useUpsertMediaLibraryCategory, useDeleteMedi
 import { MediaLibraryCategory } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
@@ -65,9 +66,14 @@ export function CategorySidebar({ selectedCategoryId, onSelectCategory }: Catego
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           {t("categories.title", "Categories")}
         </h3>
-        <Button variant="ghost" size="icon" onClick={handleOpenAdd}>
-          <Plus className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label={t("categories.add", "Add Category")} onClick={handleOpenAdd}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("categories.add", "Add Category")}</TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -90,11 +96,16 @@ export function CategorySidebar({ selectedCategoryId, onSelectCategory }: Catego
             </button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                  <MoreVertical className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label={t("actions.options", "Options")} className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                      <MoreVertical className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{t("actions.options", "Options")}</TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handleOpenEdit(category)}>
                   <Edit2 className="mr-2 h-3 w-3" />

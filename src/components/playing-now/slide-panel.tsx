@@ -4,6 +4,7 @@ import { PanelLeftClose, PanelLeft } from "lucide-react";
 import { SlideThumbnail } from "../slides/slide-thumbnail";
 import { ScrollArea } from "../ui/scroll-area";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { getPreference, setPreference } from "../../lib/store";
 import type { SlideContent } from "../../lib/bindings";
 
@@ -49,9 +50,14 @@ export function SlidePanel({ slides, activeSlideIndex, onSlideClick, visible }: 
         className="absolute inset-0 flex flex-col items-center pt-2 gap-2 transition-opacity duration-200"
         style={{ opacity: collapsed ? 1 : 0, pointerEvents: collapsed ? "auto" : "none" }}
       >
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleCollapsed}>
-          <PanelLeft className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleCollapsed} aria-label="Show slide panel">
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Show slide panel</TooltipContent>
+        </Tooltip>
         <span className="writing-vertical-lr text-xs text-muted-foreground">
           {t("playingNow.slides")} ({slides.length})
         </span>
@@ -67,9 +73,14 @@ export function SlidePanel({ slides, activeSlideIndex, onSlideClick, visible }: 
           <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
             {t("playingNow.slides")} ({slides.length})
           </span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={toggleCollapsed}>
-            <PanelLeftClose className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={toggleCollapsed} aria-label="Hide slide panel">
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Hide slide panel</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Thumbnail list */}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 import type { Verse } from "../../types/bible";
 import { Copy, Plus, Columns2, Monitor } from "lucide-react";
@@ -146,26 +147,36 @@ export function VerseDisplay({
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {onOpenCompare && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onOpenCompare}
-                title={t("bible.comparison")}
-                className="h-7 w-7 p-0"
-              >
-                <Columns2 className="h-3.5 w-3.5" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onOpenCompare}
+                    aria-label={t("bible.comparison")}
+                    className="h-7 w-7 p-0"
+                  >
+                    <Columns2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{t("bible.comparison")}</TooltipContent>
+              </Tooltip>
             )}
             {hasSelection && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => void handleCopyVerses()}
-                title={t("bible.copyVerse")}
-                className="h-7 w-7 p-0"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void handleCopyVerses()}
+                    aria-label={t("bible.copyVerse")}
+                    className="h-7 w-7 p-0"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{t("bible.copyVerse")}</TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>

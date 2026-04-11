@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import type { MediaItem, MediaStatus } from "../../types/media";
 import { mediaHasSlides, mediaHasTimeline } from "../../types/media";
 
@@ -125,119 +126,184 @@ export function ControlBar({
         {/* Left: playback controls */}
         <div className="flex items-center gap-1">
           {!isBibleProjection && hasSlides && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onPrevSlide}
-              disabled={activeSlideIndex === 0}
-              aria-label="Previous slide"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onPrevSlide}
+                  disabled={activeSlideIndex === 0}
+                  aria-label={t("playingNow.prevSlide")}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("playingNow.prevSlide")}</TooltipContent>
+            </Tooltip>
           )}
 
           {hasTimeline && (
             <>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevItem} aria-label="Previous item">
-                <SkipBack className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9"
-                onClick={isPlaying ? onPause : onPlay}
-                disabled={status === "loading"}
-                aria-label={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? (
-                  <Pause className="h-5 w-5" />
-                ) : (
-                  <Play className="h-5 w-5" />
-                )}
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextItem} aria-label="Next item">
-                <SkipForward className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevItem} aria-label={t("playingNow.prevQueue")}>
+                    <SkipBack className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("playingNow.prevQueue")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={isPlaying ? onPause : onPlay}
+                    disabled={status === "loading"}
+                    aria-label={isPlaying ? t("playingNow.pause") : t("playingNow.play")}
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-5 w-5" />
+                    ) : (
+                      <Play className="h-5 w-5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{isPlaying ? t("playingNow.pause") : t("playingNow.play")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextItem} aria-label={t("playingNow.nextQueue")}>
+                    <SkipForward className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("playingNow.nextQueue")}</TooltipContent>
+              </Tooltip>
             </>
           )}
 
           {!isBibleProjection && hasSlides && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onNextSlide}
-              disabled={activeSlideIndex >= totalSlides - 1}
-              aria-label="Next slide"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onNextSlide}
+                  disabled={activeSlideIndex >= totalSlides - 1}
+                  aria-label={t("playingNow.nextSlide")}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("playingNow.nextSlide")}</TooltipContent>
+            </Tooltip>
           )}
 
           {isActive && onRestart && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRestart} aria-label="Restart">
-              <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRestart} aria-label="Restart">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Restart</TooltipContent>
+            </Tooltip>
           )}
 
           {isActive && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onStop} aria-label="Stop">
-              <Square className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onStop} aria-label={t("playingNow.stop")}>
+                  <Square className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("playingNow.stop")}</TooltipContent>
+            </Tooltip>
           )}
 
           {/* Mode toggle (hymns only) */}
           {currentMode && onModeChange && (
             <div className="ml-2 flex items-center gap-0.5 rounded-md border border-border p-0.5">
-              <Button
-                variant={currentMode === "sung" ? "default" : "ghost"}
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => onModeChange("sung")}
-                title={t("playingNow.modeSung")}
-              >
-                <Mic className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={currentMode === "karaoke" ? "default" : "ghost"}
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => onModeChange("karaoke")}
-                title={t("playingNow.modeKaraoke")}
-              >
-                <Music2 className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={currentMode === "silent" ? "default" : "ghost"}
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => onModeChange("silent")}
-                title={t("playingNow.modeSilent")}
-              >
-                <MonitorPlay className="h-3 w-3" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={currentMode === "sung" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => onModeChange("sung")}
+                    aria-label={t("playingNow.modeSung")}
+                  >
+                    <Mic className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("playingNow.modeSung")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={currentMode === "karaoke" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => onModeChange("karaoke")}
+                    aria-label={t("playingNow.modeKaraoke")}
+                  >
+                    <Music2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("playingNow.modeKaraoke")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={currentMode === "silent" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => onModeChange("silent")}
+                    aria-label={t("playingNow.modeSilent")}
+                  >
+                    <MonitorPlay className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("playingNow.modeSilent")}</TooltipContent>
+              </Tooltip>
             </div>
           )}
 
           {isBibleProjection && (
             <div className="ml-2 flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevSlide} aria-label="Previous verse">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextSlide} aria-label="Next verse">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevSlide} aria-label="Previous verse">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Previous verse</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onNextSlide} aria-label="Next verse">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Next verse</TooltipContent>
+              </Tooltip>
               {onGoToBible && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={onGoToBible}
-                  title={t("playingNow.goToBible")}
-                >
-                  <BookOpen className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={onGoToBible}
+                      aria-label={t("playingNow.goToBible")}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{t("playingNow.goToBible")}</TooltipContent>
+                </Tooltip>
               )}
             </div>
           )}
@@ -257,13 +323,18 @@ export function ControlBar({
         <div className="flex items-center gap-1">
           {hasTimeline && (
             <>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMuteToggle} aria-label={muted ? "Unmute" : "Mute"}>
-                {muted ? (
-                  <VolumeX className="h-3.5 w-3.5" />
-                ) : (
-                  <Volume2 className="h-3.5 w-3.5" />
-                )}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMuteToggle} aria-label={muted ? "Unmute" : "Mute"}>
+                    {muted ? (
+                      <VolumeX className="h-3.5 w-3.5" />
+                    ) : (
+                      <Volume2 className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{muted ? "Unmute" : "Mute"}</TooltipContent>
+              </Tooltip>
               <Slider
                 min={0}
                 max={100}
