@@ -3,6 +3,10 @@
     "MAX_THINKING_TOKENS": "10000",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "65"
   },
+  "attribution": {
+    "pr": "",
+    "commit": "",
+  },
   "permissions": {
     "allow": [
       "Bash(cargo build:*)",
