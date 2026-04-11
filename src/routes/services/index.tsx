@@ -516,7 +516,7 @@ function TodayLiturgySection({ todayLiturgy, view, isFavorite, isFull, category,
         <span className="text-[10.5px] font-semibold uppercase tracking-wide text-primary/90">
           {t("services.todayLiturgy")}
         </span>
-        <span className="text-[10.5px] text-primary/50">{todayName}</span>
+        <span className="text-[10.5px] text-muted-foreground">{todayName}</span>
       </div>
       {todayLiturgy ? (
         <div className={view === "grid" ? "grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]" : "flex flex-col gap-0.5"}>
@@ -533,12 +533,12 @@ function TodayLiturgySection({ todayLiturgy, view, isFavorite, isFull, category,
           />
         </div>
       ) : (
-        <div className="flex items-center gap-3 rounded-lg border border-dashed border-primary/20 bg-primary/5 px-4 py-3">
-          <Sun className="h-4 w-4 flex-shrink-0 text-primary/40" />
-          <p className="flex-1 text-xs text-primary/60">{t("services.todayLiturgyEmpty")}</p>
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/50 px-4 py-3">
+          <Sun className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <p className="flex-1 text-sm text-muted-foreground">{t("services.todayLiturgyEmpty")}</p>
           <button
             onClick={onCreate}
-            className="flex-shrink-0 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+            className="flex-shrink-0 rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-surface-hover"
           >
             {t("services.new")}
           </button>

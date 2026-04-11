@@ -28,61 +28,81 @@
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
+
+  /* Typography scale — desktop app density (14px base, not 16px web) */
+  --text-display: 1.5rem;     /* 24px — page titles, hero metrics */
+  --text-heading: 1.125rem;   /* 18px — section headers */
+  --text-body: 0.875rem;      /* 14px — default body text */
+  --text-caption: 0.75rem;    /* 12px — metadata, timestamps */
+  --text-micro: 0.6875rem;    /* 11px — status bar, badges */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-tight: -0.01em;  /* headings, display */
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;   /* uppercase labels, micro text */
 }
 
 /* ========== Azure Theme (Default) ========== */
+/* Chapel blue — stained glass warmth, not corporate Outlook */
 [data-theme="azure"],
 :root {
-  --theme-primary: #0078d4;
-  --theme-primary-hover: #106ebe;
+  --theme-primary: #2563a8;
+  --theme-primary-hover: #1d5590;
   --theme-primary-foreground: #ffffff;
-  --theme-bg: #f8f9fa;
+  --theme-bg: #f9f8f6; /* hymnal page warmth */
   --theme-fg: #1a1a1a;
-  --theme-surface: #ffffff;
-  --theme-surface-hover: #f0f0f0;
-  --theme-border: #e0e0e0;
-  --theme-muted: #f5f5f5;
-  --theme-muted-fg: #595959; /* was #737373 — ~4.0:1 fail → now ~6.2:1 on bg */
-  --theme-accent: #e8f0fe;
-  --theme-accent-fg: #0060aa; /* was #0078d4 — borderline → now ~4.8:1 on accent */
+  --theme-surface: #fefefe;
+  --theme-surface-hover: #f0efed;
+  --theme-border: #ddd9d4; /* warm pencil-on-paper gray */
+  --theme-muted: #f5f4f2;
+  --theme-muted-fg: #595959; /* ~6.2:1 on bg */
+  --theme-accent: #e8eef6;
+  --theme-accent-fg: #1d5590; /* ~5.2:1 on accent */
 }
 
 /* ========== White Theme ========== */
+/* Parchment — warm paper, not clinical white */
 [data-theme="white"] {
   --theme-primary: #1a1a1a;
   --theme-primary-hover: #333333;
   --theme-primary-foreground: #ffffff;
-  --theme-bg: #ffffff;
+  --theme-bg: #fdfcfa; /* bare hint of cream */
   --theme-fg: #1a1a1a;
-  --theme-surface: #fafafa;
-  --theme-surface-hover: #f0f0f0;
-  --theme-border: #e5e5e5;
-  --theme-muted: #f5f5f5;
-  --theme-muted-fg: #595959; /* was #737373 — ~4.2:1 fail on #fff → now ~6.9:1 */
-  --theme-accent: #f0f0f0;
+  --theme-surface: #faf9f7;
+  --theme-surface-hover: #f0efed;
+  --theme-border: #e2dfd9; /* warm separator */
+  --theme-muted: #f5f3f0;
+  --theme-muted-fg: #595959; /* ~6.8:1 on bg */
+  --theme-accent: #f0eeeb;
   --theme-accent-fg: #1a1a1a;
 }
 
 /* ========== Gray Theme ========== */
+/* Wood-paneled study at night — warm charcoal, not IDE */
 [data-theme="gray"] {
   --theme-primary: #4a90d9;
   --theme-primary-hover: #3a7bc8;
   --theme-primary-foreground: #ffffff;
-  --theme-bg: #2d2d2d;
+  --theme-bg: #2c2a28; /* warm charcoal */
   --theme-fg: #e0e0e0;
-  --theme-surface: #383838;
-  --theme-surface-hover: #424242;
-  --theme-border: #4a4a4a;
-  --theme-muted: #333333;
-  --theme-muted-fg: #b0b0b0; /* was #999999 — ~4.4:1 on surface → now ~5.8:1 */
-  --theme-accent: #3a3a3a;
-  --theme-accent-fg: #6eb0f5; /* was #4a90d9 — ~3.6:1 fail → now ~5.0:1 on accent */
+  --theme-surface: #363432;
+  --theme-surface-hover: #403e3b;
+  --theme-border: #4a4744; /* warm border */
+  --theme-muted: #322f2d;
+  --theme-muted-fg: #b0b0b0; /* ~5.8:1 on surface */
+  --theme-accent: #3a3836;
+  --theme-accent-fg: #6eb0f5; /* ~5.0:1 on accent */
 }
 
 /* ========== Orange Theme ========== */
+/* Candlelight amber — dark honey, not bright tangerine */
 [data-theme="orange"] {
-  --theme-primary: #e67e22;
-  --theme-primary-hover: #d35400;
+  --theme-primary: #b05a0f; /* was #e67e22 — 4.54:1 on bg, 4.87:1 white-on-btn */
+  --theme-primary-hover: #8f4c0d; /* 6.11:1 on bg */
   --theme-primary-foreground: #ffffff;
   --theme-bg: #fdf6ee;
   --theme-fg: #2c2c2c;
@@ -90,25 +110,44 @@
   --theme-surface-hover: #fef0e0;
   --theme-border: #f0d9b5;
   --theme-muted: #fdf2e9;
-  --theme-muted-fg: #6b5535; /* was #8b7355 — ~4.2:1 fail → now ~5.8:1 on bg */
+  --theme-muted-fg: #6b5535; /* ~5.8:1 on bg */
   --theme-accent: #fdebd0;
-  --theme-accent-fg: #c05e00; /* was #e67e22 — ~2.5:1 severe fail → now ~4.8:1 on accent */
+  --theme-accent-fg: #9a4c00; /* was #c05e00 — 3.71:1 fail → now 5.27:1 on accent */
 }
 
 /* ========== Black Theme ========== */
+/* Sanctuary at night — one lamp, warm shadows */
 [data-theme="black"] {
   --theme-primary: #0078d4;
   --theme-primary-hover: #1a8ae6;
   --theme-primary-foreground: #ffffff;
-  --theme-bg: #0a0a0a;
+  --theme-bg: #0c0b0a; /* warm black */
   --theme-fg: #e5e5e5;
-  --theme-surface: #141414;
-  --theme-surface-hover: #1e1e1e;
-  --theme-border: #2a2a2a;
-  --theme-muted: #1a1a1a;
+  --theme-surface: #151413;
+  --theme-surface-hover: #1f1e1c;
+  --theme-border: #2a2826; /* warm border */
+  --theme-muted: #1b1a18;
   --theme-muted-fg: #888888;
   --theme-accent: #1a1a2e;
   --theme-accent-fg: #4a9eed;
+}
+
+/* ========== Border Hierarchy ========== */
+/* Borders-only depth strategy: no shadows, structure from lines and surface shifts */
+:root,
+[data-theme="azure"],
+[data-theme="white"],
+[data-theme="orange"] {
+  --border-subtle: rgba(0, 0, 0, 0.06);   /* internal card divisions */
+  --border-default: var(--theme-border);    /* standard separation */
+  --border-emphasis: rgba(0, 0, 0, 0.15);  /* focus, active states */
+}
+
+[data-theme="gray"],
+[data-theme="black"] {
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: var(--theme-border);
+  --border-emphasis: rgba(255, 255, 255, 0.15);
 }
 
 /* ========== Base Styles ========== */
