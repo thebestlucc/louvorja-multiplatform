@@ -112,7 +112,8 @@ export const useQueueStore = create<QueueState>((set) => ({
       if (state.repeat === "all" && allItems.length > 0) {
         return { currentIndex: 0 };
       }
-      return state;
+      // Last item finished, repeat off → signal end of queue
+      return { currentIndex: -1 };
     }),
 
   prev: () =>
