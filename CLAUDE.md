@@ -58,47 +58,9 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 
 ### Component Patterns
 
-**CVA Pattern (Button, Badge):**
-```tsx
-import { cva, type VariantProps } from "class-variance-authority";
-
-export const buttonVariants = cva("base-classes", {
-  variants: {
-    variant: { default: "...", outline: "..." },
-    size: { sm: "...", md: "..." }
-  },
-  defaultVariants: { variant: "default", size: "md" }
-});
-
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
-```
-
-**Radix Wrapper Pattern (Dialog, Select, etc.):**
-```tsx
-import * as RadixDialog from "@radix-ui/react-dialog";
-import { cn } from "@/lib/utils";
-
-const DialogContent = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<typeof RadixDialog.Content>>(
-  ({ className, children, ...props }, ref) => (
-    <RadixDialog.Content ref={ref} className={cn("base-styles", className)} {...props}>
-      {children}
-    </RadixDialog.Content>
-  )
-);
-```
-
-**Input Pattern (label + error):**
-```tsx
-const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, id, ...props }, ref) => (
-    <div>
-      {label && <label htmlFor={id}>{label}</label>}
-      <input ref={ref} className={cn("base", error && "border-destructive", className)} {...props} />
-      {error && <span>{error}</span>}
-    </div>
-  )
-);
-```
+- **CVA Pattern** (Button, Badge): `cva("base")` + `VariantProps`, export `buttonVariants` + `ButtonProps`. See `src/components/ui/button.tsx`.
+- **Radix Wrapper Pattern** (Dialog, Select, etc.): `forwardRef` + `cn("base-styles", className)` spread of props. See `src/components/ui/dialog.tsx`.
+- **Input Pattern**: `forwardRef` with `label?` + `error?` props; adds `border-destructive` on error. See `src/components/ui/input.tsx`.
 
 ### Figma Implementation Flow
 
@@ -135,7 +97,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 - **App shell**: Sidebar (left) + Header (top) + Content + StatusBar (bottom)
 - **Sidebar**: `w-60` open / `w-14` collapsed, uses `<Link>` (TanStack Router), NOT `<a>`
 - **Header**: `h-14`, command palette + date/time + theme/language controls
-- **Status Bar**: `h-11`, version + projector + streaming + sync progress
+- **Status Bar**: `h-11`, version + projector + streaming + sync progress + slide passer indicator
 - **Bare routes** (`/projector`, `/return`): Use `{ enabled: false }` pattern for hooks, return `<Outlet />` early
 
 ---
@@ -206,6 +168,7 @@ src/                          # Frontend (React)
 │   ├── online-videos/        # playlist-card, video-card, add-playlist-modal, api-key-setup,
 │   │                         # playlist-picker, online-video-slide, video-follower-element,
 │   │                         # persistent-video-player
+│   ├── slide-passer/         # slide-passer-indicator, key-capture-dialog, test-clicker-dialog
 │   ├── streaming/            # streaming preview panels, SSE event handlers
 │   └── ui/                   # Radix-based primitives (button, card, badge, input, etc.)
 ├── hooks/                    # use-slides, use-keyboard, use-monitors, use-audio, use-presentation, use-service, use-youtube-events, use-video-source
@@ -314,11 +277,7 @@ src-tauri/src/                # Backend (Rust)
 
 3. **Converting flat route to directory route:** Delete the `.tsx` file, create `route.tsx` (layout with `<Outlet />`) + `index.tsx` (list page) + `$paramId.tsx` (detail page).
 
-4. **Unused destructured variables in mutations:** Instead of `mutationFn: ({ id, contentJson, presentationId })` where `presentationId` is only needed for invalidation, use a single `vars` parameter:
-   ```ts
-   mutationFn: (vars) => updateSlide(vars.id, vars.contentJson),
-   onSuccess: (_, vars) => queryClient.invalidateQueries({ queryKey: ["slides", vars.presentationId] }),
-   ```
+4. **Unused destructured variables in mutations:** Use a single `vars` parameter instead of destructuring when some fields are only needed in `onSuccess`: `mutationFn: (vars) => updateSlide(vars.id, vars.contentJson), onSuccess: (_, vars) => queryClient.invalidateQueries(...)` .
 
 5. **Stale closures in Zustand + setTimeout/useCallback:** Use `Store.getState()` inside async callbacks for fresh reads instead of captured state. See `use-slides.ts` `goToSlide`.
 
@@ -328,12 +287,9 @@ src-tauri/src/                # Backend (Rust)
 
 8. **Package manager/tooling:** This project uses **pnpm** for frontend commands. Do not use `npm` or `deno` in this repo.
 
-9. **Conditional hooks in root layout:** Never call hooks after an early `return` in a component. For bare routes (e.g., `/projector`, `/return`), pass `{ enabled: false }` to hooks instead:
-   ```ts
-   const isBareRoute = BARE_ROUTES.includes(pathname);
-   useKeyboard({ enabled: !isBareRoute }); // always called, conditionally active
-   if (isBareRoute) return <Outlet />;
-   ```
+10. **Unit tests for Tauri-dependent stores:** Stub Tauri IPC *before* importing the store: `(globalThis as any).window = { __TAURI_INTERNALS__: { invoke: () => Promise.resolve(null) } };` — required because plugin-store calls `invoke` at module load. See `tests/stores/slide-passer-store.test.ts`.
+
+9. **Conditional hooks in root layout:** Never call hooks after an early `return`. For bare routes (`/projector`, `/return`), pass `{ enabled: false }` to hooks instead of calling them conditionally — `useKeyboard({ enabled: !isBareRoute })` always called, conditionally active.
 
 ### General
 
@@ -363,7 +319,7 @@ src-tauri/src/                # Backend (Rust)
 - **Content DB hymnal category filter:** When `categories` + `categories_albums` tables exist, add `LEFT JOIN categories_albums ca ... LEFT JOIN categories cat ... AND (cat.slug IS NULL OR cat.slug = 'hymnal')` to filter the hymnal route. Absence of these tables → return all items (safe default). Used in `get_hymns_from_content_db` and `search_hymns_content_db` FTS branch only (not in detail queries like `get_hymn_by_id` or `get_collection_hymns`).
 - **Content DB path contract:** `files` table stores `dir` + `name` separately (e.g. `dir='/covers'`, `name='brj.jpg'`). SQL concatenates `dir || '/' || name`. Rust `resolve_hymn_paths()` / `resolve_collection_paths()` strip leading `/` via `trim_start_matches('/')` and join with `app_data_dir`. CDN ZIP packs must extract files at matching paths (`covers/brj.jpg`, `musics/pt/.../song.mp3` inside the ZIP root).
 - **Windows path separator normalization:** After `Path::join(...).to_string_lossy()` on Windows, backslashes break Tauri's asset protocol URLs. Always `.replace('\\', "/")` on Rust path strings sent to frontend. On the frontend, normalize `appDataDir` before building asset URLs: `(await getCachedAppDataDir()).replace(/\\/g, "/")`. Asset protocol scope in `tauri.conf.json` must include `$APPDATA/com.louvorja/**` (the app identifier directory) to serve files in the data dir.
-- **Pack sync disk I/O pattern (low-end devices):** Use `THREAD_MODE_BACKGROUND_BEGIN` (Windows `SetThreadPriority`) on the sync thread to deprioritize all I/O at the kernel level — highest-impact single change. Reduce `MAX_CONCURRENT_DOWNLOADS` to 3 (prevents HDD write-head thrashing). Use `BufWriter::with_capacity(256 * 1024)` for both downloads and ZIP extraction (coalesces ~32 syscalls into 1). Use `FILE_FLAG_SEQUENTIAL_SCAN` (0x08000000) on Windows via `OpenOptionsExt::custom_flags` for sequential cache hints. Yield `10ms` every 10 extracted items to allow OS cache flush. Reduce `mmap_size` to 64MB (reduces page cache competition on low-RAM devices). Run FTS5 `OPTIMIZE` after bulk music inserts to merge segments. These optimizations are layered: OS deprioritization + fewer streams + larger buffers + smaller mmap target <50% disk usage on HDD/eMMC (down from 100%).
+- **Pack sync disk I/O pattern (low-end devices):** Background thread priority (`THREAD_MODE_BACKGROUND_BEGIN`), 3 max concurrent downloads, `BufWriter::with_capacity(256*1024)`, `FILE_FLAG_SEQUENTIAL_SCAN`, 64MB mmap, FTS5 `OPTIMIZE` after bulk inserts. See `pack_sync/executor.rs`.
 - **Streaming SSE pattern:** Use raw `std::net::TcpListener` with `TcpStream::write_all()` + `flush()` for SSE — never use buffered HTTP libraries (like tiny_http) for SSE as they buffer small writes. Set `TCP_NODELAY` on connections.
 - **Streaming clear pattern:** When clearing slides, all 3 SSE channels (music/bible/return) must receive empty payloads. HTML templates must handle `null`/empty values explicitly (show "Waiting for content" state).
 - **Video media path contract:** Persist only managed relative paths (`media/videos/...`) in slide content. Resolve to absolute paths via the dedicated video HTTP server (`VideoServerState` in Rust, `useVideoSource()` hook in frontend). The server binds loopback-only, supports HTTP 206 range requests, and uses access-token auth. Projection windows are read-only — they poll `get_video_server_status` with `refetchInterval` until the main window starts the server via `start_video_server`. Never use `convertFileSrc` for downloaded videos (format-detection issues).
