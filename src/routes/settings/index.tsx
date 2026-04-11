@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Wifi, Palette, Film, Monitor, Sliders, Keyboard, Database, RefreshCw } from "lucide-react";
+import { Wifi, Palette, Film, Monitor, Sliders, Keyboard, Database, RefreshCw, Pointer } from "lucide-react";
 import { ShortcutsTab } from "../../components/settings/shortcuts-tab";
 import { GeneralSection } from "../../components/settings/general-section";
 import { AppearanceSection } from "../../components/settings/appearance-section";
@@ -9,11 +9,12 @@ import { StreamingSection } from "../../components/settings/streaming-section";
 import { SyncSection } from "../../components/settings/sync-section";
 import { DataSection } from "../../components/settings/data-section";
 import { YouTubeSection } from "../../components/settings/youtube-section";
+import { SlidePasserSection } from "../../components/settings/slide-passer-section";
 import { cn } from "../../lib/utils";
 import { useRouteTour } from "../../hooks/use-route-tour";
 import { SpotlightTour } from "../../components/tour/spotlight-tour";
 
-type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "streaming" | "sync" | "youtube" | "data";
+type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "slide-passer" | "streaming" | "sync" | "youtube" | "data";
 
 interface SettingsSearch {
   tab?: SettingsTab;
@@ -33,6 +34,7 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentT
   { id: "appearance", labelKey: "settings.tabs.appearance", icon: Palette },
   { id: "shortcuts", labelKey: "settings.tabs.shortcuts", icon: Keyboard },
   { id: "monitor", labelKey: "settings.tabs.monitor", icon: Monitor },
+  { id: "slide-passer", labelKey: "settings.tabs.slidePasser", icon: Pointer },
   { id: "streaming", labelKey: "settings.tabs.streaming", icon: Wifi },
   { id: "sync", labelKey: "settings.tabs.sync", icon: RefreshCw },
   { id: "youtube", labelKey: "settings.tabs.youtube", icon: Film },
@@ -83,6 +85,7 @@ function SettingsIndex() {
         {activeTab === "appearance" && <AppearanceSection />}
         {activeTab === "shortcuts" && <ShortcutsTab />}
         {activeTab === "monitor" && <MonitorSection />}
+        {activeTab === "slide-passer" && <SlidePasserSection />}
         {activeTab === "streaming" && <StreamingSection />}
         {activeTab === "sync" && <SyncSection />}
         {activeTab === "youtube" && <YouTubeSection />}

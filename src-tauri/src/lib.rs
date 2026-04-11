@@ -277,6 +277,9 @@ pub fn run() {
             // Video Server
             commands::video_server::start_video_server,
             commands::video_server::get_video_server_status,
+            // Slide Passer
+            commands::slide_passer::send_keystroke,
+            commands::slide_passer::check_accessibility_permission,
         ]);
 
     #[cfg(debug_assertions)]

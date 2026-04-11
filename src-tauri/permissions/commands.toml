@@ -302,6 +302,15 @@ allow = [
 ]
 
 [[permission]]
+identifier = "allow-slide-passer-commands"
+description = "Allows slide passer keystroke simulation commands"
+[permission.commands]
+allow = [
+    "send_keystroke",
+    "check_accessibility_permission"
+]
+
+[[permission]]
 identifier = "allow-spotlight-commands"
 description = "Minimal commands needed for spotlight search window"
 [permission.commands]

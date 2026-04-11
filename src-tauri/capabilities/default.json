@@ -47,6 +47,7 @@
     "allow-schedule-commands",
     "allow-media-library-commands",
     "allow-youtube-commands",
-    "allow-video-server-commands"
+    "allow-video-server-commands",
+    "allow-slide-passer-commands"
   ]
 }

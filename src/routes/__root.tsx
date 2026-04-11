@@ -12,6 +12,8 @@ import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcu
 import { UpdateNotification } from "../components/update-notification";
 import { PersistentVideoPlayer } from "../components/online-videos/persistent-video-player";
 import { useKeyboard } from "../hooks/use-keyboard";
+import { useSlidePasser } from "../hooks/use-slide-passer";
+import { useSlidePasserStore } from "../stores/slide-passer-store";
 import { useLiturgyPlayback } from "../hooks/use-liturgy-playback";
 import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
@@ -328,9 +330,18 @@ function RootLayout() {
     };
   }, [isBareRoute]);
 
+  // Load slide passer config from plugin-store on first mount
+  const slidePasserLoaded = useSlidePasserStore((s) => s.loaded);
+  useEffect(() => {
+    if (!slidePasserLoaded) {
+      void useSlidePasserStore.getState().loadFromStore();
+    }
+  }, [slidePasserLoaded]);
+
   usePlaybackCoordinator();
   useDownloadEvents();
   useKeyboard({ enabled: !isBareRoute });
+  useSlidePasser({ enabled: !isBareRoute });
   const { t } = useTranslation();
   const { service: liturgyService, items: liturgyItems } = useLiturgyPlayback();
   const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);

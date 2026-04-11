@@ -21,3 +21,4 @@ pub mod video_copy;
 pub mod pack_sync;
 pub mod video_server;
 pub mod youtube;
+pub mod slide_passer;

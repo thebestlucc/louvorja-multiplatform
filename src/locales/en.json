@@ -1166,6 +1166,7 @@
       "migration": "Migration",
       "monitor": "Monitor",
       "shortcuts": "Shortcuts",
+      "slidePasser": "Slide Passer",
       "streaming": "Streaming",
       "sync": "Content Sync",
       "youtube": "YouTube"
@@ -1680,5 +1681,51 @@
     "files": "files",
     "pack": "pack",
     "packs": "packs"
+  },
+  "slidePasser": {
+    "title": "Slide Passer",
+    "enable": "Enable Slide Passer",
+    "enableDesc": "Intercept clicker/presenter device keys to control slides",
+    "mode": "Mode",
+    "modeInternal": "Internal",
+    "modeInternalDesc": "Control LouvorJA slides directly",
+    "modeExternal": "External",
+    "modeExternalDesc": "Forward keystrokes to PowerPoint, Keynote, etc.",
+    "keyMappings": "Key Mappings",
+    "mappings": {
+      "nextSlide": "Next Slide",
+      "prevSlide": "Previous Slide",
+      "blackScreen": "Black Screen",
+      "toggleProjection": "Toggle Projection"
+    },
+    "noKey": "Not set",
+    "change": "Change",
+    "clear": "Clear",
+    "captureTitle": "Press a Key",
+    "captureDesc": "Press any key on your clicker or keyboard to assign it",
+    "testClicker": "Test Clicker",
+    "testClickerDesc": "Press buttons on your clicker to verify they are detected and mapped correctly.",
+    "testClickerWaiting": "Waiting for key press...",
+    "unmapped": "Unmapped",
+    "externalApp": "External App Control",
+    "targetApp": "Target Application",
+    "externalAppDesc": "Keystrokes will be forwarded to the selected application when it has focus.",
+    "apps": {
+      "powerpoint": "Microsoft PowerPoint",
+      "keynote": "Apple Keynote",
+      "libreoffice": "LibreOffice Impress",
+      "googleSlides": "Google Slides (Browser)",
+      "custom": "Custom"
+    },
+    "macPermissionTitle": "Accessibility Permission Required",
+    "macPermissionDesc": "External mode requires Accessibility permission on macOS. Open System Preferences > Privacy & Security > Accessibility and add LouvorJA.",
+    "statusLabel": "Slide Passer",
+    "mappedKeys": "Mapped keys",
+    "lastEvent": "Last event",
+    "openSettings": "Settings",
+    "toast": {
+      "enabled": "Slide Passer enabled",
+      "disabled": "Slide Passer disabled"
+    }
   }
 }
