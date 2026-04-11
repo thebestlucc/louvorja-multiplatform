@@ -1166,6 +1166,7 @@
       "migration": "Migración",
       "monitor": "Monitor",
       "shortcuts": "Atajos",
+      "slidePasser": "Pasador de Diapositivas",
       "streaming": "Streaming",
       "sync": "Sincronización",
       "youtube": "YouTube"
@@ -1680,5 +1681,51 @@
     "files": "archivos",
     "pack": "paquete",
     "packs": "paquetes"
+  },
+  "slidePasser": {
+    "title": "Pasador de Diapositivas",
+    "enable": "Activar Pasador de Diapositivas",
+    "enableDesc": "Interceptar teclas del control/presentador para controlar diapositivas",
+    "mode": "Modo",
+    "modeInternal": "Interno",
+    "modeInternalDesc": "Controlar diapositivas de LouvorJA directamente",
+    "modeExternal": "Externo",
+    "modeExternalDesc": "Reenviar teclas a PowerPoint, Keynote, etc.",
+    "keyMappings": "Asignación de Teclas",
+    "mappings": {
+      "nextSlide": "Siguiente Diapositiva",
+      "prevSlide": "Diapositiva Anterior",
+      "blackScreen": "Pantalla Negra",
+      "toggleProjection": "Alternar Proyección"
+    },
+    "noKey": "No definido",
+    "change": "Cambiar",
+    "clear": "Borrar",
+    "captureTitle": "Presione una Tecla",
+    "captureDesc": "Presione cualquier tecla en su control o teclado para asignarla",
+    "testClicker": "Probar Control",
+    "testClickerDesc": "Presione los botones de su control para verificar que se detectan y asignan correctamente.",
+    "testClickerWaiting": "Esperando pulsación de tecla...",
+    "unmapped": "Sin asignar",
+    "externalApp": "Control de App Externo",
+    "targetApp": "Aplicación Destino",
+    "externalAppDesc": "Las teclas se reenviarán a la aplicación seleccionada cuando tenga el foco.",
+    "apps": {
+      "powerpoint": "Microsoft PowerPoint",
+      "keynote": "Apple Keynote",
+      "libreoffice": "LibreOffice Impress",
+      "googleSlides": "Google Slides (Navegador)",
+      "custom": "Personalizado"
+    },
+    "macPermissionTitle": "Permiso de Accesibilidad Requerido",
+    "macPermissionDesc": "El modo externo requiere permiso de Accesibilidad en macOS. Abra Preferencias del Sistema > Privacidad y Seguridad > Accesibilidad y agregue LouvorJA.",
+    "statusLabel": "Pasador de Diapositivas",
+    "mappedKeys": "Teclas asignadas",
+    "lastEvent": "Último evento",
+    "openSettings": "Configuración",
+    "toast": {
+      "enabled": "Pasador de Diapositivas activado",
+      "disabled": "Pasador de Diapositivas desactivado"
+    }
   }
 }

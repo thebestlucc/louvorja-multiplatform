@@ -1564,6 +1564,30 @@ async getVideoServerStatus() : Promise<Result<VideoServerInfo, AppErrorResponse>
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Send a keystroke to the currently focused application.
+ * Used by external mode to forward clicker presses to PowerPoint/Keynote/etc.
+ */
+async sendKeystroke(key: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("send_keystroke", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Check if the app has macOS Accessibility permission (needed for keystroke simulation).
+ * Returns true on non-macOS platforms.
+ */
+async checkAccessibilityPermission() : Promise<Result<boolean, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_accessibility_permission") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

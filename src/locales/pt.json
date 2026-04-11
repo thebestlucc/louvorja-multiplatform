@@ -1166,6 +1166,7 @@
       "migration": "Migração",
       "monitor": "Monitor",
       "shortcuts": "Atalhos",
+      "slidePasser": "Passador de Slides",
       "streaming": "Streaming",
       "sync": "Sincronização",
       "youtube": "YouTube"
@@ -1680,5 +1681,51 @@
     "files": "arquivos",
     "pack": "pacote",
     "packs": "pacotes"
+  },
+  "slidePasser": {
+    "title": "Passador de Slides",
+    "enable": "Ativar Passador de Slides",
+    "enableDesc": "Interceptar teclas do controle/apresentador para controlar slides",
+    "mode": "Modo",
+    "modeInternal": "Interno",
+    "modeInternalDesc": "Controlar slides do LouvorJA diretamente",
+    "modeExternal": "Externo",
+    "modeExternalDesc": "Encaminhar teclas para PowerPoint, Keynote, etc.",
+    "keyMappings": "Mapeamento de Teclas",
+    "mappings": {
+      "nextSlide": "Próximo Slide",
+      "prevSlide": "Slide Anterior",
+      "blackScreen": "Tela Preta",
+      "toggleProjection": "Alternar Projeção"
+    },
+    "noKey": "Não definido",
+    "change": "Alterar",
+    "clear": "Limpar",
+    "captureTitle": "Pressione uma Tecla",
+    "captureDesc": "Pressione qualquer tecla no seu controle ou teclado para atribuí-la",
+    "testClicker": "Testar Controle",
+    "testClickerDesc": "Pressione os botões do seu controle para verificar se são detectados e mapeados corretamente.",
+    "testClickerWaiting": "Aguardando pressionamento de tecla...",
+    "unmapped": "Não mapeado",
+    "externalApp": "Controle de App Externo",
+    "targetApp": "Aplicativo Alvo",
+    "externalAppDesc": "As teclas serão encaminhadas para o aplicativo selecionado quando ele estiver em foco.",
+    "apps": {
+      "powerpoint": "Microsoft PowerPoint",
+      "keynote": "Apple Keynote",
+      "libreoffice": "LibreOffice Impress",
+      "googleSlides": "Google Slides (Navegador)",
+      "custom": "Personalizado"
+    },
+    "macPermissionTitle": "Permissão de Acessibilidade Necessária",
+    "macPermissionDesc": "O modo externo requer permissão de Acessibilidade no macOS. Abra Preferências do Sistema > Privacidade e Segurança > Acessibilidade e adicione o LouvorJA.",
+    "statusLabel": "Passador de Slides",
+    "mappedKeys": "Teclas mapeadas",
+    "lastEvent": "Último evento",
+    "openSettings": "Configurações",
+    "toast": {
+      "enabled": "Passador de Slides ativado",
+      "disabled": "Passador de Slides desativado"
+    }
   }
 }

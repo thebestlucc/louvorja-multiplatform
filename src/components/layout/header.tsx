@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useThemeStore } from "../../stores/theme-store";
 import { useContentSyncStore } from "../../stores/content-sync-store";
 import {
@@ -191,29 +192,37 @@ export function Header() {
           </DropdownMenu>
         )}
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9"
-          aria-label={shortcutsHelpLabel}
-          title={`${shortcutsHelpLabel} (${shortcutsHelpComboLabel})`}
-          onClick={openKeyboardShortcutsPanel}
-        >
-          <Keyboard className="size-4.5" />
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
               className="h-9 w-9"
-              aria-label={t("settings.language")}
-              title={t("settings.language")}
+              aria-label={shortcutsHelpLabel}
+              onClick={openKeyboardShortcutsPanel}
             >
-              <Languages className="size-4.5" />
+              <Keyboard className="size-4.5" />
             </Button>
-          </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{`${shortcutsHelpLabel} (${shortcutsHelpComboLabel})`}</TooltipContent>
+        </Tooltip>
+
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label={t("settings.language")}
+                >
+                  <Languages className="size-4.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t("settings.language")}</TooltipContent>
+          </Tooltip>
           <DropdownMenuContent align="end">
             {LANGUAGES.map((option) => (
               <DropdownMenuItem
@@ -234,17 +243,21 @@ export function Header() {
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              aria-label={t("settings.theme")}
-              title={t("settings.theme")}
-            >
-              <Palette className="size-4.5" />
-            </Button>
-          </DropdownMenuTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label={t("settings.theme")}
+                >
+                  <Palette className="size-4.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t("settings.theme")}</TooltipContent>
+          </Tooltip>
           <DropdownMenuContent align="end">
             {THEMES.map((option) => (
               <DropdownMenuItem

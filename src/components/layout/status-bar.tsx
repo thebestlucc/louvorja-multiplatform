@@ -4,9 +4,11 @@ import { useTranslation } from "react-i18next";
 import { ListChecks, Loader2, Timer, Wifi } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { ProjectorControls } from "../display/projector-controls";
+import { SlidePasserIndicator } from "../slide-passer/slide-passer-indicator";
 import { StatusBarUpdateIndicator } from "./status-bar-update-indicator";
 import { StreamingControls } from "../streaming/streaming-controls";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useLiturgy, useStreamingStatus, useTimerState } from "../../lib/queries";
 import { formatUtilityTimer } from "../../types/utilities";
 import { useContentSyncStore } from "../../stores/content-sync-store";
@@ -72,7 +74,7 @@ export function StatusBar() {
     : null;
 
   return (
-    <footer data-tour="status-bar" className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-surface px-3 text-xs text-muted-foreground">
+    <footer data-tour="status-bar" className="flex h-11 shrink-0 items-center justify-between border-t border-border bg-surface px-3 text-xs text-muted-foreground">
       <span>
         {t("status.ready")}
         {version ? <span className="ml-2 opacity-60">v{version}</span> : null}
@@ -81,110 +83,144 @@ export function StatusBar() {
       <div className="flex items-center gap-1">
         {activeLiturgyId !== null && truncatedTitle && (
           <>
-            <button
-              onClick={() =>
-                navigate({
-                  to: "/services/$serviceId",
-                  params: { serviceId: String(activeLiturgyId) },
-                })
-              }
-              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-surface-hover"
-              title={t("services.activeServiceIndicator")}
-            >
-              <ListChecks className="size-3.75" />
-              <span>{truncatedTitle}</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() =>
+                    navigate({
+                      to: "/services/$serviceId",
+                      params: { serviceId: String(activeLiturgyId) },
+                    })
+                  }
+                  className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-green-500 hover:bg-surface-hover"
+                  aria-label={t("services.activeServiceIndicator")}
+                >
+                  <ListChecks className="size-3.75" />
+                  <span>{truncatedTitle}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("services.activeServiceIndicator")}</TooltipContent>
+            </Tooltip>
             <div className="mx-1 h-4 w-px bg-border" />
           </>
         )}
         {packSyncRunning && (
           <>
-            <button
-              onClick={openPackSyncProgress}
-              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
-            >
-              <Loader2 className="size-3.75 animate-spin" />
-              <span>
-                {t("settings.packSync.statusBar", {
-                  current: packSyncProgress!.packsProcessed,
-                  total: packSyncProgress!.packsTotal,
-                })}
-              </span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={openPackSyncProgress}
+                  className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
+                  aria-label={t("settings.packSync.progressTitle")}
+                >
+                  <Loader2 className="size-3.75 animate-spin" />
+                  <span>
+                    {t("settings.packSync.statusBar", {
+                      current: packSyncProgress!.packsProcessed,
+                      total: packSyncProgress!.packsTotal,
+                    })}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("settings.packSync.progressTitle")}</TooltipContent>
+            </Tooltip>
             <div className="mx-1 h-4 w-px bg-border" />
           </>
         )}
         {downloadEntries.length > 0 && firstDownload && (
           <>
-            <button
-              onClick={() =>
-                navigate({
-                  to: "/collections",
-                  search: { tab: "online-videos", playlist: firstDownload.playlistId },
-                })
-              }
-              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
-              title={t("onlineVideos.detail.downloading")}
-            >
-              <Loader2 className="size-3.75 animate-spin" />
-              <span>
-                {downloadEntries.length > 1
-                  ? `${downloadEntries.length} downloads`
-                  : `${Math.round(firstDownload.progress)}%`}
-              </span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() =>
+                    navigate({
+                      to: "/collections",
+                      search: { tab: "online-videos", playlist: firstDownload.playlistId },
+                    })
+                  }
+                  className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-sky-400 hover:bg-surface-hover"
+                  aria-label={t("onlineVideos.detail.downloading")}
+                >
+                  <Loader2 className="size-3.75 animate-spin" />
+                  <span>
+                    {downloadEntries.length > 1
+                      ? `${downloadEntries.length} downloads`
+                      : `${Math.round(firstDownload.progress)}%`}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("onlineVideos.detail.downloading")}</TooltipContent>
+            </Tooltip>
             <div className="mx-1 h-4 w-px bg-border" />
           </>
         )}
         {showContentSyncIndicator && (
           <>
-            <button
-              onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
-              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-surface-hover"
-              title={t("settings.contentSync.title")}
-            >
-              <Loader2 className="size-3.75 animate-spin" />
-              <span>
-                {t("settings.contentSync.statusBar", {
-                  current: contentSyncProgress?.itemsProcessed ?? 0,
-                  total: contentSyncProgress?.itemsTotal ?? 0,
-                })}
-              </span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => navigate({ to: "/settings", search: { tab: "sync" } })}
+                  className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 text-emerald-400 hover:bg-surface-hover"
+                  aria-label={t("settings.contentSync.title")}
+                >
+                  <Loader2 className="size-3.75 animate-spin" />
+                  <span>
+                    {t("settings.contentSync.statusBar", {
+                      current: contentSyncProgress?.itemsProcessed ?? 0,
+                      total: contentSyncProgress?.itemsTotal ?? 0,
+                    })}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("settings.contentSync.title")}</TooltipContent>
+            </Tooltip>
             <div className="mx-1 h-4 w-px bg-border" />
           </>
         )}
-        <button
-          onClick={() => navigate({ to: "/utilities/timer" })}
-          className={cn(
-            "flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover",
-            hasTimerProgress && "text-foreground",
-          )}
-          title={t("status.timerOpen")}
-        >
-          <Timer className={cn("size-3.75", timerState?.isRunning && "text-green-500")} />
-          <span>
-            {timerLabel
-              ? t("status.timerCompact", { value: timerLabel })
-              : t("status.timerIdle")}
-          </span>
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => navigate({ to: "/utilities/timer" })}
+              className={cn(
+                "flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover",
+                hasTimerProgress && "text-foreground",
+              )}
+              aria-label={t("status.timerOpen")}
+            >
+              <Timer className={cn("size-3.75", timerState?.isRunning && "text-green-500")} />
+              <span>
+                {timerLabel
+                  ? t("status.timerCompact", { value: timerLabel })
+                  : t("status.timerIdle")}
+              </span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t("status.timerOpen")}</TooltipContent>
+        </Tooltip>
+        <div className="mx-1 h-4 w-px bg-border" />
+        <SlidePasserIndicator />
         <div className="mx-1 h-4 w-px bg-border" />
         <ProjectorControls />
         <div className="mx-1 h-4 w-px bg-border" />
         <StatusBarUpdateIndicator />
-        <button
-          onClick={() => setStreamingOpen(true)}
-          className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover"
-        >
-          <Wifi className={cn("size-3.75", isRunning && "text-green-500")} />
-          {isRunning
-            ? t("status.streamingOn", {
-              port: status?.port ?? 7070,
-              count: status?.connections ?? 0,
-            })
-            : t("status.streamingOff")}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setStreamingOpen(true)}
+              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover"
+              aria-label={t("streaming.title")}
+            >
+              <Wifi className={cn("size-3.75", isRunning && "text-green-500")} />
+              {isRunning
+                ? t("status.streamingOn", {
+                  port: status?.port ?? 7070,
+                  count: status?.connections ?? 0,
+                })
+                : t("status.streamingOff")}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t("streaming.title")}</TooltipContent>
+        </Tooltip>
       </div>
 
       <Dialog open={streamingOpen} onOpenChange={setStreamingOpen}>

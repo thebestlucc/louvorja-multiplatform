@@ -5,6 +5,141 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 
 - When reporting information to me, be extremely concise and sacrifice grammar for the sake of concision.
 
+---
+
+## Design System Rules
+
+### Component Organization
+
+- **UI primitives** are in `src/components/ui/` — always check here first before creating new components
+- **Feature components** are in `src/components/{domain}/` (e.g., `music/`, `slides/`, `services/`, `display/`, `streaming/`)
+- **Layout components** (Sidebar, Header, StatusBar) are in `src/components/layout/`
+- **File naming**: kebab-case (`dropdown-menu.tsx`), **export names**: PascalCase (`DropdownMenu`)
+- **Variant objects**: exported separately as `{componentName}Variants` (e.g., `buttonVariants`, `badgeVariants`)
+- **Props interfaces**: exported as `{ComponentName}Props`
+- **All components must accept `className` prop** for composition via `cn()`
+
+### Styling Rules
+
+- **IMPORTANT**: Use Tailwind v4 utility classes — CSS-first config in `global.css` (no `tailwind.config.ts`)
+- **IMPORTANT**: Never hardcode colors — always use design tokens: `bg-primary`, `text-foreground`, `border-border`, `bg-surface`, etc.
+- **Color tokens** map to CSS custom properties (`var(--theme-*)`) that change per theme (azure/white/gray/orange/black)
+- **Destructive color** (`text-destructive`, `bg-destructive`) is hardcoded red (`#dc2626`) — does NOT vary by theme
+- **Spacing**: Use raw Tailwind scale (`p-6`, `gap-1.5`, `h-9`) — no custom spacing tokens
+- **Border radius**: `rounded-sm` (4px), `rounded-md` (6px), `rounded-lg` (8px)
+- **Typography**: `text-xs` (12px), `text-sm` (14px), `text-base` (16px), `text-lg` (18px); weights: `font-medium` (500), `font-semibold` (600), `font-bold` (700)
+- **Font**: Inter (loaded via `@font-face` in `src/styles/fonts.css`)
+- **Custom utility**: `writing-vertical-lr` available via `@utility` in `global.css`
+
+### UI Primitives Inventory
+
+| Component | Variants | Notes |
+|-----------|----------|-------|
+| `Button` | `variant`: default, outline, ghost, destructive; `size`: sm, md, lg, icon | CVA pattern |
+| `Badge` | `variant`: default, secondary, outline, destructive | Simple function |
+| `Input` | label?, error? | Adds `border-destructive` on error |
+| `Textarea` | label?, error? | Same pattern as Input |
+| `Card` | Compound: Header, Title, Description, Content, Footer | No variants |
+| `Dialog` | Re-exports Radix + styled wrappers | Auto close button (X icon) |
+| `DropdownMenu` | Re-exports Radix + styled wrappers | |
+| `Select` | Re-exports Radix + styled wrappers | ChevronDown + Check icons |
+| `Slider`, `Tabs`, `Tooltip`, `ScrollArea` | Radix wrappers | |
+| `Table` | Compound: Header, Body, Row, Cell, etc. | Native HTML table |
+| `Popover` | Custom (NOT Radix) — controlled, Escape/click-outside handling | |
+| `HighlightedSnippet` | Renders `<mark>` HTML strings | |
+| `AppToaster` | Sonner wrapper with dynamic layout | |
+
+### Icon System
+
+- **Library**: `lucide-react` (v0.563.0) — named imports, no icon fonts
+- **IMPORTANT**: DO NOT install new icon packages — all icons come from lucide-react
+- **Sizes**: `h-4 w-4` (16px) standard, `h-3 w-3` (12px) small, `h-3.5 w-3.5` (14px), `h-5 w-5` (20px)
+- **Accessibility**: Decorative icons use `aria-hidden="true"`, interactive icons wrapped in buttons with `aria-label`
+
+### Component Patterns
+
+**CVA Pattern (Button, Badge):**
+```tsx
+import { cva, type VariantProps } from "class-variance-authority";
+
+export const buttonVariants = cva("base-classes", {
+  variants: {
+    variant: { default: "...", outline: "..." },
+    size: { sm: "...", md: "..." }
+  },
+  defaultVariants: { variant: "default", size: "md" }
+});
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
+```
+
+**Radix Wrapper Pattern (Dialog, Select, etc.):**
+```tsx
+import * as RadixDialog from "@radix-ui/react-dialog";
+import { cn } from "@/lib/utils";
+
+const DialogContent = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<typeof RadixDialog.Content>>(
+  ({ className, children, ...props }, ref) => (
+    <RadixDialog.Content ref={ref} className={cn("base-styles", className)} {...props}>
+      {children}
+    </RadixDialog.Content>
+  )
+);
+```
+
+**Input Pattern (label + error):**
+```tsx
+const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, label, error, id, ...props }, ref) => (
+    <div>
+      {label && <label htmlFor={id}>{label}</label>}
+      <input ref={ref} className={cn("base", error && "border-destructive", className)} {...props} />
+      {error && <span>{error}</span>}
+    </div>
+  )
+);
+```
+
+### Figma Implementation Flow
+
+1. Run `get_design_context` for the node
+2. Run `get_screenshot` for visual reference
+3. Map Figma colors to project tokens (`primary`, `surface`, `muted-foreground`, etc.)
+4. Check `src/components/ui/` for existing components before creating new ones
+5. Translate Figma React output to project conventions:
+   - Replace hardcoded colors with Tailwind token classes
+   - Replace custom spacing with Tailwind scale
+   - Use existing UI primitives from `src/components/ui/`
+   - Apply CVA pattern if component needs variants
+6. Validate against screenshot before completing
+
+### Accessibility Rules
+
+- **IMPORTANT**: All interactive elements must have `aria-label` or be properly labeled
+- **IMPORTANT**: Use `aria-hidden="true"` on decorative icons
+- **Color contrast**: All theme colors verified to meet WCAG AA (documented in `global.css` comments)
+- **Focus rings**: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary` on interactive elements
+- **Keyboard navigation**: All Radix primitives provide built-in keyboard support
+- **Form inputs**: Must use `label` prop or explicit `<label htmlFor>` association
+
+### State Management UI Patterns
+
+- **Zustand stores**: Client-only UI state (12 stores in `src/stores/`)
+- **Direct subscription**: `const { sidebarOpen } = useUIStore()`
+- **Selector**: `const id = usePresentationStore((s) => s.activeLiturgyId)`
+- **IMPORTANT**: Use `Store.getState()` inside async callbacks to avoid stale closures
+- **Persistence**: Theme/language persisted to `localStorage`; UI state (sidebar, modals) is NOT persisted
+
+### Layout Conventions
+
+- **App shell**: Sidebar (left) + Header (top) + Content + StatusBar (bottom)
+- **Sidebar**: `w-60` open / `w-14` collapsed, uses `<Link>` (TanStack Router), NOT `<a>`
+- **Header**: `h-14`, command palette + date/time + theme/language controls
+- **Status Bar**: `h-11`, version + projector + streaming + sync progress
+- **Bare routes** (`/projector`, `/return`): Use `{ enabled: false }` pattern for hooks, return `<Outlet />` early
+
+---
+
 ## Project Overview
 
 Church worship desktop app migrating from Delphi to **Tauri 2 + React 19 + Rust**.
@@ -168,6 +303,8 @@ src-tauri/src/                # Backend (Rust)
 6. **Windows IPC handler blocking:** Blocking ops (`sleep`, I/O) in `#[tauri::command]` hang the entire IPC bridge on Windows. **All long-running operations must `std::thread::spawn`** and return `Ok(())` immediately. See `commands/display.rs` `open_projector_window` for the pattern.
 
 7. **`skip_taskbar(true)` hides from alt+tab:** Projector windows use `.skip_taskbar(false)` so they appear in the OS window switcher.
+
+8. **Spawned threads/processes must exit on app shutdown:** Every `std::thread::spawn`, `std::process::Command`, or background worker started by the app **must terminate when the main process exits**. Patterns: (a) **Channel-based worker**: `mpsc::channel` + `OnceLock<Sender>` — when the process drops the static sender, `rx.recv()` returns `Err` and the worker loop exits (see `commands/slide_passer.rs`). (b) **Cancel flag**: `Arc<AtomicBool>` checked between work items (see `pack_sync/executor.rs`). (c) **One-shot thread**: for short-lived operations (<1s), bare `std::thread::spawn` is acceptable since the OS kills all threads on process exit. Never spawn long-lived loops without a shutdown mechanism.
 
 ### TypeScript / React
 
