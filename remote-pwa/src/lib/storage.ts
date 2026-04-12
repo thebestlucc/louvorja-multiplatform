@@ -10,12 +10,18 @@ const DEVICE_KEY = "device";
 
 export interface DeviceInfo {
   id: string;
+  // TODO(review): Token is stored as plaintext in IndexedDB (acceptable for LAN-local
+  // use — same-origin only). Document threat model: attacker needs physical access to
+  // the device OR a same-origin XSS to extract. (ring:security-reviewer, 2026-04-12, Low)
   token: string;
   host: string;
   port: number;
   name: string;
 }
 
+// TODO(review): Cache the IDBDatabase promise at module level to avoid opening a new connection
+// per call — each getDevice/setDevice currently opens its own connection.
+// (ring:code-reviewer, 2026-04-12, Low)
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
