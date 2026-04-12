@@ -255,6 +255,7 @@ pub struct AppState {
     /// Used by update_global_shortcut to unregister before re-registering.
     pub global_shortcuts: RwLock<HashMap<String, String>>,
     pub bible_projection: Mutex<BibleProjectionState>,
+    pub remote: crate::remote::state::RemoteServerState,
 }
 
 pub struct AudioState {

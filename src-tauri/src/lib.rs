@@ -10,7 +10,9 @@ mod error;
 mod http_sync;
 mod pack_sync;
 mod migration;
+pub mod net;
 mod projection;
+pub mod remote;
 mod state;
 mod streaming;
 mod utils;
@@ -211,6 +213,10 @@ pub fn run() {
             commands::streaming::get_streaming_status,
             commands::streaming::set_streaming_broadcast,
             commands::streaming::broadcast_video_state_to_streaming,
+            // Remote
+            commands::remote::start_remote_server,
+            commands::remote::stop_remote_server,
+            commands::remote::get_remote_status,
             // Settings
             commands::settings::get_setting,
             commands::settings::set_setting,
@@ -245,7 +251,7 @@ pub fn run() {
             commands::video_copy::copy_image_to_media,
             commands::video_copy::copy_video_to_media,
             commands::utility::get_video_metadata,
-            commands::utility::open_media_folder,
+            commands::utility::open_app_data_folder,
             // Spotlight
             commands::spotlight::spotlight_open,
             commands::spotlight::spotlight_select,
@@ -420,6 +426,7 @@ pub fn run() {
                     projector_size: None,
                     part_index: 0,
                 }),
+                remote: crate::remote::state::RemoteServerState::default(),
             });
 
             // Manage a disabled AudioState immediately (non-blocking).

@@ -6,6 +6,7 @@ pub mod liturgy;
 pub mod media_library;
 pub mod music;
 pub mod online_videos;
+pub mod remote;
 pub mod schedules;
 pub mod settings;
 pub mod slides;

@@ -246,6 +246,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (43)", [])?;
     }
 
+    if current_version < 44 {
+        migrate_v44(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (44)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1750,6 +1755,23 @@ fn migrate_v43(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+/// LAN Remote Control: persisted device registry for paired remotes.
+fn migrate_v44(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS remote_devices (
+            id           TEXT PRIMARY KEY,         -- UUID v4
+            name         TEXT NOT NULL,            -- user-facing device name
+            token_hash   BLOB NOT NULL UNIQUE,     -- SHA-256(device_token); never store plaintext
+            created_at   INTEGER NOT NULL,         -- Unix ms
+            last_seen_at INTEGER,                  -- Unix ms, nullable
+            revoked_at   INTEGER                   -- Unix ms; NULL = active
+        );
+        CREATE INDEX IF NOT EXISTS idx_remote_devices_active
+            ON remote_devices(token_hash) WHERE revoked_at IS NULL;",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1953,11 +1975,26 @@ mod tests {
             (41, migrate_v41),
             (42, migrate_v42),
             (43, migrate_v43),
+            (44, migrate_v44),
         ] {
             migration(&conn).map_err(|error| {
                 AppError::Internal(format!("migration v{version} failed: {error:?}"))
             })?;
         }
         Ok(())
+    }
+
+    #[test]
+    fn migrate_v44_creates_remote_devices_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        super::run_migrations(&conn).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='remote_devices'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
     }
 }

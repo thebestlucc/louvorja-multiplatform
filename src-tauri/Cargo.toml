@@ -58,6 +58,16 @@ tauri-plugin-clipboard-manager = "2"
 mimalloc = { version = "0.1.48", default-features = false }
 walkdir = "2"
 suppaftp = { version = "6", features = ["rustls"] }
+# LAN Remote Control deps
+axum               = { version = "0.7", features = ["ws", "macros"] }
+tower              = "0.5"
+tower-http         = { version = "0.5", features = ["fs", "cors", "trace"] }
+tokio-tungstenite  = "0.24"
+hmac               = "0.12"
+subtle             = "2.6"
+lru                = "0.12"
+qrcode             = "0.14"
+include_dir        = "0.7"
 base64 = "0.22"
 sha2 = "0.10"
 bytes = "1"
