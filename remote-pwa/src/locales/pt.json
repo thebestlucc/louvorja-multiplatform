@@ -56,7 +56,8 @@
       "move_to_top": "Mover para o início",
       "remove": "Remover",
       "target_projector": "Projetor",
-      "target_return": "Retorno"
+      "target_return": "Retorno",
+      "empty": "Fila vazia"
     },
     "connection": {
       "connected": "Conectado",

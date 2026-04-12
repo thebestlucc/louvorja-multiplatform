@@ -56,7 +56,8 @@
       "move_to_top": "Move to top",
       "remove": "Remove",
       "target_projector": "Projector",
-      "target_return": "Return"
+      "target_return": "Return",
+      "empty": "Queue is empty"
     },
     "connection": {
       "connected": "Connected",
