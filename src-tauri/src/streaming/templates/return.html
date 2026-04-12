@@ -291,7 +291,6 @@ body {
 
 <script>
 let es = null;
-let videoEs = null;
 let reconnectTimer = null;
 let uiLanguage = "pt";
 let lastRealPayload = null;
@@ -712,7 +711,8 @@ function resetPanel(prefix) {
 
   const bg = document.getElementById(prefix + "-bg");
   const overlay = document.getElementById(prefix + "-overlay");
-  bg.removeAttribute("src");
+  // Keep the existing src so the browser reuses the decoded image when the
+  // next panel sets the same URL. applyPanel() re-shows it or overwrites src.
   bg.style.opacity = "0";
   overlay.style.opacity = "0";
 
@@ -818,7 +818,11 @@ function applyPanel(prefix, payload, mode) {
 
   frame.style.background = backgroundColor || (mode === "current" ? "#000" : "#0f0f0f");
   if (backgroundImage) {
-    bg.src = backgroundImage;
+    // Only reassign src when the URL actually changes — keeps the image loaded
+    // once per song instead of re-fetching on every slide update.
+    if (bg.getAttribute("src") !== backgroundImage) {
+      bg.src = backgroundImage;
+    }
     bg.style.opacity = "1";
     overlay.style.opacity = "1";
   }
@@ -1281,47 +1285,6 @@ async function fetchVideoSnapshot() {
   } catch (_) {}
 }
 
-function connectVideo() {
-  if (videoEs) return;
-  videoEs = new EventSource("/sse/video");
-  videoEs.onopen = function () {
-    void fetchVideoSnapshot();
-  };
-  videoEs.onmessage = function (event) {
-    try {
-      applyVideoEvent(JSON.parse(event.data));
-    } catch (_) {}
-  };
-  videoEs.onerror = function () {
-    if (videoEs) {
-      videoEs.close();
-      videoEs = null;
-    }
-    setTimeout(connectVideo, 3000);
-  };
-}
-
-let alertEs = null;
-function connectAlert() {
-  if (alertEs) return;
-  alertEs = new EventSource("/sse/alert");
-  alertEs.onopen = function() {
-    void fetchAlertSnapshot();
-  };
-  alertEs.onmessage = function(event) {
-    try {
-      applyAlert(JSON.parse(event.data));
-    } catch (_) {}
-  };
-  alertEs.onerror = function() {
-    if (alertEs) {
-      alertEs.close();
-      alertEs = null;
-    }
-    setTimeout(connectAlert, 3000);
-  };
-}
-
 async function fetchAlertSnapshot() {
   try {
     const response = await fetch("/state/alert", { cache: "no-store" });
@@ -1430,19 +1393,32 @@ async function connectIfAvailable() {
 
 function connect() {
   if (es) return;
-  es = new EventSource("/sse/return");
+  // Single multiplexed SSE connection carries return + alert + video streams
+  // (named events). Keeps browser persistent-connection count low so concurrent
+  // image/media requests don't stall against Chrome's 6-per-origin limit.
+  es = new EventSource("/sse/combined/return");
   es.onopen = function () {
     void fetchSnapshot();
     void fetchUtilitySnapshot();
     void fetchAudioSnapshot();
-    connectAlert();
-    connectVideo();
+    void fetchAlertSnapshot();
+    void fetchVideoSnapshot();
   };
-  es.onmessage = function (event) {
+  es.addEventListener("return", function (event) {
     try {
       handleReturnStreamMessage(JSON.parse(event.data));
     } catch (_) {}
-  };
+  });
+  es.addEventListener("alert", function (event) {
+    try {
+      applyAlert(JSON.parse(event.data));
+    } catch (_) {}
+  });
+  es.addEventListener("video", function (event) {
+    try {
+      applyVideoEvent(JSON.parse(event.data));
+    } catch (_) {}
+  });
   es.onerror = function () {
     if (es) {
       es.close();
@@ -1467,8 +1443,6 @@ window.addEventListener("beforeunload", function () {
   if (clockTimer) clearInterval(clockTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (es) es.close();
-  if (alertEs) alertEs.close();
-  if (videoEs) videoEs.close();
 });
 </script>
 </body>

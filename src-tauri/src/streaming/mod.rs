@@ -4,12 +4,13 @@ use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use tauri::{AppHandle, Emitter};
 
 // --- SSE Broadcaster ---
 
@@ -61,14 +62,6 @@ impl SseBroadcaster {
         }
     }
 
-    pub fn connection_count(&self) -> usize {
-        if let Ok(senders) = self.senders.lock() {
-            senders.len()
-        } else {
-            0
-        }
-    }
-
     pub fn latest_payload(&self) -> Option<String> {
         let message = self
             .latest_message
@@ -107,6 +100,12 @@ pub struct StreamingServer {
     listener: Option<Arc<TcpListener>>,
     is_running: Arc<AtomicBool>,
     broadcast_enabled: Arc<AtomicBool>,
+    /// Count of live SSE clients (one per browser EventSource), independent of
+    /// how many broadcasters each client is subscribed to via multiplexing.
+    sse_clients: Arc<AtomicUsize>,
+    /// AppHandle used by the SSE client guard to emit `streaming-status-changed`
+    /// on connect/disconnect so the frontend count stays current without polling.
+    app_handle: Arc<OnceLock<AppHandle>>,
     thread_handle: Option<thread::JoinHandle<()>>,
     port: u16,
 }
@@ -146,6 +145,8 @@ impl StreamingServer {
             listener: None,
             is_running: Arc::new(AtomicBool::new(false)),
             broadcast_enabled: Arc::new(AtomicBool::new(true)),
+            sse_clients: Arc::new(AtomicUsize::new(0)),
+            app_handle: Arc::new(OnceLock::new()),
             thread_handle: None,
             port,
         };
@@ -155,6 +156,13 @@ impl StreamingServer {
 
     pub fn set_broadcast_enabled(&self, enabled: bool) {
         self.broadcast_enabled.store(enabled, Ordering::SeqCst);
+    }
+
+    /// Registers the Tauri AppHandle used to emit `streaming-status-changed`
+    /// whenever an SSE client connects or disconnects. Safe to call multiple
+    /// times — only the first value is retained (OnceLock semantics).
+    pub fn set_app_handle(&self, app: AppHandle) {
+        let _ = self.app_handle.set(app);
     }
 
     pub fn set_ui_language(&self, language: &str) {
@@ -212,6 +220,8 @@ impl StreamingServer {
         let latest_audio_status = Arc::clone(&self.latest_audio_status);
         let ui_language = Arc::clone(&self.ui_language);
         let media_root = Arc::clone(&self.media_root);
+        let sse_clients = Arc::clone(&self.sse_clients);
+        let app_handle = Arc::clone(&self.app_handle);
 
         self.thread_handle = Some(thread::spawn(move || {
             while is_running.load(Ordering::SeqCst) {
@@ -233,6 +243,8 @@ impl StreamingServer {
                         let media_root_for_connection = Arc::clone(&media_root);
                         let latest_audio_status_for_connection =
                             Arc::clone(&latest_audio_status);
+                        let sse_clients_for_connection = Arc::clone(&sse_clients);
+                        let app_handle_for_connection = Arc::clone(&app_handle);
 
                         thread::spawn(move || {
                             let context = ConnectionContext {
@@ -247,6 +259,8 @@ impl StreamingServer {
                                 ui_language: &language,
                                 media_root: &media_root_for_connection,
                                 is_running: &running,
+                                sse_clients: &sse_clients_for_connection,
+                                app_handle: &app_handle_for_connection,
                             };
                             handle_connection(stream, &context);
                         });
@@ -290,13 +304,7 @@ impl StreamingServer {
             return_monitor: format!("http://{}:{}/return", ip, self.port),
         });
         let connections = if running {
-            (self.music_broadcaster.connection_count()
-                + self.bible_broadcaster.connection_count()
-                + self.return_broadcaster.connection_count()
-                + self.alert_broadcaster.connection_count()
-                + self.utility_broadcaster.connection_count()
-                + self.ui_broadcaster.connection_count()
-                + self.video_broadcaster.connection_count()) as u32
+            self.sse_clients.load(Ordering::SeqCst) as u32
         } else {
             0
         };
@@ -391,6 +399,8 @@ struct ConnectionContext<'a> {
     ui_language: &'a Arc<Mutex<String>>,
     media_root: &'a Arc<Mutex<Option<PathBuf>>>,
     is_running: &'a Arc<AtomicBool>,
+    sse_clients: &'a Arc<AtomicUsize>,
+    app_handle: &'a Arc<OnceLock<AppHandle>>,
 }
 
 fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
@@ -465,13 +475,40 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
             });
             serve_json(&mut stream, &body);
         }
-        "/sse/music" => serve_sse(stream, context.music_bc, context.is_running),
-        "/sse/bible" => serve_sse(stream, context.bible_bc, context.is_running),
-        "/sse/return" => serve_sse(stream, context.return_bc, context.is_running),
-        "/sse/alert" => serve_sse(stream, context.alert_bc, context.is_running),
-        "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running),
-        "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running),
-        "/sse/video" => serve_sse(stream, context.video_bc, context.is_running),
+        "/sse/music" => serve_sse(stream, context.music_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/bible" => serve_sse(stream, context.bible_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/return" => serve_sse(stream, context.return_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/alert" => serve_sse(stream, context.alert_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/video" => serve_sse(stream, context.video_bc, context.is_running, context.sse_clients, context.app_handle),
+        // Multiplexed SSE endpoints — one connection carries multiple named event
+        // streams so a single browser tab opens 1 persistent connection instead of 3.
+        // Chrome caps HTTP/1.1 at 6 connections per origin, so without this a /music
+        // tab + /return tab (3 SSE each) saturates the pool and new requests like
+        // background image fetches sit pending forever.
+        "/sse/combined/music" => serve_sse_multi(
+            stream,
+            &[
+                ("music", context.music_bc),
+                ("alert", context.alert_bc),
+                ("video", context.video_bc),
+            ],
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/combined/return" => serve_sse_multi(
+            stream,
+            &[
+                ("return", context.return_bc),
+                ("alert", context.alert_bc),
+                ("video", context.video_bc),
+            ],
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
         "/state/video" => {
             let body = context.video_bc.latest_payload().unwrap_or_else(|| {
                 r#"{"type":"state","paused":true,"currentTime":0,"duration":0,"volume":1,"videoId":null,"videoSource":null}"#
@@ -541,11 +578,44 @@ fn serve_json(stream: &mut TcpStream, json: &str) {
     let _ = stream.flush();
 }
 
+/// RAII guard: increments the SSE client counter on creation and decrements on
+/// drop so the counter reflects live EventSource connections regardless of the
+/// exit path (graceful disconnect, write error, shutdown).
+struct SseClientGuard {
+    counter: Arc<AtomicUsize>,
+    app_handle: Arc<OnceLock<AppHandle>>,
+}
+
+impl SseClientGuard {
+    fn new(counter: &Arc<AtomicUsize>, app_handle: &Arc<OnceLock<AppHandle>>) -> Self {
+        counter.fetch_add(1, Ordering::SeqCst);
+        if let Some(app) = app_handle.get() {
+            let _ = app.emit("streaming-status-changed", ());
+        }
+        Self {
+            counter: Arc::clone(counter),
+            app_handle: Arc::clone(app_handle),
+        }
+    }
+}
+
+impl Drop for SseClientGuard {
+    fn drop(&mut self) {
+        self.counter.fetch_sub(1, Ordering::SeqCst);
+        if let Some(app) = self.app_handle.get() {
+            let _ = app.emit("streaming-status-changed", ());
+        }
+    }
+}
+
 fn serve_sse(
     mut stream: TcpStream,
     broadcaster: &Arc<SseBroadcaster>,
     is_running: &Arc<AtomicBool>,
+    sse_clients: &Arc<AtomicUsize>,
+    app_handle: &Arc<OnceLock<AppHandle>>,
 ) {
+    let _client_guard = SseClientGuard::new(sse_clients, app_handle);
     const SSE_HEARTBEAT_INTERVAL_SECS: u64 = 5;
 
     // Write SSE headers
@@ -642,6 +712,141 @@ fn serve_sse(
 
     // Ensure connection count is decremented immediately on disconnect.
     broadcaster.unsubscribe(subscription_id);
+}
+
+/// Serve multiple SSE streams multiplexed over a single connection using named
+/// events (`event: <name>\ndata: ...`). Each underlying broadcaster is subscribed
+/// to and its payloads are forwarded to a shared channel tagged with the stream
+/// name. The client uses `addEventListener(name, ...)` to dispatch by stream.
+fn serve_sse_multi(
+    mut stream: TcpStream,
+    streams: &[(&str, &Arc<SseBroadcaster>)],
+    is_running: &Arc<AtomicBool>,
+    sse_clients: &Arc<AtomicUsize>,
+    app_handle: &Arc<OnceLock<AppHandle>>,
+) {
+    let _client_guard = SseClientGuard::new(sse_clients, app_handle);
+    const SSE_HEARTBEAT_INTERVAL_SECS: u64 = 5;
+
+    let headers = "HTTP/1.1 200 OK\r\n\
+        Content-Type: text/event-stream; charset=utf-8\r\n\
+        Cache-Control: no-cache\r\n\
+        Connection: keep-alive\r\n\
+        Access-Control-Allow-Origin: *\r\n\
+        \r\n";
+
+    if stream.write_all(headers.as_bytes()).is_err() {
+        return;
+    }
+    if stream.flush().is_err() {
+        return;
+    }
+
+    let (out_tx, out_rx) = mpsc::channel::<String>();
+    let mut subs: Vec<(Arc<SseBroadcaster>, usize)> = Vec::with_capacity(streams.len());
+
+    for (name, broadcaster) in streams {
+        let event_name = name.to_string();
+        let (subscription_id, rx, latest_message) = broadcaster.subscribe();
+        subs.push((Arc::clone(broadcaster), subscription_id));
+
+        // Replay the latest payload immediately so late-joining clients get the
+        // current state without waiting for the next broadcast.
+        if let Some(raw) = latest_message {
+            let payload = raw
+                .strip_prefix("data: ")
+                .unwrap_or(&raw)
+                .trim_end_matches(['\r', '\n']);
+            let tagged = format!("event: {}\ndata: {}\n\n", event_name, payload);
+            if stream.write_all(tagged.as_bytes()).is_err() {
+                for (bc, id) in subs {
+                    bc.unsubscribe(id);
+                }
+                return;
+            }
+        }
+
+        // Forwarder thread: tag each broadcast with the event name and push to
+        // the shared channel. Exits cleanly when the broadcaster drops its tx
+        // (i.e. on unsubscribe) — rx.recv() returns Err at that point.
+        let tx = out_tx.clone();
+        thread::spawn(move || {
+            while let Ok(raw) = rx.recv() {
+                let payload = raw
+                    .strip_prefix("data: ")
+                    .unwrap_or(&raw)
+                    .trim_end_matches(['\r', '\n'])
+                    .to_string();
+                let tagged = format!("event: {}\ndata: {}\n\n", event_name, payload);
+                if tx.send(tagged).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    // Drop the original tx so out_rx returns Disconnected once all forwarders exit.
+    drop(out_tx);
+
+    let _ = stream.flush();
+
+    // Track remote socket closure (same pattern as serve_sse).
+    let disconnected = Arc::new(AtomicBool::new(false));
+    if let Ok(mut read_stream) = stream.try_clone() {
+        let flag = Arc::clone(&disconnected);
+        let _ = read_stream.set_read_timeout(Some(Duration::from_secs(1)));
+        thread::spawn(move || {
+            let mut buf = [0_u8; 1];
+            loop {
+                match read_stream.read(&mut buf) {
+                    Ok(0) => {
+                        flag.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                    Ok(_) => {}
+                    Err(ref e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::WouldBlock
+                                | std::io::ErrorKind::TimedOut
+                                | std::io::ErrorKind::Interrupted
+                        ) => {}
+                    Err(_) => {
+                        flag.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
+    while is_running.load(Ordering::SeqCst) && !disconnected.load(Ordering::SeqCst) {
+        match out_rx.recv_timeout(Duration::from_secs(SSE_HEARTBEAT_INTERVAL_SECS)) {
+            Ok(msg) => {
+                if stream.write_all(msg.as_bytes()).is_err() {
+                    break;
+                }
+                if stream.flush().is_err() {
+                    break;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let heartbeat = format!(": heartbeat {}\n\n", chrono::Utc::now().timestamp());
+                if stream.write_all(heartbeat.as_bytes()).is_err() {
+                    break;
+                }
+                if stream.flush().is_err() {
+                    break;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    for (bc, id) in subs {
+        bc.unsubscribe(id);
+    }
 }
 
 /// Resolve a percent-decoded media path to a file to serve.

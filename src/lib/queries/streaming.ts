@@ -11,9 +11,10 @@ export function useStreamingStatus() {
   return useQuery({
     queryKey: queryKeys.streaming.status,
     queryFn: () => getStreamingStatus(),
-    // Primary invalidation is event-driven via "streaming-status-changed" listener in __root.tsx.
-    // This interval is a safety-net fallback only (e.g. app restart, missed events).
-    refetchInterval: 60_000,
+    // Event-driven — invalidation is triggered by the "streaming-status-changed"
+    // listener in __root.tsx. Rust emits that event on server start/stop AND on
+    // every SSE client connect/disconnect, so no polling is needed.
+    refetchInterval: false,
   });
 }
 

@@ -646,7 +646,11 @@ function applyBackground(payload) {
   const bgOverlay = document.getElementById("bg-overlay");
 
   if (backgroundImage && lyricsEnableBgImage) {
-    bgImage.src = backgroundImage;
+    // Only reassign src when the URL actually changes — prevents browser
+    // re-validation/re-fetch on every slide update during a song.
+    if (bgImage.getAttribute("src") !== backgroundImage) {
+      bgImage.src = backgroundImage;
+    }
     bgImage.style.opacity = "1";
 
     // Apply backdrop filter blur if enabled
@@ -663,7 +667,8 @@ function applyBackground(payload) {
     // Update CSS for text panel to use custom opacity + background color
     updatePanelStyle(lyricsPanelOpacity, lyricsBgColor || "#000000");
   } else {
-    bgImage.removeAttribute("src");
+    // Keep the existing src so the browser reuses the decoded image when the
+    // next slide sets the same URL — no new network request is made.
     bgImage.style.opacity = "0";
     bgImage.style.filter = "none";
     bgOverlay.style.opacity = "0";
@@ -1269,27 +1274,6 @@ function applyAlert(payload) {
   }
 }
 
-let alertEs = null;
-function connectAlert() {
-  if (alertEs) return;
-  alertEs = new EventSource("/sse/alert");
-  alertEs.onopen = function() {
-    void fetchAlertSnapshot();
-  };
-  alertEs.onmessage = function(event) {
-    try {
-      applyAlert(JSON.parse(event.data));
-    } catch (_) {}
-  };
-  alertEs.onerror = function() {
-    if (alertEs) {
-      alertEs.close();
-      alertEs = null;
-    }
-    setTimeout(connectAlert, 3000);
-  };
-}
-
 async function fetchAlertSnapshot() {
   try {
     const response = await fetch("/state/alert", { cache: "no-store" });
@@ -1303,8 +1287,6 @@ async function fetchAlertSnapshot() {
 // The /sse/video stream carries play/pause/seek/state events emitted by the
 // master video player (PersistentVideoPlayer in the Tauri main window).
 // Streaming screens use these to stay synchronized with the master.
-
-let videoEs = null;
 
 function applyVideoEvent(data) {
   if (!data || typeof data !== "object") return;
@@ -1377,41 +1359,34 @@ async function fetchVideoSnapshot() {
   } catch (_) {}
 }
 
-function connectVideo() {
-  if (videoEs) return;
-  videoEs = new EventSource("/sse/video");
-  videoEs.onopen = function() {
-    void fetchVideoSnapshot();
-  };
-  videoEs.onmessage = function(event) {
-    try {
-      applyVideoEvent(JSON.parse(event.data));
-    } catch (_) {}
-  };
-  videoEs.onerror = function() {
-    if (videoEs) {
-      videoEs.close();
-      videoEs = null;
-    }
-    setTimeout(connectVideo, 3000);
-  };
-}
-
 function connect() {
   if (es) return;
-  es = new EventSource("/sse/music");
+  // Single multiplexed SSE connection carries music + alert + video streams
+  // (named events). Keeps browser persistent-connection count low so concurrent
+  // image/media requests don't stall against Chrome's 6-per-origin limit.
+  es = new EventSource("/sse/combined/music");
   es.onopen = function () {
     void fetchSnapshot();
     void fetchUtilitySnapshot();
     void fetchAudioSnapshot();
-    connectAlert();
-    connectVideo();
+    void fetchAlertSnapshot();
+    void fetchVideoSnapshot();
   };
-  es.onmessage = function (event) {
+  es.addEventListener("music", function (event) {
     try {
       handleMusicStreamMessage(JSON.parse(event.data));
     } catch (_) {}
-  };
+  });
+  es.addEventListener("alert", function (event) {
+    try {
+      applyAlert(JSON.parse(event.data));
+    } catch (_) {}
+  });
+  es.addEventListener("video", function (event) {
+    try {
+      applyVideoEvent(JSON.parse(event.data));
+    } catch (_) {}
+  });
   es.onerror = function () {
     if (es) {
       es.close();
@@ -1431,8 +1406,6 @@ setInterval(function() { void refreshUiLanguage(); }, 30000);
 window.addEventListener("beforeunload", function () {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (es) es.close();
-  if (alertEs) alertEs.close();
-  if (videoEs) videoEs.close();
 });
 </script>
 </body>
