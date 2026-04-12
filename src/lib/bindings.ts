@@ -1122,6 +1122,28 @@ async getRemoteStatus() : Promise<Result<RemoteStatus, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Open a 120-second pairing window. A second call replaces any existing session.
+ */
+async beginPairing() : Promise<Result<PairingInfo, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("begin_pairing") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Cancel an in-progress pairing window early.
+ */
+async cancelPairing() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_pairing") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getSetting(key: string) : Promise<Result<Setting, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_setting", { key }) };
@@ -1709,6 +1731,11 @@ export type PackSyncDiagnostics = { appDataDir: string; topLevelEntries: string[
 export type PackSyncFileItem = { path: string; hymnApiId: number | null; albumApiId: number | null; fileType: string; size: number; albumName: string | null }
 export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[]; totalDownloadSize: number; totalDownloadCount: number; availableLanguages: string[]; selectedLanguages: string[] }
 export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[]; language: string }
+/**
+ * Info returned by `begin_pairing` — includes a one-time token, 6-digit PIN,
+ * expiry timestamp (unix seconds), QR SVG string, and the pairing URL.
+ */
+export type PairingInfo = { token: string; pin: string; expiresAt: number; qrSvg: string; url: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type RefPosition = "bottom" | "top" | "hidden"
 export type RemoteStatus = { running: boolean; ip: string | null; port: number }

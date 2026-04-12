@@ -1804,7 +1804,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 43);
+        assert_eq!(schema_version, 44);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(

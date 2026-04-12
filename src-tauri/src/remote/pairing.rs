@@ -50,7 +50,9 @@ mod tests {
 
     #[test]
     fn zero_ttl_expires_immediately() {
-        let s = PairingSession::new(Duration::from_secs(0));
+        // Use a tiny but non-zero sleep so elapsed() > Duration::from_nanos(1) reliably.
+        let s = PairingSession::new(Duration::from_nanos(1));
+        std::thread::sleep(Duration::from_millis(2));
         assert!(s.is_expired());
     }
 

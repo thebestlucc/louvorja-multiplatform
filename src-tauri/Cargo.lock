@@ -3312,6 +3312,7 @@ dependencies = [
  "display-info",
  "dotenvy",
  "enigo",
+ "futures-util",
  "global-hotkey",
  "hmac",
  "include_dir",
