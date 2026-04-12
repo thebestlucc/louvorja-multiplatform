@@ -29,3 +29,28 @@ export async function clearDatabase(): Promise<{ success: boolean }> {
 export async function broadcastProjectionDisplay(fontSize: number, fontFamily: string): Promise<void> {
   return tauriInvoke<void>("broadcast_projection_display", { fontSize, fontFamily });
 }
+
+/** Broadcasts full projection + lyrics display settings to all windows. */
+export async function broadcastProjectionDisplayFull(
+  fontSize: number,
+  fontFamily: string,
+  lyricsSettings: {
+    textColor: string;
+    backgroundColor: string;
+    enableBackgroundImage: boolean;
+    enableBackdropFilter: boolean;
+    backdropOpacity: number;
+    panelOpacity: number;
+  },
+): Promise<void> {
+  return tauriInvoke<void>("broadcast_projection_display_full", {
+    fontSize,
+    fontFamily,
+    textColor: lyricsSettings.textColor,
+    backgroundColor: lyricsSettings.backgroundColor,
+    enableBackgroundImage: lyricsSettings.enableBackgroundImage,
+    enableBackdropFilter: lyricsSettings.enableBackdropFilter,
+    backdropOpacity: lyricsSettings.backdropOpacity,
+    panelOpacity: lyricsSettings.panelOpacity,
+  });
+}

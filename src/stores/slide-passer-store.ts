@@ -61,32 +61,32 @@ export const useSlidePasserStore = create<SlidePasserState>((set, get) => ({
   setConfig: (partial) => {
     const newConfig = { ...get().config, ...partial };
     set({ config: newConfig });
-    void setPreference(STORE_KEY, newConfig);
+    setPreference(STORE_KEY, newConfig);
   },
 
   setEnabled: (enabled) => {
     const newConfig = { ...get().config, enabled };
     set({ config: newConfig });
-    void setPreference(STORE_KEY, newConfig);
+    setPreference(STORE_KEY, newConfig);
   },
 
   setMode: (mode) => {
     const newConfig = { ...get().config, mode };
     set({ config: newConfig });
-    void setPreference(STORE_KEY, newConfig);
+    setPreference(STORE_KEY, newConfig);
   },
 
   setMapping: (action, key) => {
     const newMappings = { ...get().config.mappings, [action]: key };
     const newConfig = { ...get().config, mappings: newMappings };
     set({ config: newConfig });
-    void setPreference(STORE_KEY, newConfig);
+    setPreference(STORE_KEY, newConfig);
   },
 
   setExternalApp: (app) => {
     const newConfig = { ...get().config, externalApp: app };
     set({ config: newConfig });
-    void setPreference(STORE_KEY, newConfig);
+    setPreference(STORE_KEY, newConfig);
   },
 
   recordEvent: (key) => {

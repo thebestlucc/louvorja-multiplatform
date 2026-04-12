@@ -149,7 +149,79 @@ pub(crate) fn build_music_stream_payload(
         }
     }
 
+    // Inject lyrics display settings so streaming clients can style accordingly
+    inject_lyrics_display_settings(&mut payload, app_data_dir);
+
     payload
+}
+
+/// Reads lyrics display preferences from the plugin store and merges them
+/// into the streaming music payload so remote viewers honor user styling.
+fn inject_lyrics_display_settings(payload: &mut serde_json::Value, app_data_dir: Option<&Path>) {
+    use std::fs;
+
+    let settings = read_lyrics_display_prefs(app_data_dir);
+    if let Some(map) = payload.as_object_mut() {
+        map.insert("lyricsTextColor".to_string(), serde_json::json!(settings.text_color));
+        map.insert("lyricsBackgroundColor".to_string(), serde_json::json!(settings.bg_color));
+        map.insert("lyricsEnableBackgroundImage".to_string(), serde_json::json!(settings.enable_bg_image));
+        map.insert("lyricsEnableBackdropFilter".to_string(), serde_json::json!(settings.enable_backdrop));
+        map.insert("lyricsBackdropOpacity".to_string(), serde_json::json!(settings.backdrop_opacity));
+        map.insert("lyricsPanelOpacity".to_string(), serde_json::json!(settings.panel_opacity));
+    }
+}
+
+struct LyricsDisplayPrefs {
+    text_color: String,
+    bg_color: String,
+    enable_bg_image: bool,
+    enable_backdrop: bool,
+    backdrop_opacity: f64,
+    panel_opacity: f64,
+}
+
+fn read_lyrics_display_prefs(app_data_dir: Option<&Path>) -> LyricsDisplayPrefs {
+    // Default values match the frontend defaults
+    let mut prefs = LyricsDisplayPrefs {
+        text_color: "#ffffff".to_string(),
+        bg_color: "#1a1a2e".to_string(),
+        enable_bg_image: true,
+        enable_backdrop: true,
+        backdrop_opacity: 40.0,
+        panel_opacity: 68.0,
+    };
+
+    // Try to read from app-preferences.json
+    let prefs_path = app_data_dir.map(|p| p.join("app-preferences.json"));
+
+    if let Some(path) = prefs_path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(obj) = json.as_object() {
+                    if let Some(v) = obj.get("lyrics.textColor").and_then(|v| v.as_str()) {
+                        prefs.text_color = v.to_string();
+                    }
+                    if let Some(val) = obj.get("lyrics.backgroundColor").and_then(|v| v.as_str()) {
+                        prefs.bg_color = val.to_string();
+                    }
+                    if let Some(v) = obj.get("lyrics.enableBackgroundImage").and_then(|v| v.as_bool()) {
+                        prefs.enable_bg_image = v;
+                    }
+                    if let Some(v) = obj.get("lyrics.enableBackdropFilter").and_then(|v| v.as_bool()) {
+                        prefs.enable_backdrop = v;
+                    }
+                    if let Some(v) = obj.get("lyrics.backdropOpacity").and_then(|v| v.as_f64()) {
+                        prefs.backdrop_opacity = v;
+                    }
+                    if let Some(v) = obj.get("lyrics.panelOpacity").and_then(|v| v.as_f64()) {
+                        prefs.panel_opacity = v;
+                    }
+                }
+            }
+        }
+    }
+
+    prefs
 }
 
 pub(crate) fn empty_streaming_music_payload() -> serde_json::Value {

@@ -82,7 +82,7 @@ export function Header() {
   }
 
   function openCommandPalette() {
-    void spotlightOpen();
+    spotlightOpen();
   }
 
   const dateLabel = now.toLocaleDateString(locale, {

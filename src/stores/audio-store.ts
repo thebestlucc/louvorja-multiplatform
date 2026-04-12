@@ -211,7 +211,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => {
 
     set({ lastSyncSlide: -1, subscriptionToken });
 
-    void listen<AudioStatusPayload>("audio-status", (event) => {
+    listen<AudioStatusPayload>("audio-status", (event) => {
       applyPayload(event.payload);
     })
       .then((unlisten) => {

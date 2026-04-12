@@ -301,6 +301,15 @@ function safeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function hexToRgba(hex, alpha) {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map(function(c) { return c + c; }).join("") : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return "rgba(" + r + ", " + g + ", " + b + ", " + alpha + ")";
+}
+
 function safeNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -581,14 +590,14 @@ function resolveFontSize(baseSize, sourceSize, variant) {
   if (hasExplicit) {
     if (variant === "lyrics") {
       scaled = sourceSize * 2.8;
-      return Math.max(58, Math.min(210, Math.round(scaled)));
+      return Math.max(58, Math.min(1400, Math.round(scaled)));
     }
     if (variant === "cover") {
       scaled = sourceSize * 2.3;
-      return Math.max(62, Math.min(220, Math.round(scaled)));
+      return Math.max(62, Math.min(1400, Math.round(scaled)));
     }
     scaled = sourceSize * 2.0;
-    return Math.max(28, Math.min(180, Math.round(scaled)));
+    return Math.max(28, Math.min(900, Math.round(scaled)));
   }
 
   return Math.round(baseSize);
@@ -598,7 +607,12 @@ function applyTextStyles(payload, slideType) {
   const text = document.getElementById("text");
   const title = document.getElementById("title");
   const sourceSize = safeNumber(payload.textSize);
-  const textColor = safeText(payload.textColor);
+  const slideTextColor = safeText(payload.textColor);
+
+  // Use lyrics display settings if available
+  const lyricsTextColor = safeText(payload.lyricsTextColor);
+  const textColor = slideTextColor || lyricsTextColor;
+
   const variant = slideType === "lyrics" ? "lyrics" : slideType === "cover" ? "cover" : "text";
   const textSize = resolveFontSize(
     slideType === "cover" ? 64 : slideType === "lyrics" ? 58 : 42,
@@ -615,21 +629,64 @@ function applyTextStyles(payload, slideType) {
 }
 
 function applyBackground(payload) {
-  const backgroundColor = safeText(payload.backgroundColor);
+  const slideBgColor = safeText(payload.backgroundColor);
   const backgroundImage = toStreamingMediaUrl(payload.backgroundImage);
 
-  document.body.style.background = backgroundColor || DEFAULT_BACKGROUND;
+  // Lyrics display settings
+  const lyricsBgColor = safeText(payload.lyricsBackgroundColor);
+  const lyricsEnableBgImage = payload.lyricsEnableBackgroundImage !== false;
+  const lyricsEnableBackdrop = payload.lyricsEnableBackdropFilter !== false;
+  const lyricsBackdropOpacity = (safeNumber(payload.lyricsBackdropOpacity) ?? 40) / 100;
+  const lyricsPanelOpacity = (safeNumber(payload.lyricsPanelOpacity) ?? 68) / 100;
+
+  const backgroundColor = slideBgColor || lyricsBgColor || DEFAULT_BACKGROUND;
+  document.body.style.background = backgroundColor;
+
   const bgImage = document.getElementById("bg-image");
   const bgOverlay = document.getElementById("bg-overlay");
-  if (backgroundImage) {
+
+  if (backgroundImage && lyricsEnableBgImage) {
     bgImage.src = backgroundImage;
     bgImage.style.opacity = "1";
+
+    // Apply backdrop filter blur if enabled
+    if (lyricsEnableBackdrop) {
+      bgImage.style.filter = "blur(" + (lyricsBackdropOpacity * 10) + "px)";
+    } else {
+      bgImage.style.filter = "none";
+    }
+
+    // Custom overlay opacity from settings — tinted with user's background color
     bgOverlay.style.opacity = "1";
+    bgOverlay.style.backgroundColor = hexToRgba(lyricsBgColor || "#000000", lyricsBackdropOpacity);
+
+    // Update CSS for text panel to use custom opacity + background color
+    updatePanelStyle(lyricsPanelOpacity, lyricsBgColor || "#000000");
   } else {
     bgImage.removeAttribute("src");
     bgImage.style.opacity = "0";
+    bgImage.style.filter = "none";
     bgOverlay.style.opacity = "0";
+    updatePanelStyle(null, null); // reset to default
   }
+}
+
+function updatePanelStyle(opacity, bgColor) {
+  const styleId = "lyrics-panel-style";
+  let styleEl = document.getElementById(styleId);
+
+  if (opacity == null) {
+    // Reset to default CSS class behavior
+    if (styleEl) styleEl.remove();
+    return;
+  }
+
+  if (!styleEl) {
+    styleEl = document.createElement("style");
+    styleEl.id = styleId;
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = ".text-wrap.with-panel { background: " + hexToRgba(bgColor || "#000000", opacity) + "; }";
 }
 
 function setTextPanel(enabled) {

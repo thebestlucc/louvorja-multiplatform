@@ -173,7 +173,7 @@ function SpotlightWindow() {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        void spotlightHide();
+        spotlightHide();
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -215,7 +215,7 @@ function SpotlightWindow() {
   function handleSearchBarMouseDown(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
     if (!target.closest("input, button")) {
-      void getCurrentWindow().startDragging();
+      getCurrentWindow().startDragging();
     }
   }
 
@@ -346,7 +346,7 @@ function SpotlightWindow() {
                 <Command.Item
                   value={`ref-${parsedRef.bookName}-${parsedRef.chapter}-${parsedRef.verse ?? 1}`}
                   onSelect={() =>
-                    void spotlightSelect(
+                    spotlightSelect(
                       "navigate",
                       `/bible?book=${encodeURIComponent(parsedRef.bookName)}&chapter=${parsedRef.chapter}&verse=${parsedRef.verse ?? 1}`,
                     )
@@ -372,7 +372,7 @@ function SpotlightWindow() {
                   <Command.Item
                     key={id}
                     value={id}
-                    onSelect={() => void spotlightSelect("navigate", to)}
+                    onSelect={() => spotlightSelect("navigate", to)}
                     className={itemClass}
                   >
                     <Icon className={itemIconClass} />
@@ -392,7 +392,7 @@ function SpotlightWindow() {
                   <Command.Item
                     key={id}
                     value={id}
-                    onSelect={() => void spotlightSelect("action", action)}
+                    onSelect={() => spotlightSelect("action", action)}
                     className={itemClass}
                   >
                     <Icon className={itemIconClass} />
@@ -412,7 +412,7 @@ function SpotlightWindow() {
                   <Command.Item
                     key={hymn.id}
                     value={`hymn-${hymn.id}`}
-                    onSelect={() => void spotlightSelect("navigate", `/hymnal/${hymn.id}`)}
+                    onSelect={() => spotlightSelect("navigate", `/hymnal/${hymn.id}`)}
                     className={itemClass}
                   >
                     <Music className={itemIconClass} />
@@ -431,7 +431,7 @@ function SpotlightWindow() {
                       title={t("spotlight.projectToScreen")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void projectHymnFirstStanza(hymn);
+                        projectHymnFirstStanza(hymn);
                       }}
                       className={projectButtonClass}
                     >
@@ -453,7 +453,7 @@ function SpotlightWindow() {
                     key={`${result.verse.versionId}-${result.verse.book}-${result.verse.chapter}-${result.verse.verse}`}
                     value={`bible-${result.verse.versionId}-${result.verse.book}-${result.verse.chapter}-${result.verse.verse}`}
                     onSelect={() =>
-                      void spotlightSelect(
+                      spotlightSelect(
                         "navigate",
                         `/bible?book=${result.verse.book}&chapter=${result.verse.chapter}&verse=${result.verse.verse}&version=${result.verse.versionId}`,
                       )
@@ -476,7 +476,7 @@ function SpotlightWindow() {
                       title={t("spotlight.projectToScreen")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void projectBibleVerse(result);
+                        projectBibleVerse(result);
                       }}
                       className={projectButtonClass}
                     >
@@ -498,7 +498,7 @@ function SpotlightWindow() {
                     key={`library-item-${item.id}`}
                     value={`library-item-${item.id}`}
                     onSelect={() =>
-                      void spotlightSelect(
+                      spotlightSelect(
                         "navigate",
                         `/utilities/media-library?categoryId=${item.categoryId}&itemId=${item.id}`,
                       )
@@ -513,7 +513,7 @@ function SpotlightWindow() {
                       title={t("spotlight.projectToScreen")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void spotlightSelect(
+                        spotlightSelect(
                           "navigate",
                           `/utilities/media-library?categoryId=${item.categoryId}&itemId=${item.id}`,
                         );
@@ -540,7 +540,7 @@ function SpotlightWindow() {
                       key={`collection-${col.collectionId}`}
                       value={`collection-${col.collectionId}`}
                       onSelect={() =>
-                        void spotlightSelect("navigate", `/collections/${col.collectionId}`)
+                        spotlightSelect("navigate", `/collections/${col.collectionId}`)
                       }
                       className={itemClass}
                     >
@@ -571,14 +571,14 @@ function SpotlightWindow() {
                       value={`song-${col.collectionId}-${col.songId}`}
                       onSelect={() => {
                         if (col.kind === "song" && col.songId != null) {
-                          return void spotlightSelect(
+                          return spotlightSelect(
                             "navigate",
                             `/collections/${col.collectionId}#song-${col.songId}`,
                           );
                         }
 
                         if (col.songId != null) {
-                          return void spotlightSelect("navigate", `/hymnal/${col.songId}`);
+                          return spotlightSelect("navigate", `/hymnal/${col.songId}`);
                         }
                       }}
                       className={itemClass}

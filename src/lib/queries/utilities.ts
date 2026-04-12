@@ -44,7 +44,7 @@ export function useTimerState(options?: { enabled?: boolean }) {
       unlisten = unsubscribe;
     };
 
-    void setup();
+    setup();
 
     return () => {
       cancelled = true;

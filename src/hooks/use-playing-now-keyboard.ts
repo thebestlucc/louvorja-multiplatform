@@ -43,7 +43,7 @@ export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, ne
       } else if (matchesShortcutCombo(e, "m")) {
         e.preventDefault();
         const audioState = useAudioStore.getState();
-        void audioState.setOutputMuted(!audioState.outputMuted);
+        audioState.setOutputMuted(!audioState.outputMuted);
       } else if (matchesShortcutCombo(e, "Alt+ArrowLeft") || matchesShortcutCombo(e, "[")) {
         e.preventDefault();
         prevItem();

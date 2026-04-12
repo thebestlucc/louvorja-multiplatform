@@ -10,7 +10,7 @@ export function useRouteTour(routePath: string) {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    void isRouteTourCompleted(routePath).then((completed) => {
+    isRouteTourCompleted(routePath).then((completed) => {
       if (!completed && !cancelled) {
         timer = setTimeout(() => setShowTour(true), 1000);
       }

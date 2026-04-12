@@ -1194,12 +1194,28 @@
       "ytdlpUpdating": "Actualizando...",
       "ytdlpUpdated": "yt-dlp actualizado con éxito"
     },
-    "presentationTitle": "Proyección",
+    "displaySectionTitle": "Pantalla",
+    "fontAndTypography": "Fuente y Tipografía",
+    "lyricsCustomization": "Personalización de Letras",
     "presentationFontSize": "Tamaño de fuente predeterminado",
     "presentationFontSizeHint": "Aplicado a letras de himnos, músicas de colección y proyecciones bíblicas.",
     "presentationFontFamily": "Familia de fuente",
     "presentationFontFamilyHint": "Fuente utilizada en el contenido proyectado. El predeterminado del sistema hereda la fuente del OS.",
-    "presentationFontFamilyDefault": "Predeterminado del sistema"
+    "presentationFontFamilyDefault": "Predeterminado del sistema",
+    "lyricsDisplayTitle": "Visualización de Letras",
+    "lyricsColorPresets": "Combinaciones predefinidas",
+    "lyricsTextColor": "Color del texto",
+    "lyricsTextColorHint": "Color del texto de las letras en el proyector.",
+    "lyricsBackgroundColor": "Color de fondo",
+    "lyricsBackgroundColorHint": "Color de fondo cuando no se muestra ninguna imagen.",
+    "lyricsEnableBgImage": "Mostrar imagen de fondo",
+    "lyricsEnableBgImageHint": "Usa la portada del álbum/himno como fondo detrás de las letras.",
+    "lyricsBackdropFilter": "Desenfoque de fondo",
+    "lyricsBackdropFilterHint": "Aplica un efecto de desenfoque detrás del panel de letras.",
+    "lyricsBackdropOpacity": "Opacidad del fondo",
+    "lyricsBackdropOpacityHint": "Controla la intensidad del desenfoque/oscurecimiento detrás del panel de texto.",
+    "lyricsPanelOpacity": "Opacidad del panel",
+    "lyricsPanelOpacityHint": "Controla la opacidad de la capa oscura directamente detrás del texto de las letras."
   },
   "shortcuts": {
     "categories": {

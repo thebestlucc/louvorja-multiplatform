@@ -52,7 +52,7 @@ function HelpRoutePage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => void handleResetTours()}
+              onClick={() => { handleResetTours(); }}
             >
               <RotateCcw className="mr-2 h-4 w-4" />
               {t("help.restartTours")}

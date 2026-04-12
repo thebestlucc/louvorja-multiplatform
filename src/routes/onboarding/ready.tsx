@@ -97,7 +97,7 @@ function OnboardingReadyPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t("common.back")}
         </Button>
-        <Button size="lg" onClick={() => void handleFinish()} disabled={saving}>
+        <Button size="lg" onClick={() => { handleFinish(); }} disabled={saving}>
           {t("onboarding.ready.finish")}
         </Button>
       </div>

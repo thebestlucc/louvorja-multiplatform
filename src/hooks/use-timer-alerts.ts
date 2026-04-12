@@ -48,7 +48,7 @@ export function useTimerAlerts(enabled = true) {
 
       if (previousRemainingSeconds > thresholdSeconds && currentRemainingSeconds <= thresholdSeconds) {
         triggeredAlertMinutesRef.current.add(rule.minuteMark);
-        void playTimerAlertRule(rule, alertVolume).catch((error) => {
+        playTimerAlertRule(rule, alertVolume).catch((error) => {
           notify.tauriError(
             error,
             t("utilities.timer.alertPlaybackFailed", {

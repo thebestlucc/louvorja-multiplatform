@@ -100,9 +100,9 @@ export function useMediaPlayer() {
 
     if (state.timelineSource === "audio") {
       const audioState = useAudioStore.getState();
-      void audioState.resume();
+      audioState.resume();
     } else if (state.timelineSource === "video") {
-      void emit("video-control", { action: "play" });
+      emit("video-control", { action: "play" });
     }
     store.getState().setStatus("playing");
   }, []);
@@ -110,9 +110,9 @@ export function useMediaPlayer() {
   const pause = useCallback(() => {
     const state = store.getState();
     if (state.timelineSource === "audio") {
-      void useAudioStore.getState().pause();
+      useAudioStore.getState().pause();
     } else if (state.timelineSource === "video") {
-      void emit("video-control", { action: "pause" });
+      emit("video-control", { action: "pause" });
     }
     store.getState().setStatus("paused");
   }, []);
@@ -120,10 +120,10 @@ export function useMediaPlayer() {
   const stop = useCallback(() => {
     // Seek video to beginning before clearing screens
     if (store.getState().timelineSource === "video") {
-      void emit("video-control", { action: "seek", value: 0 });
+      emit("video-control", { action: "seek", value: 0 });
     }
-    void useAudioStore.getState().stop();
-    void clearCurrentSlide();
+    useAudioStore.getState().stop();
+    clearCurrentSlide();
 
     const pStore = usePresentationStore.getState();
     if (pStore.isPlayingLiturgy) {
@@ -143,9 +143,9 @@ export function useMediaPlayer() {
   const seek = useCallback((timeMs: number) => {
     const state = store.getState();
     if (state.timelineSource === "audio") {
-      void useAudioStore.getState().seek(timeMs);
+      useAudioStore.getState().seek(timeMs);
     } else if (state.timelineSource === "video") {
-      void emit("video-control", { action: "seek", value: timeMs / 1000 });
+      emit("video-control", { action: "seek", value: timeMs / 1000 });
     }
   }, []);
 
@@ -182,7 +182,7 @@ export function useMediaPlayer() {
           const mode = state.currentItem.mode;
           const timestamp = resolveSlideSeekTimestamp(state.syncPoints, index, mode);
           if (timestamp !== null) {
-            void audioState.seek(timestamp);
+            audioState.seek(timestamp);
           }
         }
       }
@@ -288,11 +288,11 @@ export function useMediaPlayer() {
   const restart = useCallback(() => {
     const state = store.getState();
     if (state.timelineSource === "video") {
-      void emit("video-control", { action: "seek", value: 0 });
-      void emit("video-control", { action: "play" });
+      emit("video-control", { action: "seek", value: 0 });
+      emit("video-control", { action: "play" });
     } else {
-      void useAudioStore.getState().seek(0);
-      void useAudioStore.getState().resume();
+      useAudioStore.getState().seek(0);
+      useAudioStore.getState().resume();
     }
     useMediaPlayerStore.setState({ currentTime: 0, activeSlideIndex: 0 });
   }, []);
@@ -301,9 +301,9 @@ export function useMediaPlayer() {
     if (store.getState().timelineSource === "video") {
       // Bypass rodio command (no audio player active in video mode)
       useAudioStore.setState({ volume });
-      void emit("video-control", { action: "volume", value: volume });
+      emit("video-control", { action: "volume", value: volume });
     } else {
-      void useAudioStore.getState().setVolume(volume);
+      useAudioStore.getState().setVolume(volume);
     }
   }, []);
 

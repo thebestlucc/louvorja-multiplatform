@@ -70,7 +70,7 @@ export function useUtilityProjection(_kind: UtilityProjectionKind) {
     return () => {
       isMountedRef.current = false;
       if (snapshotRef.current) {
-        void stopProjection();
+        stopProjection();
       }
     };
   }, [stopProjection]);
