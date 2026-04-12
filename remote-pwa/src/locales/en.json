@@ -44,7 +44,9 @@
       "stop": "Stop service",
       "stop_confirm": "Stop service?",
       "next_item": "Next item",
-      "prev_item": "Previous item"
+      "prev_item": "Previous item",
+      "no_service": "No active service",
+      "item_count": "items"
     },
     "queue": {
       "now_playing": "Now playing",

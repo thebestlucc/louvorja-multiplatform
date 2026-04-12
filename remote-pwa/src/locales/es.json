@@ -44,7 +44,9 @@
       "stop": "Detener culto",
       "stop_confirm": "¿Detener culto?",
       "next_item": "Siguiente ítem",
-      "prev_item": "Ítem anterior"
+      "prev_item": "Ítem anterior",
+      "no_service": "Ningún servicio activo",
+      "item_count": "elementos"
     },
     "queue": {
       "now_playing": "Reproduciendo ahora",
