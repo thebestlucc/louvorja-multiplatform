@@ -89,7 +89,11 @@
       "haptics_strong": "Fuerte",
       "wake_lock": "Mantener pantalla encendida",
       "hardware_buttons": "Botones de volumen físicos",
-      "forget_device": "Olvidar dispositivo (mantener)"
+      "forget_device": "Olvidar dispositivo (mantener)",
+      "about_section": "Acerca de",
+      "version": "Versión",
+      "device_name": "Dispositivo",
+      "server_name": "Servidor"
     },
     "errors": {
       "network_title": "No se puede alcanzar la computadora",

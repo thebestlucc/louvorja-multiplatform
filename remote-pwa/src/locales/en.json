@@ -89,7 +89,11 @@
       "haptics_strong": "Strong",
       "wake_lock": "Keep screen on",
       "hardware_buttons": "Hardware volume buttons",
-      "forget_device": "Forget device (hold)"
+      "forget_device": "Forget device (hold)",
+      "about_section": "About",
+      "version": "Version",
+      "device_name": "Device",
+      "server_name": "Server"
     },
     "errors": {
       "network_title": "Can't reach the computer",
