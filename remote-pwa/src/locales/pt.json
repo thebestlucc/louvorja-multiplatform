@@ -44,7 +44,9 @@
       "stop": "Encerrar culto",
       "stop_confirm": "Encerrar culto?",
       "next_item": "Próximo item",
-      "prev_item": "Item anterior"
+      "prev_item": "Item anterior",
+      "no_service": "Nenhum culto ativo",
+      "item_count": "itens"
     },
     "queue": {
       "now_playing": "Tocando agora",
