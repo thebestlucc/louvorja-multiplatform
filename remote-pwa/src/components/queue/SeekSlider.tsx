@@ -28,6 +28,9 @@ export function SeekSlider({ position, duration, onSeek, className }: SeekSlider
         role="slider"
         aria-label={t("remote.queue.seek")}
         min={0}
+        // TODO(review): max={duration || 1} — when duration=0 before media loads, slider shows
+        // full range but position=0. Consider showing a disabled/loading state when duration=0.
+        // (ring:business-logic-reviewer, 2026-04-12, Low)
         max={duration || 1}
         value={displayValue}
         onChange={(e) => setLocalValue(Number(e.target.value))}

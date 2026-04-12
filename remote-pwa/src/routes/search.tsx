@@ -26,6 +26,9 @@ export default function SearchRoute() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
 
+  // TODO(review): debounceRef timer is not cleared on unmount — if a 400ms timer fires after
+  // component unmount, it will call ws.send on a potentially stale ws. Add a cleanup useEffect
+  // that calls clearTimeout(debounceRef.current) on unmount. (ring:code-reviewer, 2026-04-12, Low)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Subscribe to search.results

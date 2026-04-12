@@ -26,6 +26,9 @@ export default function ServiceRoute() {
   useEffect(() => {
     if (!ws || typeof ws.on !== "function") return;
     const unsub = ws.on("service.state", (payload) => {
+      // TODO(review): payload cast without validation — if server sends malformed data (e.g.
+      // missing `items` array), service.items.map will throw. Add array guard before setState.
+      // (ring:nil-safety-reviewer, 2026-04-12, Low)
       setService(payload as ServiceState);
     });
     return unsub;
