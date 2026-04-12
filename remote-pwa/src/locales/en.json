@@ -21,7 +21,11 @@
       "clear": "Clear projection",
       "hold_hint": "Hold to confirm",
       "swipe_up_hint": "Swipe up for all slides",
-      "slide_counter": "Slide {{n}} of {{total}}"
+      "slide_counter": "Slide {{n}} of {{total}}",
+      "no_slide": "Waiting for content",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "reconnecting": "Reconnecting"
     },
     "search": {
       "tab_hymns": "Hymns",

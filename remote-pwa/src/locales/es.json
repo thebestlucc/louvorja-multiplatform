@@ -21,7 +21,11 @@
       "clear": "Limpiar proyección",
       "hold_hint": "Mantén presionado para confirmar",
       "swipe_up_hint": "Desliza hacia arriba para ver todas las diapositivas",
-      "slide_counter": "Diapositiva {{n}} de {{total}}"
+      "slide_counter": "Diapositiva {{n}} de {{total}}",
+      "no_slide": "Esperando contenido",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "reconnecting": "Reconectando"
     },
     "search": {
       "tab_hymns": "Himnos",
