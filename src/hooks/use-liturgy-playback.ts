@@ -208,7 +208,7 @@ export function useLiturgyPlayback() {
       if (item.itemType === "hymn" && item.itemId != null && hymnData == null) {
         return; // wait for hymn data; effect re-runs when hymnData arrives
       }
-      void projectItem(item, items, hymnData);
+      projectItem(item, items, hymnData);
     }
   }, [isPlayingLiturgy, activeLiturgyItemIndex, items, hymnData, projectItem]);
 

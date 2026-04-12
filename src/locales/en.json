@@ -1194,12 +1194,28 @@
       "ytdlpUpdating": "Updating...",
       "ytdlpUpdated": "yt-dlp updated successfully"
     },
-    "presentationTitle": "Projection",
+    "displaySectionTitle": "Display",
+    "fontAndTypography": "Font & Typography",
+    "lyricsCustomization": "Lyrics Customization",
     "presentationFontSize": "Default font size",
     "presentationFontSizeHint": "Applies to hymnal lyrics, collection music, and Bible projections.",
     "presentationFontFamily": "Font family",
     "presentationFontFamilyHint": "Font used for projected content. System Default inherits the OS font.",
-    "presentationFontFamilyDefault": "System Default"
+    "presentationFontFamilyDefault": "System Default",
+    "lyricsDisplayTitle": "Lyrics Display",
+    "lyricsColorPresets": "Color presets",
+    "lyricsTextColor": "Text color",
+    "lyricsTextColorHint": "Color of the lyrics text on the projector.",
+    "lyricsBackgroundColor": "Background color",
+    "lyricsBackgroundColorHint": "Fallback background color when no image is shown.",
+    "lyricsEnableBgImage": "Show background image",
+    "lyricsEnableBgImageHint": "Use the album/hymn cover as background behind the lyrics.",
+    "lyricsBackdropFilter": "Blur backdrop",
+    "lyricsBackdropFilterHint": "Apply a blur effect behind the lyrics panel.",
+    "lyricsBackdropOpacity": "Backdrop opacity",
+    "lyricsBackdropOpacityHint": "Controls how strong the blur/dark overlay behind the text panel is.",
+    "lyricsPanelOpacity": "Panel opacity",
+    "lyricsPanelOpacityHint": "Controls how opaque the dark overlay directly behind the lyrics text is."
   },
   "shortcuts": {
     "categories": {

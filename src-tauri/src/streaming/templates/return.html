@@ -751,26 +751,26 @@ function resolveFontSize(sourceSize, mode, variant) {
     if (mode === "current") {
       if (variant === "lyrics") {
         raw = sourceSize * 2.05;
-        return Math.max(36, Math.min(140, Math.round(raw)));
+        return Math.max(36, Math.min(700, Math.round(raw)));
       }
       if (variant === "cover") {
         raw = sourceSize * 1.8;
-        return Math.max(40, Math.min(140, Math.round(raw)));
+        return Math.max(40, Math.min(700, Math.round(raw)));
       }
       raw = sourceSize * 1.55;
-      return Math.max(20, Math.min(120, Math.round(raw)));
+      return Math.max(20, Math.min(500, Math.round(raw)));
     }
 
     if (variant === "lyrics") {
       raw = sourceSize * 1.3;
-      return Math.max(20, Math.min(84, Math.round(raw)));
+      return Math.max(20, Math.min(420, Math.round(raw)));
     }
     if (variant === "cover") {
       raw = sourceSize * 1.2;
-      return Math.max(20, Math.min(88, Math.round(raw)));
+      return Math.max(20, Math.min(440, Math.round(raw)));
     }
     raw = sourceSize * 1.1;
-    return Math.max(14, Math.min(76, Math.round(raw)));
+    return Math.max(14, Math.min(380, Math.round(raw)));
   }
 
   if (mode === "current") {

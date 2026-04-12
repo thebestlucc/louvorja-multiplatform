@@ -49,7 +49,7 @@ export function useVideoSource(path: string | null | undefined): string | null {
     if (!needsServer) return;
 
     let cancelled = false;
-    void startVideoServer()
+    startVideoServer()
       .then(() => {
         if (!cancelled) {
           queryClient.invalidateQueries({ queryKey: ["video-server-status"] });

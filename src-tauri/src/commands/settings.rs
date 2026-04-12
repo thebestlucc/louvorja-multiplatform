@@ -255,3 +255,46 @@ pub fn broadcast_projection_display(
         .map_err(|e| AppError::Tauri(e.to_string()))?;
     Ok(())
 }
+
+/// Broadcasts full projection + lyrics display settings to all windows.
+#[tauri::command]
+#[specta::specta]
+pub fn broadcast_projection_display_full(
+    app: AppHandle,
+    font_size: f64,
+    font_family: String,
+    text_color: String,
+    background_color: String,
+    enable_background_image: bool,
+    enable_backdrop_filter: bool,
+    backdrop_opacity: f64,
+    panel_opacity: f64,
+) -> Result<(), AppError> {
+    #[derive(Clone, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Payload {
+        font_size: f64,
+        font_family: String,
+        text_color: String,
+        background_color: String,
+        enable_background_image: bool,
+        enable_backdrop_filter: bool,
+        backdrop_opacity: f64,
+        panel_opacity: f64,
+    }
+    app.emit(
+        "projection-display-changed",
+        Payload {
+            font_size,
+            font_family,
+            text_color,
+            background_color,
+            enable_background_image,
+            enable_backdrop_filter,
+            backdrop_opacity,
+            panel_opacity,
+        },
+    )
+    .map_err(|e| AppError::Tauri(e.to_string()))?;
+    Ok(())
+}

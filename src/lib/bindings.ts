@@ -1287,6 +1287,17 @@ async broadcastProjectionDisplay(fontSize: number, fontFamily: string) : Promise
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Broadcasts full projection + lyrics display settings to all windows.
+ */
+async broadcastProjectionDisplayFull(fontSize: number, fontFamily: string, textColor: string, backgroundColor: string, enableBackgroundImage: boolean, enableBackdropFilter: boolean, backdropOpacity: number, panelOpacity: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("broadcast_projection_display_full", { fontSize, fontFamily, textColor, backgroundColor, enableBackgroundImage, enableBackdropFilter, backdropOpacity, panelOpacity }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async runLottery(names: string[]) : Promise<Result<string, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("run_lottery", { names }) };

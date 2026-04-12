@@ -90,13 +90,13 @@ export function useProjectionSettings() {
       }
       setLoaded(true);
     };
-    void load();
+    load();
   }, []);
 
   const updateSettings = useCallback(
     (next: BibleProjectionSettings) => {
       setSettings(next);
-      void catcher(setPreference(STORE_KEY, next));
+      catcher(setPreference(STORE_KEY, next));
     },
     [],
   );

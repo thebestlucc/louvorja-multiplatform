@@ -168,7 +168,7 @@ export function VerseDisplay({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => void handleCopyVerses()}
+                    onClick={() => { handleCopyVerses(); }}
                     aria-label={t("bible.copyVerse")}
                     className="h-7 w-7 p-0"
                   >

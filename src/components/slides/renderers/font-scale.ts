@@ -38,18 +38,18 @@ export function resolveRenderFontSize(
 
   const raw = baseSize * scale;
   if (variant === "cover-title") {
-    if (renderMode === "projector") return Math.max(62, Math.min(220, Math.round(raw)));
-    if (renderMode === "return-current") return Math.max(40, Math.min(140, Math.round(raw)));
-    if (renderMode === "return-next") return Math.max(20, Math.min(88, Math.round(raw)));
+    if (renderMode === "projector") return Math.max(62, Math.min(1400, Math.round(raw)));
+    if (renderMode === "return-current") return Math.max(40, Math.min(700, Math.round(raw)));
+    if (renderMode === "return-next") return Math.max(20, Math.min(440, Math.round(raw)));
   }
 
   if (variant === "lyrics") {
-    if (renderMode === "projector") return Math.max(58, Math.min(210, Math.round(raw)));
-    if (renderMode === "return-current") return Math.max(36, Math.min(140, Math.round(raw)));
-    if (renderMode === "return-next") return Math.max(20, Math.min(84, Math.round(raw)));
+    if (renderMode === "projector") return Math.max(58, Math.min(1400, Math.round(raw)));
+    if (renderMode === "return-current") return Math.max(36, Math.min(700, Math.round(raw)));
+    if (renderMode === "return-next") return Math.max(20, Math.min(420, Math.round(raw)));
   }
 
-  return Math.max(10, Math.min(180, Math.round(raw)));
+  return Math.max(10, Math.min(900, Math.round(raw)));
 }
 
 /** Compute primary text style (color + fontSize). */

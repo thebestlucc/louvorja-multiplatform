@@ -31,18 +31,18 @@ export function useSlidePasser({ enabled = true }: { enabled?: boolean } = {}) {
 
     switch (action) {
       case "nextSlide":
-        if (projType === "bible") void navigateBible("next");
+        if (projType === "bible") navigateBible("next");
         else nextSlideRef.current();
         break;
       case "prevSlide":
-        if (projType === "bible") void navigateBible("prev");
+        if (projType === "bible") navigateBible("prev");
         else prevSlideRef.current();
         break;
       case "blackScreen":
-        void toggleBlackScreenRef.current();
+        toggleBlackScreenRef.current();
         break;
       case "toggleProjection":
-        void toggleProjectorRef.current();
+        toggleProjectorRef.current();
         break;
     }
   }, []);
@@ -68,7 +68,7 @@ export function useSlidePasser({ enabled = true }: { enabled?: boolean } = {}) {
     }
 
     if (key) {
-      void invoke("send_keystroke", { key });
+      invoke("send_keystroke", { key });
     }
   }, []);
 

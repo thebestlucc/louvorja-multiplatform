@@ -20,7 +20,7 @@ export function useSetStorePreference<T>(key: string) {
   const queryClient = useQueryClient();
   return (value: T) => {
     queryClient.setQueryData(queryKeys.storePrefs.detail(key), value);
-    void setPreference(key, value);
+    setPreference(key, value);
   };
 }
 

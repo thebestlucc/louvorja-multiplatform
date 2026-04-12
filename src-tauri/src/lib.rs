@@ -238,6 +238,7 @@ pub fn run() {
             commands::updater::check_for_updates,
             commands::updater::install_update,
             commands::settings::broadcast_projection_display,
+            commands::settings::broadcast_projection_display_full,
             // Utility
             commands::text_tools::run_lottery,
             commands::text_tools::format_text,

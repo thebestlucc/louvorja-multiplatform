@@ -62,7 +62,7 @@ export function useHymnPlayback() {
     await catcher(async () => {
       clearQueue();
       addToQueue([{ id: crypto.randomUUID(), hymn, type: "audio" }], true);
-      void router.navigate({ to: "/playing-now" });
+      router.navigate({ to: "/playing-now" });
     }, { notify: false });
   }, [router, clearQueue, addToQueue]);
 
@@ -70,7 +70,7 @@ export function useHymnPlayback() {
     await catcher(async () => {
       clearQueue();
       addToQueue([{ id: crypto.randomUUID(), hymn, type: "playback" }], true);
-      void router.navigate({ to: "/playing-now" });
+      router.navigate({ to: "/playing-now" });
     }, { notify: false });
   }, [router, clearQueue, addToQueue]);
 
@@ -78,7 +78,7 @@ export function useHymnPlayback() {
     await catcher(async () => {
       clearQueue();
       addToQueue([{ id: crypto.randomUUID(), hymn, type: "projection" }], true);
-      void router.navigate({ to: "/playing-now" });
+      router.navigate({ to: "/playing-now" });
     }, { notify: false });
   }, [router, clearQueue, addToQueue]);
 

@@ -99,10 +99,10 @@ function OnboardingMonitorsPage() {
     if (!monitorId) return;
     if (type === "projector") {
       await openProjectorWindow(monitorId);
-      window.setTimeout(() => void closeProjectorWindow(), 2500);
+      window.setTimeout(() => { closeProjectorWindow(); }, 2500);
     } else {
       await openReturnWindow(monitorId);
-      window.setTimeout(() => void closeReturnWindow(), 2500);
+      window.setTimeout(() => { closeReturnWindow(); }, 2500);
     }
   };
 
@@ -176,11 +176,11 @@ function OnboardingMonitorsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void openWindowTemporarily("projector")} disabled={!projectorId}>
+            <Button variant="outline" onClick={() => { openWindowTemporarily("projector"); }} disabled={!projectorId}>
               <MonitorPlay className="mr-2 h-4 w-4" />
               {t("onboarding.monitors.testProjector")}
             </Button>
-            <Button variant="outline" onClick={() => void openWindowTemporarily("return")} disabled={!returnId || hasMonitorSelectionConflict}>
+            <Button variant="outline" onClick={() => { openWindowTemporarily("return"); }} disabled={!returnId || hasMonitorSelectionConflict}>
               <MonitorPlay className="mr-2 h-4 w-4" />
               {t("onboarding.monitors.testReturn")}
             </Button>
@@ -204,7 +204,7 @@ function OnboardingMonitorsPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t("common.back")}
         </Button>
-        <Button onClick={() => void handleSaveAndContinue()} disabled={saving || hasMonitorSelectionConflict}>
+        <Button onClick={() => { handleSaveAndContinue(); }} disabled={saving || hasMonitorSelectionConflict}>
           {t("onboarding.monitors.saveAndContinue")}
         </Button>
       </div>

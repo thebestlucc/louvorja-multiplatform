@@ -20,7 +20,7 @@ import {
 } from "../../lib/projector-screen-defaults";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { isTheme } from "./toggle-button";
-import { ProjectionSection } from "./projection-section";
+import { DisplaySection } from "./display-section";
 
 export function AppearanceSection() {
   const { t } = useTranslation();
@@ -182,8 +182,8 @@ export function AppearanceSection() {
         </div>
       </section>
 
-      {/* Projection display (font size + family) */}
-      <ProjectionSection />
+      {/* Display (font size, family, lyrics customization) */}
+      <DisplaySection />
 
       {/* Projector Screens Defaults */}
       <section className="rounded-lg border border-border bg-card p-4">

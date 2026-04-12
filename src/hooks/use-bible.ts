@@ -57,7 +57,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
 
   const setVersion = (id: number) => {
     setCurrentVersionId(id);
-    void setPreference("bible.selectedVersionId", id);
+    setPreference("bible.selectedVersionId", id);
   };
 
   const setBook = (name: string) => {
@@ -165,7 +165,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     if (!error) {
       setCurrentProjectionType(null);
       setBibleContext(null);
-      void catcher(clearBibleProjection());
+      catcher(clearBibleProjection());
     }
   }, [setCurrentProjectionType, setBibleContext]);
 

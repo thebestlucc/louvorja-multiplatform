@@ -1194,12 +1194,28 @@
       "ytdlpUpdating": "Atualizando...",
       "ytdlpUpdated": "yt-dlp atualizado com sucesso"
     },
-    "presentationTitle": "Projeção",
+    "displaySectionTitle": "Exibição",
+    "fontAndTypography": "Fonte e Tipografia",
+    "lyricsCustomization": "Personalização de Letras",
     "presentationFontSize": "Tamanho de fonte padrão",
     "presentationFontSizeHint": "Aplicado a letras de hinos, músicas de coleção e projeções bíblicas.",
     "presentationFontFamily": "Família de fonte",
     "presentationFontFamilyHint": "Fonte usada no conteúdo projetado. Padrão do sistema usa a fonte do OS.",
-    "presentationFontFamilyDefault": "Padrão do sistema"
+    "presentationFontFamilyDefault": "Padrão do sistema",
+    "lyricsDisplayTitle": "Exibição de Letras",
+    "lyricsColorPresets": "Predefinições de cores",
+    "lyricsTextColor": "Cor do texto",
+    "lyricsTextColorHint": "Cor do texto das letras no projetor.",
+    "lyricsBackgroundColor": "Cor de fundo",
+    "lyricsBackgroundColorHint": "Cor de fundo quando nenhuma imagem é exibida.",
+    "lyricsEnableBgImage": "Exibir imagem de fundo",
+    "lyricsEnableBgImageHint": "Usa a capa do álbum/hino como fundo atrás das letras.",
+    "lyricsBackdropFilter": "Desfocar fundo",
+    "lyricsBackdropFilterHint": "Aplica desfoque atrás do painel de letras.",
+    "lyricsBackdropOpacity": "Opacidade do fundo",
+    "lyricsBackdropOpacityHint": "Controla a intensidade do desfoque/escurecimento atrás do painel de texto.",
+    "lyricsPanelOpacity": "Opacidade do painel",
+    "lyricsPanelOpacityHint": "Controla a opacidade da sobreposição escura diretamente atrás do texto das letras."
   },
   "shortcuts": {
     "categories": {

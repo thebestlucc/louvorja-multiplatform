@@ -96,7 +96,7 @@ function RootLayout() {
   const handleTourComplete = useCallback(() => {
     setShowTour(false);
     // Mark home route tour as completed too to avoid double-touring
-    void completeRouteTour("/");
+    completeRouteTour("/");
   }, []);
 
   const setLanguage = useThemeStore((state) => state.setLanguage);
@@ -297,17 +297,17 @@ function RootLayout() {
         setPackSyncProgress(event.payload);
         const status = event.payload.status;
         if (status === "completed" || status === "completed_with_errors" || status === "failed" || status === "cancelled") {
-          void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+          queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
           // Content DB was hot-swapped — refetch hymn/collection/album data
-          void queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
-          void queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
+          queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
+          queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
+          queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
         }
       }),
       "pack-sync-progress",
     );
-    return () => { void unlisten.then((fn) => fn()); };
+    return () => { unlisten.then((fn) => fn()); };
   }, [isBareRoute, setPackSyncProgress, queryClient]);
 
   // Global Bible context + slides sync — keeps Playing Now preview + sidebar updated
@@ -326,7 +326,7 @@ function RootLayout() {
       "bible-context-changed",
     );
     return () => {
-      void unlistenContext.then((fn) => fn());
+      unlistenContext.then((fn) => fn());
     };
   }, [isBareRoute]);
 
@@ -334,7 +334,7 @@ function RootLayout() {
   const slidePasserLoaded = useSlidePasserStore((s) => s.loaded);
   useEffect(() => {
     if (!slidePasserLoaded) {
-      void useSlidePasserStore.getState().loadFromStore();
+      useSlidePasserStore.getState().loadFromStore();
     }
   }, [slidePasserLoaded]);
 
@@ -353,7 +353,7 @@ function RootLayout() {
   const handleStopLiturgy = useCallback(() => {
     setPlayingLiturgy(false);
     useMediaPlayerStore.getState().unload();
-    void catcher(deletePreference("activePlayState"));
+    catcher(deletePreference("activePlayState"));
   }, [setPlayingLiturgy]);
 
   const handlePrevLiturgyItem = useCallback(() => {
@@ -367,8 +367,8 @@ function RootLayout() {
       setActiveLiturgyItemIndex(activeLiturgyItemIndex + 1);
     } else {
       setPlayingLiturgy(false);
-      void catcher(deletePreference("activePlayState"));
-      void catcher(stopProjectionAndSongAudio(), { notify: true });
+      catcher(deletePreference("activePlayState"));
+      catcher(stopProjectionAndSongAudio(), { notify: true });
     }
   }, [activeLiturgyItemIndex, liturgyItems.length, setActiveLiturgyItemIndex, setPlayingLiturgy]);
 
@@ -394,7 +394,7 @@ function RootLayout() {
   useEffect(() => {
     const unlistenPromise = safeListen(
       listen<string>("spotlight-navigated", (event) => {
-        void router.navigate({ to: event.payload as never });
+        router.navigate({ to: event.payload as never });
       }),
       "spotlight-navigated",
     );
@@ -410,19 +410,19 @@ function RootLayout() {
       listen<string>("spotlight-action", (event) => {
         switch (event.payload) {
           case "toggle-projector":
-            void toggleProjectorRef.current();
+            toggleProjectorRef.current();
             break;
           case "toggle-return":
-            void toggleReturnRef.current();
+            toggleReturnRef.current();
             break;
           case "toggle-black":
-            void toggleBlackScreenRef.current();
+            toggleBlackScreenRef.current();
             break;
           case "toggle-logo":
-            void toggleLogoScreenRef.current();
+            toggleLogoScreenRef.current();
             break;
           case "clear-projection":
-            void stopProjectionAndSongAudio();
+            stopProjectionAndSongAudio();
             break;
           case "open-shortcuts":
             openKeyboardShortcutsPanel();
@@ -535,7 +535,7 @@ function RootLayout() {
         summary={contentSyncPromptSummary}
         onOpenSettings={() => {
           closeContentSyncPrompt();
-          void router.navigate({ to: "/settings", search: { tab: "sync" } });
+          router.navigate({ to: "/settings", search: { tab: "sync" } });
         }}
       />
       <PackSyncDialog />

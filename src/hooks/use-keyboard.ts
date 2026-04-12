@@ -40,7 +40,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
 
   const clearPresentation = useCallback(() => {
     usePresentationStore.getState().setSlides([]);
-    void stopProjectionAndSongAudio();
+    stopProjectionAndSongAudio();
     // Clear queue when ESC is pressed with one item or at the last item
     const q = useQueueStore.getState();
     if (q.items.length <= 1 || q.currentIndex >= q.items.length - 1) {
@@ -56,7 +56,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       // Spotlight gets priority — works even in text inputs
       if (matchesShortcutCombo(e, shortcutMap["app-command-palette"] ?? "Meta+k")) {
         e.preventDefault();
-        void spotlightOpen();
+        spotlightOpen();
         return;
       }
 
@@ -96,16 +96,16 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
           const mpState = useMediaPlayerStore.getState();
           if (mpState.status === "playing") {
             if (mpState.timelineSource === "audio") {
-              void useAudioStore.getState().pause();
+              useAudioStore.getState().pause();
             } else if (mpState.timelineSource === "video") {
-              void emit("video-control", { action: "pause" });
+              emit("video-control", { action: "pause" });
             }
             mpState.setStatus("paused");
           } else if (mpState.status === "paused") {
             if (mpState.timelineSource === "audio") {
-              void useAudioStore.getState().resume();
+              useAudioStore.getState().resume();
             } else if (mpState.timelineSource === "video") {
-              void emit("video-control", { action: "play" });
+              emit("video-control", { action: "play" });
             }
             mpState.setStatus("playing");
           } else {
@@ -117,7 +117,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         case "slides-next": {
           const projType = useDisplayStore.getState().currentProjectionType;
           if (projType === "bible") {
-            void navigateBible("next");
+            navigateBible("next");
           } else {
             nextSlide();
           }
@@ -127,7 +127,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         case "slides-prev": {
           const projType = useDisplayStore.getState().currentProjectionType;
           if (projType === "bible") {
-            void navigateBible("prev");
+            navigateBible("prev");
           } else {
             prevSlide();
           }
@@ -183,13 +183,13 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         switch (event.payload) {
           case "slides-next": {
             const projType = useDisplayStore.getState().currentProjectionType;
-            if (projType === "bible") void navigateBible("next");
+            if (projType === "bible") navigateBible("next");
             else nextSlide();
             break;
           }
           case "slides-prev": {
             const projType = useDisplayStore.getState().currentProjectionType;
-            if (projType === "bible") void navigateBible("prev");
+            if (projType === "bible") navigateBible("prev");
             else prevSlide();
             break;
           }

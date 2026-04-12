@@ -30,8 +30,8 @@ export function useStartPackSync() {
       startPackSync(vars?.items, vars?.selectedLanguages),
     onSuccess: () => {
       // Clear the manifest cache so the bell disappears and the next check fetches fresh
-      void clearManifestCache();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+      clearManifestCache();
+      queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
     },
   });
 }
@@ -41,7 +41,7 @@ export function useClearManifestCache() {
   return useMutation({
     mutationFn: () => clearManifestCache(),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
+      queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
     },
   });
 }

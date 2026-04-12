@@ -132,7 +132,8 @@ allow = [
     "get_monitor_configs",
     "set_slide_on_projector",
     "set_slide_on_return",
-    "broadcast_projection_display"
+    "broadcast_projection_display",
+    "broadcast_projection_display_full"
 ]
 
 [[permission]]
