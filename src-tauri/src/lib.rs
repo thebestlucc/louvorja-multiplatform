@@ -217,6 +217,10 @@ pub fn run() {
             commands::remote::start_remote_server,
             commands::remote::stop_remote_server,
             commands::remote::get_remote_status,
+            commands::remote::begin_pairing,
+            commands::remote::cancel_pairing,
+            commands::remote::list_paired_devices,
+            commands::remote::revoke_paired_device,
             // Settings
             commands::settings::get_setting,
             commands::settings::set_setting,

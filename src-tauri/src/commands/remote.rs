@@ -1,9 +1,12 @@
 use crate::error::AppError;
+use crate::remote::pairing::PairingSession;
+use crate::remote::routes::pair::PairRouteState;
 use crate::remote::server::RemoteServer;
 use crate::state::AppState;
 use serde::Serialize;
 use specta::Type;
-use tauri::{AppHandle, Emitter, Manager, State};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(Serialize, Type, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -39,8 +42,21 @@ pub fn start_remote_server(
         }
     }
 
+    // Wire Tauri event listeners → broadcast channel.
+    // TODO(review): listeners accumulate on server restart; track handles and unlisten on stop - business-logic-reviewer 2026-04-12, Low
+    crate::remote::events::listen_and_broadcast(&app, (*state.remote.broadcast_tx).clone());
+
+    let pair_state = PairRouteState {
+        db: state.db.clone(),
+        pairing: state.remote.pairing.clone(),
+        nonce_cache: state.remote.nonce_cache.clone(),
+        server_name: "LouvorJA".to_string(),
+        app_handle: Some(app.clone()),
+        broadcast_tx: state.remote.broadcast_tx.clone(),
+    };
+
     let mut server = RemoteServer::new();
-    let actual_port = server.start(preferred)?;
+    let actual_port = server.start_with_state(preferred, Some(pair_state))?;
     let status = RemoteStatus {
         running: true,
         ip: crate::net::get_lan_ip(),
@@ -89,6 +105,102 @@ pub fn get_remote_status(state: State<'_, AppState>) -> Result<RemoteStatus, App
     }
 }
 
+// Re-export so frontend bindings include the type.
+pub use crate::db::models::RemoteDevice;
+
+/// Info returned by `begin_pairing` — includes a one-time token, 6-digit PIN,
+/// expiry timestamp (unix seconds), QR SVG string, and the pairing URL.
+#[derive(Serialize, Type, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingInfo {
+    pub token: String,
+    pub pin: String,
+    pub expires_at: i64,
+    pub qr_svg: String,
+    pub url: String,
+}
+
+/// Open a 120-second pairing window. A second call replaces any existing session.
+#[tauri::command]
+#[specta::specta]
+pub fn begin_pairing(state: State<'_, AppState>) -> Result<PairingInfo, AppError> {
+    // Require the server to be running (we need ip + port for the URL).
+    let (ip, port) = {
+        let handle = state.remote.server_handle.lock()?;
+        match handle.as_ref() {
+            Some(s) if s.is_running() => (
+                crate::net::get_lan_ip().unwrap_or_else(|| "127.0.0.1".to_string()),
+                s.port,
+            ),
+            _ => {
+                return Err(AppError::Internal(
+                    "Remote server is not running".into(),
+                ))
+            }
+        }
+    };
+
+    let ttl = Duration::from_secs(120);
+    let session = PairingSession::new(ttl);
+    let url = format!("http://{}:{}/pair?token={}", ip, port, session.token);
+    let qr_svg = crate::remote::qr::render_svg(&url);
+
+    // expires_at in unix seconds
+    let expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+        + 120;
+
+    let info = PairingInfo {
+        token: session.token.clone(),
+        pin: session.pin.clone(),
+        expires_at,
+        qr_svg,
+        url,
+    };
+
+    *state.remote.pairing.lock()? = Some(session);
+    Ok(info)
+}
+
+/// Cancel an in-progress pairing window early.
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_pairing(state: State<'_, AppState>) -> Result<(), AppError> {
+    *state.remote.pairing.lock()? = None;
+    Ok(())
+}
+
+/// List all non-revoked paired devices.
+#[tauri::command]
+#[specta::specta]
+pub fn list_paired_devices(state: State<'_, AppState>) -> Result<Vec<RemoteDevice>, AppError> {
+    let conn = state.db.get()?;
+    crate::db::queries::remote::list_devices(&conn)
+}
+
+/// Revoke a device by ID — removes it from the active list and closes any live WS connection.
+#[tauri::command]
+#[specta::specta]
+pub fn revoke_paired_device(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), AppError> {
+    let conn = state.db.get()?;
+    crate::db::queries::remote::revoke_device(&conn, &id)?;
+    // Close any active WS connection for this device (placeholder — wired in D3).
+    {
+        let mut conns = state.remote.connections.lock()?;
+        if let Ok(uuid) = uuid::Uuid::parse_str(&id) {
+            conns.remove(&uuid);
+        }
+    }
+    let _ = app.emit("remote-devices-changed", ());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +216,33 @@ mod tests {
         assert!(json.contains("\"running\":false"));
         assert!(json.contains("\"port\":7456"));
         assert!(json.contains("\"ip\":\"192.168.1.10\""));
+    }
+
+    #[test]
+    fn remote_device_type_is_exported() {
+        // Ensures RemoteDevice is accessible via the commands module re-export.
+        let d = RemoteDevice {
+            id: "a".into(),
+            name: "b".into(),
+            created_at: 0,
+            last_seen_at: None,
+            revoked_at: None,
+        };
+        assert_eq!(d.name, "b");
+    }
+
+    #[test]
+    fn pairing_info_serializes_camel_case() {
+        let info = PairingInfo {
+            token: "abc".into(),
+            pin: "123456".into(),
+            expires_at: 9999,
+            qr_svg: "<svg/>".into(),
+            url: "http://1.2.3.4:7456/pair?token=abc".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"expiresAt\":9999"));
+        assert!(json.contains("\"qrSvg\":"));
+        assert!(json.contains("\"pin\":\"123456\""));
     }
 }
