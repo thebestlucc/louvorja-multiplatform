@@ -1,0 +1,93 @@
+{
+  "remote": {
+    "title": "LouvorJA Remote",
+    "pair": {
+      "headline": "Vincular este dispositivo",
+      "scan": "Escanear QR",
+      "scan_hint": "Apunta la cámara al código en tu computadora",
+      "pin_link": "Ingresar código manualmente",
+      "pin_placeholder": "Código de 6 dígitos",
+      "pin_invalid": "Código inválido. {{attempts}} intentos restantes.",
+      "pin_locked": "Demasiados intentos. Inténtalo de nuevo en {{seconds}}s.",
+      "torch": "Alternar linterna",
+      "success": "¡Vinculado!",
+      "find_code_hint": "Encuentra el código en tu computadora:\nLouvorJA → Remote"
+    },
+    "live": {
+      "prev": "Diapositiva anterior",
+      "next": "Siguiente diapositiva",
+      "black": "Pantalla negra",
+      "logo": "Pantalla de logo",
+      "clear": "Limpiar proyección",
+      "hold_hint": "Mantén presionado para confirmar",
+      "swipe_up_hint": "Desliza hacia arriba para ver todas las diapositivas",
+      "slide_counter": "Diapositiva {{n}} de {{total}}"
+    },
+    "search": {
+      "tab_hymns": "Himnos",
+      "tab_bible": "Biblia",
+      "tab_services": "Cultos",
+      "placeholder_hymns": "Buscar himnos…",
+      "placeholder_bible": "Libro, capítulo, versículo…",
+      "placeholder_service": "Buscar cultos…",
+      "recent": "Recientes",
+      "results_count": "{{n}} resultados",
+      "add_to_service": "Agregar al culto"
+    },
+    "service": {
+      "start": "Iniciar culto",
+      "stop": "Detener culto",
+      "stop_confirm": "¿Detener culto?",
+      "next_item": "Siguiente ítem",
+      "prev_item": "Ítem anterior"
+    },
+    "queue": {
+      "now_playing": "Reproduciendo ahora",
+      "up_next": "A continuación",
+      "history": "Historial",
+      "play_next": "Reproducir a continuación",
+      "move_to_top": "Mover al inicio",
+      "remove": "Eliminar",
+      "target_projector": "Proyector",
+      "target_return": "Retorno"
+    },
+    "connection": {
+      "connected": "Conectado",
+      "reconnecting": "Reconectando…",
+      "offline": "Sin conexión",
+      "latency": "{{ms}} ms",
+      "devices_count": "{{n}} conectados",
+      "cannot_reach": "No se puede alcanzar LouvorJA",
+      "retry": "Toca para reintentar"
+    },
+    "multi_op": {
+      "joined": "{{name}} se unió",
+      "next_by": "Siguiente por {{name}}"
+    },
+    "settings": {
+      "connection_section": "Conexión",
+      "projector_section": "Proyector y monitores",
+      "appearance": "Apariencia",
+      "theme": "Tema",
+      "theme_dark": "Oscuro",
+      "theme_light": "Claro",
+      "theme_auto": "Automático",
+      "haptics": "Hápticos",
+      "haptics_off": "Apagado",
+      "haptics_light": "Suave",
+      "haptics_medium": "Medio",
+      "haptics_strong": "Fuerte",
+      "wake_lock": "Mantener pantalla encendida",
+      "hardware_buttons": "Botones de volumen físicos",
+      "forget_device": "Olvidar dispositivo (mantener)"
+    },
+    "errors": {
+      "network_title": "No se puede alcanzar la computadora",
+      "network_action": "Verifica el Wi-Fi e intenta de nuevo",
+      "auth_title": "Dispositivo no reconocido",
+      "auth_action": "Vincular de nuevo",
+      "generic_title": "Algo salió mal",
+      "generic_action": "Intentar de nuevo"
+    }
+  }
+}

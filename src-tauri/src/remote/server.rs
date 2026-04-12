@@ -69,7 +69,9 @@ pub fn build_router(pair_state: Option<PairRouteState>) -> Router {
         Router::new()
     };
 
-    health_router.merge(stateful_router)
+    // PWA static assets — fallback for any path not matched above.
+    use crate::remote::assets::serve_static;
+    health_router.merge(stateful_router).fallback(serve_static)
 }
 
 impl RemoteServer {
