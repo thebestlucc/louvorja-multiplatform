@@ -147,7 +147,7 @@ allow = [
     "delete_excess_media",
     "copy_image_to_media",
     "get_video_metadata",
-    "open_media_folder",
+    "open_app_data_folder",
     "copy_video_to_media",
     "start_timer",
     "pause_timer",
@@ -325,4 +325,14 @@ allow = [
     "spotlight_select",
     "spotlight_hide",
     "get_available_monitors"
+]
+
+[[permission]]
+identifier = "allow-remote-commands"
+description = "Allows LAN remote control server management commands"
+[permission.commands]
+allow = [
+    "start_remote_server",
+    "stop_remote_server",
+    "get_remote_status"
 ]

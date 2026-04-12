@@ -921,8 +921,8 @@
     },
     "storage": {
       "title": "Armazenamento",
-      "mediaFolder": "Pasta de Mídia",
-      "mediaFolderDesc": "Abrir a pasta onde o LouvorJA armazena áudios, capas e outros arquivos de mídia.",
+      "dataFolder": "Pasta de Dados",
+      "dataFolderDesc": "Abrir a pasta onde o LouvorJA armazena seu banco de dados, conteúdo baixado e arquivos de mídia.",
       "openFolder": "Abrir Pasta"
     },
     "dangerZone": {

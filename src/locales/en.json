@@ -921,8 +921,8 @@
     },
     "storage": {
       "title": "Storage",
-      "mediaFolder": "Media Folder",
-      "mediaFolderDesc": "Open the folder where LouvorJA stores audio, covers, and other media files.",
+      "dataFolder": "Data Folder",
+      "dataFolderDesc": "Open the folder where LouvorJA stores its database, downloaded content, and media files.",
       "openFolder": "Open Folder"
     },
     "dangerZone": {

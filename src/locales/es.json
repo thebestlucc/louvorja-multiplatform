@@ -921,8 +921,8 @@
     },
     "storage": {
       "title": "Almacenamiento",
-      "mediaFolder": "Carpeta de Medios",
-      "mediaFolderDesc": "Abrir la carpeta donde LouvorJA almacena audios, portadas y otros archivos multimedia.",
+      "dataFolder": "Carpeta de Datos",
+      "dataFolderDesc": "Abrir la carpeta donde LouvorJA almacena su base de datos, contenido descargado y archivos multimedia.",
       "openFolder": "Abrir Carpeta"
     },
     "dangerZone": {
