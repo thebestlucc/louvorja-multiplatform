@@ -1,0 +1,78 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the connection store
+vi.mock("@/stores/connection-store", () => ({
+  useConnectionStore: vi.fn(),
+}));
+// Mock storage to avoid IndexedDB
+vi.mock("@/lib/storage", () => ({
+  getDevice: vi.fn().mockResolvedValue(null),
+  setDevice: vi.fn(),
+  clearDevice: vi.fn(),
+}));
+
+import { useConnectionStore } from "@/stores/connection-store";
+import App from "../../App";
+
+const mockUseConnectionStore = vi.mocked(useConnectionStore);
+
+function makeStore(isPaired: boolean) {
+  const init = vi.fn().mockResolvedValue(undefined);
+  return {
+    isPaired,
+    wsState: "disconnected" as const,
+    device: null,
+    ws: null,
+    latencyMs: null,
+    init,
+    completePairing: vi.fn(),
+    forgetDevice: vi.fn(),
+    _setWsState: vi.fn(),
+    _setLatency: vi.fn(),
+  };
+}
+
+describe("Routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows pair screen for unauthenticated user", async () => {
+    mockUseConnectionStore.mockReturnValue(makeStore(false));
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText(/LouvorJA Remote/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows live tab for authenticated user", async () => {
+    mockUseConnectionStore.mockReturnValue(makeStore(true));
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole("tablist", { name: "Main navigation" })).toBeInTheDocument();
+    });
+  });
+
+  it("tab bar has 5 destinations", async () => {
+    mockUseConnectionStore.mockReturnValue(makeStore(true));
+
+    render(<App />);
+    await waitFor(() => {
+      const tabs = screen.getAllByRole("tab");
+      expect(tabs).toHaveLength(5);
+    });
+  });
+
+  it("live tab is active by default", async () => {
+    mockUseConnectionStore.mockReturnValue(makeStore(true));
+
+    render(<App />);
+    await waitFor(() => {
+      const liveTab = screen.getByRole("tab", { name: "Live" });
+      expect(liveTab).toHaveAttribute("aria-selected", "true");
+    });
+  });
+});

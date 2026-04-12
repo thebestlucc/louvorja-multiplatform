@@ -40,4 +40,13 @@ mod tests {
         // Different timestamp
         assert!(!verify(b"secret", 43, "n1", "slide.next", "{}", &s));
     }
+
+    #[test]
+    fn reference_vector_stable() {
+        // This vector is used by the TypeScript crypto.test.ts to ensure
+        // the JS HMAC implementation matches the Rust implementation.
+        // DO NOT change the expected value — update crypto.test.ts instead.
+        let s = sign(b"secret", 42, "n1", "slide.next", "{}");
+        assert_eq!(s, "dyX7H/vwxDPiU97xiva7S5KmMc4hhNyDzzeiV0dmqjw");
+    }
 }

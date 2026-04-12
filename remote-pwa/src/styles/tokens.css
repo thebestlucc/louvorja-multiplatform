@@ -1,0 +1,62 @@
+/*
+ * LouvorJA Remote — design tokens (dark-first, touch-optimized)
+ * Based on docs/pre-dev/lan-remote-control/design/design-system.md
+ */
+:root {
+  /* Surfaces */
+  --color-surface-0: #0f172a;   /* app background */
+  --color-surface-1: #1e293b;   /* card / panel */
+  --color-surface-2: #334155;   /* elevated / hover */
+  --color-surface-3: #475569;   /* active state */
+
+  /* Foreground */
+  --color-fg: #f1f5f9;          /* primary text */
+  --color-fg-muted: #94a3b8;    /* secondary text */
+  --color-fg-subtle: #64748b;   /* hint / placeholder */
+
+  /* Brand */
+  --color-primary: #6366f1;     /* indigo-500 */
+  --color-primary-hover: #818cf8;
+  --color-primary-fg: #ffffff;
+
+  /* Destructive */
+  --color-destructive: #ef4444;
+  --color-destructive-hover: #f87171;
+  --color-destructive-fg: #ffffff;
+
+  /* Success */
+  --color-success: #22c55e;
+  --color-success-fg: #ffffff;
+
+  /* Warning */
+  --color-warning: #f59e0b;
+  --color-warning-fg: #ffffff;
+
+  /* Borders */
+  --color-border: #1e293b;
+  --color-border-muted: #334155;
+
+  /* Overlay */
+  --color-overlay: rgba(0, 0, 0, 0.6);
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Touch targets */
+  --min-tap-target: 44px;
+  --tap-target: 56px;
+
+  /* Transitions */
+  --duration-fast: 120ms;
+  --duration-default: 200ms;
+  --duration-slow: 350ms;
+
+  /* Z-indexes */
+  --z-overlay: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+}

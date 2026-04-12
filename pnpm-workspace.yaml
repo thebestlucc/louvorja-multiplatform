@@ -1,3 +1,7 @@
+packages:
+  - "."
+  - "remote-pwa"
+
 ignoredBuiltDependencies:
   - core-js
   - esbuild

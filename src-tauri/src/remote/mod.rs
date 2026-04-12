@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod config;
 pub mod dispatcher;
 pub mod events;
