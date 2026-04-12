@@ -57,7 +57,9 @@
       "remove": "Remove",
       "target_projector": "Projector",
       "target_return": "Return",
-      "empty": "Queue is empty"
+      "empty": "Queue is empty",
+      "seek": "Seek",
+      "volume": "Volume"
     },
     "connection": {
       "connected": "Connected",

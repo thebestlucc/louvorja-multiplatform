@@ -57,7 +57,9 @@
       "remove": "Eliminar",
       "target_projector": "Proyector",
       "target_return": "Retorno",
-      "empty": "Cola vacía"
+      "empty": "Cola vacía",
+      "seek": "Buscar",
+      "volume": "Volumen"
     },
     "connection": {
       "connected": "Conectado",
