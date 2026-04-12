@@ -1098,6 +1098,30 @@ async broadcastVideoStateToStreaming(payload: VideoStreamPayload) : Promise<Resu
     else return { status: "error", error: e  as any };
 }
 },
+async startRemoteServer(port: number | null) : Promise<Result<RemoteStatus, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_remote_server", { port }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async stopRemoteServer() : Promise<Result<RemoteStatus, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop_remote_server") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getRemoteStatus() : Promise<Result<RemoteStatus, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_remote_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getSetting(key: string) : Promise<Result<Setting, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_setting", { key }) };
@@ -1687,6 +1711,7 @@ export type PackSyncPlan = { manifestVersion: number; items: PackSyncPlanItem[];
 export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: number; packSize: number; packSha256: string; localExtractedVersion: number; localDbVersion: number; needsDownload: boolean; needsDbUpdate: boolean; fileCount: number; files: PackSyncFileItem[]; language: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type RefPosition = "bottom" | "top" | "hidden"
+export type RemoteStatus = { running: boolean; ip: string | null; port: number }
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
 export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }
 export type ScheduleDay = { id: number; scheduleMonthId: number; serviceDate: string; label: string | null; sourceKind: string; responsibleDepartmentId: number | null; createdAt: string; updatedAt: string; responsibleDepartment: ScheduleDepartment | null; departments: ScheduleDayDepartment[] }

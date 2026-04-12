@@ -297,6 +297,7 @@ impl StreamingServer {
 
     pub fn get_status(&self) -> Result<StreamingInfo, String> {
         let running = self.is_running.load(Ordering::SeqCst);
+        #[allow(deprecated)]
         let ip = if running { get_local_ip() } else { None };
         let urls = ip.as_ref().map(|ip| StreamingUrls {
             music: format!("http://{}:{}/music", ip, self.port),
@@ -1086,10 +1087,9 @@ a{color:#60a5fa;text-decoration:none;display:block;margin:0.5rem}a:hover{text-de
 
 // --- Local IP detection ---
 
+#[deprecated(note = "use crate::net::get_lan_ip")]
 pub fn get_local_ip() -> Option<String> {
-    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
-    socket.connect("8.8.8.8:80").ok()?;
-    socket.local_addr().ok().map(|a| a.ip().to_string())
+    crate::net::get_lan_ip()
 }
 
 fn normalize_language(value: &str) -> &'static str {
@@ -1154,5 +1154,14 @@ mod serve_path_tests {
     fn test_nonexistent_absolute_returns_none() {
         let dir = setup();
         assert!(resolve_serve_path("/tmp/nonexistent_louvorja_test_file_xyz123.jpg", dir.path()).is_none());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn streaming_module_exports_same_fn_behavior() {
+        // Both must agree: get_local_ip() (legacy) and crate::net::get_lan_ip() (new).
+        let a = super::get_local_ip();
+        let b = crate::net::get_lan_ip();
+        assert_eq!(a, b);
     }
 }
