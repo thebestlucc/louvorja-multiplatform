@@ -1,6 +1,18 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock qr-scanner to avoid Worker not defined in jsdom
+vi.mock("@/components/system/qr-scanner", () => ({
+  QrScanner: () => <div data-testid="qr-scanner" />,
+}));
+
+// Mock i18next so translations resolve to keys (avoids i18n init in jsdom)
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 // Mock the connection store
 vi.mock("@/stores/connection-store", () => ({
   useConnectionStore: vi.fn(),
@@ -43,7 +55,7 @@ describe("Routing", () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText(/LouvorJA Remote/i)).toBeInTheDocument();
+      expect(screen.getByText("remote.pair.headline")).toBeInTheDocument();
     });
   });
 
