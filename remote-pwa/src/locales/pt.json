@@ -36,7 +36,8 @@
       "placeholder_service": "Buscar cultos…",
       "recent": "Recentes",
       "results_count": "{{n}} resultados",
-      "add_to_service": "Adicionar ao culto"
+      "add_to_service": "Adicionar ao culto",
+      "no_results": "Nenhum resultado"
     },
     "service": {
       "start": "Iniciar culto",
