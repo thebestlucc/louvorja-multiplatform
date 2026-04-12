@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
-import { openMediaFolder } from "../../lib/tauri";
+import { openAppDataFolder } from "../../lib/tauri";
 
 export function DataSection() {
   const { t } = useTranslation();
@@ -34,8 +34,8 @@ export function DataSection() {
     }
   };
 
-  const handleOpenMediaFolder = async () => {
-    await catcher(openMediaFolder(), { notify: true });
+  const handleOpenDataFolder = async () => {
+    await catcher(openAppDataFolder(), { notify: true });
   };
 
   return (
@@ -47,10 +47,10 @@ export function DataSection() {
         </div>
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <label className="text-sm font-medium">{t("settings.storage.mediaFolder")}</label>
-            <p className="text-xs text-muted-foreground">{t("settings.storage.mediaFolderDesc")}</p>
+            <label className="text-sm font-medium">{t("settings.storage.dataFolder")}</label>
+            <p className="text-xs text-muted-foreground">{t("settings.storage.dataFolderDesc")}</p>
           </div>
-          <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void handleOpenMediaFolder()}>
+          <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void handleOpenDataFolder()}>
             <FolderOpen className="mr-2 h-4 w-4" />
             {t("settings.storage.openFolder")}
           </Button>

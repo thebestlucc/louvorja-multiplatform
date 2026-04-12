@@ -5,13 +5,16 @@ import {
   getAllSettings,
   clearDatabase,
 } from "../tauri";
-import { getPreference, setPreference } from "../store";
+import { getPreference, getPreferenceSync, setPreference } from "../store";
 import { queryKeys } from "./keys";
 
 export function useStorePreference<T>(key: string, fallback: T) {
   return useQuery({
     queryKey: queryKeys.storePrefs.detail(key),
     queryFn: () => getPreference<T>(key, fallback),
+    // Synchronous hit from the pre-hydrated store cache avoids a flash of
+    // default content on first render (see src/lib/store.ts).
+    initialData: () => getPreferenceSync<T>(key, fallback),
     staleTime: Infinity,
   });
 }

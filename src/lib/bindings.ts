@@ -1351,9 +1351,9 @@ async getVideoMetadata(path: string) : Promise<Result<VideoMetadata, AppErrorRes
     else return { status: "error", error: e  as any };
 }
 },
-async openMediaFolder() : Promise<Result<null, AppErrorResponse>> {
+async openAppDataFolder() : Promise<Result<null, AppErrorResponse>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("open_media_folder") };
+    return { status: "ok", data: await TAURI_INVOKE("open_app_data_folder") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

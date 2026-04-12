@@ -107,20 +107,19 @@ pub async fn get_video_metadata(
 
 #[tauri::command]
 #[specta::specta]
-pub fn open_media_folder(app: AppHandle) -> Result<(), AppError> {
-    let media_dir = app
+pub fn open_app_data_folder(app: AppHandle) -> Result<(), AppError> {
+    let data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?
-        .join("media");
+        .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {}", e)))?;
 
     // Create the folder if it doesn't exist yet so opener doesn't fail
-    if !media_dir.exists() {
-        std::fs::create_dir_all(&media_dir)
+    if !data_dir.exists() {
+        std::fs::create_dir_all(&data_dir)
             .map_err(AppError::Io)?;
     }
 
-    tauri_plugin_opener::open_path(media_dir, None::<&str>)
+    tauri_plugin_opener::open_path(data_dir, None::<&str>)
         .map_err(|e| AppError::Internal(format!("Could not open folder: {}", e)))
 }
 

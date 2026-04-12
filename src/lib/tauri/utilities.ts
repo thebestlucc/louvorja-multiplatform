@@ -101,8 +101,8 @@ export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
   return tauriInvoke<VideoMetadata>("get_video_metadata", { path });
 }
 
-export async function openMediaFolder(): Promise<void> {
-  return tauriInvoke<void>("open_media_folder");
+export async function openAppDataFolder(): Promise<void> {
+  return tauriInvoke<void>("open_app_data_folder");
 }
 
 export async function updateGlobalShortcut(
