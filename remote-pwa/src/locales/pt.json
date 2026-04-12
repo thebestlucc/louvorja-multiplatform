@@ -21,7 +21,11 @@
       "clear": "Limpar projeção",
       "hold_hint": "Segure para confirmar",
       "swipe_up_hint": "Deslize para cima para ver todos os slides",
-      "slide_counter": "Slide {{n}} de {{total}}"
+      "slide_counter": "Slide {{n}} de {{total}}",
+      "no_slide": "Aguardando conteúdo",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "reconnecting": "Reconectando"
     },
     "search": {
       "tab_hymns": "Hinos",
