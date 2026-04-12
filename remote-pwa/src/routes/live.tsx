@@ -12,6 +12,9 @@ interface SlidePayload {
   title?: string;
 }
 
+// TODO(review): useLongPress captures `action` in useCallback deps — callers passing inline arrow
+// functions will cause new timer registrations each render. Memoize action at call site or use
+// a useRef for the action ref pattern. (ring:code-reviewer, 2026-04-12, Low)
 /** Returns pointerdown/pointerup/pointerleave handlers that fire `action` after LONG_PRESS_MS. */
 function useLongPress(action: () => void) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

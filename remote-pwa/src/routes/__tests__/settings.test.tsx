@@ -1,3 +1,6 @@
+// TODO(review): Missing test for isPaired=false edge case — settings screen shown while device
+// is not paired. Also no test that forgetDevice is actually sourced from the store.
+// (ring:test-reviewer, 2026-04-12, Low)
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import SettingsRoute from "../settings";
