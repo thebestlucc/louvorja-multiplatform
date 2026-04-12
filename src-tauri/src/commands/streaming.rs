@@ -407,6 +407,7 @@ pub fn start_streaming_server(
     let app_data_dir = app_data_dir.unwrap();
 
     server.set_media_root(app_data_dir.clone());
+    server.set_app_handle(app.clone());
     let info = server.start(port).map_err(AppError::Internal)?;
 
     sync_streaming_projection_state(
