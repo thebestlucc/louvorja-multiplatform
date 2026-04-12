@@ -32,11 +32,18 @@ interface ConnectionActions {
   /** Forget the device and disconnect. */
   forgetDevice: () => Promise<void>;
   /** Internal — called by WS connection state changes. */
+  // TODO(review): _setWsState / _setLatency are public despite "Internal" JSDoc.
+  // Zustand has no built-in access control; the _ prefix is idiomatic convention.
+  // Consider separating into a private slice in Phase H if external misuse occurs.
+  // (ring:code-reviewer, 2026-04-12, Low)
   _setWsState: (s: ConnectionState) => void;
   /** Internal — update latency. */
   _setLatency: (ms: number) => void;
 }
 
+// TODO(review): `completePairing` and `forgetDevice` action flows have no unit tests.
+// Add Zustand store action tests in Phase H (mock IndexedDB + fake RemoteWS).
+// (ring:test-reviewer, 2026-04-12, Low)
 export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((set, get) => ({
   isPaired: false,
   wsState: "disconnected",
@@ -54,6 +61,9 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
     const ws = new RemoteWS();
     ws.onStateChange((s) => get()._setWsState(s));
 
+    // TODO(review): Add basic host/port validation before connecting — malformed data
+    // stored in IndexedDB (e.g. empty host) could cause an infinite reconnect storm.
+    // (ring:business-logic-reviewer, 2026-04-12, Low)
     const wsUrl = `ws://${device.host}:${device.port}/ws`;
     ws.connect(wsUrl, device.token);
 

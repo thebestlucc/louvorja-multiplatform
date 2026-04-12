@@ -9,6 +9,10 @@
  *
  * Reconnect: exponential backoff 1, 2, 4, 8 s (capped). Resets on success.
  *
+ * TODO(review): No unit tests for this module — reconnect backoff, stale-discard
+ * logic, and connection state machine are untested. Add unit tests with a fake
+ * WebSocket in Phase H. (ring:test-reviewer, 2026-04-12, Low)
+ *
  * Stale discard: each send increments `clientSeq`; responses older than the
  * latest acknowledged seq are dropped.
  */
