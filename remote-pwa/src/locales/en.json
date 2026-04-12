@@ -36,7 +36,8 @@
       "placeholder_service": "Search services…",
       "recent": "Recent",
       "results_count": "{{n}} results",
-      "add_to_service": "Add to service"
+      "add_to_service": "Add to service",
+      "no_results": "No results"
     },
     "service": {
       "start": "Start service",
