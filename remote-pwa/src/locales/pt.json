@@ -57,7 +57,9 @@
       "remove": "Remover",
       "target_projector": "Projetor",
       "target_return": "Retorno",
-      "empty": "Fila vazia"
+      "empty": "Fila vazia",
+      "seek": "Buscar",
+      "volume": "Volume"
     },
     "connection": {
       "connected": "Conectado",
