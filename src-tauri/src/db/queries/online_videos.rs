@@ -373,3 +373,62 @@ pub fn search_online_playlists(
 
     Ok(results)
 }
+
+/// List all videos, optionally filtered by title substring.
+/// Returns up to 200 results ordered by title.
+pub fn search_videos(conn: &Connection, query: &str) -> Result<Vec<OnlineVideo>, AppError> {
+    let mut stmt = if query.is_empty() {
+        conn.prepare(
+            "SELECT id, id_playlist, video_id, sequence, title, description, images, status, error, local_path, duration_seconds
+             FROM online_videos
+             ORDER BY COALESCE(title, '') ASC
+             LIMIT 200",
+        )?
+    } else {
+        conn.prepare(
+            "SELECT id, id_playlist, video_id, sequence, title, description, images, status, error, local_path, duration_seconds
+             FROM online_videos
+             WHERE LOWER(COALESCE(title, '')) LIKE LOWER('%' || ?1 || '%')
+             ORDER BY COALESCE(title, '') ASC
+             LIMIT 200",
+        )?
+    };
+
+    let rows = if query.is_empty() {
+        stmt.query_map([], |row| {
+            Ok(OnlineVideo {
+                id: row.get("id")?,
+                id_playlist: row.get("id_playlist")?,
+                video_id: row.get("video_id")?,
+                sequence: row.get("sequence")?,
+                title: row.get("title")?,
+                description: row.get("description")?,
+                images: row.get("images")?,
+                status: row.get("status")?,
+                error: row.get("error")?,
+                local_path: row.get("local_path")?,
+                duration_seconds: row.get("duration_seconds")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+    } else {
+        stmt.query_map(params![query], |row| {
+            Ok(OnlineVideo {
+                id: row.get("id")?,
+                id_playlist: row.get("id_playlist")?,
+                video_id: row.get("video_id")?,
+                sequence: row.get("sequence")?,
+                title: row.get("title")?,
+                description: row.get("description")?,
+                images: row.get("images")?,
+                status: row.get("status")?,
+                error: row.get("error")?,
+                local_path: row.get("local_path")?,
+                duration_seconds: row.get("duration_seconds")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+    };
+
+    Ok(rows)
+}
