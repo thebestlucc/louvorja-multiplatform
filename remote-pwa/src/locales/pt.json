@@ -68,7 +68,15 @@
       "action_sheet_title": "Escolher ação",
       "action_project_now": "Projetar agora",
       "action_add_to_queue": "Adicionar à fila",
-      "action_cancel": "Cancelar"
+      "action_cancel": "Cancelar",
+      "selection_bar": "Ações de seleção",
+      "selection_count": "{{count}} selecionado(s)",
+      "action_clear_selection": "Limpar seleção",
+      "action_play_now": "Projetar agora",
+      "tab_videos": "Vídeos",
+      "tab_presentations": "Apresentações",
+      "placeholder_videos": "Buscar vídeos...",
+      "placeholder_presentations": "Buscar apresentações..."
     },
     "service": {
       "start": "Iniciar culto",

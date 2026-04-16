@@ -1878,5 +1878,13 @@
       "generic_title": "Something went wrong",
       "generic_action": "Try again"
     }
+  },
+  "queue": {
+    "kind": {
+      "hymn": "Hymn",
+      "bible": "Bible",
+      "video": "Video",
+      "presentation": "Presentation"
+    }
   }
 }

@@ -68,7 +68,15 @@
       "action_sheet_title": "Choose action",
       "action_project_now": "Project now",
       "action_add_to_queue": "Add to queue",
-      "action_cancel": "Cancel"
+      "action_cancel": "Cancel",
+      "selection_bar": "Selection actions",
+      "selection_count": "{{count}} selected",
+      "action_clear_selection": "Clear selection",
+      "action_play_now": "Play now",
+      "tab_videos": "Videos",
+      "tab_presentations": "Presentations",
+      "placeholder_videos": "Search videos...",
+      "placeholder_presentations": "Search presentations..."
     },
     "service": {
       "start": "Start service",

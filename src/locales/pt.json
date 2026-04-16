@@ -1878,5 +1878,13 @@
       "generic_title": "Algo deu errado",
       "generic_action": "Tentar novamente"
     }
+  },
+  "queue": {
+    "kind": {
+      "hymn": "Hino",
+      "bible": "Bíblia",
+      "video": "Vídeo",
+      "presentation": "Apresentação"
+    }
   }
 }

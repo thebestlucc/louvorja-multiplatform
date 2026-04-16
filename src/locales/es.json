@@ -1878,5 +1878,13 @@
       "generic_title": "Algo salió mal",
       "generic_action": "Intentar de nuevo"
     }
+  },
+  "queue": {
+    "kind": {
+      "hymn": "Himno",
+      "bible": "Biblia",
+      "video": "Video",
+      "presentation": "Presentación"
+    }
   }
 }
