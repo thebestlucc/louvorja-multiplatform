@@ -26,9 +26,11 @@ function hasNextQueueItem(): boolean {
   return q.items.length > 0 && q.currentIndex < q.items.length - 1;
 }
 
-/** Clears projection screens when a video ends with no next queue item. */
+/** Advances queue or clears projection screens when a video ends. */
 function handleVideoEnded() {
-  if (!hasNextQueueItem()) {
+  if (hasNextQueueItem()) {
+    useQueueStore.getState().next();
+  } else {
     void clearCurrentSlide();
     useVideoPlayerStore.getState().resetVideoState();
   }
