@@ -239,6 +239,23 @@ pub async fn select(app: &AppHandle, id: String, item_type: &str, payload: &Valu
     Ok(serde_json::json!({}))
 }
 
+/// `presentation.list {}` — list all presentations, newest first.
+pub async fn presentation_list(app: &AppHandle) -> Result<Value, AppError> {
+    let state = app_state(app)?;
+    let conn = state.db.get()?;
+    let items = crate::db::queries::slides::get_presentations(&conn)?;
+    Ok(serde_json::to_value(items).unwrap_or(Value::Array(vec![])))
+}
+
+/// `video.list { query? }` — list downloaded / known videos from the online_videos table,
+/// optionally filtered by title substring.
+pub async fn video_list(app: &AppHandle, query: String) -> Result<Value, AppError> {
+    let state = app_state(app)?;
+    let conn = state.db.get()?;
+    let items = crate::db::queries::online_videos::search_videos(&conn, &query)?;
+    Ok(serde_json::to_value(items).unwrap_or(Value::Array(vec![])))
+}
+
 /// `queue.add { items: QueueAddItemRaw[] }` — append mixed-kind items to the queue.
 /// All items are emitted in a single `remote-queue-add { items: [...] }` event.
 pub async fn queue_add(
