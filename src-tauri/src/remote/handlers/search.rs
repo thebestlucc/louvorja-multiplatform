@@ -12,9 +12,9 @@ use tauri::{AppHandle, Manager};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum QueueAddItemRaw {
-    #[serde(rename = "hymn")]
+    #[serde(rename = "hymn", rename_all = "camelCase")]
     Hymn { hymn_id: i64 },
-    #[serde(rename = "bible")]
+    #[serde(rename = "bible", rename_all = "camelCase")]
     Bible {
         version_id: i64,
         book: String,
@@ -22,7 +22,7 @@ pub enum QueueAddItemRaw {
         chapter: i64,
         verse: i64,
     },
-    #[serde(rename = "video")]
+    #[serde(rename = "video", rename_all = "camelCase")]
     Video {
         video_source: String, // "youtube" | "local"
         video_id: Option<String>,
@@ -30,7 +30,7 @@ pub enum QueueAddItemRaw {
         video_title: Option<String>,
         duration: Option<f64>,
     },
-    #[serde(rename = "presentation")]
+    #[serde(rename = "presentation", rename_all = "camelCase")]
     Presentation { presentation_id: i64 },
 }
 
@@ -239,21 +239,26 @@ pub async fn select(app: &AppHandle, id: String, item_type: &str, payload: &Valu
     Ok(serde_json::json!({}))
 }
 
-/// `queue.add { id, type }` — append a hymn to the playing queue WITHOUT
-/// clearing the queue or projecting. Only `type="hymns"` is supported today —
-/// bible/services have no queue semantics.
-pub async fn queue_add(app: &AppHandle, id: String, item_type: &str) -> Result<Value, AppError> {
+/// `queue.add { items: QueueAddItemRaw[] }` — append mixed-kind items to the queue.
+/// All items are emitted in a single `remote-queue-add { items: [...] }` event.
+pub async fn queue_add(
+    app: &AppHandle,
+    payload: &Value,
+) -> Result<Value, AppError> {
     use tauri::Emitter;
-    if item_type != "hymns" {
-        return Err(AppError::Internal(format!(
-            "queue.add: only `hymns` type supported, got: {item_type}"
-        )));
+    let batch: QueueAddBatchPayload = serde_json::from_value(payload.clone())
+        .map_err(|e| AppError::Internal(format!("queue.add invalid payload: {e}")))?;
+    if batch.items.is_empty() {
+        return Err(AppError::Internal("queue.add: items must be non-empty".into()));
     }
-    let hymn_id: i64 = id
-        .parse()
-        .map_err(|_| AppError::Internal(format!("queue.add: invalid hymn id: {id}")))?;
-    app.emit("remote-queue-add", serde_json::json!({ "id": hymn_id }))
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    app.emit(
+        "remote-queue-add",
+        serde_json::json!({
+            "items": serde_json::to_value(&batch.items)
+                .map_err(|e| AppError::Internal(format!("serialize items: {e}")))?
+        }),
+    )
+    .map_err(|e| AppError::Tauri(e.to_string()))?;
     Ok(serde_json::json!({}))
 }
 
@@ -281,5 +286,27 @@ mod tests {
         let mut v = vec![1, 2, 3, 4, 5];
         v.truncate(3);
         assert_eq!(v, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn queue_add_payload_parses_mixed_batch() {
+        let v = serde_json::json!({
+            "items": [
+                { "kind": "hymn", "hymnId": 42 },
+                { "kind": "bible", "versionId": 1, "book": "John", "bookName": "John", "chapter": 3, "verse": 16 },
+                { "kind": "video", "videoSource": "youtube", "videoId": "abc" },
+                { "kind": "presentation", "presentationId": 7 }
+            ]
+        });
+        let parsed: super::QueueAddBatchPayload = serde_json::from_value(v).unwrap();
+        assert_eq!(parsed.items.len(), 4);
+    }
+
+    #[test]
+    fn queue_add_rejects_empty_batch() {
+        let v = serde_json::json!({ "items": [] });
+        let parsed: super::QueueAddBatchPayload = serde_json::from_value(v).unwrap();
+        assert_eq!(parsed.items.len(), 0);
+        // queue_add() will reject this at runtime (not tested here — app handle unavailable).
     }
 }

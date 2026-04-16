@@ -258,18 +258,7 @@ pub async fn dispatch(
         }
 
         // ── queue.add (PWA search confirms "Add to queue" — appends without projecting) ──
-        "queue.add" => {
-            let id = payload
-                .get("id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppError::Internal("queue.add requires `id`".into()))?
-                .to_string();
-            let item_type = payload
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("hymns");
-            search_handler::queue_add(&ctx.app, id, item_type).await
-        }
+        "queue.add" => search_handler::queue_add(&ctx.app, payload).await,
 
         // ── Overlay ops (E7) ─────────────────────────────────────────────────
         "overlay.black"    => overlay_handler::black(&ctx.app).await,
