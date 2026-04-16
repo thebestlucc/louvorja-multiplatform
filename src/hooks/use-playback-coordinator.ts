@@ -26,6 +26,180 @@ export function resetCoordinatorPlaybackState() {
   _lastItemsRef = null;
 }
 
+// ── Private helpers ────────────────────────────────────────────────────────────
+
+async function playHymnItem(
+  item: QueueItem,
+  setSyncPoints: (pts: import("../lib/bindings").SyncPoint[]) => void,
+  setPlaybackMode: (m: "sung" | "karaoke" | "silent") => void,
+  playAudio: (path: string, offset: number) => Promise<void>,
+  playAudioVariants: (sung: string, karaoke: string, mode: "sung" | "karaoke", offset: number) => Promise<void>,
+  stopAudio: () => Promise<void>,
+) {
+  const hymnId = item.hymn?.id;
+  const variantPaths = resolvePlaybackVariantPaths(
+    item.hymn?.audioPath,
+    item.hymn?.playbackPath,
+  );
+  const audioPath = item.type === "projection"
+    ? null
+    : item.type === "playback"
+      ? (item.hymn?.playbackPath || item.hymn?.audioPath)
+      : item.hymn?.audioPath; // "audio" = Cantado = sung version
+
+  // 0. Stop any active video playback from previous content
+  const { useVideoPlayerStore } = await import("../stores/video-player-store");
+  const videoState = useVideoPlayerStore.getState();
+  if (videoState.videoId || videoState.videoSrc) {
+    videoState.resetVideoState();
+  }
+
+  // 1. Resolve sync points
+  let effectiveSyncPoints: import("../lib/bindings").SyncPoint[] = [];
+  if (hymnId) {
+    const syncPoints = await getSyncPoints(hymnId);
+    effectiveSyncPoints = (syncPoints && syncPoints.length > 0)
+      ? syncPoints
+      : parseLyricsSyncToPoints(item.hymn?.lyricsSync);
+  }
+
+  // 2. Build slides (prefer pre-built slides from legacy collection items)
+  const slides = item.slides ??
+    (item.hymn
+      ? hymnToSlides(
+          item.hymn.title,
+          item.hymn.lyrics,
+          item.hymn.album,
+          item.hymn.coverPath,
+          item.hymn.lyricsSync,
+        )
+      : []);
+
+  // 3. Map queue type → media mode
+  const mode: HymnMediaItem["mode"] =
+    item.type === "playback" ? "karaoke"
+    : item.type === "projection" ? "silent"
+    : "sung";
+
+  // 4. Construct HymnMediaItem and dispatch to media-player-store
+  if (item.hymn) {
+    const mediaItem: HymnMediaItem = {
+      type: "hymn",
+      hymn: item.hymn,
+      mode,
+      slides,
+      syncPoints: effectiveSyncPoints,
+      audioPath: item.hymn.audioPath ?? undefined,
+      playbackPath: item.hymn.playbackPath ?? undefined,
+    };
+    useMediaPlayerStore.getState().load(mediaItem);
+  }
+
+  // 5. Push sync points to audio store so the sync loop can auto-advance slides
+  setSyncPoints(effectiveSyncPoints);
+
+  // 6. Start audio playback (rodio lifecycle stays here)
+  if (audioPath) {
+    const activeMode = item.type === "playback" ? "karaoke" : "sung";
+    setPlaybackMode(activeMode);
+    if (variantPaths) {
+      await playAudioVariants(
+        variantPaths.sungPath,
+        variantPaths.karaokePath,
+        activeMode,
+        0,
+      );
+    } else {
+      await playAudio(audioPath, 0);
+    }
+  } else {
+    setPlaybackMode("silent");
+    await stopAudio();
+  }
+
+  // 7. Project first slide
+  useDisplayStore.getState().setCurrentProjectionType("hymn");
+  await projectSlideIndex(0);
+}
+
+async function playBibleItem(item: QueueItem) {
+  if (!item.bibleContext) return;
+  const { verses, initialVerse, bookName } = item.bibleContext;
+  const { usePresentationStore } = await import("../stores/presentation-store");
+  const { useDisplayStore: displayStore } = await import("../stores/display-store");
+  const { setCurrentSlide } = await import("../lib/tauri/display");
+  const { defaultBackground } = await import("../types/presentation");
+  const { useAudioStore: audioStore } = await import("../stores/audio-store");
+
+  // Build one slide per verse in the chapter. Preserves intra-chapter
+  // next/prev via usePresentationStore.setActiveSlideIndex WITHOUT advancing the queue —
+  // slide index is presentation-store-local, not queue-local.
+  const slides: import("../lib/bindings").SlideContent[] = verses.map((v) => ({
+    slideType: "bible" as const,
+    text: v.text,
+    reference: `${bookName} ${v.chapter}:${v.verse}`,
+    mode: { alignment: "center" as const, refPosition: "bottom" as const, textShadow: false, gradient: null, fontFamily: null },
+    background: defaultBackground(),
+    text_color: null,
+    text_size: null,
+  }));
+
+  // Find the initial-verse slide index
+  const startIdx = Math.max(0, verses.findIndex((v) => v.verse === initialVerse));
+
+  // Stop audio (bible items are silent)
+  await audioStore.getState().stop();
+
+  // Reset any active video
+  const { useVideoPlayerStore } = await import("../stores/video-player-store");
+  const vs = useVideoPlayerStore.getState();
+  if (vs.videoId || vs.videoSrc) vs.resetVideoState();
+
+  // Populate presentation store with the WHOLE chapter
+  const pres = usePresentationStore.getState();
+  pres.setSlides(slides);
+  pres.setActiveSlideIndex(startIdx);
+  displayStore.getState().setCurrentProjectionType("bible");
+  await catcher(setCurrentSlide(slides[startIdx]));
+}
+
+async function playVideoItem(item: QueueItem) {
+  if (!item.videoMedia) return;
+  const { useAudioStore: audioStore } = await import("../stores/audio-store");
+  const { usePresentationStore } = await import("../stores/presentation-store");
+  const { setCurrentSlide } = await import("../lib/tauri/display");
+
+  await audioStore.getState().stop();
+
+  const vm = item.videoMedia;
+  // onlineVideo SlideContent: { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null }
+  // youtube: url is empty (player uses video_id), local: url is the path
+  const slide: import("../lib/bindings").SlideContent = {
+    slideType: "onlineVideo" as const,
+    url: vm.videoUrl ?? "",
+    video_id: vm.videoId ?? "",
+    source: vm.videoSource,
+    title: vm.videoTitle ?? null,
+  };
+
+  usePresentationStore.getState().setSlides([slide]);
+  usePresentationStore.getState().setActiveSlideIndex(0);
+  // "presentation" is used for any non-standard projection type not explicitly in the union
+  // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle
+  await catcher(setCurrentSlide(slide));
+}
+
+// RULE: Presentations are manual-advance only for MVP.
+// Slide-end-of-presentation does NOT auto-advance the queue.
+async function playPresentationItem(item: QueueItem) {
+  if (!item.presentationId) return;
+  // TODO(P3): wire getPresentationSlides binding once the Rust command is registered.
+  // `commands.getPresentationSlides` does not yet exist in src/lib/bindings.ts.
+  // Until then, this is a no-op stub — the queue item will be skipped gracefully.
+  throw new Error("Not implemented: presentation queue item (pending P3 Rust command registration)");
+}
+
+// ── Coordinator hook ───────────────────────────────────────────────────────────
 
 /**
  * Centralized hook to coordinate playback and projection based on the queue store.
@@ -60,95 +234,24 @@ export function usePlaybackCoordinator() {
 
     _lastPlayedIndex = index;
 
-    const hymnId = item.hymn?.id;
-    const variantPaths = resolvePlaybackVariantPaths(
-      item.hymn?.audioPath,
-      item.hymn?.playbackPath,
-    );
-    const audioPath = item.type === "projection"
-      ? null
-      : item.type === "playback"
-        ? (item.hymn?.playbackPath || item.hymn?.audioPath)
-        : item.hymn?.audioPath; // "audio" = Cantado = sung version
-
     await catcher(async () => {
-      // 0. Stop any active video playback from previous content
-      const { useVideoPlayerStore } = await import("../stores/video-player-store");
-      const videoState = useVideoPlayerStore.getState();
-      if (videoState.videoId || videoState.videoSrc) {
-        videoState.resetVideoState();
-      }
-
-      // 1. Resolve sync points
-      let effectiveSyncPoints: import("../lib/bindings").SyncPoint[] = [];
-      if (hymnId) {
-        const syncPoints = await getSyncPoints(hymnId);
-        effectiveSyncPoints = (syncPoints && syncPoints.length > 0)
-          ? syncPoints
-          : parseLyricsSyncToPoints(item.hymn?.lyricsSync);
-      }
-
-      // 2. Build slides (prefer pre-built slides from legacy collection items)
-      const slides = item.slides ??
-        (item.hymn
-          ? hymnToSlides(
-              item.hymn.title,
-              item.hymn.lyrics,
-              item.hymn.album,
-              item.hymn.coverPath,
-              item.hymn.lyricsSync,
-            )
-          : []);
-
-      // 3. Map queue type → media mode
-      const mode: HymnMediaItem["mode"] =
-        item.type === "playback" ? "karaoke"
-        : item.type === "projection" ? "silent"
-        : "sung";
-
-      // 4. Construct HymnMediaItem and dispatch to media-player-store
-      if (item.hymn) {
-        const mediaItem: HymnMediaItem = {
-          type: "hymn",
-          hymn: item.hymn,
-          mode,
-          slides,
-          syncPoints: effectiveSyncPoints,
-          audioPath: item.hymn.audioPath ?? undefined,
-          playbackPath: item.hymn.playbackPath ?? undefined,
-        };
-        useMediaPlayerStore.getState().load(mediaItem);
-      }
-
-      // 5. Push sync points to audio store so the sync loop can auto-advance slides
-      setSyncPoints(effectiveSyncPoints);
-
-      // 6. Start audio playback (rodio lifecycle stays here)
-      if (audioPath) {
-        const activeMode = item.type === "playback" ? "karaoke" : "sung";
-        setPlaybackMode(activeMode);
-        if (variantPaths) {
-          await playAudioVariants(
-            variantPaths.sungPath,
-            variantPaths.karaokePath,
-            activeMode,
-            0,
-          );
-        } else {
-          await playAudio(audioPath, 0);
+      try {
+        switch (item.kind) {
+          case "hymn":
+            return await playHymnItem(item, setSyncPoints, setPlaybackMode, playAudio, playAudioVariants, stopAudio);
+          case "bible":
+            return await playBibleItem(item);
+          case "video":
+            return await playVideoItem(item);
+          case "presentation":
+            return await playPresentationItem(item);
         }
-      } else {
-        setPlaybackMode("silent");
-        await stopAudio();
+      } catch (err) {
+        _lastPlayedIndex = null; // allow retry
+        throw err;               // catcher will notify
       }
-
-      // 7. Project first slide (only for hymn items — Bible/other projections manage their own type)
-      if (item.hymn) {
-        useDisplayStore.getState().setCurrentProjectionType("hymn");
-        await projectSlideIndex(0);
-      }
-
-    }, { notify: true });  }, [items, setSyncPoints, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
+    }, { notify: true });
+  }, [items, setSyncPoints, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
 
   // Effect: React to queue index changes (and repeat-one replay triggers)
   useEffect(() => {
