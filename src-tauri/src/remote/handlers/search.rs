@@ -268,11 +268,27 @@ pub async fn presentation_list(app: &AppHandle) -> Result<Value, AppError> {
 
 /// `video.list { query? }` — list downloaded / known videos from the online_videos table,
 /// optionally filtered by title substring.
+/// Maps OnlineVideo fields to the shape the PWA expects (videoSource, videoTitle, videoUrl, etc.).
 pub async fn video_list(app: &AppHandle, query: String) -> Result<Value, AppError> {
     let state = app_state(app)?;
     let conn = state.db.get()?;
     let items = crate::db::queries::online_videos::search_videos(&conn, &query)?;
-    Ok(serde_json::to_value(items).unwrap_or(Value::Array(vec![])))
+    let mapped: Vec<Value> = items
+        .into_iter()
+        .map(|v| {
+            let has_local = v.local_path.as_ref().map_or(false, |p| !p.is_empty());
+            serde_json::json!({
+                "id": v.id,
+                "title": v.title.clone().unwrap_or_default(),
+                "videoSource": if has_local { "local" } else { "youtube" },
+                "videoId": v.video_id,
+                "videoUrl": v.local_path,
+                "videoTitle": v.title,
+                "duration": v.duration_seconds,
+            })
+        })
+        .collect();
+    Ok(Value::Array(mapped))
 }
 
 /// `queue.add { items: QueueAddItemRaw[] }` — append mixed-kind items to the queue.
