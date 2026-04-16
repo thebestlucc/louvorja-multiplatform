@@ -66,6 +66,7 @@ interface QueueState {
   addToQueueNext: (item: QueueItem) => void;
   setSourceQueue: (items: QueueItem[], label: string) => void;
   clearManualQueue: () => void;
+  moveItem: (fromIndex: number, toIndex: number) => void;
   setRepeat: (mode: "off" | "one" | "all") => void;
   setShuffle: (enabled: boolean) => void;
 }
@@ -198,6 +199,24 @@ export const useQueueStore = create<QueueState>((set) => ({
         ? state.currentIndex - state.manualQueue.length
         : state.sourceQueue.length > 0 ? 0 : -1,
     })),
+
+  moveItem: (fromIndex, toIndex) =>
+    set((state) => {
+      const allItems = [...state.manualQueue, ...state.sourceQueue];
+      if (fromIndex < 0 || fromIndex >= allItems.length || toIndex < 0 || toIndex >= allItems.length || fromIndex === toIndex) return state;
+      const [moved] = allItems.splice(fromIndex, 1);
+      allItems.splice(toIndex, 0, moved);
+      // Recompute currentIndex to follow the currently-playing item
+      let newIndex = state.currentIndex;
+      if (state.currentIndex === fromIndex) {
+        newIndex = toIndex;
+      } else if (fromIndex < state.currentIndex && toIndex >= state.currentIndex) {
+        newIndex--;
+      } else if (fromIndex > state.currentIndex && toIndex <= state.currentIndex) {
+        newIndex++;
+      }
+      return { manualQueue: allItems, sourceQueue: [], items: allItems, currentIndex: newIndex };
+    }),
 
   setRepeat: (mode) => set({ repeat: mode }),
   setShuffle: (enabled) => set({ shuffle: enabled }),

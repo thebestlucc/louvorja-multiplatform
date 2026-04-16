@@ -21,40 +21,42 @@ export function SelectionActionBar({ count, onPlayNow, onAddToQueue, onClear }: 
       role="toolbar"
       aria-label={t("remote.search.selection_bar")}
     >
-      <div className="flex items-center gap-2 px-4 py-3">
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
         <button
           type="button"
           onClick={onClear}
           aria-label={t("remote.search.action_clear_selection")}
-          className="p-2 rounded-md text-fg-muted hover:text-fg hover:bg-surface-2"
+          className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-surface-2 flex-shrink-0"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
-        <span className="text-sm text-fg-muted">
+        <span className="text-xs text-fg-muted flex-shrink-0">
           {t("remote.search.selection_count", { count })}
         </span>
         <div className="flex-1" />
         <button
           type="button"
           onClick={onAddToQueue}
+          aria-label={t("remote.search.action_add_to_queue")}
           className={cn(
-            "h-11 px-4 rounded-lg text-sm font-medium border border-border bg-surface-1",
-            "flex items-center gap-2 active:scale-[0.98] transition-transform",
+            "h-9 px-3 rounded-lg text-xs font-medium border border-border bg-surface-1",
+            "flex items-center gap-1.5 active:scale-[0.98] transition-transform flex-shrink-0",
           )}
         >
           <ListPlus className="h-4 w-4" aria-hidden="true" />
-          {t("remote.search.action_add_to_queue")}
+          <span className="hidden min-[360px]:inline">{t("remote.search.action_add_to_queue")}</span>
         </button>
         <button
           type="button"
           onClick={onPlayNow}
+          aria-label={t("remote.search.action_play_now")}
           className={cn(
-            "h-11 px-4 rounded-lg text-sm font-semibold bg-primary text-white",
-            "flex items-center gap-2 active:scale-[0.98] transition-transform",
+            "h-9 px-3 rounded-lg text-xs font-semibold bg-primary text-white",
+            "flex items-center gap-1.5 active:scale-[0.98] transition-transform flex-shrink-0",
           )}
         >
           <Monitor className="h-4 w-4" aria-hidden="true" />
-          {t("remote.search.action_play_now")}
+          <span className="hidden min-[360px]:inline">{t("remote.search.action_play_now")}</span>
         </button>
       </div>
     </div>
