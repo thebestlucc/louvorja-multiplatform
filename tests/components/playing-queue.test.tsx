@@ -25,8 +25,8 @@ test("PlayingQueueView renders empty state", () => {
 
 test("PlayingQueueView renders list of items", () => {
   const items = [
-    { id: "1", hymn: { id: 1, title: "Hymn 1" } as any, type: "audio" as const },
-    { id: "2", hymn: { id: 2, title: "Hymn 2" } as any, type: "projection" as const },
+    { id: "1", kind: "hymn" as const, hymn: { id: 1, title: "Hymn 1" } as any, type: "audio" as const },
+    { id: "2", kind: "hymn" as const, hymn: { id: 2, title: "Hymn 2" } as any, type: "projection" as const },
   ];
   const element = PlayingQueueView({ items, currentIndex: 0 });
   const text = getText(element);

@@ -1,6 +1,6 @@
-import { test, describe } from "node:test";
+import { test, describe, beforeEach } from "node:test";
 import * as assert from "node:assert";
-import { useQueueStore } from "../../src/stores/queue-store";
+import { useQueueStore, type QueueItem } from "../../src/stores/queue-store";
 
 // Mocking Hymn for tests
 const mockHymn = (id: number, title: string) => ({
@@ -31,8 +31,8 @@ describe("Queue Store", () => {
 
   test("addToQueue adds items", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
-    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", kind: "hymn" as const, hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
     
     useQueueStore.getState().addToQueue([item1, item2]);
     
@@ -43,9 +43,9 @@ describe("Queue Store", () => {
 
   test("removeFromQueue updates items and currentIndex", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
-    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
-    const item3 = { id: "3", hymn: mockHymn(3, "Hymn 3"), type: "audio" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", kind: "hymn" as const, hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
+    const item3 = { id: "3", kind: "hymn" as const, hymn: mockHymn(3, "Hymn 3"), type: "audio" as const };
     
     useQueueStore.getState().addToQueue([item1, item2, item3]);
     useQueueStore.getState().setCurrentIndex(1); // Item 2
@@ -67,8 +67,8 @@ describe("Queue Store", () => {
 
   test("next and prev navigation", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
-    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", kind: "hymn" as const, hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
 
     useQueueStore.getState().addToQueue([item1, item2]);
 
@@ -88,8 +88,8 @@ describe("Queue Store", () => {
 
   test("repeat=one: next() increments replayTrigger, keeps currentIndex", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
-    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "audio" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", kind: "hymn" as const, hymn: mockHymn(2, "Hymn 2"), type: "audio" as const };
     useQueueStore.getState().addToQueue([item1, item2]);
     useQueueStore.getState().setRepeat("one");
 
@@ -103,8 +103,8 @@ describe("Queue Store", () => {
 
   test("repeat=all: next() wraps to 0 at end of queue", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
-    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "audio" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", kind: "hymn" as const, hymn: mockHymn(2, "Hymn 2"), type: "audio" as const };
     useQueueStore.getState().addToQueue([item1, item2]);
     useQueueStore.getState().setRepeat("all");
     useQueueStore.getState().setCurrentIndex(1); // last item
@@ -115,7 +115,7 @@ describe("Queue Store", () => {
 
   test("repeat=off: next() sets currentIndex to -1 at end of queue", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
     useQueueStore.getState().addToQueue([item1]);
     useQueueStore.getState().setRepeat("off");
 
@@ -125,7 +125,7 @@ describe("Queue Store", () => {
 
   test("clearQueue() resets replayTrigger to 0", () => {
     useQueueStore.getState().clearQueue();
-    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item1 = { id: "1", kind: "hymn" as const, hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
     useQueueStore.getState().addToQueue([item1]);
     useQueueStore.getState().setRepeat("one");
     useQueueStore.getState().next(); // increments replayTrigger
@@ -133,5 +133,61 @@ describe("Queue Store", () => {
     assert.ok(useQueueStore.getState().replayTrigger > 0);
     useQueueStore.getState().clearQueue();
     assert.strictEqual(useQueueStore.getState().replayTrigger, 0);
+  });
+});
+
+// ── mixed-kind invariants (Task 1.3) ────────────────────────────────────────
+
+function hymnItem(id: string): QueueItem {
+  return { id, kind: "hymn", type: "audio", hymn: { id: 1, title: `H-${id}` } as any };
+}
+
+function bibleItem(id: string): QueueItem {
+  return {
+    id,
+    kind: "bible",
+    type: "projection",
+    title: "John 3:16",
+    bibleContext: {
+      versionId: 1, book: "John", bookName: "John",
+      chapter: 3, initialVerse: 16,
+      verses: [{ id: 1, versionId: 1, book: "John", chapter: 3, verse: 16, text: "..." } as any],
+    },
+  };
+}
+
+describe("queue-store — mixed kinds", { concurrency: false }, () => {
+  beforeEach(() => {
+    useQueueStore.getState().clearQueue();
+  });
+
+  test("accepts mixed hymn + bible items and derives kind per item", () => {
+    useQueueStore.getState().clearQueue();
+    useQueueStore.getState().addToQueue([hymnItem("a"), bibleItem("b")], true);
+    const s = useQueueStore.getState();
+    assert.strictEqual(s.items.length, 2);
+    assert.strictEqual(s.items[0].kind, "hymn");
+    assert.strictEqual(s.items[1].kind, "bible");
+    assert.strictEqual(s.items[1].bibleContext?.verses.length, 1);
+    assert.strictEqual(s.currentIndex, 0);
+  });
+
+  test("addToQueue(clear=false) appends without changing currentIndex when queue is already playing", () => {
+    useQueueStore.getState().clearQueue();
+    useQueueStore.getState().addToQueue([hymnItem("a")], true);
+    useQueueStore.getState().addToQueue([bibleItem("b")], false);
+    assert.strictEqual(useQueueStore.getState().currentIndex, 0);
+    const kinds = useQueueStore.getState().items.map((i) => i.kind);
+    assert.deepStrictEqual(kinds, ["hymn", "bible"]);
+  });
+
+  test("next() advances past bible items", () => {
+    useQueueStore.getState().clearQueue();
+    useQueueStore.getState().setRepeat("off");
+    useQueueStore.getState().addToQueue([hymnItem("a"), bibleItem("b"), hymnItem("c")], true);
+    useQueueStore.getState().next();
+    assert.strictEqual(useQueueStore.getState().currentIndex, 1);
+    useQueueStore.getState().next();
+    assert.strictEqual(useQueueStore.getState().currentIndex, 2);
   });
 });
