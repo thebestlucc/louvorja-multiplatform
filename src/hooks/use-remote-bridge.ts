@@ -19,6 +19,7 @@ import { setMonitorConfig, setCurrentSlide } from "../lib/tauri/display";
 import { catcher } from "../lib/catcher";
 import { commands } from "../lib/bindings";
 import { defaultBackground } from "../types/presentation";
+import { buildQueueItemsFromRemote, type RemoteQueueAddPayload } from "./build-queue-items-from-remote";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,9 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
         }),
 
         // ── Hymn select (from search.select type=hymns) ───────────────────
+        // "Play now" single-item path — called by the PWA's bottom action bar when the user
+        // presses Play now. For multi-select Play now, the FIRST selected item goes via this
+        // path; the REMAINING items go via remote-queue-add.
         // Route through the queue so use-playback-coordinator handles audio init,
         // sync points, slides, and projection — same path as desktop hymnal play.
         listen<RemoteHymnSelectPayload>("remote-hymn-select", (e) => {
@@ -137,20 +141,19 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
         }),
 
         // ── Queue add (from search.tsx "Add to queue" action — no projection) ─
-        // Appends hymn to existing queue. Does NOT clear or auto-project.
-        listen<RemoteHymnSelectPayload>("remote-queue-add", (e) => {
+        // Appends mixed-kind items to existing queue. Does NOT clear or auto-project.
+        listen<RemoteQueueAddPayload>("remote-queue-add", (e) => {
           void (async () => {
-            const [result] = await catcher(commands.getHymn(e.payload.id));
-            if (!result || result.status !== "ok") return;
-            const hymn = result.data;
-            useQueueStore.getState().addToQueue(
-              [{ id: crypto.randomUUID(), kind: "hymn", hymn, type: "audio" }],
-              false, // clearExisting=false: append without changing currentIndex
-            );
+            const items = await buildQueueItemsFromRemote(e.payload);
+            if (items.length === 0) return;
+            useQueueStore.getState().addToQueue(items, false);
           })();
         }),
 
         // ── Bible select (from search.select type=bible) ──────────────────
+        // "Play now" single-item path — called by the PWA's bottom action bar when the user
+        // presses Play now. For multi-select Play now, the FIRST selected item goes via this
+        // path; the REMAINING items go via remote-queue-add.
         listen<RemoteBibleSelectPayload>("remote-bible-select", (e) => {
           const { chapter, verse, text, bookName } = e.payload;
           const reference = `${bookName} ${chapter}:${verse}`;
@@ -169,6 +172,35 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
           useDisplayStore.getState().setCurrentProjectionType("bible");
           void catcher(setCurrentSlide(slide));
         }),
+
+        // ── Video select (from search.select type=video) ──────────────────
+        listen<{ videoSource: "youtube" | "local"; videoId?: string; videoUrl?: string; videoTitle?: string }>(
+          "remote-video-select", (e) => {
+            // Clear queue + start single video item
+            const item = {
+              id: crypto.randomUUID(),
+              kind: "video" as const,
+              type: "projection" as const,
+              title: e.payload.videoTitle ?? e.payload.videoUrl ?? e.payload.videoId ?? "Video",
+              videoMedia: { ...e.payload },
+            };
+            useQueueStore.getState().addToQueue([item], true);
+          },
+        ),
+
+        // ── Presentation select (from search.select type=presentation) ────
+        listen<{ presentationId: number }>(
+          "remote-presentation-select", (e) => {
+            const item = {
+              id: crypto.randomUUID(),
+              kind: "presentation" as const,
+              type: "projection" as const,
+              title: `Presentation #${e.payload.presentationId}`,
+              presentationId: e.payload.presentationId,
+            };
+            useQueueStore.getState().addToQueue([item], true);
+          },
+        ),
 
         // ── Queue play (jump to item by UUID) ─────────────────────────────
         listen<RemoteQueuePlayPayload>("remote-queue-play", (e) => {
