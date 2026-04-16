@@ -1,12 +1,41 @@
 // src/stores/queue-store.ts
 import { create } from "zustand";
-import type { Hymn } from "../lib/bindings";
+import type { Hymn, SlideContent, Verse as BibleVerse } from "../lib/bindings";
+
+export type QueueItemKind = "hymn" | "presentation" | "bible" | "video";
+
+export interface QueueBibleContext {
+  versionId: number;
+  book: string;
+  bookName: string;
+  chapter: number;
+  initialVerse: number;
+  verses: BibleVerse[];
+}
+
+export interface QueueVideoMedia {
+  videoSource: "youtube" | "local";
+  videoId?: string;
+  videoUrl?: string;
+  videoTitle?: string;
+  duration?: number;
+}
 
 export interface QueueItem {
   id: string;
-  hymn?: Hymn;
+  kind: QueueItemKind;
   title?: string;
+  /** Legacy: only meaningful when kind === "hymn". Kept for back-compat. */
   type: "audio" | "playback" | "projection";
+  // Hymn
+  hymn?: Hymn;
+  slides?: SlideContent[];
+  // Bible
+  bibleContext?: QueueBibleContext;
+  // Video
+  videoMedia?: QueueVideoMedia;
+  // Presentation
+  presentationId?: number;
 }
 
 interface QueueState {
@@ -19,6 +48,7 @@ interface QueueState {
   currentIndex: number; // index into allItems (manualQueue + sourceQueue)
   repeat: "off" | "one" | "all";
   shuffle: boolean;
+  replayTrigger: number; // incremented when repeat=one fires so coordinator re-runs
 
   // Derived (set explicitly on every mutation)
   items: QueueItem[]; // = manualQueue + sourceQueue (backwards compatible)
@@ -47,6 +77,7 @@ export const useQueueStore = create<QueueState>((set) => ({
   currentIndex: -1,
   repeat: "off",
   shuffle: false,
+  replayTrigger: 0,
 
   // items is derived — set explicitly in every mutation below
   items: [],
@@ -98,14 +129,14 @@ export const useQueueStore = create<QueueState>((set) => ({
     }),
 
   clearQueue: () =>
-    set({ manualQueue: [], sourceQueue: [], sourceLabel: "", items: [], currentIndex: -1 }),
+    set({ manualQueue: [], sourceQueue: [], sourceLabel: "", items: [], currentIndex: -1, replayTrigger: 0 }),
 
   setCurrentIndex: (index) => set({ currentIndex: index }),
 
   next: () =>
     set((state) => {
       const allItems = [...state.manualQueue, ...state.sourceQueue];
-      if (state.repeat === "one") return state; // handled by audio onFinished re-triggering same index
+      if (state.repeat === "one") return { replayTrigger: state.replayTrigger + 1 };
       if (state.currentIndex < allItems.length - 1) {
         return { currentIndex: state.currentIndex + 1 };
       }
