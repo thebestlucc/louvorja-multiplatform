@@ -5,7 +5,7 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::remote::routes::{
     health::health_handler,
-    pair::{pair_complete, pair_start, PairRouteState},
+    pair::{pair_complete, pair_revoke, pair_start, PairRouteState},
     ws::ws_handler,
 };
 
@@ -64,6 +64,7 @@ pub fn build_router(pair_state: Option<PairRouteState>) -> Router {
             .route("/ws", get(ws_handler))
             .route("/pair/start", post(pair_start))
             .route("/pair/complete", post(pair_complete))
+            .route("/pair/revoke", post(pair_revoke))
             .with_state(ps)
     } else {
         Router::new()
@@ -106,12 +107,30 @@ impl RemoteServer {
         let handle = std::thread::Builder::new()
             .name("louvorja-remote".into())
             .spawn(move || {
-                let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+                let rt = match Builder::new_multi_thread().enable_all().build() {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        log::error!("Failed to build tokio runtime for remote server: {}", e);
+                        running.store(false, Ordering::SeqCst);
+                        return;
+                    }
+                };
                 rt.block_on(async move {
                     let router = build_router(pair_state);
-                    let tokio_listener =
-                        tokio::net::TcpListener::from_std(listener).unwrap();
-                    let server = axum::serve(tokio_listener, router);
+                    let tokio_listener = match tokio::net::TcpListener::from_std(listener) {
+                        Ok(l) => l,
+                        Err(e) => {
+                            log::error!("Failed to create TcpListener for remote server: {}", e);
+                            running.store(false, Ordering::SeqCst);
+                            return;
+                        }
+                    };
+                    // H7: use into_make_service_with_connect_info so ConnectInfo<SocketAddr>
+                    // is available in handlers for IP-based rate limiting.
+                    let server = axum::serve(
+                        tokio_listener,
+                        router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                    );
                     let _ = server
                         .with_graceful_shutdown(async {
                             let _ = rx.await;
@@ -181,10 +200,11 @@ mod tests {
         let pool = r2d2::Pool::new(manager).unwrap();
         let conn = pool.get().unwrap();
         crate::db::migrations::run_migrations(&conn).unwrap();
-        // Seed a device.
-        let token = b"d6-test-token-32bytes-padded0000".to_vec();
-        let _id = crate::db::queries::remote::insert_device(&conn, "D6Phone", &token).unwrap();
+        // Seed a device using raw bytes; client presents base64-encoded form.
+        let raw_token: Vec<u8> = (0u8..32).collect();
+        let _id = crate::db::queries::remote::insert_device(&conn, "D6Phone", &raw_token).unwrap();
         drop(conn);
+        let token_b64 = base64::Engine::encode(&base64::prelude::BASE64_URL_SAFE_NO_PAD, &raw_token);
 
         let ps = PairRouteState {
             db: pool,
@@ -193,6 +213,10 @@ mod tests {
             server_name: "D6Test".into(),
             app_handle: None,
             broadcast_tx: broadcast_tx.clone(),
+            connections: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            pin_limiter: std::sync::Arc::new(crate::remote::state::PinRateLimiter::new()),
+            pair_rate_limiter: std::sync::Arc::new(crate::remote::rate_limit::PairRateLimiter::default()),
+            suspicious_tracker: std::sync::Arc::new(crate::remote::rate_limit::SuspiciousHmacTracker::default()),
         };
 
         let mut srv = RemoteServer::new();
@@ -201,10 +225,9 @@ mod tests {
         // Connect an authenticated WS client.
         let url = format!("ws://127.0.0.1:{}/ws", port);
         let mut req = url.into_client_request().unwrap();
-        let token_str = String::from_utf8(token).unwrap();
         req.headers_mut().insert(
             "sec-websocket-protocol",
-            format!("bearer, {}", token_str).parse().unwrap(),
+            format!("bearer, {}", token_b64).parse().unwrap(),
         );
         let (mut ws, _) = tokio_tungstenite::connect_async(req)
             .await

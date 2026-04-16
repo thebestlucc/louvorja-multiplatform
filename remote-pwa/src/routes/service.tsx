@@ -1,38 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Square } from "lucide-react";
 import { useConnectionStore } from "@/stores/connection-store";
 import { cn } from "@/lib/utils";
 
-interface ServiceItem {
-  id: string;
-  title: string;
-  type: string;
-}
-
-interface ServiceState {
-  title: string;
-  activeIndex: number;
-  items: ServiceItem[];
-}
-
 export default function ServiceRoute() {
   const { t } = useTranslation();
   const ws = useConnectionStore((s) => s.ws);
-
-  const [service, setService] = useState<ServiceState | null>(null);
-
-  // Subscribe to service.state
-  useEffect(() => {
-    if (!ws || typeof ws.on !== "function") return;
-    const unsub = ws.on("service.state", (payload) => {
-      // TODO(review): payload cast without validation — if server sends malformed data (e.g.
-      // missing `items` array), service.items.map will throw. Add array guard before setState.
-      // (ring:nil-safety-reviewer, 2026-04-12, Low)
-      setService(payload as ServiceState);
-    });
-    return unsub;
-  }, [ws]);
+  const service = useConnectionStore((s) => s.currentService);
 
   const sendCmd = useCallback(
     (op: string, payload: Record<string, unknown> = {}) => {
@@ -70,16 +45,45 @@ export default function ServiceRoute() {
         </button>
       </div>
 
+      {/* Prev / Next bar */}
+      <div className="grid grid-cols-2 border-b border-border">
+        <button
+          type="button"
+          aria-label={t("remote.service.prev_item")}
+          onClick={() => sendCmd("service.prev_item", {})}
+          className={cn(
+            "flex items-center justify-center gap-2 py-4 text-sm font-medium",
+            "text-fg hover:bg-surface-2 active:bg-surface-2 transition-colors",
+            "border-r border-border",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          )}
+        >
+          ◀ {t("remote.service.prev_item")}
+        </button>
+        <button
+          type="button"
+          aria-label={t("remote.service.next_item")}
+          onClick={() => sendCmd("service.next_item", {})}
+          className={cn(
+            "flex items-center justify-center gap-2 py-4 text-sm font-medium",
+            "text-fg hover:bg-surface-2 active:bg-surface-2 transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          )}
+        >
+          {t("remote.service.next_item")} ▶
+        </button>
+      </div>
+
       {/* Items list */}
       <div className="flex-1 overflow-y-auto">
         <ul>
           {service.items.map((item, index) => {
-            const isActive = index === service.activeIndex;
+            const isActive = service.activeIndex >= 0 && index === service.activeIndex;
             return (
               <li key={item.id}>
                 <button
                   type="button"
-                  data-active={isActive ? "true" : "false"}
+                  aria-current={isActive ? "step" : undefined}
                   onClick={() => sendCmd("service.goto", { index })}
                   className={cn(
                     "w-full text-left px-4 py-3 border-b border-border last:border-0 transition-colors",

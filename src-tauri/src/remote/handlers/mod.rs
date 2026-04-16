@@ -3,7 +3,9 @@
 pub mod audio;
 pub mod display;
 pub mod overlay;
+pub mod presence;
 pub mod search;
 pub mod service;
 pub mod slide;
+pub mod sync;
 pub mod video;

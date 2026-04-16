@@ -26,6 +26,7 @@ import { parseSlideRow } from "../../types/presentation";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
+import { clearActivePlayback } from "../../lib/projection-playback";
 import {
   Dialog,
   DialogContent,
@@ -198,11 +199,13 @@ function CollectionsIndex() {
 
   const handlePlayCollectionSongs = useCallback(async (collection: Collection) => {
     await catcher(async () => {
+      await clearActivePlayback();
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
         if (hymns.length > 0) {
           const queueItems: QueueItem[] = hymns.map((hymn) => ({
             id: crypto.randomUUID(),
+            kind: "hymn" as const,
             hymn,
             type: "audio",
           }));
@@ -221,11 +224,13 @@ function CollectionsIndex() {
 
   const handlePlayCollectionPlayback = useCallback(async (collection: Collection) => {
     await catcher(async () => {
+      await clearActivePlayback();
       if (collection.sourceType === "api") {
         const hymns = await getCollectionHymns(collection.id);
         if (hymns.length > 0) {
           const queueItems: QueueItem[] = hymns.map((hymn) => ({
             id: crypto.randomUUID(),
+            kind: "hymn" as const,
             hymn,
             type: "playback",
           }));

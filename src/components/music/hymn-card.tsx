@@ -1,11 +1,12 @@
 import { memo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Plus, MonitorPlay, Play, Music } from "lucide-react";
+import { BookOpen, ListPlus, Plus, MonitorPlay, Play, Music } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useQueueStore } from "../../stores/queue-store";
 import { useAddLiturgyItem } from "../../lib/queries";
 import type { Hymn, HymnListItem } from "../../lib/bindings";
 import { CoverImage } from "../media/cover-image";
@@ -28,10 +29,11 @@ interface HymnCardProps {
 export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteIds }: HymnCardProps) {
   const { t } = useTranslation();
   const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
+  const queueHasItems = useQueueStore((s) => s.items.length > 0);
   const addItemMutation = useAddLiturgyItem();
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsHymn, setLyricsHymn] = useState<Hymn | null>(null);
-  const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly } = useHymnPlayback();
+  const { handleStartCantado, handleStartPlayback, handleStartSlidesOnly, handlePlayNext } = useHymnPlayback();
   const isFav = favoriteIds?.has(hymn.id) ?? false;
 
   const fetchingRef = useRef(false);
@@ -105,6 +107,15 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
     void (async () => {
       const full = await getFullHymn();
       if (full) void handleStartPlayback(full);
+    })();
+  };
+
+  const onPlayNext = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void (async () => {
+      const full = await getFullHymn();
+      if (full) handlePlayNext(full);
     })();
   };
 
@@ -184,6 +195,22 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">{t("hymn.actionPlayback")}</TooltipContent>
+                </Tooltip>
+              )}
+              {queueHasItems && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={onPlayNext}
+                      aria-label={t("hymn.playNext")}
+                    >
+                      <ListPlus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t("hymn.playNext")}</TooltipContent>
                 </Tooltip>
               )}
               {hasLyrics && (
@@ -299,6 +326,22 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">{t("hymn.actionPlayback")}</TooltipContent>
+              </Tooltip>
+            )}
+            {queueHasItems && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background border-transparent"
+                    onClick={onPlayNext}
+                    aria-label={t("hymn.playNext")}
+                  >
+                    <ListPlus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("hymn.playNext")}</TooltipContent>
               </Tooltip>
             )}
             {hasLyrics && (

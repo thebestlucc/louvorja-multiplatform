@@ -12,8 +12,11 @@
 //! inside the WS handler when it receives from the broadcast channel. The broadcast
 //! payload is the *unsigned* envelope JSON; each handler re-signs it.
 
-use crate::remote::protocol::RemoteEnvelope;
+use crate::remote::{protocol::RemoteEnvelope, state::ConnectionInfo};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
+use uuid::Uuid;
 
 /// Capacity of the broadcast channel. Slow consumers lag and drop events.
 pub const BROADCAST_CAPACITY: usize = 128;
@@ -46,11 +49,19 @@ pub fn make_event_envelope(op: &str, payload: serde_json::Value) -> RemoteEnvelo
 /// Register Tauri event listeners that fanout to all connected WS clients.
 ///
 /// Called once when the remote server starts.
+/// `connections` is the shared presence map; passed so the `remote-devices-changed`
+/// listener can embed the current connection list in the `presence.changed` payload.
+///
+/// Returns a `Vec<EventId>` so the caller can call `app.unlisten(id)` on server stop
+/// to prevent listener accumulation across restarts.
 pub fn listen_and_broadcast(
     app: &tauri::AppHandle,
     tx: broadcast::Sender<String>,
-) {
+    connections: Arc<Mutex<HashMap<Uuid, ConnectionInfo>>>,
+) -> Vec<tauri::EventId> {
     use tauri::Listener;
+
+    let mut handles = Vec::new();
 
     // Helper: build an envelope, serialize it, and send to the broadcast channel.
     let send = move |op: &str, payload: serde_json::Value, tx: &broadcast::Sender<String>| {
@@ -64,50 +75,107 @@ pub fn listen_and_broadcast(
     // `slide-changed` ──────────────────────────────────────────────────────
     {
         let tx2 = tx.clone();
-        app.listen("slide-changed", move |event| {
+        handles.push(app.listen("slide-changed", move |event| {
             let payload: serde_json::Value =
                 serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
             send("slide.changed", payload, &tx2);
-        });
+        }));
     }
 
     // `overlay-changed` ────────────────────────────────────────────────────
     {
         let tx2 = tx.clone();
-        app.listen("overlay-changed", move |event| {
+        handles.push(app.listen("overlay-changed", move |event| {
             let payload: serde_json::Value =
                 serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
             send("overlay.changed", payload, &tx2);
-        });
+        }));
     }
 
     // `audio-status` ────────────────────────────────────────────────────────
     {
         let tx2 = tx.clone();
-        app.listen("audio-status", move |event| {
+        handles.push(app.listen("audio-status", move |event| {
             let payload: serde_json::Value =
                 serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
             send("audio.status", payload, &tx2);
-        });
+        }));
     }
 
     // `remote-devices-changed` ─────────────────────────────────────────────
     {
         let tx2 = tx.clone();
-        app.listen("remote-devices-changed", move |_event| {
-            send("presence.changed", serde_json::json!({}), &tx2);
-        });
+        let conns2 = connections.clone();
+        handles.push(app.listen("remote-devices-changed", move |_event| {
+            let arr: Vec<serde_json::Value> = conns2
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .values()
+                .map(|info| {
+                    serde_json::json!({
+                        "deviceId":    info.device_id,
+                        "name":        info.name,
+                        "connectedAt": info.connected_at,
+                    })
+                })
+                .collect();
+            send("presence.changed", serde_json::json!({ "connections": arr }), &tx2);
+        }));
     }
 
     // `video-state` ────────────────────────────────────────────────────────
     {
         let tx2 = tx.clone();
-        app.listen("video-state", move |event| {
+        handles.push(app.listen("video-state", move |event| {
             let payload: serde_json::Value =
                 serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
             send("video.state", payload, &tx2);
-        });
+        }));
     }
+
+    // `projector-state-changed` ────────────────────────────────────────────
+    {
+        let tx2 = tx.clone();
+        handles.push(app.listen("projector-state-changed", move |event| {
+            let is_open: bool = serde_json::from_str(event.payload()).unwrap_or(false);
+            send("projector.state", serde_json::json!({ "open": is_open }), &tx2);
+        }));
+    }
+
+    // `return-state-changed` ───────────────────────────────────────────────
+    {
+        let tx2 = tx.clone();
+        handles.push(app.listen("return-state-changed", move |event| {
+            let is_open: bool = serde_json::from_str(event.payload()).unwrap_or(false);
+            send("return_monitor.state", serde_json::json!({ "open": is_open }), &tx2);
+        }));
+    }
+
+    // `service-state` ──────────────────────────────────────────────────────
+    // Emitted by React when service playback state changes.
+    // Forwards to PWA as service.state { title, activeIndex, items[] }
+    {
+        let tx2 = tx.clone();
+        handles.push(app.listen("service-state", move |event| {
+            let payload: serde_json::Value =
+                serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
+            send("service.state", payload, &tx2);
+        }));
+    }
+
+    // `queue-state` ────────────────────────────────────────────────────────
+    // Emitted by React when playing queue changes.
+    // Forwards to PWA as queue.state { nowPlaying, upNext[], history[] }
+    {
+        let tx2 = tx.clone();
+        handles.push(app.listen("queue-state", move |event| {
+            let payload: serde_json::Value =
+                serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
+            send("queue.state", payload, &tx2);
+        }));
+    }
+
+    handles
 }
 
 #[cfg(test)]
@@ -122,6 +190,21 @@ mod tests {
         assert!(env.ts > 0);
         assert!(env.sig.is_none(), "unsigned at this stage");
         assert_eq!(env.payload["slideIndex"], 1);
+    }
+
+    #[test]
+    fn new_event_names_are_documented() {
+        // Document the new event→op mappings added as part of remote bridge fixes.
+        let mappings: &[(&str, &str)] = &[
+            ("projector-state-changed", "projector.state"),
+            ("return-state-changed",    "return_monitor.state"),
+            ("service-state",           "service.state"),
+            ("queue-state",             "queue.state"),
+        ];
+        for (tauri_event, ws_op) in mappings {
+            assert!(tauri_event.contains('-'), "Tauri events use kebab-case: {tauri_event}");
+            assert!(ws_op.contains('.'), "WS ops use dot.notation: {ws_op}");
+        }
     }
 
     #[test]

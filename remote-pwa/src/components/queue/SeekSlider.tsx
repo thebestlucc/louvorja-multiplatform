@@ -25,21 +25,21 @@ export function SeekSlider({ position, duration, onSeek, className }: SeekSlider
     <div className={cn("flex flex-col gap-1", className)}>
       <input
         type="range"
-        role="slider"
         aria-label={t("remote.queue.seek")}
         min={0}
-        // TODO(review): max={duration || 1} — when duration=0 before media loads, slider shows
-        // full range but position=0. Consider showing a disabled/loading state when duration=0.
-        // (ring:business-logic-reviewer, 2026-04-12, Low)
         max={duration || 1}
         value={displayValue}
+        disabled={duration === 0}
         onChange={(e) => setLocalValue(Number(e.target.value))}
         onPointerUp={(e) => {
           const val = Number((e.target as HTMLInputElement).value);
           setLocalValue(null);
           onSeek(val);
         }}
-        className="w-full h-1.5 appearance-none rounded-full bg-border accent-primary cursor-pointer"
+        className={cn(
+          "w-full h-1.5 appearance-none rounded-full bg-border accent-primary cursor-pointer",
+          duration === 0 && "opacity-50 cursor-default",
+        )}
       />
       <div className="flex justify-between text-xs text-fg-muted tabular-nums">
         <span>{formatTime(displayValue)}</span>

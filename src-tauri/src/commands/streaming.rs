@@ -158,8 +158,6 @@ pub(crate) fn build_music_stream_payload(
 /// Reads lyrics display preferences from the plugin store and merges them
 /// into the streaming music payload so remote viewers honor user styling.
 fn inject_lyrics_display_settings(payload: &mut serde_json::Value, app_data_dir: Option<&Path>) {
-    use std::fs;
-
     let settings = read_lyrics_display_prefs(app_data_dir);
     if let Some(map) = payload.as_object_mut() {
         map.insert("lyricsTextColor".to_string(), serde_json::json!(settings.text_color));

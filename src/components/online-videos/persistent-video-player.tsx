@@ -1,6 +1,6 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen, emitTo } from "@tauri-apps/api/event";
+import { listen, emit, emitTo } from "@tauri-apps/api/event";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
@@ -181,6 +181,8 @@ export function PersistentVideoPlayer() {
     if (seekingRef.current && !force) return;
     useVideoPlayerStore.getState().setVideoState({ ...snap, ...meta });
     const enriched = { ...snap, seeking: seekingRef.current };
+    // Global emit so Rust event.rs can bridge video-state to WS clients.
+    void emit("video-state", enriched).catch(() => {});
     for (const target of ["main", "projector", "return"]) {
       void emitTo(target, "video-state", enriched).catch(() => {});
     }

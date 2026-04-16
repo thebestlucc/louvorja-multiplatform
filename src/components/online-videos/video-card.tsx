@@ -13,6 +13,7 @@ import { cn } from "../../lib/utils";
 import { useDownloadStore } from "../../stores/download-store";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useQueueStore } from "../../stores/queue-store";
+import { useMediaPlayerStore } from "../../stores/media-player-store";
 
 interface VideoCardProps {
   video: OnlineVideo;
@@ -113,6 +114,12 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
     // "all" target: stop current playback, clear queue, project video
     await clearActivePlayback();
     useQueueStore.getState().clearQueue();
+
+    if (video.localPath) {
+      useMediaPlayerStore.getState().load({ type: "offline_video", videoPath: video.localPath, title: video.title ?? "", isManaged: true });
+    } else {
+      useMediaPlayerStore.getState().load({ type: "online_video", videoId: video.videoId, videoSource: "youtube", title: video.title ?? "" });
+    }
 
     const payload = buildVideoSlidePayload(video);
     const [, err] = await catcher(setCurrentSlide(payload), { notify: true });

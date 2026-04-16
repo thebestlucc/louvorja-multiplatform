@@ -10,7 +10,20 @@ vi.mock("@/components/system/qr-scanner", () => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
+    i18n: { language: "en" },
   }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
+}));
+
+// Mock i18n module to prevent real initialization (localStorage unavailable in jsdom)
+vi.mock("@/lib/i18n", () => ({
+  setLanguage: vi.fn(),
+  SUPPORTED_LANGUAGES: [
+    { code: "en", label: "English" },
+    { code: "pt", label: "Português" },
+    { code: "es", label: "Español" },
+  ],
+  default: { language: "en" },
 }));
 
 // Mock store and storage to avoid IndexedDB in jsdom

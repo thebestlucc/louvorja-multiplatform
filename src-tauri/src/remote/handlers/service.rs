@@ -45,8 +45,6 @@ pub async fn jump_to(app: &AppHandle, index: usize) -> Result<serde_json::Value,
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn service_event_names_are_kebab_case() {
         // Document the contract: these are the events the frontend must listen for.

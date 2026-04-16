@@ -9,22 +9,54 @@
  *
  * Reconnect: exponential backoff 1, 2, 4, 8 s (capped). Resets on success.
  *
- * TODO(review): No unit tests for this module — reconnect backoff, stale-discard
- * logic, and connection state machine are untested. Add unit tests with a fake
- * WebSocket in Phase H. (ring:test-reviewer, 2026-04-12, Low)
- *
  * Stale discard: each send increments `clientSeq`; responses older than the
  * latest acknowledged seq are dropped.
  */
 
 import { signEnvelope } from "./crypto";
 
+/**
+ * Decode a base64url (no padding) string to raw bytes.
+ * The device token is delivered by the server as base64url-encoded 32 raw bytes;
+ * the server uses the DECODED raw bytes as the HMAC key, so the client must
+ * decode too (otherwise HMAC verification fails and all commands are rejected).
+ */
+function base64UrlDecode(s: string): Uint8Array {
+  // Restore standard base64 alphabet + padding so atob can parse it.
+  let std = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = std.length % 4;
+  if (pad === 2) std += "==";
+  else if (pad === 3) std += "=";
+  else if (pad === 1) {
+    // Malformed — atob will throw. Keep as-is so the error is visible.
+  }
+  const bin = atob(std);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 type OpHandler = (payload: unknown) => void;
 
 const BACKOFF_SCHEDULE_MS = [1000, 2000, 4000, 8000];
 
+/**
+ * Generate a random UUID. `crypto.randomUUID` is only defined in secure
+ * contexts (HTTPS or localhost); over plain LAN HTTP we fall back to
+ * `crypto.getRandomValues` which IS available in all contexts.
+ */
+function randomUUID(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  b[6] = (b[6]! & 0x0f) | 0x40; // version 4
+  b[8] = (b[8]! & 0x3f) | 0x80; // variant 10
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 function nonce(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  return randomUUID().replace(/-/g, "").slice(0, 16);
 }
 
 function nowSecs(): number {
@@ -62,7 +94,17 @@ export class RemoteWS {
   /** Connect to the remote server. */
   connect(url: string, token: string) {
     this.url = url;
-    this.tokenBytes = new TextEncoder().encode(token);
+    // Server stores the device token as raw 32 bytes, base64url-encodes it to
+    // send to the client, then base64url-decodes it on WS connect to use as
+    // the HMAC key. Decode here so our HMAC key matches the server's.
+    try {
+      this.tokenBytes = base64UrlDecode(token);
+    } catch (e) {
+      // Fall back to UTF-8 bytes (matches server behaviour for malformed tokens —
+      // the connection will fail cleanly at the HMAC check).
+      console.error("[RemoteWS] Failed to base64url-decode device token:", e);
+      this.tokenBytes = new TextEncoder().encode(token);
+    }
     this.destroyed = false;
     this._openSocket(token);
   }
@@ -85,6 +127,13 @@ export class RemoteWS {
         msg = JSON.parse(event.data as string) as typeof msg;
       } catch {
         return;
+      }
+      // Always-on minimal error log: if the server returns an error envelope,
+      // surface it so silent rejections (bad HMAC, bad payload, unknown op)
+      // never go unnoticed in the field.
+      if (msg.type === "error") {
+        console.error("[RemoteWS] server error:", msg.op, msg.payload);
+        return; // Don't dispatch error payloads to op handlers
       }
       if (msg.op) {
         const handlers = this.handlers.get(msg.op);
@@ -142,7 +191,7 @@ export class RemoteWS {
       // Drop silently; let the caller decide whether to retry
       return;
     }
-    const seq = ++this.clientSeq;
+    ++this.clientSeq;
     const ts = nowSecs();
     const n = nonce();
     const payloadStr = JSON.stringify(payload);
@@ -150,11 +199,9 @@ export class RemoteWS {
 
     // If the connection died while we were signing, don't send stale
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    // If a newer send has already been issued, discard this one
-    if (seq < this.clientSeq) return;
 
     const envelope = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       type: "request",
       op,
       payload,

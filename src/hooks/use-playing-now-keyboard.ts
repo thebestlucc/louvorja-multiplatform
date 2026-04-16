@@ -10,6 +10,8 @@ interface PlayingNowActions {
   pause: () => void;
   stop: () => void;
   restart: () => void;
+  prevSlide: () => void;
+  nextSlide: () => void;
   prevItem: () => void;
   nextItem: () => void;
   setVolume: (volume: number) => void;
@@ -24,7 +26,7 @@ interface PlayingNowActions {
  * Space (play/pause) and ArrowLeft/Right (prev/next slide) are handled
  * globally in use-keyboard.ts so they work on any route.
  */
-export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, nextItem, setVolume }: PlayingNowActions) {
+export function usePlayingNowKeyboard({ play, pause, stop, restart, prevSlide, nextSlide, prevItem, nextItem, setVolume }: PlayingNowActions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -50,6 +52,12 @@ export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, ne
       } else if (matchesShortcutCombo(e, "Alt+ArrowRight") || matchesShortcutCombo(e, "]")) {
         e.preventDefault();
         nextItem();
+      } else if (matchesShortcutCombo(e, "ArrowRight")) {
+        e.preventDefault();
+        nextSlide();
+      } else if (matchesShortcutCombo(e, "ArrowLeft")) {
+        e.preventDefault();
+        prevSlide();
       } else if (matchesShortcutCombo(e, "ArrowUp")) {
         e.preventDefault();
         const vol = useAudioStore.getState().volume;
@@ -63,5 +71,5 @@ export function usePlayingNowKeyboard({ play, pause, stop, restart, prevItem, ne
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [play, pause, stop, restart, prevItem, nextItem, setVolume]);
+  }, [play, pause, stop, restart, prevSlide, nextSlide, prevItem, nextItem, setVolume]);
 }

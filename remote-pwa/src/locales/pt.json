@@ -1,16 +1,31 @@
 {
   "remote": {
     "title": "LouvorJA Remote",
+    "loading": "Carregando…",
+    "nav": {
+      "live": "Ao Vivo",
+      "search": "Buscar",
+      "service": "Culto",
+      "queue": "Fila",
+      "settings": "Config."
+    },
     "pair": {
       "headline": "Parear este dispositivo",
       "scan": "Escanear QR",
       "scan_hint": "Aponte a câmera para o código no computador",
+      "camera_denied": "Acesso à câmera negado. Insira o código manualmente.",
+      "camera_error": "Câmera indisponível. Insira o código manualmente.",
+      "manual_code_placeholder": "Código de 6 dígitos",
+      "pair_button": "Parear",
+      "pairing": "Pareando…",
+      "requesting_camera": "Solicitando câmera…",
       "pin_link": "Inserir código manualmente",
       "pin_placeholder": "Código de 6 dígitos",
       "pin_invalid": "Código inválido. {{attempts}} tentativas restantes.",
       "pin_locked": "Muitas tentativas. Tente novamente em {{seconds}}s.",
       "torch": "Alternar lanterna",
       "success": "Pareado!",
+      "redirecting": "Redirecionando para a tela ao vivo…",
       "find_code_hint": "Encontre o código no seu computador:\nLouvorJA → Remote"
     },
     "live": {
@@ -25,7 +40,9 @@
       "no_slide": "Aguardando conteúdo",
       "connected": "Conectado",
       "disconnected": "Desconectado",
-      "reconnecting": "Reconectando"
+      "reconnecting": "Reconectando",
+      "all_slides": "Todos os slides",
+      "close_grid": "Fechar grade de slides"
     },
     "search": {
       "tab_hymns": "Hinos",
@@ -37,7 +54,21 @@
       "recent": "Recentes",
       "results_count": "{{n}} resultados",
       "add_to_service": "Adicionar ao culto",
-      "no_results": "Nenhum resultado"
+      "no_results": "Nenhum resultado",
+      "clear": "Limpar busca",
+      "bible_version": "Versão",
+      "bible_pick_version": "Escolha uma versão",
+      "bible_pick_book": "Escolha um livro",
+      "bible_pick_chapter": "Capítulo",
+      "bible_pick_verse": "Versículo",
+      "bible_back": "Voltar",
+      "bible_loading": "Carregando…",
+      "bible_no_chapters": "Nenhum capítulo encontrado para este livro",
+      "bible_no_verses": "Nenhum versículo encontrado para este capítulo",
+      "action_sheet_title": "Escolher ação",
+      "action_project_now": "Projetar agora",
+      "action_add_to_queue": "Adicionar à fila",
+      "action_cancel": "Cancelar"
     },
     "service": {
       "start": "Iniciar culto",
@@ -59,7 +90,12 @@
       "target_return": "Retorno",
       "empty": "Fila vazia",
       "seek": "Buscar",
-      "volume": "Volume"
+      "volume": "Volume",
+      "play": "Reproduzir",
+      "pause": "Pausar",
+      "skip_prev": "Faixa anterior",
+      "skip_next": "Próxima faixa",
+      "video_targets": "Vídeo em"
     },
     "connection": {
       "connected": "Conectado",
@@ -74,6 +110,11 @@
       "joined": "{{name}} entrou",
       "next_by": "Próximo por {{name}}"
     },
+    "presence": {
+      "title": "Operadores conectados",
+      "close": "Fechar",
+      "empty": "Nenhum outro operador conectado"
+    },
     "settings": {
       "connection_section": "Conexão",
       "projector_section": "Projetor e monitores",
@@ -81,19 +122,44 @@
       "theme": "Tema",
       "theme_dark": "Escuro",
       "theme_light": "Claro",
-      "theme_auto": "Automático",
-      "haptics": "Hápticos",
+      "theme_auto": "Sistema",
+      "behavior_section": "Comportamento",
+      "haptics": "Vibração",
+      "haptics_hint": "Vibrar ao pressionar botões",
       "haptics_off": "Desligado",
       "haptics_light": "Leve",
       "haptics_medium": "Médio",
       "haptics_strong": "Forte",
       "wake_lock": "Manter tela ligada",
+      "wake_lock_hint": "Evita suspensão enquanto conectado",
       "hardware_buttons": "Botões de volume físicos",
       "forget_device": "Esquecer dispositivo (segurar)",
+      "forget_device_hint": "Segure por 1 segundo para confirmar",
+      "host": "Host",
+      "status": "Status",
+      "language": "Idioma",
+      "language_section": "Idioma",
       "about_section": "Sobre",
+      "app_name": "LouvorJA Remote",
       "version": "Versão",
+      "desktop_link": "Obter o app desktop",
       "device_name": "Dispositivo",
       "server_name": "Servidor"
+    },
+    "desktop_ui": {
+      "panel_title": "Controle Remoto",
+      "server_start": "Iniciar servidor",
+      "server_stop": "Parar servidor",
+      "server_status_running": "Rodando em {{url}}",
+      "server_status_stopped": "Parado",
+      "show_qr": "Exibir QR",
+      "pair_new_device": "Parear novo dispositivo",
+      "paired_devices": "Dispositivos pareados",
+      "revoke_device": "Revogar",
+      "pairing_request_title": "Solicitação de pareamento",
+      "pairing_request_body": "{{name}} quer se conectar",
+      "pairing_approve": "Aprovar",
+      "pairing_deny": "Negar"
     },
     "errors": {
       "network_title": "Não foi possível alcançar o computador",

@@ -12,9 +12,11 @@ use crate::remote::handlers::{
     audio as audio_handler,
     display as display_handler,
     overlay as overlay_handler,
+    presence as presence_handler,
     search as search_handler,
     service as service_handler,
     slide as slide_handler,
+    sync as sync_handler,
     video as video_handler,
 };
 
@@ -95,11 +97,12 @@ pub async fn dispatch(
         "service.stop"      => service_handler::stop(&ctx.app).await,
         "service.next_item" => service_handler::next_item(&ctx.app).await,
         "service.prev_item" => service_handler::prev_item(&ctx.app).await,
-        "service.jump_to"   => {
+        // `service.goto` is the canonical op sent by the PWA; `service.jump_to` kept for back-compat.
+        "service.goto" | "service.jump_to"   => {
             let index = payload
                 .get("index")
                 .and_then(|v| v.as_u64())
-                .ok_or_else(|| AppError::Internal("service.jump_to requires `index`".into()))? as usize;
+                .ok_or_else(|| AppError::Internal("service.goto requires `index`".into()))? as usize;
             service_handler::jump_to(&ctx.app, index).await
         }
 
@@ -128,7 +131,45 @@ pub async fn dispatch(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(50)
                 .min(200) as usize;
-            search_handler::bible_search(&ctx.app, query, limit).await
+            // Optional: when set, FTS is scoped to a single Bible version.
+            let version_id = payload.get("versionId").and_then(|v| v.as_i64());
+            search_handler::bible_search(&ctx.app, query, limit, version_id).await
+        }
+        "bible.list_versions" => search_handler::bible_list_versions(&ctx.app).await,
+        "bible.list_books" => {
+            let version_id = payload
+                .get("versionId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| AppError::Internal("bible.list_books requires `versionId`".into()))?;
+            search_handler::bible_list_books(&ctx.app, version_id).await
+        }
+        "bible.list_chapters" => {
+            let version_id = payload
+                .get("versionId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| AppError::Internal("bible.list_chapters requires `versionId`".into()))?;
+            let book = payload
+                .get("book")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("bible.list_chapters requires `book`".into()))?
+                .to_string();
+            search_handler::bible_list_chapters(&ctx.app, version_id, book).await
+        }
+        "bible.list_verses" => {
+            let version_id = payload
+                .get("versionId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| AppError::Internal("bible.list_verses requires `versionId`".into()))?;
+            let book = payload
+                .get("book")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("bible.list_verses requires `book`".into()))?
+                .to_string();
+            let chapter = payload
+                .get("chapter")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| AppError::Internal("bible.list_verses requires `chapter`".into()))?;
+            search_handler::bible_list_verses(&ctx.app, version_id, book, chapter).await
         }
         "bible.get_verse" => {
             let version_id = payload
@@ -178,6 +219,58 @@ pub async fn dispatch(
         "return_monitor.open"  => display_handler::return_open(&ctx.app).await,
         "return_monitor.close" => display_handler::return_close(&ctx.app).await,
 
+        // ── display.overlay alias (PWA live.tsx sends this op) ───────────────
+        "display.overlay" => {
+            let kind = payload
+                .get("overlay")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("display.overlay requires `overlay`".into()))?;
+            match kind {
+                "black" => overlay_handler::black(&ctx.app).await,
+                "logo"  => overlay_handler::logo(&ctx.app).await,
+                "clear" => overlay_handler::clear(&ctx.app).await,
+                other   => Err(AppError::Internal(format!("unknown overlay kind: {other}"))),
+            }
+        }
+
+        // ── search.select (PWA search.tsx taps a result) ─────────────────────
+        "search.select" => {
+            let id = payload
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("search.select requires `id`".into()))?
+                .to_string();
+            let item_type = payload
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("hymns");
+            search_handler::select(&ctx.app, id, item_type, payload).await
+        }
+
+        // ── queue.play (PWA queue.tsx taps an up-next item) ──────────────────
+        "queue.play" => {
+            let id = payload
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("queue.play requires `id`".into()))?
+                .to_string();
+            search_handler::queue_play(&ctx.app, id).await
+        }
+
+        // ── queue.add (PWA search confirms "Add to queue" — appends without projecting) ──
+        "queue.add" => {
+            let id = payload
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("queue.add requires `id`".into()))?
+                .to_string();
+            let item_type = payload
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("hymns");
+            search_handler::queue_add(&ctx.app, id, item_type).await
+        }
+
         // ── Overlay ops (E7) ─────────────────────────────────────────────────
         "overlay.black"    => overlay_handler::black(&ctx.app).await,
         "overlay.logo"     => overlay_handler::logo(&ctx.app).await,
@@ -189,6 +282,12 @@ pub async fn dispatch(
                 .ok_or_else(|| AppError::Internal("shortcut.trigger requires `code`".into()))?;
             overlay_handler::shortcut_trigger(&ctx.app, code).await
         }
+
+        // ── Presence (H1) ───────────────────────────────────────────────────
+        "presence.list" => presence_handler::list(&ctx.app).await,
+
+        // ── State sync (on every WS connect) ────────────────────────────────
+        "state.sync" => sync_handler::sync_state(&ctx.app).await,
 
         // ── Ping (keep-alive) ────────────────────────────────────────────────
         "ping" => Ok(serde_json::json!({ "op": "pong" })),
@@ -245,7 +344,8 @@ mod tests {
     }
 
     #[test]
-    fn service_jump_to_parses_index() {
+    // Both `service.goto` (PWA canonical) and `service.jump_to` (back-compat) parse `index`.
+    fn service_goto_and_jump_to_parses_index() {
         let payload = serde_json::json!({ "index": 3u64 });
         let index = payload.get("index").and_then(|v| v.as_u64()).unwrap() as usize;
         assert_eq!(index, 3);

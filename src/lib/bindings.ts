@@ -1144,6 +1144,28 @@ async cancelPairing() : Promise<Result<null, AppErrorResponse>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * List all non-revoked paired devices.
+ */
+async listPairedDevices() : Promise<Result<RemoteDevice[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_paired_devices") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Revoke a device by ID — removes it from the active list and closes any live WS connection.
+ */
+async revokePairedDevice(id: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("revoke_paired_device", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getSetting(key: string) : Promise<Result<Setting, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_setting", { key }) };
@@ -1738,7 +1760,11 @@ export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: n
 export type PairingInfo = { token: string; pin: string; expiresAt: number; qrSvg: string; url: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
 export type RefPosition = "bottom" | "top" | "hidden"
-export type RemoteStatus = { running: boolean; ip: string | null; port: number }
+/**
+ * A paired remote control device stored in the `remote_devices` table.
+ */
+export type RemoteDevice = { id: string; name: string; createdAt: number; lastSeenAt: number | null; revokedAt: number | null }
+export type RemoteStatus = { running: boolean; ip: string | null; port: number; connections: number }
 export type ScheduleAssignment = { id: number; scheduleDayDepartmentId: number; memberId: number; sortOrder: number; createdAt: string; member: ScheduleDepartmentMember | null }
 export type ScheduleAssignmentInput = { scheduleDayDepartmentId: number; memberIds: number[] }
 export type ScheduleDay = { id: number; scheduleMonthId: number; serviceDate: string; label: string | null; sourceKind: string; responsibleDepartmentId: number | null; createdAt: string; updatedAt: string; responsibleDepartment: ScheduleDepartment | null; departments: ScheduleDayDepartment[] }

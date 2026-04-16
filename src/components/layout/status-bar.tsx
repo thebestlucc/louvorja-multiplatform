@@ -1,33 +1,49 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ListChecks, Loader2, Timer, Wifi } from "lucide-react";
+import { ListChecks, Loader2, Timer, Wifi, Smartphone } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
+import { useQueryClient } from "@tanstack/react-query";
 import { ProjectorControls } from "../display/projector-controls";
 import { SlidePasserIndicator } from "../slide-passer/slide-passer-indicator";
 import { StatusBarUpdateIndicator } from "./status-bar-update-indicator";
 import { StreamingControls } from "../streaming/streaming-controls";
+import { RemoteControlPanel } from "../remote/remote-control-panel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { useLiturgy, useStreamingStatus, useTimerState } from "../../lib/queries";
+import { useLiturgy, useStreamingStatus, useTimerState, useRemoteStatus } from "../../lib/queries";
+import { queryKeys } from "../../lib/queries/keys";
 import { formatUtilityTimer } from "../../types/utilities";
 import { useContentSyncStore } from "../../stores/content-sync-store";
 import { useDownloadStore } from "../../stores/download-store";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { cn } from "../../lib/utils";
+import type { RemoteStatus } from "../../lib/bindings";
 
 export function StatusBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const routerState = useRouterState();
   const [streamingOpen, setStreamingOpen] = useState(false);
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const [version, setVersion] = useState("");
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     getVersion().then(setVersion).catch(() => {});
   }, []);
   const { data: status } = useStreamingStatus();
+  const { data: remoteStatus } = useRemoteStatus();
   const { data: timerState } = useTimerState();
+
+  // Subscribe to remote-server-status event — no polling.
+  useEffect(() => {
+    const unlisten = listen<RemoteStatus>("remote-server-status", () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.remote.status });
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, [queryClient]);
   const contentSyncProgress = useContentSyncStore((s) => s.progress);
   const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
   const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
@@ -203,6 +219,23 @@ export function StatusBar() {
         <ProjectorControls />
         <div className="mx-1 h-4 w-px bg-border" />
         <StatusBarUpdateIndicator />
+        <div className="mx-1 h-4 w-px bg-border" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setRemoteOpen(true)}
+              className="flex min-h-7 items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-hover"
+              aria-label={t("status.remoteOpen")}
+            >
+              <Smartphone className={cn("size-3.75", remoteStatus?.running && "text-primary")} />
+              {remoteStatus?.running
+                ? t("status.remoteOn", { count: remoteStatus.connections })
+                : t("status.remoteOff")}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t("remoteControl.panelTitle")}</TooltipContent>
+        </Tooltip>
+        <div className="mx-1 h-4 w-px bg-border" />
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -222,6 +255,15 @@ export function StatusBar() {
           <TooltipContent side="top">{t("streaming.title")}</TooltipContent>
         </Tooltip>
       </div>
+
+      <Dialog open={remoteOpen} onOpenChange={setRemoteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("remoteControl.panelTitle")}</DialogTitle>
+          </DialogHeader>
+          <RemoteControlPanel />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={streamingOpen} onOpenChange={setStreamingOpen}>
         <DialogContent className="max-w-xl">

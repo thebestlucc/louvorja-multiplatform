@@ -7,6 +7,7 @@ import { useAudioStore } from "../stores/audio-store";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useMediaPlayerStore } from "../stores/media-player-store";
+import { resetCoordinatorPlaybackState } from "./use-playback-coordinator";
 import { useDisplayStore } from "../stores/display-store";
 import { navigateBible } from "../lib/tauri";
 import { useAllSettings } from "../lib/queries";
@@ -19,7 +20,7 @@ import { spotlightOpen } from "../lib/tauri";
 import { emit } from "@tauri-apps/api/event";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
-  const { nextSlide, prevSlide } = useSlides();
+  const { nextSlide, prevSlide, goToSlide } = useSlides();
   const { toggleProjector, toggleReturn, toggleBlackScreen, toggleLogoScreen } = useMonitorsControl();
   const { data: allSettings = [] } = useAllSettings({ enabled });
 
@@ -39,6 +40,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   }, [allSettings]);
 
   const clearPresentation = useCallback(() => {
+    resetCoordinatorPlaybackState();
     usePresentationStore.getState().setSlides([]);
     stopProjectionAndSongAudio();
     // Clear queue when ESC is pressed with one item or at the last item
@@ -67,6 +69,9 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       ) {
         return;
       }
+
+      // Playing Now has its own ArrowLeft/Right handler via use-playing-now-keyboard
+      const isPlayingNowRoute = window.location.pathname.startsWith("/playing-now");
 
       const isBibleRoute = window.location.pathname.startsWith("/bible");
       const isBibleProjecting = useDisplayStore.getState().currentProjectionType === "bible";
@@ -115,6 +120,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         }
 
         case "slides-next": {
+          if (isPlayingNowRoute) break; // handled by use-playing-now-keyboard
           const projType = useDisplayStore.getState().currentProjectionType;
           if (projType === "bible") {
             navigateBible("next");
@@ -125,8 +131,9 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         }
 
         case "slides-prev": {
-          const projType = useDisplayStore.getState().currentProjectionType;
-          if (projType === "bible") {
+          if (isPlayingNowRoute) break; // handled by use-playing-now-keyboard
+          const projType2 = useDisplayStore.getState().currentProjectionType;
+          if (projType2 === "bible") {
             navigateBible("prev");
           } else {
             prevSlide();
@@ -217,4 +224,62 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
       unlisten?.();
     };
   }, [enabled, nextSlide, prevSlide, toggleBlackScreen, toggleLogoScreen]);
+
+  // Remote control events — dispatched by the Rust remote handlers
+  useEffect(() => {
+    if (!enabled) return;
+
+    let cancelled = false;
+    let unlistens: Array<() => void> = [];
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      if (cancelled) return;
+
+      Promise.all([
+        // remote-slide-goto: jump to a specific slide index
+        listen<{ index: number }>("remote-slide-goto", (e) => {
+          goToSlide(e.payload.index);
+        }),
+        // remote-slide-clear: clear current projection (same as Escape)
+        listen("remote-slide-clear", () => {
+          clearPresentation();
+        }),
+        // remote-service-stop: stop service playback
+        listen("remote-service-stop", () => {
+          usePresentationStore.getState().setPlayingLiturgy(false);
+        }),
+        // remote-service-next: advance to next service item
+        listen("remote-service-next", () => {
+          const { activeLiturgyItemIndex, liturgyItemsCount } = usePresentationStore.getState();
+          if (activeLiturgyItemIndex < liturgyItemsCount - 1) {
+            usePresentationStore.getState().setActiveLiturgyItemIndex(activeLiturgyItemIndex + 1);
+          }
+        }),
+        // remote-service-prev: go to previous service item
+        listen("remote-service-prev", () => {
+          const { activeLiturgyItemIndex } = usePresentationStore.getState();
+          if (activeLiturgyItemIndex > 0) {
+            usePresentationStore.getState().setActiveLiturgyItemIndex(activeLiturgyItemIndex - 1);
+          }
+        }),
+        // remote-service-jump: jump to specific service item index
+        listen<{ index: number }>("remote-service-jump", (e) => {
+          const { liturgyItemsCount } = usePresentationStore.getState();
+          const idx = Math.max(0, Math.min(e.payload.index, liturgyItemsCount - 1));
+          usePresentationStore.getState().setActiveLiturgyItemIndex(idx);
+        }),
+      ]).then((fns) => {
+        if (cancelled) {
+          fns.forEach((fn) => fn());
+        } else {
+          unlistens = fns;
+        }
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unlistens.forEach((fn) => fn());
+    };
+  }, [enabled, goToSlide, clearPresentation]);
 }

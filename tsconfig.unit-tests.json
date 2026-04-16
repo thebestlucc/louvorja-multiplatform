@@ -34,6 +34,7 @@
     "tests/asset-url.test.ts",
     "tests/shortcut-settings.test.ts",
     "tests/stores/slide-passer-store.test.ts",
+    "tests/components/remote-panel.test.ts",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
@@ -55,6 +56,7 @@
     "src/components/operator/playing-queue.tsx",
     "src/components/ui/button.tsx",
     "src/lib/utils.ts",
-    "src/lib/asset-url.ts"
+    "src/lib/asset-url.ts",
+    "src/lib/bindings.ts"
   ]
 }

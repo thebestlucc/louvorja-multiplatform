@@ -6,7 +6,7 @@ use crate::state::AppState;
 use serde::Serialize;
 use specta::Type;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Listener, State};
 
 #[derive(Serialize, Type, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -14,10 +14,65 @@ pub struct RemoteStatus {
     pub running: bool,
     pub ip: Option<String>,
     pub port: u16,
+    pub connections: usize,
 }
 
-fn emit_status(app: &AppHandle, status: &RemoteStatus) {
+pub fn emit_status(app: &AppHandle, status: &RemoteStatus) {
     let _ = app.emit("remote-server-status", status.clone());
+}
+
+/// Internal helper for starting the remote server. Used by both the Tauri command
+/// and the auto-start logic in `lib.rs`.
+pub fn do_start_remote_server(app: &AppHandle, state: &AppState, port: Option<u16>) -> Result<RemoteStatus, AppError> {
+    let preferred = port.unwrap_or(7456);
+    let mut handle = state.remote.server_handle.lock()?;
+
+    // If already running, return current status
+    if let Some(ref server) = *handle {
+        if server.is_running() {
+            let connections = state.remote.connections.lock().map(|c| c.len()).unwrap_or(0);
+            let status = RemoteStatus {
+                running: true,
+                ip: crate::net::get_lan_ip(),
+                port: server.port,
+                connections,
+            };
+            return Ok(status);
+        }
+    }
+
+    // Wire Tauri event listeners → broadcast channel.
+    let handles = crate::remote::events::listen_and_broadcast(
+        app,
+        (*state.remote.broadcast_tx).clone(),
+        state.remote.connections.clone(),
+    );
+    *state.remote.listener_handles.lock()? = handles;
+
+    let pair_state = PairRouteState {
+        db: state.db.clone(),
+        pairing: state.remote.pairing.clone(),
+        nonce_cache: state.remote.nonce_cache.clone(),
+        server_name: "LouvorJA".to_string(),
+        app_handle: Some(app.clone()),
+        broadcast_tx: state.remote.broadcast_tx.clone(),
+        connections: state.remote.connections.clone(),
+        pin_limiter: state.remote.pin_limiter.clone(),
+        pair_rate_limiter: state.remote.pair_rate_limiter.clone(),
+        suspicious_tracker: state.remote.suspicious_tracker.clone(),
+    };
+
+    let mut server = RemoteServer::new();
+    let actual_port = server.start_with_state(preferred, Some(pair_state))?;
+    let status = RemoteStatus {
+        running: true,
+        ip: crate::net::get_lan_ip(),
+        port: actual_port,
+        connections: 0,
+    };
+    *handle = Some(server);
+    crate::commands::remote::emit_status(app, &status);
+    Ok(status)
 }
 
 #[tauri::command]
@@ -27,44 +82,7 @@ pub fn start_remote_server(
     state: State<'_, AppState>,
     port: Option<u16>,
 ) -> Result<RemoteStatus, AppError> {
-    let preferred = port.unwrap_or(7456);
-    let mut handle = state.remote.server_handle.lock()?;
-
-    // If already running, return current status
-    if let Some(ref server) = *handle {
-        if server.is_running() {
-            let status = RemoteStatus {
-                running: true,
-                ip: crate::net::get_lan_ip(),
-                port: server.port,
-            };
-            return Ok(status);
-        }
-    }
-
-    // Wire Tauri event listeners → broadcast channel.
-    // TODO(review): listeners accumulate on server restart; track handles and unlisten on stop - business-logic-reviewer 2026-04-12, Low
-    crate::remote::events::listen_and_broadcast(&app, (*state.remote.broadcast_tx).clone());
-
-    let pair_state = PairRouteState {
-        db: state.db.clone(),
-        pairing: state.remote.pairing.clone(),
-        nonce_cache: state.remote.nonce_cache.clone(),
-        server_name: "LouvorJA".to_string(),
-        app_handle: Some(app.clone()),
-        broadcast_tx: state.remote.broadcast_tx.clone(),
-    };
-
-    let mut server = RemoteServer::new();
-    let actual_port = server.start_with_state(preferred, Some(pair_state))?;
-    let status = RemoteStatus {
-        running: true,
-        ip: crate::net::get_lan_ip(),
-        port: actual_port,
-    };
-    *handle = Some(server);
-    emit_status(&app, &status);
-    Ok(status)
+    do_start_remote_server(&app, &state, port)
 }
 
 #[tauri::command]
@@ -73,6 +91,13 @@ pub fn stop_remote_server(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RemoteStatus, AppError> {
+    // Unregister all event listeners.
+    {
+        let mut handles = state.remote.listener_handles.lock()?;
+        for id in handles.drain(..) {
+            app.unlisten(id);
+        }
+    }
     let mut handle = state.remote.server_handle.lock()?;
     if let Some(ref mut server) = *handle {
         server.stop();
@@ -82,6 +107,7 @@ pub fn stop_remote_server(
         running: false,
         ip: crate::net::get_lan_ip(),
         port: 0,
+        connections: 0,
     };
     emit_status(&app, &status);
     Ok(status)
@@ -90,17 +116,20 @@ pub fn stop_remote_server(
 #[tauri::command]
 #[specta::specta]
 pub fn get_remote_status(state: State<'_, AppState>) -> Result<RemoteStatus, AppError> {
+    let connections = state.remote.connections.lock().map(|c| c.len()).unwrap_or(0);
     let handle = state.remote.server_handle.lock()?;
     match handle.as_ref() {
         Some(server) if server.is_running() => Ok(RemoteStatus {
             running: true,
             ip: crate::net::get_lan_ip(),
             port: server.port,
+            connections,
         }),
         _ => Ok(RemoteStatus {
             running: false,
             ip: crate::net::get_lan_ip(),
             port: 0,
+            connections: 0,
         }),
     }
 }
@@ -211,11 +240,13 @@ mod tests {
             running: false,
             ip: Some("192.168.1.10".into()),
             port: 7456,
+            connections: 2,
         };
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("\"running\":false"));
         assert!(json.contains("\"port\":7456"));
         assert!(json.contains("\"ip\":\"192.168.1.10\""));
+        assert!(json.contains("\"connections\":2"));
     }
 
     #[test]

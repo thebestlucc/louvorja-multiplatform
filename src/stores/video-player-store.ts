@@ -9,11 +9,14 @@ interface VideoPlayerState {
   videoId: string | null;
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState">>) => void;
+  /** Which screens render live video. Default: projector only. Persisted via plugin-store. */
+  videoPlaybackTargets: string[];
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setVideoPlaybackTargets">>) => void;
+  setVideoPlaybackTargets: (targets: string[]) => void;
   resetVideoState: () => void;
 }
 
-type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource">;
+type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource" | "videoPlaybackTargets">;
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -23,11 +26,13 @@ const initialState: VideoPlayerData = {
   videoId: null,
   videoSrc: null,
   videoSource: null,
+  videoPlaybackTargets: ["projector"],
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   setVideoState: (partial) => set(partial),
+  setVideoPlaybackTargets: (targets) => set({ videoPlaybackTargets: targets }),
   resetVideoState: () => set(initialState),
 }));
 

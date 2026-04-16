@@ -53,7 +53,7 @@ describe("VolumeSlider — G6", () => {
   });
 });
 
-describe("TargetChips — G6", () => {
+describe("TargetChips — G7", () => {
   it("renders projector and return chips", () => {
     render(<TargetChips targets={["projector"]} onChange={vi.fn()} />);
     expect(screen.getByRole("checkbox", { name: /projector/i })).toBeInTheDocument();

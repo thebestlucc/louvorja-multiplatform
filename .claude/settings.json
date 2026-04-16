@@ -4,8 +4,8 @@
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "65"
   },
   "attribution": {
-    "pr": "",
-    "commit": ""
+    "commit": "",
+    "pr": ""
   },
   "permissions": {
     "allow": [
@@ -46,6 +46,7 @@
   "enabledPlugins": {
     "rust-skills@rust-skills": true,
     "superpowers@claude-plugins-official": true,
-    "claude-mem@thedotmack": true
+    "claude-mem@thedotmack": true,
+    "caveman@caveman": true
   }
 }

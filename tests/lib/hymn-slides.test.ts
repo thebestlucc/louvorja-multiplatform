@@ -65,8 +65,8 @@ describe("hymn slide builder", () => {
     assert.equal(slides.length, 8, "cover + 6 ordered items + pause");
     assert.equal(slides[0]?.slideType, "cover");
     assert.equal(slides[5]?.slideType, "text", "order 5 gap should be a blank cover slide");
-    assert.equal(slides[5]?.text, null);
-    assert.equal(slides[5]?.backgroundImage, "cover.jpg");
+    assert.equal(slides[5]?.content, "");
+    assert.equal(slides[5]?.background?.imagePath, "cover.jpg");
     assert.equal(slides[6]?.text, "Santo, santo, santo!\r\nNós, os pecadores");
   });
 
