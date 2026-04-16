@@ -1,10 +1,23 @@
-import { Trash2 } from "lucide-react";
+import { Trash2, Music, BookOpen, Film, Presentation as PresentationIcon } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+
+function kindIcon(kind: QueueItem["kind"]) {
+  switch (kind) {
+    case "hymn":         return <Music className="h-3.5 w-3.5" aria-hidden="true" />;
+    case "bible":        return <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />;
+    case "video":        return <Film className="h-3.5 w-3.5" aria-hidden="true" />;
+    case "presentation": return <PresentationIcon className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+}
+
+function rowTitle(item: QueueItem): string {
+  return item.hymn?.title ?? item.title ?? `${item.kind}`;
+}
 
 interface PlayingQueueViewProps {
   items: QueueItem[];
@@ -34,8 +47,9 @@ export function PlayingQueueView({ items, currentIndex, onItemClick, onRemoveIte
               index === currentIndex ? "bg-primary text-primary-foreground" : "hover:bg-surface-hover text-foreground"
             )}
           >
-            <span className="flex-1 truncate">{item.hymn?.title || item.title || "Unknown"}</span>
-            <span className="text-[10px] opacity-70 uppercase font-bold">{item.type}</span>
+            <span className="flex-shrink-0 text-current opacity-70">{kindIcon(item.kind)}</span>
+            <span className="flex-1 truncate">{rowTitle(item)}</span>
+            <span className="text-[10px] opacity-70 uppercase font-bold">{item.kind === "hymn" ? item.type : ""}</span>
           </button>
           <Tooltip>
             <TooltipTrigger asChild>
