@@ -1,8 +1,14 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Music, ChevronDown, ChevronUp } from "lucide-react";
+import { Music, ChevronDown, ChevronUp, Trash2, Play, X } from "lucide-react";
 import { useConnectionStore } from "@/stores/connection-store";
 import { cn } from "@/lib/utils";
+
+interface QueueItem {
+  id: string;
+  title: string;
+  artist?: string;
+}
 
 export default function QueueRoute() {
   const { t } = useTranslation();
@@ -10,6 +16,7 @@ export default function QueueRoute() {
   const queue = useConnectionStore((s) => s.currentQueue);
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
 
   const sendCmd = useCallback(
     (op: string, payload: Record<string, unknown> = {}) => {
@@ -17,6 +24,22 @@ export default function QueueRoute() {
     },
     [ws],
   );
+
+  const handleTap = useCallback((item: QueueItem) => {
+    setSelectedItem((prev) => (prev?.id === item.id ? null : item));
+  }, []);
+
+  const handlePlayNow = useCallback(() => {
+    if (!selectedItem) return;
+    sendCmd("queue.play", { id: selectedItem.id });
+    setSelectedItem(null);
+  }, [selectedItem, sendCmd]);
+
+  const handleDelete = useCallback(() => {
+    if (!selectedItem) return;
+    sendCmd("queue.remove", { id: selectedItem.id });
+    setSelectedItem(null);
+  }, [selectedItem, sendCmd]);
 
   const isEmpty = !queue || (!queue.nowPlaying && queue.upNext.length === 0 && queue.history.length === 0);
 
@@ -30,7 +53,7 @@ export default function QueueRoute() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex flex-col h-full overflow-y-auto pb-16">
       {/* Now playing */}
       {queue?.nowPlaying && (
         <section className="px-4 py-3">
@@ -56,27 +79,33 @@ export default function QueueRoute() {
             {t("remote.queue.up_next")}
           </h3>
           <ul className="space-y-1">
-            {queue.upNext.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => sendCmd("queue.play", { id: item.id })}
-                  className={cn(
-                    "w-full text-left rounded-lg border border-border bg-surface-1 p-3",
-                    "hover:bg-surface-2 active:scale-[0.99] transition-all",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  )}
-                >
-                  <p className="text-sm font-medium text-fg truncate">{item.title}</p>
-                  {item.artist && <p className="text-xs text-fg-muted truncate">{item.artist}</p>}
-                </button>
-              </li>
-            ))}
+            {queue.upNext.map((item) => {
+              const isSelected = selectedItem?.id === item.id;
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleTap(item)}
+                    className={cn(
+                      "w-full text-left rounded-lg border p-3",
+                      "active:scale-[0.99] transition-all",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      isSelected
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-surface-1 hover:bg-surface-2",
+                    )}
+                  >
+                    <p className="text-sm font-medium text-fg truncate">{item.title}</p>
+                    {item.artist && <p className="text-xs text-fg-muted truncate">{item.artist}</p>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
 
-      {/* History — accordion, collapsed by default */}
+      {/* History — accordion */}
       {queue && queue.history.length > 0 && (
         <section className="px-4 py-2">
           <button
@@ -108,6 +137,47 @@ export default function QueueRoute() {
             </ul>
           )}
         </section>
+      )}
+
+      {/* Bottom action bar — shown when a queue item is selected */}
+      {selectedItem && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface shadow-lg pb-safe animate-[slideUp_200ms_ease-out]">
+          <div className="flex items-center gap-1.5 px-3 py-2.5">
+            <button
+              type="button"
+              onClick={() => setSelectedItem(null)}
+              aria-label={t("remote.queue.action_dismiss")}
+              className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-surface-2 flex-shrink-0"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-fg-muted truncate flex-1 min-w-0">{selectedItem.title}</span>
+            <button
+              type="button"
+              onClick={handleDelete}
+              aria-label={t("remote.queue.action_remove")}
+              className={cn(
+                "h-9 px-3 rounded-lg text-xs font-medium border border-destructive/30 bg-destructive/10 text-destructive",
+                "flex items-center gap-1.5 active:scale-[0.98] transition-transform flex-shrink-0",
+              )}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden min-[360px]:inline">{t("remote.queue.action_remove")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handlePlayNow}
+              aria-label={t("remote.queue.action_play_now")}
+              className={cn(
+                "h-9 px-3 rounded-lg text-xs font-semibold bg-primary text-white",
+                "flex items-center gap-1.5 active:scale-[0.98] transition-transform flex-shrink-0",
+              )}
+            >
+              <Play className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden min-[360px]:inline">{t("remote.queue.action_play_now")}</span>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

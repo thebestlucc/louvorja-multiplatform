@@ -103,7 +103,10 @@
       "pause": "Pause",
       "skip_prev": "Previous track",
       "skip_next": "Next track",
-      "video_targets": "Video on"
+      "video_targets": "Video on",
+      "action_dismiss": "Dismiss",
+      "action_remove": "Remove",
+      "action_play_now": "Play now"
     },
     "connection": {
       "connected": "Connected",
