@@ -5,8 +5,39 @@
 //! the remote client receives results inline.
 
 use crate::{error::AppError, state::AppState};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum QueueAddItemRaw {
+    #[serde(rename = "hymn")]
+    Hymn { hymn_id: i64 },
+    #[serde(rename = "bible")]
+    Bible {
+        version_id: i64,
+        book: String,
+        book_name: String,
+        chapter: i64,
+        verse: i64,
+    },
+    #[serde(rename = "video")]
+    Video {
+        video_source: String, // "youtube" | "local"
+        video_id: Option<String>,
+        video_url: Option<String>,
+        video_title: Option<String>,
+        duration: Option<f64>,
+    },
+    #[serde(rename = "presentation")]
+    Presentation { presentation_id: i64 },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QueueAddBatchPayload {
+    pub items: Vec<QueueAddItemRaw>,
+}
 
 fn app_state(app: &AppHandle) -> Result<tauri::State<'_, AppState>, AppError> {
     app.try_state::<AppState>()
