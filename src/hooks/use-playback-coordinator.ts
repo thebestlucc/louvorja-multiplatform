@@ -14,7 +14,7 @@ import type { QueueItem } from "../stores/queue-store";
 // Module-level state — survives component remounts so we can distinguish
 // "remount with same queue" from "new content queued".
 let _lastPlayedIndex: number | null = null;
-let _lastItemsRef: QueueItem[] | null = null;
+let _lastPlayedItemId: string | null = null;
 
 /**
  * Reset coordinator tracking. Called by clearActivePlayback() so that
@@ -23,7 +23,7 @@ let _lastItemsRef: QueueItem[] | null = null;
  */
 export function resetCoordinatorPlaybackState() {
   _lastPlayedIndex = null;
-  _lastItemsRef = null;
+  _lastPlayedItemId = null;
 }
 
 // ── Private helpers ────────────────────────────────────────────────────────────
@@ -147,8 +147,9 @@ async function playBibleItem(item: QueueItem) {
   // Find the initial-verse slide index
   const startIdx = Math.max(0, verses.findIndex((v) => v.verse === initialVerse));
 
-  // Stop audio (bible items are silent)
+  // Stop audio + unload media player (bible items are silent)
   await audioStore.getState().stop();
+  useMediaPlayerStore.getState().unload();
 
   // Reset any active video
   const { useVideoPlayerStore } = await import("../stores/video-player-store");
@@ -170,6 +171,7 @@ async function playVideoItem(item: QueueItem) {
   const { setCurrentSlide } = await import("../lib/tauri/display");
 
   await audioStore.getState().stop();
+  useMediaPlayerStore.getState().unload();
 
   const vm = item.videoMedia;
   // onlineVideo SlideContent: { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null }
@@ -193,10 +195,33 @@ async function playVideoItem(item: QueueItem) {
 // Slide-end-of-presentation does NOT auto-advance the queue.
 async function playPresentationItem(item: QueueItem) {
   if (!item.presentationId) return;
-  // TODO(P3): wire getPresentationSlides binding once the Rust command is registered.
-  // `commands.getPresentationSlides` does not yet exist in src/lib/bindings.ts.
-  // Until then, this is a no-op stub — the queue item will be skipped gracefully.
-  throw new Error("Not implemented: presentation queue item (pending P3 Rust command registration)");
+  const { commands } = await import("../lib/bindings");
+  const { usePresentationStore } = await import("../stores/presentation-store");
+  const { setCurrentSlide } = await import("../lib/tauri/display");
+
+  const [res] = await catcher(commands.getSlides(item.presentationId));
+  if (!res || res.status !== "ok") return;
+  const rawSlides = res.data;
+  if (!rawSlides || rawSlides.length === 0) return;
+
+  // Parse each Slide.content JSON string into SlideContent
+  const slides = rawSlides
+    .map((s) => { try { return JSON.parse(s.content); } catch { return null; } })
+    .filter(Boolean) as import("../lib/bindings").SlideContent[];
+  if (slides.length === 0) return;
+
+  await useAudioStore.getState().stop();
+  useMediaPlayerStore.getState().unload();
+
+  // Reset any active video
+  const { useVideoPlayerStore } = await import("../stores/video-player-store");
+  const vs = useVideoPlayerStore.getState();
+  if (vs.videoId || vs.videoSrc) vs.resetVideoState();
+
+  usePresentationStore.getState().setSlides(slides);
+  usePresentationStore.getState().setActiveSlideIndex(0);
+  useDisplayStore.getState().setCurrentProjectionType("presentation");
+  await catcher(setCurrentSlide(slides[0]));
 }
 
 // ── Coordinator hook ───────────────────────────────────────────────────────────
@@ -223,16 +248,11 @@ export function usePlaybackCoordinator() {
     const item = items[index];
     if (!item) return;
 
-    // When items array reference changes (new queue), reset tracking
-    if (_lastItemsRef !== items) {
-      _lastPlayedIndex = null;
-      _lastItemsRef = items;
-    }
-
-    // Already started this exact item in this queue — skip (handles remount)
-    if (_lastPlayedIndex === index) return;
+    // Already playing this exact item at this index — skip (handles remount + append)
+    if (_lastPlayedIndex === index && _lastPlayedItemId === item.id) return;
 
     _lastPlayedIndex = index;
+    _lastPlayedItemId = item.id;
 
     await catcher(async () => {
       try {
@@ -247,7 +267,8 @@ export function usePlaybackCoordinator() {
             return await playPresentationItem(item);
         }
       } catch (err) {
-        _lastPlayedIndex = null; // allow retry
+        _lastPlayedIndex = null;
+        _lastPlayedItemId = null; // allow retry
         throw err;               // catcher will notify
       }
     }, { notify: true });
@@ -263,6 +284,7 @@ export function usePlaybackCoordinator() {
       playItem(currentIndex);
     } else if (currentIndex === -1) {
       _lastPlayedIndex = null;
+      _lastPlayedItemId = null;
       // Queue ended — stop audio, clear projection, and unload Playing Now
       stopAudio();
       useMediaPlayerStore.getState().unload();
