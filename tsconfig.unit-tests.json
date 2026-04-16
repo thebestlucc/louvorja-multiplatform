@@ -11,7 +11,8 @@
     "noUnusedParameters": false,
     "allowImportingTsExtensions": false,
     "types": ["node"],
-    "sourceMap": false
+    "sourceMap": false,
+    "jsx": "react-jsx"
   },
   "include": [
     "tests/lib/audio-sync.test.ts",
@@ -35,6 +36,7 @@
     "tests/shortcut-settings.test.ts",
     "tests/stores/slide-passer-store.test.ts",
     "tests/components/remote-panel.test.ts",
+    "tests/hooks/build-queue-items-from-remote.test.ts",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
@@ -57,6 +59,8 @@
     "src/components/ui/button.tsx",
     "src/lib/utils.ts",
     "src/lib/asset-url.ts",
-    "src/lib/bindings.ts"
+    "src/lib/bindings.ts",
+    "src/hooks/build-queue-items-from-remote.ts",
+    "src/lib/catcher.ts"
   ]
 }
