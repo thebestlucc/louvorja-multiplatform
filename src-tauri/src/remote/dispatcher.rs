@@ -188,6 +188,11 @@ pub async fn dispatch(
             search_handler::bible_get_verse(&ctx.app, version_id, book, chapter).await
         }
         "service.list_today" => search_handler::service_list_today(&ctx.app).await,
+        "presentation.list" => search_handler::presentation_list(&ctx.app).await,
+        "video.list" => {
+            let q = payload.get("query").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            search_handler::video_list(&ctx.app, q).await
+        }
 
         // ── Video control (E5) ───────────────────────────────────────────────
         "video.play"        => video_handler::play(&ctx.app).await,
