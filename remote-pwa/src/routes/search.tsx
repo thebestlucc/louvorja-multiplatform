@@ -477,8 +477,7 @@ export default function SearchRoute() {
           const versionId = bibleStateRef.current.selectedVersion?.id;
           freshWs?.send(op, versionId != null ? { query: value, versionId } : { query: value });
         } else if (op === "video.list" || op === "presentation.list") {
-          // These ops list all — no query support; just re-fetch
-          freshWs?.send(op, {});
+          freshWs?.send(op, { query: value });
         } else {
           freshWs?.send(op, { query: value });
         }
