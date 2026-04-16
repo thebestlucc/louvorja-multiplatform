@@ -37,6 +37,7 @@
     "tests/stores/slide-passer-store.test.ts",
     "tests/components/remote-panel.test.ts",
     "tests/hooks/build-queue-items-from-remote.test.ts",
+    "tests/hooks/use-playback-coordinator.test.ts",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
@@ -55,12 +56,18 @@
     "src/stores/presentation-store.ts",
     "src/stores/video-player-store.ts",
     "src/stores/slide-passer-store.ts",
+    "src/stores/display-store.ts",
+    "src/stores/media-player-store.ts",
     "src/components/operator/playing-queue.tsx",
     "src/components/ui/button.tsx",
     "src/lib/utils.ts",
     "src/lib/asset-url.ts",
     "src/lib/bindings.ts",
+    "src/lib/catcher.ts",
+    "src/lib/projection-playback.ts",
     "src/hooks/build-queue-items-from-remote.ts",
-    "src/lib/catcher.ts"
+    "src/hooks/use-playback-coordinator.ts",
+    "src/hooks/use-hymn-playback.ts",
+    "src/types/presentation.ts"
   ]
 }
