@@ -1,5 +1,6 @@
-import RootLayout from "./routes/__root";
+import { RouterProvider } from "@tanstack/react-router";
+import { router } from "./router";
 
 export default function App() {
-  return <RootLayout />;
+  return <RouterProvider router={router} />;
 }

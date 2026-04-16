@@ -80,6 +80,16 @@ pub fn get_verses(
     Ok(verses)
 }
 
+pub fn get_chapters(conn: &Connection, version_id: i64, book: &str) -> Result<Vec<i32>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT chapter FROM bible_verses WHERE version_id = ?1 AND book = ?2 ORDER BY chapter",
+    )?;
+    let chapters = stmt
+        .query_map(params![version_id, book], |row| row.get::<_, i32>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(chapters)
+}
+
 pub fn get_verse_range(
     conn: &Connection,
     version_id: i64,

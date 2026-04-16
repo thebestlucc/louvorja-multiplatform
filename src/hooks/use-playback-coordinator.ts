@@ -35,6 +35,7 @@ export function resetCoordinatorPlaybackState() {
 export function usePlaybackCoordinator() {
   const items = useQueueStore((s) => s.items);
   const currentIndex = useQueueStore((s) => s.currentIndex);
+  const replayTrigger = useQueueStore((s) => s.replayTrigger);
   const next = useQueueStore((s) => s.next);
 
   const setOnFinished = useAudioStore((s) => s.setOnFinished);
@@ -87,16 +88,17 @@ export function usePlaybackCoordinator() {
           : parseLyricsSyncToPoints(item.hymn?.lyricsSync);
       }
 
-      // 2. Build slides
-      const slides = item.hymn
-        ? hymnToSlides(
-            item.hymn.title,
-            item.hymn.lyrics,
-            item.hymn.album,
-            item.hymn.coverPath,
-            item.hymn.lyricsSync,
-          )
-        : [];
+      // 2. Build slides (prefer pre-built slides from legacy collection items)
+      const slides = item.slides ??
+        (item.hymn
+          ? hymnToSlides(
+              item.hymn.title,
+              item.hymn.lyrics,
+              item.hymn.album,
+              item.hymn.coverPath,
+              item.hymn.lyricsSync,
+            )
+          : []);
 
       // 3. Map queue type → media mode
       const mode: HymnMediaItem["mode"] =
@@ -148,17 +150,22 @@ export function usePlaybackCoordinator() {
 
     }, { notify: true });  }, [items, setSyncPoints, setPlaybackMode, playAudio, playAudioVariants, stopAudio]);
 
-  // Effect: React to queue index changes
+  // Effect: React to queue index changes (and repeat-one replay triggers)
   useEffect(() => {
     if (currentIndex >= 0 && currentIndex < items.length) {
+      // replayTrigger > 0 means repeat=one fired — force re-play same index
+      if (replayTrigger > 0) {
+        _lastPlayedIndex = null;
+      }
       playItem(currentIndex);
     } else if (currentIndex === -1) {
       _lastPlayedIndex = null;
-      // Queue ended — stop audio and clear Playing Now
+      // Queue ended — stop audio, clear projection, and unload Playing Now
       stopAudio();
       useMediaPlayerStore.getState().unload();
+      useDisplayStore.getState().setCurrentProjectionType(null);
     }
-  }, [currentIndex, items.length, playItem, stopAudio]);
+  }, [currentIndex, items.length, replayTrigger, playItem, stopAudio]);
 
   // Effect: Register Auto-Next callback
   useEffect(() => {

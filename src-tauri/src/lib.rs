@@ -565,44 +565,6 @@ pub fn run() {
             }
 
 
-            // Auto-start streaming server if configured
-            {
-                let db_state = app.state::<AppState>();
-                let conn = db_state.db.get().map_err(|e| e.to_string())?;
-                let auto_start =
-                    crate::db::queries::settings::get_setting(&conn, "streaming.autoStart")
-                        .ok()
-                        .map(|s| s.value == "true")
-                        .unwrap_or(false);
-                let port = crate::db::queries::settings::get_setting(&conn, "streaming.port")
-                    .ok()
-                    .and_then(|s| s.value.parse::<u16>().ok())
-                    .unwrap_or(7070);
-                let language = crate::db::queries::settings::get_setting(&conn, "app.language")
-                    .ok()
-                    .map(|s| s.value)
-                    .unwrap_or_else(|| "pt".to_string());
-                drop(conn); // release connection back to pool before locking streaming state
-
-                if auto_start {
-                    let handle = app.handle().clone();
-                    std::thread::spawn(move || {
-                        let streaming = handle.state::<StreamingState>();
-                        if let Ok(mut server) = streaming.server.lock() {
-                            server.set_ui_language(&language);
-                            if let Ok(app_data) = handle.path().app_data_dir() {
-                                server.set_media_root(app_data);
-                            }
-                            if let Err(e) = server.start(Some(port)) {
-                                eprintln!("[streaming] Failed to auto-start: {e}");
-                            } else {
-                                println!("[streaming] Auto-started on port {port}");
-                            }
-                        };
-                    });
-                }
-            }
-
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -675,6 +637,16 @@ pub fn run() {
                             if let Some(video_server) = app_for_shutdown.try_state::<VideoServerState>() {
                                 if let Ok(mut server) = video_server.server.lock() {
                                     server.stop();
+                                }
+                            }
+                            // Phase I4: stop remote server and join its thread.
+                            // stop() signals the axum shutdown channel then joins the tokio
+                            // runtime thread, so remote tasks terminate before process exit.
+                            if let Some(app_state) = app_for_shutdown.try_state::<AppState>() {
+                                if let Ok(mut srv_opt) = app_state.remote.server_handle.lock() {
+                                    if let Some(srv) = srv_opt.as_mut() {
+                                        srv.stop();
+                                    }
                                 }
                             }
                             app_for_shutdown.exit(0);

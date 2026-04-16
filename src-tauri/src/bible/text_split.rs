@@ -3,9 +3,14 @@ use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping};
 use crate::db::models::slides::{BackgroundConfig, BibleMode, SlideContent};
 
 /// Result of splitting a verse into 1+ parts that fit the projection area.
+/// `verse_number` and `reference` are scaffolded for the upcoming Bible navigation
+/// feature (see `docs/pre-dev/`). They are set on construction but consumed by the
+/// frontend via `parts`, so the Rust side currently only reads `parts`.
 #[derive(Debug, Clone)]
 pub struct VerseSplitResult {
+    #[allow(dead_code)]
     pub verse_number: i32,
+    #[allow(dead_code)]
     pub reference: String,
     pub parts: Vec<SlideContent>,
 }

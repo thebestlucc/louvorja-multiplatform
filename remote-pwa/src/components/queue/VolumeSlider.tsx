@@ -19,7 +19,6 @@ export function VolumeSlider({ volume, onVolumeChange, className }: VolumeSlider
       <Volume2 className="h-4 w-4 text-fg-muted flex-shrink-0" aria-hidden="true" />
       <input
         type="range"
-        role="slider"
         aria-label={t("remote.queue.volume")}
         min={0}
         max={100}

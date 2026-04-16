@@ -3,7 +3,6 @@ import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-r
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   ArrowLeft,
   ExternalLink,
@@ -35,15 +34,11 @@ import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
 import { CoverPicker } from "../../components/media/cover-picker";
 import { CoverImage } from "../../components/media/cover-image";
-import type { CollectionSong, CollectionSongSyncStatus, AudioStatusPayload } from "../../lib/bindings";
+import type { CollectionSong, CollectionSongSyncStatus } from "../../lib/bindings";
 import { FavoriteButton } from "../../components/music/favorite-button";
 import { getSlides } from "../../lib/tauri";
 import { parseSlideRow, type SlideRow } from "../../types/presentation";
-import { useSlides as useSlidesControl } from "../../hooks/use-slides";
-import { useAudio } from "../../hooks/use-audio";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
-import { usePresentationStore } from "../../stores/presentation-store";
-import { useAudioStore } from "../../stores/audio-store";
 
 import { normalizeMediaPath } from "../../lib/media-path";
 import { useQueueStore } from "../../stores/queue-store";
@@ -92,12 +87,7 @@ function CollectionDetail() {
   const resyncSong = resyncMutation.mutateAsync;
   const removeSong = removeMutation.mutateAsync;
   const reorderSongs = reorderMutation.mutateAsync;
-  const { goToSlide } = useSlidesControl();
-  const { play, setPlaybackMode } = useAudio();
   const { handleStartCantado, handleStartSlidesOnly } = useHymnPlayback();
-  const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
-  const setPresentationSlides = usePresentationStore((state) => state.setSlides);
-  const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
   const { data: autoCheckSetting } = useSetting("collections.autoCheckSourceOnOpen");
   const isApiCollection = data?.collection.sourceType === "api";
   const { data: collectionHymns } = useCollectionHymns(isApiCollection ? id : -1);
@@ -252,10 +242,17 @@ function CollectionDetail() {
       return;
     }
 
-    const { audioPath, syncPoints } = extractLegacyPlaybackMetadata(slideRows);
-    
-    useQueueStore.getState().addToQueue([{ 
-      id: crypto.randomUUID(), 
+    const slideContents = slideRows.map((row) => parseSlideRow(row).content);
+    if (slideContents.length === 0) {
+      notify.error(t("collections.playEmpty"));
+      return;
+    }
+
+    const { audioPath } = extractLegacyPlaybackMetadata(slideRows);
+
+    useQueueStore.getState().addToQueue([{
+      id: crypto.randomUUID(),
+      kind: "hymn",
       hymn: {
         id: song.id,
         title: song.cachePresentationTitle || song.sourcePath.split(/[\\/]/).pop() || "",
@@ -269,42 +266,13 @@ function CollectionDetail() {
         sourceMtimeMs: null,
         syncStatus: "inSync",
         createdAt: "",
-        updatedAt: ""
-      } as any, 
-      type: audioPath ? "audio" : "projection" 
+        updatedAt: "",
+      } as any,
+      type: audioPath ? "audio" : "projection",
+      slides: slideContents,
     }], true);
 
-    const slideContents = slideRows.map((row) => parseSlideRow(row).content);
-    if (slideContents.length === 0) {
-      notify.error(t("collections.playEmpty"));
-      return;
-    }
-
-    setCurrentPresentation(song.cachePresentationId);
-    setPresentationSlides(slideContents);
-    await goToSlide(0);
-
-    if (audioPath) {
-      setPlaybackMode("sung");
-      await play(audioPath);
-      setAudioSyncPoints(syncPoints);
-
-      void (async () => {
-        const durationMs = await resolveAudioDurationMs();
-        const calibrated = calibrateSyncPointsToDuration(
-          syncPoints,
-          durationMs,
-          slideContents.length,
-        );
-        if (calibrated !== syncPoints) {
-          setAudioSyncPoints(calibrated);
-        }
-      })();
-    } else {
-      setPlaybackMode("silent");
-    }
-
-    void router.navigate({ to: "/playing-now" });
+    router.navigate({ to: "/playing-now" });
   };
 
   return (
@@ -724,85 +692,6 @@ function extractLegacyPlaybackMetadata(rows: SlideRow[]): {
       timestampMs: point.timestampMs,
     })),
   };
-}
-
-async function resolveAudioDurationMs(timeoutMs = 2_000): Promise<number | null> {
-  const currentDuration = useAudioStore.getState().durationMs;
-  if (currentDuration > 0) {
-    return currentDuration;
-  }
-
-  return new Promise((resolve) => {
-    let settled = false;
-    let unlisten: UnlistenFn | null = null;
-
-    const finish = (value: number | null) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (unlisten) {
-        unlisten();
-      }
-      window.clearTimeout(timeoutId);
-      resolve(value);
-    };
-
-    const timeoutId = window.setTimeout(() => {
-      finish(null);
-    }, timeoutMs);
-
-    void listen<AudioStatusPayload>("audio-status", (event) => {
-      const durationMs = event.payload.durationMs;
-      if (typeof durationMs === "number" && durationMs > 0) {
-        finish(durationMs);
-      }
-    })
-      .then((dispose) => {
-        unlisten = dispose;
-        const latestDuration = useAudioStore.getState().durationMs;
-        if (latestDuration > 0) {
-          finish(latestDuration);
-        }
-      })
-      .catch(() => {
-        finish(null);
-      });
-  });
-}
-
-function calibrateSyncPointsToDuration(
-  points: LegacySyncPoint[],
-  durationMs: number | null,
-  totalSlides: number,
-): LegacySyncPoint[] {
-  if (!durationMs || durationMs <= 0 || points.length === 0) {
-    return points;
-  }
-
-  const maxSlideIndex = points.reduce((max, point) => Math.max(max, point.slideIndex), -1);
-  if (totalSlides > 1 && maxSlideIndex < totalSlides - 2) {
-    return points;
-  }
-
-  const maxTimestamp = points.reduce((max, point) => Math.max(max, point.timestampMs), 0);
-  if (maxTimestamp <= 0) {
-    return points;
-  }
-
-  const factor = durationMs / maxTimestamp;
-  const currentErrorRatio = Math.abs(maxTimestamp - durationMs) / durationMs;
-  const factorIsReasonable = factor > 0.05 && factor < 20;
-  const shouldRescale = factorIsReasonable && currentErrorRatio > 0.25;
-
-  if (!shouldRescale) {
-    return points;
-  }
-
-  return points.map((point) => ({
-    slideIndex: point.slideIndex,
-    timestampMs: Math.max(0, Math.floor(point.timestampMs * factor)),
-  }));
 }
 
 function parseLegacyHmsToMs(value: string): number | null {

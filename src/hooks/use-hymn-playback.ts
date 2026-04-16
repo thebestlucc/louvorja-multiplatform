@@ -31,7 +31,6 @@ export function useHymnPlayback() {
   const setPresentationActiveSlideIndex = usePresentationStore((state) => state.setActiveSlideIndex);
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
-  const clearQueue = useQueueStore((state) => state.clearQueue);
   const addToQueue = useQueueStore((state) => state.addToQueue);
 
   const bindHymnToPlaybackQueue = useCallback(async (hymn: Hymn, startIndex: number = 0) => {
@@ -60,32 +59,40 @@ export function useHymnPlayback() {
 
   const handleStartCantado = useCallback(async (hymn: Hymn) => {
     await catcher(async () => {
-      clearQueue();
-      addToQueue([{ id: crypto.randomUUID(), hymn, type: "audio" }], true);
+      addToQueue([{ id: crypto.randomUUID(), kind: "hymn", hymn, type: "audio" }], true);
       router.navigate({ to: "/playing-now" });
     }, { notify: false });
-  }, [router, clearQueue, addToQueue]);
+  }, [router, addToQueue]);
 
   const handleStartPlayback = useCallback(async (hymn: Hymn) => {
     await catcher(async () => {
-      clearQueue();
-      addToQueue([{ id: crypto.randomUUID(), hymn, type: "playback" }], true);
+      addToQueue([{ id: crypto.randomUUID(), kind: "hymn", hymn, type: "playback" }], true);
       router.navigate({ to: "/playing-now" });
     }, { notify: false });
-  }, [router, clearQueue, addToQueue]);
+  }, [router, addToQueue]);
 
   const handleStartSlidesOnly = useCallback(async (hymn: Hymn) => {
     await catcher(async () => {
-      clearQueue();
-      addToQueue([{ id: crypto.randomUUID(), hymn, type: "projection" }], true);
+      addToQueue([{ id: crypto.randomUUID(), kind: "hymn", hymn, type: "projection" }], true);
       router.navigate({ to: "/playing-now" });
     }, { notify: false });
-  }, [router, clearQueue, addToQueue]);
+  }, [router, addToQueue]);
+
+  const handlePlayNext = useCallback((hymn: Hymn, type: "audio" | "playback" | "projection" = "audio") => {
+    const queueState = useQueueStore.getState();
+    if (queueState.items.length === 0) {
+      addToQueue([{ id: crypto.randomUUID(), kind: "hymn", hymn, type }], true);
+      router.navigate({ to: "/playing-now" });
+      return;
+    }
+    queueState.addToQueueNext({ id: crypto.randomUUID(), kind: "hymn", hymn, type });
+  }, [router, addToQueue]);
 
   return {
     bindHymnToPlaybackQueue,
     handleStartCantado,
     handleStartPlayback,
     handleStartSlidesOnly,
+    handlePlayNext,
   };
 }

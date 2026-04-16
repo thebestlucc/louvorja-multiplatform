@@ -52,8 +52,6 @@ pub async fn set_targets(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn set_targets_both_false_produces_empty_array() {
         // Verify the targets logic directly without AppHandle.

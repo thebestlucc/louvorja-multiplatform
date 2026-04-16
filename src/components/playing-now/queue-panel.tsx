@@ -15,6 +15,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { getPreference, setPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
+import { usePresentationStore } from "../../stores/presentation-store";
 
 interface QueuePanelProps {
   className?: string;
@@ -46,6 +47,7 @@ export function QueuePanel({ className }: QueuePanelProps) {
   const setCurrentIndex = useQueueStore((s) => s.setCurrentIndex);
   const removeFromQueue = useQueueStore((s) => s.removeFromQueue);
   const clearQueue = useQueueStore((s) => s.clearQueue);
+  const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -107,6 +109,7 @@ export function QueuePanel({ className }: QueuePanelProps) {
                     size="icon"
                     className="h-6 w-6"
                     onClick={clearQueue}
+                    disabled={isPlayingLiturgy}
                     aria-label={t("playingNow.clearQueue")}
                   >
                     <Trash2 className="h-3 w-3" />
@@ -162,6 +165,7 @@ export function QueuePanel({ className }: QueuePanelProps) {
                       key={item.id}
                       item={item}
                       isActive={false}
+                      disabled={isPlayingLiturgy}
                       onClick={() => setCurrentIndex(actualIndex)}
                       onRemove={() => removeFromQueue(actualIndex)}
                     />
@@ -187,17 +191,20 @@ export function QueuePanel({ className }: QueuePanelProps) {
 function QueueItemRow({
   item,
   isActive,
+  disabled,
   onClick,
   onRemove,
 }: {
   item: QueueItem;
   isActive: boolean;
+  disabled?: boolean;
   onClick: (() => void) | undefined;
   onRemove: (() => void) | undefined;
 }) {
   const Icon = typeIcons[item.type] ?? Music;
   const title = getItemTitle(item);
   const subtitle = getItemSubtitle(item);
+  const interactive = onClick && !disabled;
 
   return (
     <div
@@ -205,12 +212,14 @@ function QueueItemRow({
         "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
         isActive
           ? "bg-primary/10 text-primary"
-          : "cursor-pointer hover:bg-accent"
+          : interactive
+            ? "cursor-pointer hover:bg-accent"
+            : "opacity-50 cursor-not-allowed",
       )}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
-      onClick={onClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+      onClick={interactive ? onClick : undefined}
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/40" />
       <Icon className="h-3.5 w-3.5 shrink-0" />

@@ -290,6 +290,7 @@
     "actionShowLyrics": "Ver letra",
     "actionSlidesOnly": "Só slides",
     "actionSung": "Cantado",
+    "playNext": "Tocar em seguida",
     "actions": "Ações",
     "album": "Álbum",
     "audio": "Áudio",
@@ -1169,7 +1170,8 @@
       "slidePasser": "Passador de Slides",
       "streaming": "Streaming",
       "sync": "Sincronização",
-      "youtube": "YouTube"
+      "youtube": "YouTube",
+      "remote": "Remoto"
     },
     "theme": "Tema",
     "themeDesc": "Escolha o estilo visual do aplicativo.",
@@ -1269,11 +1271,38 @@
     "ready": "Pronto",
     "returnOff": "Retorno desligado",
     "returnOn": "Retorno ligado",
+    "remoteOff": "Controle: DESLIGADO",
+    "remoteOn": "Controle: LIGADO ({{count}})",
+    "remoteStarting": "Controle: iniciando…",
+    "remoteOpen": "Abrir Controle Remoto",
     "streamingOff": "Streaming: DESLIGADO",
     "streamingOn": "Streaming: LIGADO (porta {{port}}, {{count}})",
     "timerCompact": "Timer {{value}}",
     "timerIdle": "Timer inativo",
     "timerOpen": "Abrir utilidade de timer"
+  },
+  "remoteControl": {
+    "panelTitle": "Controle Remoto",
+    "serverStart": "Iniciar servidor",
+    "serverStop": "Parar servidor",
+    "serverStatusRunning": "Ativo em {{url}}",
+    "serverStatusStopped": "Parado",
+    "showQr": "Mostrar QR",
+    "pairNewDevice": "Parear novo dispositivo",
+    "pairedDevices": "Dispositivos pareados",
+    "revokeDevice": "Revogar",
+    "revokeConfirm": "Revogar este dispositivo?",
+    "pairingRequestTitle": "Solicitação de pareamento",
+    "pairingRequestBody": "{{name}} quer conectar",
+    "pairingApprove": "Aprovar",
+    "pairingDeny": "Negar",
+    "noDevices": "Nenhum dispositivo pareado",
+    "qrExpires": "QR expira em {{seconds}}s",
+    "pinLabel": "Código PIN",
+    "lastSeen": "Visto por último {{time}}",
+    "neverSeen": "Nunca visto",
+    "deviceCount_one": "{{count}} dispositivo",
+    "deviceCount_other": "{{count}} dispositivos"
   },
   "streaming": {
     "bible": "Bíblia",
@@ -1742,6 +1771,112 @@
     "toast": {
       "enabled": "Passador de Slides ativado",
       "disabled": "Passador de Slides desativado"
+    }
+  },
+  "remote": {
+    "title": "LouvorJA Remote",
+    "pair": {
+      "headline": "Parear este dispositivo",
+      "scan": "Escanear QR",
+      "scan_hint": "Aponte a câmera para o código no computador",
+      "pin_link": "Inserir código manualmente",
+      "pin_placeholder": "Código de 6 dígitos",
+      "pin_invalid": "Código inválido. {{attempts}} tentativas restantes.",
+      "pin_locked": "Muitas tentativas. Tente novamente em {{seconds}}s.",
+      "torch": "Alternar lanterna",
+      "success": "Pareado!",
+      "find_code_hint": "Encontre o código no seu computador:\nLouvorJA → Remote"
+    },
+    "live": {
+      "prev": "Slide anterior",
+      "next": "Próximo slide",
+      "black": "Tela preta",
+      "logo": "Tela de logo",
+      "clear": "Limpar projeção",
+      "hold_hint": "Segure para confirmar",
+      "swipe_up_hint": "Deslize para cima para ver todos os slides",
+      "slide_counter": "Slide {{n}} de {{total}}"
+    },
+    "search": {
+      "tab_hymns": "Hinos",
+      "tab_bible": "Bíblia",
+      "tab_services": "Cultos",
+      "placeholder_hymns": "Buscar hinos…",
+      "placeholder_bible": "Livro, capítulo, versículo…",
+      "placeholder_service": "Buscar cultos…",
+      "recent": "Recentes",
+      "results_count": "{{n}} resultados",
+      "add_to_service": "Adicionar ao culto"
+    },
+    "service": {
+      "start": "Iniciar culto",
+      "stop": "Encerrar culto",
+      "stop_confirm": "Encerrar culto?",
+      "next_item": "Próximo item",
+      "prev_item": "Item anterior"
+    },
+    "queue": {
+      "now_playing": "Tocando agora",
+      "up_next": "A seguir",
+      "history": "Histórico",
+      "play_next": "Tocar a seguir",
+      "move_to_top": "Mover para o início",
+      "remove": "Remover",
+      "target_projector": "Projetor",
+      "target_return": "Retorno"
+    },
+    "connection": {
+      "connected": "Conectado",
+      "reconnecting": "Reconectando…",
+      "offline": "Sem conexão",
+      "latency": "{{ms}} ms",
+      "devices_count": "{{n}} conectados",
+      "cannot_reach": "Não é possível alcançar o LouvorJA",
+      "retry": "Toque para tentar novamente"
+    },
+    "multi_op": {
+      "joined": "{{name}} entrou",
+      "next_by": "Próximo por {{name}}"
+    },
+    "settings": {
+      "connection_section": "Conexão",
+      "projector_section": "Projetor e monitores",
+      "appearance": "Aparência",
+      "theme": "Tema",
+      "theme_dark": "Escuro",
+      "theme_light": "Claro",
+      "theme_auto": "Automático",
+      "haptics": "Vibração",
+      "haptics_off": "Desligado",
+      "haptics_light": "Leve",
+      "haptics_medium": "Médio",
+      "haptics_strong": "Forte",
+      "wake_lock": "Manter tela ligada",
+      "hardware_buttons": "Botões de volume físicos",
+      "forget_device": "Esquecer dispositivo (segurar)"
+    },
+    "desktop_ui": {
+      "panel_title": "Controle Remoto",
+      "server_start": "Iniciar servidor",
+      "server_stop": "Parar servidor",
+      "server_status_running": "Rodando em {{url}}",
+      "server_status_stopped": "Parado",
+      "show_qr": "Exibir QR",
+      "pair_new_device": "Parear novo dispositivo",
+      "paired_devices": "Dispositivos pareados",
+      "revoke_device": "Revogar",
+      "pairing_request_title": "Solicitação de pareamento",
+      "pairing_request_body": "{{name}} quer se conectar",
+      "pairing_approve": "Aprovar",
+      "pairing_deny": "Negar"
+    },
+    "errors": {
+      "network_title": "Não foi possível alcançar o computador",
+      "network_action": "Verifique o Wi-Fi e tente novamente",
+      "auth_title": "Dispositivo não reconhecido",
+      "auth_action": "Parear novamente",
+      "generic_title": "Algo deu errado",
+      "generic_action": "Tentar novamente"
     }
   }
 }

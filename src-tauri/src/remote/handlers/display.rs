@@ -69,8 +69,6 @@ pub fn is_return_open(app: &AppHandle) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn event_names_have_remote_prefix() {
         for name in &[

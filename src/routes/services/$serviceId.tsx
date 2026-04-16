@@ -1,14 +1,16 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Plus, Play, Save, Undo2 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { catcher } from "../../lib/catcher";
 import { useLiturgyEditor } from "../../hooks/use-liturgy";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useAudioStore } from "../../stores/audio-store";
+import { useQueueStore } from "../../stores/queue-store";
 import { useShallow } from "zustand/react/shallow";
 import { setSlideContext } from "../../lib/tauri";
 import { projectSlideWithType } from "../../lib/projection-playback";
-import { getPreference, setPreference } from "../../lib/store";
+import { getPreference, setPreference, deletePreference } from "../../lib/store";
 import { LiturgyItemList } from "../../components/services/service-item-list";
 import { LiturgyTimeline } from "../../components/services/service-timeline";
 import { AddItemModal } from "../../components/services/add-item-modal";
@@ -95,6 +97,9 @@ function LiturgyEditor() {
     }))
   );
 
+  // Track whether liturgy was started during this mount (prevents clearing persisted state on initial render)
+  const hasPlayedRef = useRef(false);
+
   // Set active liturgy for cross-module integration
   useEffect(() => {
     setActiveLiturgy(id);
@@ -105,7 +110,7 @@ function LiturgyEditor() {
     };
   }, [id, setActiveLiturgy]);
 
-  // Restore persisted play state on mount
+  // Restore persisted play state on mount — only if no other content is currently playing
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -114,6 +119,10 @@ function LiturgyEditor() {
       );
       if (cancelled || !saved) return;
       const state = usePresentationStore.getState();
+      // Don't interrupt active music/queue playback — user must click "Start Liturgy" explicitly
+      const audioPlaying = useAudioStore.getState().status === "playing";
+      const queueHasItems = useQueueStore.getState().items.length > 0;
+      if (audioPlaying || queueHasItems) return;
       if (
         saved.activeLiturgyId === id &&
         saved.isPlayingLiturgy &&
@@ -287,9 +296,10 @@ function LiturgyEditor() {
     }, { notify: true });
   }, [items]);
 
-  // Persist play state changes
+  // Persist play state changes; clear when liturgy stops so stale state won't auto-restore on next visit
   useEffect(() => {
     if (isPlayingLiturgy) {
+      hasPlayedRef.current = true;
       void catcher(
         setPreference<PersistedPlayState>(PLAY_STATE_KEY, {
           isPlayingLiturgy: true,
@@ -297,6 +307,9 @@ function LiturgyEditor() {
           activeLiturgyItemIndex,
         }),
       );
+    } else if (hasPlayedRef.current) {
+      hasPlayedRef.current = false;
+      void catcher(deletePreference(PLAY_STATE_KEY));
     }
   }, [isPlayingLiturgy, activeLiturgyItemIndex, id]);
 

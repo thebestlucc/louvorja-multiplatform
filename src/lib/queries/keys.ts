@@ -78,6 +78,10 @@ export const queryKeys = {
   streaming: {
     status: ["streaming", "status"] as const,
   },
+  remote: {
+    status: ["remote", "status"] as const,
+    devices: ["remote", "devices"] as const,
+  },
   video: {
     metadata: (path: string) => ["video", "metadata", path] as const,
     resolvedPath: (path: string) => ["video", "resolvedPath", path] as const,

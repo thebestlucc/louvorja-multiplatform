@@ -69,18 +69,69 @@ describe("Queue Store", () => {
     useQueueStore.getState().clearQueue();
     const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
     const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "projection" as const };
-    
+
     useQueueStore.getState().addToQueue([item1, item2]);
-    
+
     assert.strictEqual(useQueueStore.getState().currentIndex, 0);
     useQueueStore.getState().next();
     assert.strictEqual(useQueueStore.getState().currentIndex, 1);
-    useQueueStore.getState().next(); // Should not exceed bounds
-    assert.strictEqual(useQueueStore.getState().currentIndex, 1);
-    
+    useQueueStore.getState().next(); // repeat=off at end → queue finished
+    assert.strictEqual(useQueueStore.getState().currentIndex, -1);
+
+    // Reset to test prev navigation
+    useQueueStore.getState().setCurrentIndex(1);
     useQueueStore.getState().prev();
     assert.strictEqual(useQueueStore.getState().currentIndex, 0);
     useQueueStore.getState().prev(); // Should not go below 0
     assert.strictEqual(useQueueStore.getState().currentIndex, 0);
+  });
+
+  test("repeat=one: next() increments replayTrigger, keeps currentIndex", () => {
+    useQueueStore.getState().clearQueue();
+    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "audio" as const };
+    useQueueStore.getState().addToQueue([item1, item2]);
+    useQueueStore.getState().setRepeat("one");
+
+    const indexBefore = useQueueStore.getState().currentIndex;
+    const triggerBefore = useQueueStore.getState().replayTrigger;
+    useQueueStore.getState().next();
+
+    assert.strictEqual(useQueueStore.getState().currentIndex, indexBefore);
+    assert.strictEqual(useQueueStore.getState().replayTrigger, triggerBefore + 1);
+  });
+
+  test("repeat=all: next() wraps to 0 at end of queue", () => {
+    useQueueStore.getState().clearQueue();
+    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    const item2 = { id: "2", hymn: mockHymn(2, "Hymn 2"), type: "audio" as const };
+    useQueueStore.getState().addToQueue([item1, item2]);
+    useQueueStore.getState().setRepeat("all");
+    useQueueStore.getState().setCurrentIndex(1); // last item
+
+    useQueueStore.getState().next();
+    assert.strictEqual(useQueueStore.getState().currentIndex, 0);
+  });
+
+  test("repeat=off: next() sets currentIndex to -1 at end of queue", () => {
+    useQueueStore.getState().clearQueue();
+    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    useQueueStore.getState().addToQueue([item1]);
+    useQueueStore.getState().setRepeat("off");
+
+    useQueueStore.getState().next();
+    assert.strictEqual(useQueueStore.getState().currentIndex, -1);
+  });
+
+  test("clearQueue() resets replayTrigger to 0", () => {
+    useQueueStore.getState().clearQueue();
+    const item1 = { id: "1", hymn: mockHymn(1, "Hymn 1"), type: "audio" as const };
+    useQueueStore.getState().addToQueue([item1]);
+    useQueueStore.getState().setRepeat("one");
+    useQueueStore.getState().next(); // increments replayTrigger
+
+    assert.ok(useQueueStore.getState().replayTrigger > 0);
+    useQueueStore.getState().clearQueue();
+    assert.strictEqual(useQueueStore.getState().replayTrigger, 0);
   });
 });

@@ -130,8 +130,22 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
             if (!result || result.status !== "ok") return;
             const hymn = result.data;
             useQueueStore.getState().addToQueue(
-              [{ id: crypto.randomUUID(), hymn, type: "audio" }],
+              [{ id: crypto.randomUUID(), kind: "hymn", hymn, type: "audio" }],
               true,
+            );
+          })();
+        }),
+
+        // ── Queue add (from search.tsx "Add to queue" action — no projection) ─
+        // Appends hymn to existing queue. Does NOT clear or auto-project.
+        listen<RemoteHymnSelectPayload>("remote-queue-add", (e) => {
+          void (async () => {
+            const [result] = await catcher(commands.getHymn(e.payload.id));
+            if (!result || result.status !== "ok") return;
+            const hymn = result.data;
+            useQueueStore.getState().addToQueue(
+              [{ id: crypto.randomUUID(), kind: "hymn", hymn, type: "audio" }],
+              false, // clearExisting=false: append without changing currentIndex
             );
           })();
         }),
@@ -151,6 +165,8 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
           };
           usePresentationStore.getState().setSlides([slide]);
           usePresentationStore.getState().setActiveSlideIndex(0);
+          // Light up the playing-now indicator — sidebar checks currentProjectionType.
+          useDisplayStore.getState().setCurrentProjectionType("bible");
           void catcher(setCurrentSlide(slide));
         }),
 

@@ -44,8 +44,6 @@ fn emit_shortcut(app: &AppHandle, shortcut: &str) -> Result<serde_json::Value, A
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     /// The slide handler functions require an `AppHandle` which is not available
     /// in pure unit tests. Logic is tested via the dispatcher integration test (Phase I1).
     /// Here we test the utility fn signatures compile correctly.

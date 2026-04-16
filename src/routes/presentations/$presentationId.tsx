@@ -87,8 +87,6 @@ function PresentationDetail() {
   const [localTitle, setLocalTitle] = useState("");
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
-  const setPresentationSlides = usePresentationStore((s) => s.setSlides);
-  const setPresentationActiveSlideIndex = usePresentationStore((s) => s.setActiveSlideIndex);
 
   const [transition, setTransition] = useState("fade");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -134,8 +132,6 @@ function PresentationDetail() {
     await catcher(async () => {
       await clearActivePlayback();
       setCurrentPresentation(id);
-      setPresentationSlides(slideContents);
-      setPresentationActiveSlideIndex(0);
 
       useMediaPlayerStore.getState().load({
         type: "presentation",
@@ -145,6 +141,7 @@ function PresentationDetail() {
 
       useQueueStore.getState().addToQueue([{
         id: crypto.randomUUID(),
+        kind: "hymn",
         title: presentation?.title || "Presentation",
         type: "projection"
       }], true);
@@ -154,7 +151,7 @@ function PresentationDetail() {
 
       void router.navigate({ to: "/playing-now" });
     }, { notify: true });
-  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, setPresentationSlides, setPresentationActiveSlideIndex, router, presentation?.title]);
+  }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, router, presentation?.title]);
 
   const handleExport = async () => {
     if (!presentation) return;

@@ -8,7 +8,10 @@ import { useQueueStore } from "../stores/queue-store";
 import { catcher } from "../lib/catcher";
 import { projectSlideWithType } from "../lib/projection-playback";
 import { setSlideContext } from "../lib/tauri";
+import { getSyncPoints } from "../lib/tauri/audio";
 import { findOnlineVideoByYtId } from "../lib/tauri/youtube";
+import { parseLyricsSyncToPoints } from "../lib/audio-sync";
+import { hymnToSlides } from "./use-hymn-playback";
 import { defaultBackground } from "../types/presentation";
 import { getFileExt, parseOnlineVideoNotes } from "../lib/utils";
 import type { LiturgyItem as ServiceItem, SlideContent } from "../lib/bindings";
@@ -112,9 +115,48 @@ export function useLiturgyPlayback() {
       };
 
       if (item.itemType === "hymn" && item.itemId != null && hymnForItem != null) {
-        // Delegate to usePlaybackCoordinator — same path as playing from hymnal/collection.
-        useQueueStore.getState().addToQueue([{ id: crypto.randomUUID(), hymn: hymnForItem, type: "audio" }], true);
-        await catcher(buildContext(), { notify: true });
+        await catcher(async () => {
+          // 1. Resolve sync points
+          const syncPoints = await getSyncPoints(hymnForItem.id);
+          const effectiveSyncPoints = (syncPoints && syncPoints.length > 0)
+            ? syncPoints
+            : parseLyricsSyncToPoints(hymnForItem.lyricsSync);
+
+          // 2. Build slides
+          const slides = hymnToSlides(
+            hymnForItem.title,
+            hymnForItem.lyrics,
+            hymnForItem.album,
+            hymnForItem.coverPath,
+            hymnForItem.lyricsSync,
+          );
+
+          // 3. Load media player
+          mediaStore.load({
+            type: "hymn",
+            hymn: hymnForItem,
+            mode: "sung",
+            slides,
+            syncPoints: effectiveSyncPoints,
+            audioPath: hymnForItem.audioPath ?? undefined,
+            playbackPath: hymnForItem.playbackPath ?? undefined,
+          });
+
+          // 4. Push sync points to audio store
+          useAudioStore.getState().setSyncPoints(effectiveSyncPoints);
+
+          // 5. Start audio if available
+          if (hymnForItem.audioPath) {
+            await useAudioStore.getState().play(hymnForItem.audioPath, 0);
+          }
+
+          // 6. Project first slide
+          if (slides.length > 0) {
+            await projectSlideWithType(slides[0], "service");
+          }
+
+          await buildContext();
+        }, { notify: true });
         return;
       }
 

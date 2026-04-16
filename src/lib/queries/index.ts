@@ -13,3 +13,4 @@ export * from "./utilities";
 export * from "./streaming";
 export * from "./display";
 export * from "./youtube";
+export * from "./remote";

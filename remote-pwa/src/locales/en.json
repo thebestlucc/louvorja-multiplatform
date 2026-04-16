@@ -1,16 +1,31 @@
 {
   "remote": {
     "title": "LouvorJA Remote",
+    "loading": "Loading…",
+    "nav": {
+      "live": "Live",
+      "search": "Search",
+      "service": "Service",
+      "queue": "Queue",
+      "settings": "Settings"
+    },
     "pair": {
       "headline": "Pair this device",
       "scan": "Scan QR",
       "scan_hint": "Point camera at the code on your computer",
+      "camera_denied": "Camera access denied. Enter the code manually.",
+      "camera_error": "Camera unavailable. Enter the code manually.",
+      "manual_code_placeholder": "6-digit code",
+      "pair_button": "Pair",
+      "pairing": "Pairing…",
+      "requesting_camera": "Requesting camera…",
       "pin_link": "Enter code manually",
       "pin_placeholder": "6-digit code",
       "pin_invalid": "Invalid code. {{attempts}} attempts left.",
       "pin_locked": "Too many attempts. Try again in {{seconds}}s.",
       "torch": "Toggle torch",
       "success": "Paired!",
+      "redirecting": "Redirecting to live screen…",
       "find_code_hint": "Find code on your computer:\nLouvorJA → Remote"
     },
     "live": {
@@ -25,7 +40,9 @@
       "no_slide": "Waiting for content",
       "connected": "Connected",
       "disconnected": "Disconnected",
-      "reconnecting": "Reconnecting"
+      "reconnecting": "Reconnecting",
+      "all_slides": "All slides",
+      "close_grid": "Close slide grid"
     },
     "search": {
       "tab_hymns": "Hymns",
@@ -37,7 +54,21 @@
       "recent": "Recent",
       "results_count": "{{n}} results",
       "add_to_service": "Add to service",
-      "no_results": "No results"
+      "no_results": "No results",
+      "clear": "Clear search",
+      "bible_version": "Version",
+      "bible_pick_version": "Pick a version",
+      "bible_pick_book": "Pick a book",
+      "bible_pick_chapter": "Chapter",
+      "bible_pick_verse": "Verse",
+      "bible_back": "Back",
+      "bible_loading": "Loading…",
+      "bible_no_chapters": "No chapters found for this book",
+      "bible_no_verses": "No verses found for this chapter",
+      "action_sheet_title": "Choose action",
+      "action_project_now": "Project now",
+      "action_add_to_queue": "Add to queue",
+      "action_cancel": "Cancel"
     },
     "service": {
       "start": "Start service",
@@ -59,7 +90,12 @@
       "target_return": "Return",
       "empty": "Queue is empty",
       "seek": "Seek",
-      "volume": "Volume"
+      "volume": "Volume",
+      "play": "Play",
+      "pause": "Pause",
+      "skip_prev": "Previous track",
+      "skip_next": "Next track",
+      "video_targets": "Video on"
     },
     "connection": {
       "connected": "Connected",
@@ -74,6 +110,11 @@
       "joined": "{{name}} joined",
       "next_by": "Next by {{name}}"
     },
+    "presence": {
+      "title": "Connected operators",
+      "close": "Close",
+      "empty": "No other operators connected"
+    },
     "settings": {
       "connection_section": "Connection",
       "projector_section": "Projector & monitors",
@@ -81,19 +122,44 @@
       "theme": "Theme",
       "theme_dark": "Dark",
       "theme_light": "Light",
-      "theme_auto": "Auto",
-      "haptics": "Haptics",
+      "theme_auto": "System",
+      "behavior_section": "Behavior",
+      "haptics": "Haptic feedback",
+      "haptics_hint": "Vibrate on button press",
       "haptics_off": "Off",
       "haptics_light": "Light",
       "haptics_medium": "Medium",
       "haptics_strong": "Strong",
       "wake_lock": "Keep screen on",
+      "wake_lock_hint": "Prevents sleep while connected",
       "hardware_buttons": "Hardware volume buttons",
       "forget_device": "Forget device (hold)",
+      "forget_device_hint": "Hold for 1 second to confirm",
+      "host": "Host",
+      "status": "Status",
+      "language": "Language",
+      "language_section": "Language",
       "about_section": "About",
+      "app_name": "LouvorJA Remote",
       "version": "Version",
+      "desktop_link": "Get the desktop app",
       "device_name": "Device",
       "server_name": "Server"
+    },
+    "desktop_ui": {
+      "panel_title": "Remote Control",
+      "server_start": "Start server",
+      "server_stop": "Stop server",
+      "server_status_running": "Running on {{url}}",
+      "server_status_stopped": "Stopped",
+      "show_qr": "Show QR",
+      "pair_new_device": "Pair new device",
+      "paired_devices": "Paired devices",
+      "revoke_device": "Revoke",
+      "pairing_request_title": "Pairing request",
+      "pairing_request_body": "{{name}} wants to connect",
+      "pairing_approve": "Approve",
+      "pairing_deny": "Deny"
     },
     "errors": {
       "network_title": "Can't reach the computer",

@@ -2,6 +2,22 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { QrScanner } from "../qr-scanner";
 
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        "remote.pair.camera_denied": "Camera access denied. Enter the code manually.",
+        "remote.pair.camera_error": "Camera unavailable. Enter the code manually.",
+        "remote.pair.manual_code_placeholder": "6-digit code",
+        "remote.pair.pair_button": "Pair",
+        "remote.pair.requesting_camera": "Requesting camera\u2026",
+        "remote.pair.scan_hint": "Point camera at the QR code on your computer.",
+      };
+      return map[key] ?? key;
+    },
+  }),
+}));
+
 // Mock qr-scanner library (dynamic import)
 vi.mock("qr-scanner", () => ({
   default: vi.fn().mockImplementation((_video: unknown, callback: (result: { data: string }) => void) => ({

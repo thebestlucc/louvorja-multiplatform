@@ -8,6 +8,7 @@ import { projectBibleVerse, clearBibleProjection } from "../lib/tauri/bible";
 import { useDisplayStore } from "../stores/display-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 
 import type { BibleProjectionSettings } from "../components/bible/projection-settings";
 
@@ -33,7 +34,6 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
   const setCurrentProjectionType = useDisplayStore((s) => s.setCurrentProjectionType);
   const setBibleContext = useDisplayStore((s) => s.setBibleContext);
   const setCurrentPresentation = usePresentationStore((s) => s.setCurrentPresentation);
-  const addToQueue = useQueueStore((s) => s.addToQueue);
 
   // Note: Bible slide-changed + context sync listeners are now global in __root.tsx
   // so they persist even when the /bible route unmounts (e.g. user on Playing Now)
@@ -102,14 +102,6 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     if (effectiveVerses.length === 0) return;
 
     const sorted = [...effectiveVerses].sort((a, b) => a - b);
-    const range = sorted.length === 1 ? String(sorted[0]) : `${sorted[0]}-${sorted[sorted.length - 1]}`;
-    const title = `${currentBook} ${currentChapter}:${range}`;
-
-    addToQueue([{
-      id: crypto.randomUUID(),
-      title,
-      type: "projection"
-    }], true);
 
     // Build settings JSON for Rust (includes mode, background, text styling, font)
     const ps = projectionSettings;
@@ -148,6 +140,8 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
 
   const startBibleProjection = useCallback(async () => {
     await clearActivePlayback();
+    useQueueStore.getState().clearQueue();
+    useMediaPlayerStore.getState().unload();
     setCurrentProjectionType("bible");
     setCurrentPresentation(null);
     await projectSelectedVersesRange();

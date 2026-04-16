@@ -7,8 +7,10 @@ import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
+import { useDisplayStore } from "../stores/display-store";
 import { useSlides } from "./use-slides";
 import { resolveSlideSeekTimestamp, resolvePlaybackVariantPaths } from "../lib/audio-sync";
+import { resetCoordinatorPlaybackState } from "./use-playback-coordinator";
 import type { OverlayState } from "../lib/bindings";
 
 /**
@@ -118,12 +120,14 @@ export function useMediaPlayer() {
   }, []);
 
   const stop = useCallback(() => {
+    resetCoordinatorPlaybackState();
     // Seek video to beginning before clearing screens
     if (store.getState().timelineSource === "video") {
       emit("video-control", { action: "seek", value: 0 });
     }
     useAudioStore.getState().stop();
     clearCurrentSlide();
+    useDisplayStore.getState().setCurrentProjectionType(null);
 
     const pStore = usePresentationStore.getState();
     if (pStore.isPlayingLiturgy) {
@@ -133,11 +137,8 @@ export function useMediaPlayer() {
     }
 
     store.getState().stop();
-    const queueState = useQueueStore.getState();
-    if (queueState.items.length <= 1) {
-      queueState.clearQueue();
-      store.getState().unload();
-    }
+    useQueueStore.getState().clearQueue();
+    store.getState().unload();
   }, []);
 
   const seek = useCallback((timeMs: number) => {

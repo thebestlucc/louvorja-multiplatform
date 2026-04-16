@@ -290,6 +290,7 @@
     "actionShowLyrics": "Show lyrics",
     "actionSlidesOnly": "Slides only",
     "actionSung": "Sung",
+    "playNext": "Play next",
     "actions": "Actions",
     "album": "Album",
     "audio": "Audio",
@@ -1169,7 +1170,8 @@
       "slidePasser": "Slide Passer",
       "streaming": "Streaming",
       "sync": "Content Sync",
-      "youtube": "YouTube"
+      "youtube": "YouTube",
+      "remote": "Remote"
     },
     "theme": "Theme",
     "themeDesc": "Choose the visual style of the app.",
@@ -1269,11 +1271,38 @@
     "ready": "Ready",
     "returnOff": "Return off",
     "returnOn": "Return on",
+    "remoteOff": "Remote: OFF",
+    "remoteOn": "Remote: ON ({{count}})",
+    "remoteStarting": "Remote: starting…",
+    "remoteOpen": "Open Remote Control",
     "streamingOff": "Streaming: OFF",
     "streamingOn": "Streaming: ON (port {{port}}, {{count}})",
     "timerCompact": "Timer {{value}}",
     "timerIdle": "Timer idle",
     "timerOpen": "Open timer utility"
+  },
+  "remoteControl": {
+    "panelTitle": "Remote Control",
+    "serverStart": "Start server",
+    "serverStop": "Stop server",
+    "serverStatusRunning": "Running on {{url}}",
+    "serverStatusStopped": "Stopped",
+    "showQr": "Show QR",
+    "pairNewDevice": "Pair new device",
+    "pairedDevices": "Paired devices",
+    "revokeDevice": "Revoke",
+    "revokeConfirm": "Revoke this device?",
+    "pairingRequestTitle": "Pairing request",
+    "pairingRequestBody": "{{name}} wants to connect",
+    "pairingApprove": "Approve",
+    "pairingDeny": "Deny",
+    "noDevices": "No paired devices",
+    "qrExpires": "QR expires in {{seconds}}s",
+    "pinLabel": "PIN code",
+    "lastSeen": "Last seen {{time}}",
+    "neverSeen": "Never seen",
+    "deviceCount_one": "{{count}} device",
+    "deviceCount_other": "{{count}} devices"
   },
   "streaming": {
     "bible": "Bible",
@@ -1742,6 +1771,112 @@
     "toast": {
       "enabled": "Slide Passer enabled",
       "disabled": "Slide Passer disabled"
+    }
+  },
+  "remote": {
+    "title": "LouvorJA Remote",
+    "pair": {
+      "headline": "Pair this device",
+      "scan": "Scan QR",
+      "scan_hint": "Point camera at the code on your computer",
+      "pin_link": "Enter code manually",
+      "pin_placeholder": "6-digit code",
+      "pin_invalid": "Invalid code. {{attempts}} attempts left.",
+      "pin_locked": "Too many attempts. Try again in {{seconds}}s.",
+      "torch": "Toggle torch",
+      "success": "Paired!",
+      "find_code_hint": "Find code on your computer:\nLouvorJA → Remote"
+    },
+    "live": {
+      "prev": "Previous slide",
+      "next": "Next slide",
+      "black": "Black screen",
+      "logo": "Logo screen",
+      "clear": "Clear projection",
+      "hold_hint": "Hold to confirm",
+      "swipe_up_hint": "Swipe up for all slides",
+      "slide_counter": "Slide {{n}} of {{total}}"
+    },
+    "search": {
+      "tab_hymns": "Hymns",
+      "tab_bible": "Bible",
+      "tab_services": "Services",
+      "placeholder_hymns": "Search hymns…",
+      "placeholder_bible": "Book, chapter, verse…",
+      "placeholder_service": "Search services…",
+      "recent": "Recent",
+      "results_count": "{{n}} results",
+      "add_to_service": "Add to service"
+    },
+    "service": {
+      "start": "Start service",
+      "stop": "Stop service",
+      "stop_confirm": "Stop service?",
+      "next_item": "Next item",
+      "prev_item": "Previous item"
+    },
+    "queue": {
+      "now_playing": "Now playing",
+      "up_next": "Up next",
+      "history": "History",
+      "play_next": "Play next",
+      "move_to_top": "Move to top",
+      "remove": "Remove",
+      "target_projector": "Projector",
+      "target_return": "Return"
+    },
+    "connection": {
+      "connected": "Connected",
+      "reconnecting": "Reconnecting…",
+      "offline": "Offline",
+      "latency": "{{ms}} ms",
+      "devices_count": "{{n}} connected",
+      "cannot_reach": "Cannot reach LouvorJA",
+      "retry": "Tap to retry"
+    },
+    "multi_op": {
+      "joined": "{{name}} joined",
+      "next_by": "Next by {{name}}"
+    },
+    "settings": {
+      "connection_section": "Connection",
+      "projector_section": "Projector & monitors",
+      "appearance": "Appearance",
+      "theme": "Theme",
+      "theme_dark": "Dark",
+      "theme_light": "Light",
+      "theme_auto": "Auto",
+      "haptics": "Haptics",
+      "haptics_off": "Off",
+      "haptics_light": "Light",
+      "haptics_medium": "Medium",
+      "haptics_strong": "Strong",
+      "wake_lock": "Keep screen on",
+      "hardware_buttons": "Hardware volume buttons",
+      "forget_device": "Forget device (hold)"
+    },
+    "desktop_ui": {
+      "panel_title": "Remote Control",
+      "server_start": "Start server",
+      "server_stop": "Stop server",
+      "server_status_running": "Running on {{url}}",
+      "server_status_stopped": "Stopped",
+      "show_qr": "Show QR",
+      "pair_new_device": "Pair new device",
+      "paired_devices": "Paired devices",
+      "revoke_device": "Revoke",
+      "pairing_request_title": "Pairing request",
+      "pairing_request_body": "{{name}} wants to connect",
+      "pairing_approve": "Approve",
+      "pairing_deny": "Deny"
+    },
+    "errors": {
+      "network_title": "Can't reach the computer",
+      "network_action": "Check Wi-Fi and try again",
+      "auth_title": "Device not recognized",
+      "auth_action": "Pair again",
+      "generic_title": "Something went wrong",
+      "generic_action": "Try again"
     }
   }
 }

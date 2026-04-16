@@ -1,11 +1,10 @@
 import { useRef, useCallback } from "react";
+import { usePreferencesStore } from "@/stores/preferences-store";
 
 interface UseLongPressOptions {
   onHoldComplete: () => void;
   /** Duration in ms before firing (default 600). */
   duration?: number;
-  /** Trigger haptic feedback if available. */
-  haptics?: boolean;
 }
 
 interface LongPressHandlers {
@@ -18,9 +17,10 @@ interface LongPressHandlers {
 export function useLongPress({
   onHoldComplete,
   duration = 600,
-  haptics = true,
 }: UseLongPressOptions): LongPressHandlers {
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onHoldCompleteRef = useRef(onHoldComplete);
+  onHoldCompleteRef.current = onHoldComplete;
 
   const cancel = useCallback(() => {
     if (timerRef.current !== undefined) {
@@ -34,14 +34,15 @@ export function useLongPress({
       e.preventDefault();
       cancel();
       timerRef.current = setTimeout(() => {
-        if (haptics && "vibrate" in navigator) {
+        // Check haptics preference at fire time to respect user's current setting
+        if (usePreferencesStore.getState().haptics && "vibrate" in navigator) {
           navigator.vibrate(40);
         }
-        onHoldComplete();
+        onHoldCompleteRef.current();
         timerRef.current = undefined;
       }, duration);
     },
-    [cancel, duration, haptics, onHoldComplete],
+    [cancel, duration],
   );
 
   const onPointerUp = useCallback(

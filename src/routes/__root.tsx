@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Square, ExternalLink } from "lucide-react";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
 import { StatusBar } from "../components/layout/status-bar";
@@ -12,6 +12,7 @@ import { KeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcu
 import { UpdateNotification } from "../components/update-notification";
 import { PersistentVideoPlayer } from "../components/online-videos/persistent-video-player";
 import { useKeyboard } from "../hooks/use-keyboard";
+import { useRemoteBridge } from "../hooks/use-remote-bridge";
 import { useSlidePasser } from "../hooks/use-slide-passer";
 import { useSlidePasserStore } from "../stores/slide-passer-store";
 import { useLiturgyPlayback } from "../hooks/use-liturgy-playback";
@@ -24,8 +25,9 @@ import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useDisplayStore } from "../stores/display-store";
-import type { SlideContent } from "../lib/bindings";
+import type { SlideContent, LiturgyWithItems } from "../lib/bindings";
 import type { BibleContext } from "../stores/display-store";
+import { useQueueStore } from "../stores/queue-store";
 import { deletePreference } from "../lib/store";
 import { Button } from "../components/ui/button";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
@@ -341,6 +343,7 @@ function RootLayout() {
   usePlaybackCoordinator();
   useDownloadEvents();
   useKeyboard({ enabled: !isBareRoute });
+  useRemoteBridge({ enabled: !isBareRoute });
   useSlidePasser({ enabled: !isBareRoute });
   const { t } = useTranslation();
   const { service: liturgyService, items: liturgyItems } = useLiturgyPlayback();
@@ -349,6 +352,8 @@ function RootLayout() {
   const activeLiturgyItemIndex = usePresentationStore((s) => s.activeLiturgyItemIndex);
   const setPlayingLiturgy = usePresentationStore((s) => s.setPlayingLiturgy);
   const setActiveLiturgyItemIndex = usePresentationStore((s) => s.setActiveLiturgyItemIndex);
+  const queueItems = useQueueStore((s) => s.items);
+  const queueCurrentIndex = useQueueStore((s) => s.currentIndex);
 
   const handleStopLiturgy = useCallback(() => {
     setPlayingLiturgy(false);
@@ -371,6 +376,95 @@ function RootLayout() {
       catcher(stopProjectionAndSongAudio(), { notify: true });
     }
   }, [activeLiturgyItemIndex, liturgyItems.length, setActiveLiturgyItemIndex, setPlayingLiturgy]);
+
+  // Broadcast service state to PWA clients when service or item index changes.
+  useEffect(() => {
+    if (!activeLiturgyId) return;
+    const data = queryClient.getQueryData<LiturgyWithItems>(
+      queryKeys.services.detail(activeLiturgyId)
+    );
+    if (!data) return;
+    const payload = {
+      title: data.service.title,
+      activeIndex: activeLiturgyItemIndex,
+      items: data.items.map((item) => ({
+        id: String(item.id),
+        title: item.title,
+        type: item.itemType,
+      })),
+    };
+    emit("service-state", payload);
+  }, [activeLiturgyId, activeLiturgyItemIndex, queryClient]);
+
+  // Broadcast queue state to PWA clients when playing queue changes.
+  useEffect(() => {
+    const nowPlaying =
+      queueCurrentIndex >= 0 && queueCurrentIndex < queueItems.length
+        ? {
+            id: queueItems[queueCurrentIndex].id,
+            title:
+              queueItems[queueCurrentIndex].hymn?.title ??
+              queueItems[queueCurrentIndex].title ??
+              "",
+            artist: queueItems[queueCurrentIndex].hymn?.author ?? undefined,
+          }
+        : null;
+    const history = queueItems
+      .slice(0, Math.max(0, queueCurrentIndex))
+      .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
+    const upNext = queueItems
+      .slice(queueCurrentIndex + 1)
+      .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
+    emit("queue-state", { nowPlaying, upNext, history });
+  }, [queueItems, queueCurrentIndex]);
+
+  // Re-emit current service + queue state whenever a new remote device connects.
+  // Uses getState() for fresh reads to avoid stale closures.
+  useEffect(() => {
+    if (isBareRoute) return;
+    const unlistenPromise = listen("remote-devices-changed", () => {
+      // Re-broadcast service state
+      const { activeLiturgyId: lid, activeLiturgyItemIndex: idx } = usePresentationStore.getState();
+      if (lid) {
+        const data = queryClient.getQueryData<LiturgyWithItems>(
+          queryKeys.services.detail(lid)
+        );
+        if (data) {
+          emit("service-state", {
+            title: data.service.title,
+            activeIndex: idx,
+            items: data.items.map((item) => ({
+              id: String(item.id),
+              title: item.title,
+              type: item.itemType,
+            })),
+          });
+        }
+      } else {
+        // No active service — signal cleared state to remote
+        emit("service-state", null);
+      }
+
+      // Re-broadcast queue state
+      const { items, currentIndex } = useQueueStore.getState();
+      const nowPlaying =
+        currentIndex >= 0 && currentIndex < items.length
+          ? {
+              id: items[currentIndex].id,
+              title: items[currentIndex].hymn?.title ?? items[currentIndex].title ?? "",
+              artist: items[currentIndex].hymn?.author ?? undefined,
+            }
+          : null;
+      const history = items
+        .slice(0, Math.max(0, currentIndex))
+        .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
+      const upNext = items
+        .slice(currentIndex + 1)
+        .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
+      emit("queue-state", { nowPlaying, upNext, history });
+    });
+    return () => { unlistenPromise.then((fn) => fn()); };
+  }, [isBareRoute, queryClient]);
 
   const router = useRouter();
   const {

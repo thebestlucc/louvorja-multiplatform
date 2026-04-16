@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Wifi, Palette, Film, Monitor, Sliders, Keyboard, Database, RefreshCw, Pointer } from "lucide-react";
+import { Wifi, Palette, Film, Monitor, Sliders, Keyboard, Database, RefreshCw, Pointer, Smartphone } from "lucide-react";
 import { ShortcutsTab } from "../../components/settings/shortcuts-tab";
 import { GeneralSection } from "../../components/settings/general-section";
 import { AppearanceSection } from "../../components/settings/appearance-section";
@@ -10,11 +10,12 @@ import { SyncSection } from "../../components/settings/sync-section";
 import { DataSection } from "../../components/settings/data-section";
 import { YouTubeSection } from "../../components/settings/youtube-section";
 import { SlidePasserSection } from "../../components/settings/slide-passer-section";
+import { RemotePanel } from "../../components/remote/RemotePanel";
 import { cn } from "../../lib/utils";
 import { useRouteTour } from "../../hooks/use-route-tour";
 import { SpotlightTour } from "../../components/tour/spotlight-tour";
 
-type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "slide-passer" | "streaming" | "sync" | "youtube" | "data";
+type SettingsTab = "general" | "appearance" | "shortcuts" | "monitor" | "slide-passer" | "streaming" | "sync" | "youtube" | "data" | "remote";
 
 interface SettingsSearch {
   tab?: SettingsTab;
@@ -39,6 +40,7 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: React.ComponentT
   { id: "sync", labelKey: "settings.tabs.sync", icon: RefreshCw },
   { id: "youtube", labelKey: "settings.tabs.youtube", icon: Film },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
+  { id: "remote", labelKey: "settings.tabs.remote", icon: Smartphone },
 ];
 
 function SettingsIndex() {
@@ -90,6 +92,7 @@ function SettingsIndex() {
         {activeTab === "sync" && <SyncSection />}
         {activeTab === "youtube" && <YouTubeSection />}
         {activeTab === "data" && <DataSection />}
+        {activeTab === "remote" && <RemotePanel />}
       </main>
 
       {showTour && steps.length > 0 && (
