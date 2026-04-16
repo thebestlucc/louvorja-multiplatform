@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, X, ChevronRight, ChevronLeft, Monitor, ListPlus } from "lucide-react";
+import { Search, X, ChevronRight, ChevronLeft, Monitor } from "lucide-react";
 import { useConnectionStore } from "@/stores/connection-store";
 import { cn } from "@/lib/utils";
 import { HighlightedSnippet } from "@/components/ui/highlighted-snippet";
-
-type SearchTab = "hymns" | "bible" | "services";
+import { SelectionActionBar } from "@/components/search/selection-action-bar";
+import {
+  compositeId,
+  type QueueableTab,
+  type SearchTab,
+  type SelectedItem,
+} from "@/lib/search-selection";
 
 interface SearchResultItem {
   id: string;
@@ -20,6 +25,14 @@ interface SearchResultItem {
     verse: number;
     text: string;
     bookName: string;
+  };
+  /** Only set for video results */
+  videoRef?: {
+    videoSource: "youtube" | "local";
+    videoId?: string;
+    videoUrl?: string;
+    videoTitle?: string;
+    duration?: number;
   };
 }
 
@@ -43,6 +56,23 @@ interface RawLiturgy {
   id: number;
   title: string;
   date?: string | null;
+}
+
+interface RawVideo {
+  id: number;
+  title: string;
+  videoSource: "youtube" | "local";
+  videoId?: string | null;
+  videoUrl?: string | null;
+  videoTitle?: string | null;
+  duration?: number | null;
+  channelName?: string | null;
+}
+
+interface RawPresentation {
+  id: number;
+  title: string;
+  slideCount?: number | null;
 }
 
 // Bible browse raw shapes — match Rust BibleVersion / Book / Verse (camelCase via serde)
@@ -76,6 +106,8 @@ interface RawBibleVerse {
 const TAB_OP: Record<SearchTab, string> = {
   hymns: "hymn.search",
   bible: "bible.search",
+  videos: "video.list",
+  presentations: "presentation.list",
   services: "service.list_today",
 };
 
@@ -104,24 +136,13 @@ function saveRecentSearch(tab: SearchTab, query: string): void {
   }
 }
 
-// ─── Action confirmation ──────────────────────────────────────────────────────
-// Tapping a result stages a PendingAction; the user confirms "project now" or
-// "add to queue" in a bottom sheet before anything is sent to the desktop.
+// ─── Action confirmation (services-only) ─────────────────────────────────────
+// Services tab keeps the old single-item sheet to confirm "open service".
 interface PendingAction {
-  kind: "hymn" | "bible" | "service";
+  kind: "service";
   title: string;
   subtitle?: string;
-  // Payload fields passed to the desktop:
-  hymnId?: number;     // kind = "hymn"
-  serviceId?: number;  // kind = "service"
-  bibleRef?: {         // kind = "bible"
-    id: number;
-    book: string;
-    chapter: number;
-    verse: number;
-    text: string;
-    bookName: string;
-  };
+  serviceId: number;
 }
 
 // ─── Bible browse state machine ──────────────────────────────────────────────
@@ -152,6 +173,100 @@ const INITIAL_BIBLE_STATE: BibleBrowseState = {
   loading: false,
 };
 
+// ─── buildSelectedItem helper ─────────────────────────────────────────────────
+
+function buildSelectedItem(
+  tab: QueueableTab,
+  item: SearchResultItem,
+  bibleState: BibleBrowseState,
+): SelectedItem {
+  if (tab === "hymns") {
+    return {
+      tab,
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      payload: { kind: "hymn", hymnId: Number(item.id) },
+    };
+  }
+  if (tab === "bible") {
+    const ref = item.bibleRef!;
+    const versionId = bibleState.selectedVersion?.id ?? 0;
+    return {
+      tab,
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      payload: {
+        kind: "bible",
+        versionId,
+        book: ref.book,
+        bookName: ref.bookName,
+        chapter: ref.chapter,
+        verse: ref.verse,
+        text: ref.text,
+      },
+    };
+  }
+  if (tab === "videos") {
+    const vr = item.videoRef!;
+    return {
+      tab,
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      payload: {
+        kind: "video",
+        videoSource: vr.videoSource,
+        videoId: vr.videoId,
+        videoUrl: vr.videoUrl,
+        videoTitle: vr.videoTitle,
+        duration: vr.duration,
+      },
+    };
+  }
+  // presentations
+  return {
+    tab,
+    id: item.id,
+    title: item.title,
+    subtitle: item.subtitle,
+    payload: { kind: "presentation", presentationId: Number(item.id) },
+  };
+}
+
+// ─── buildSelectPayload helper (legacy search.select format) ─────────────────
+
+function buildSelectPayload(selected: SelectedItem): Record<string, unknown> {
+  const { payload } = selected;
+  if (payload.kind === "hymn") {
+    return { id: String(payload.hymnId), type: "hymns" };
+  }
+  if (payload.kind === "bible") {
+    return {
+      id: selected.id,
+      type: "bible",
+      book: payload.book,
+      chapter: payload.chapter,
+      verse: payload.verse,
+      text: payload.text,
+      bookName: payload.bookName,
+    };
+  }
+  if (payload.kind === "video") {
+    return {
+      id: payload.videoId ?? payload.videoUrl ?? selected.id,
+      type: "video",
+      videoSource: payload.videoSource,
+      videoId: payload.videoId,
+      videoUrl: payload.videoUrl,
+      videoTitle: payload.videoTitle,
+    };
+  }
+  // presentation
+  return { id: String(payload.presentationId), type: "presentation" };
+}
+
 export default function SearchRoute() {
   const { t } = useTranslation();
   const ws = useConnectionStore((s) => s.ws);
@@ -162,9 +277,10 @@ export default function SearchRoute() {
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-  // Confirmation sheet — avoids mis-click projection. Tapping any result stages an
-  // action here; the sheet then presents "Project now" / "Add to queue" / "Cancel".
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  // Multi-select cart for queueable tabs (hymns, bible, videos, presentations)
+  const [selection, setSelection] = useState<Map<string, SelectedItem>>(new Map());
+  // Services-only single sheet (old flow preserved)
+  const [pendingService, setPendingService] = useState<PendingAction | null>(null);
 
   // Bible browse state
   const [bibleState, setBibleState] = useState<BibleBrowseState>(INITIAL_BIBLE_STATE);
@@ -187,8 +303,6 @@ export default function SearchRoute() {
   }, []);
 
   // Subscribe to per-tab response ops.
-  // The server returns results as a response envelope with the same op name
-  // that was sent (e.g. "hymn.search"), not as a separate "search.results" event.
   useEffect(() => {
     if (!ws || typeof ws.on !== "function") return;
 
@@ -235,15 +349,44 @@ export default function SearchRoute() {
       );
     });
 
-    // Bible browse handlers — op name matches the request op (WS echoes request op in response)
+    const videoUnsub = ws.on("video.list", (payload) => {
+      if (tab !== "videos") return;
+      const items = Array.isArray(payload) ? (payload as RawVideo[]) : [];
+      setResults(
+        items.map((v) => ({
+          id: String(v.id),
+          title: v.videoTitle ?? v.title,
+          subtitle: v.channelName ?? undefined,
+          videoRef: {
+            videoSource: v.videoSource,
+            videoId: v.videoId ?? undefined,
+            videoUrl: v.videoUrl ?? undefined,
+            videoTitle: v.videoTitle ?? undefined,
+            duration: v.duration ?? undefined,
+          },
+        })),
+      );
+    });
+
+    const presentationUnsub = ws.on("presentation.list", (payload) => {
+      if (tab !== "presentations") return;
+      const items = Array.isArray(payload) ? (payload as RawPresentation[]) : [];
+      setResults(
+        items.map((p) => ({
+          id: String(p.id),
+          title: p.title,
+          subtitle: p.slideCount != null ? String(p.slideCount) : undefined,
+        })),
+      );
+    });
+
+    // Bible browse handlers
     const bibleVersionsUnsub = ws.on("bible.list_versions", (payload) => {
       if (tab !== "bible") return;
       const versions = Array.isArray(payload) ? (payload as RawBibleVersion[]) : [];
       setBibleState((prev) => ({ ...prev, versions, loading: false }));
     });
 
-    // Response handlers populate the list for the CURRENT step but never mutate `step`
-    // itself — step advancement is driven client-side by user clicks (optimistic).
     const bibleBooksUnsub = ws.on("bible.list_books", (payload) => {
       if (tab !== "bible") return;
       const books = Array.isArray(payload) ? (payload as RawBibleBook[]) : [];
@@ -266,6 +409,8 @@ export default function SearchRoute() {
       hymnUnsub();
       bibleUnsub();
       serviceUnsub();
+      videoUnsub();
+      presentationUnsub();
       bibleVersionsUnsub();
       bibleBooksUnsub();
       bibleChaptersUnsub();
@@ -273,29 +418,29 @@ export default function SearchRoute() {
     };
   }, [ws, tab]);
 
-  // On tab change ONLY: reset query, recent searches, and bible browse state.
-  // IMPORTANT: do NOT depend on ws/wsState here — a transient reconnect would otherwise
-  // reset a mid-flow bible browse back to the version picker.
+  // On tab change ONLY: reset query, recent searches, bible browse state, and selection.
   useEffect(() => {
     setQuery("");
     setResults([]);
+    setSelection(new Map()); // clear selection on tab change
     setRecentSearches(getRecentSearches(tab));
     if (tab === "bible") {
       setBibleState({ ...INITIAL_BIBLE_STATE, loading: true });
-      bibleVersionsFetchedRef.current = false; // arm fetch for this tab entry
+      bibleVersionsFetchedRef.current = false;
     }
   }, [tab]);
 
   // Fetch default list for the active tab when connected.
-  // Re-runs on wsState transitions so a dropped send (during CONNECTING) retries on reconnect.
-  // The `bibleVersionsFetchedRef` guard ensures we fetch versions exactly ONCE per bible
-  // tab entry — preventing wsState flaps from wiping a mid-browse state.
   useEffect(() => {
     if (!ws || wsState !== "connected") return;
     if (tab === "hymns") {
       ws.send("hymn.search", { query: "" });
     } else if (tab === "services") {
       ws.send("service.list_today", {});
+    } else if (tab === "videos") {
+      ws.send("video.list", {});
+    } else if (tab === "presentations") {
+      ws.send("presentation.list", {});
     } else if (tab === "bible" && !bibleVersionsFetchedRef.current) {
       bibleVersionsFetchedRef.current = true;
       ws.send("bible.list_versions", {});
@@ -308,14 +453,16 @@ export default function SearchRoute() {
       if (debounceRef.current !== undefined) clearTimeout(debounceRef.current);
 
       if (!value.trim()) {
-        // Re-show default list when query is cleared
         const freshWs = useConnectionStore.getState().ws;
         if (tab === "hymns") {
           freshWs?.send("hymn.search", { query: "" });
         } else if (tab === "services") {
           freshWs?.send("service.list_today", {});
+        } else if (tab === "videos") {
+          freshWs?.send("video.list", {});
+        } else if (tab === "presentations") {
+          freshWs?.send("presentation.list", {});
         } else {
-          // bible: show empty results — user sees browse UI / recent searches
           setResults([]);
         }
         return;
@@ -327,9 +474,11 @@ export default function SearchRoute() {
         if (op === "service.list_today") {
           freshWs?.send(op, {});
         } else if (op === "bible.search") {
-          // Scope search to selected version when one is chosen in the browse UI
           const versionId = bibleStateRef.current.selectedVersion?.id;
           freshWs?.send(op, versionId != null ? { query: value, versionId } : { query: value });
+        } else if (op === "video.list" || op === "presentation.list") {
+          // These ops list all — no query support; just re-fetch
+          freshWs?.send(op, {});
         } else {
           freshWs?.send(op, { query: value });
         }
@@ -338,67 +487,79 @@ export default function SearchRoute() {
     [ws, tab],
   );
 
-  // Stage a selection. Actual projection/queue-add happens only after the user
-  // confirms in the bottom sheet — avoids mis-click projection from fat fingers.
-  const handleSelect = useCallback(
-    (id: string) => {
-      const item = results.find((r) => r.id === id);
-      if (!item) return;
-      let pending: PendingAction;
-      if (tab === "hymns") {
-        pending = { kind: "hymn", title: item.title, subtitle: item.subtitle, hymnId: Number(item.id) };
-      } else if (tab === "bible" && item.bibleRef) {
-        pending = {
-          kind: "bible",
+  // Toggle item in multi-select cart (for queueable tabs) or open services sheet
+  const toggleSelected = useCallback(
+    (item: SearchResultItem) => {
+      if (tab === "services") {
+        setPendingService({
+          kind: "service",
           title: item.title,
           subtitle: item.subtitle,
-          bibleRef: { ...item.bibleRef, id: Number(item.id) },
-        };
-      } else if (tab === "services") {
-        pending = { kind: "service", title: item.title, subtitle: item.subtitle, serviceId: Number(item.id) };
-      } else {
+          serviceId: Number(item.id),
+        });
+        // Record recent search for services too
+        if (query.trim()) {
+          saveRecentSearch(tab, query);
+          setRecentSearches(getRecentSearches(tab));
+        }
         return;
       }
-      setPendingAction(pending);
-      // Record the current query as a recent search when a result is tapped
+      const key = compositeId(tab as QueueableTab, item.id);
+      setSelection((prev) => {
+        const next = new Map(prev);
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.set(key, buildSelectedItem(tab as QueueableTab, item, bibleStateRef.current));
+        }
+        return next;
+      });
+      // Record recent search when toggling in
       if (query.trim()) {
         saveRecentSearch(tab, query);
         setRecentSearches(getRecentSearches(tab));
       }
     },
-    [tab, results, query],
+    [tab, query],
   );
 
-  const handleActionProjectNow = useCallback(() => {
-    if (!pendingAction) return;
+  // Services sheet handlers (legacy flow)
+  const handleServiceProjectNow = useCallback(() => {
+    if (!pendingService) return;
     const freshWs = useConnectionStore.getState().ws;
-    if (pendingAction.kind === "hymn" && pendingAction.hymnId != null) {
-      freshWs?.send("search.select", { id: String(pendingAction.hymnId), type: "hymns" });
-    } else if (pendingAction.kind === "bible" && pendingAction.bibleRef) {
-      const r = pendingAction.bibleRef;
-      freshWs?.send("search.select", {
-        id: String(r.id),
-        type: "bible",
-        book: r.book,
-        chapter: r.chapter,
-        verse: r.verse,
-        text: r.text,
-        bookName: r.bookName,
-      });
-    } else if (pendingAction.kind === "service" && pendingAction.serviceId != null) {
-      freshWs?.send("search.select", { id: String(pendingAction.serviceId), type: "services" });
+    freshWs?.send("search.select", {
+      id: String(pendingService.serviceId),
+      type: "services",
+    });
+    setPendingService(null);
+  }, [pendingService]);
+
+  const handleServiceCancel = useCallback(() => setPendingService(null), []);
+
+  // Multi-select action handlers
+  const handlePlayNow = useCallback(() => {
+    const items = Array.from(selection.values());
+    if (items.length === 0) return;
+    const freshWs = useConnectionStore.getState().ws;
+    const [first, ...rest] = items;
+    // Fire single-item search.select for the first — reuses existing desktop projection paths
+    freshWs?.send("search.select", buildSelectPayload(first));
+    // Queue the rest as batch
+    if (rest.length > 0) {
+      freshWs?.send("queue.add", { items: rest.map((r) => r.payload) });
     }
-    setPendingAction(null);
-  }, [pendingAction]);
+    setSelection(new Map());
+  }, [selection]);
 
-  const handleActionAddToQueue = useCallback(() => {
-    if (!pendingAction || pendingAction.kind !== "hymn" || pendingAction.hymnId == null) return;
+  const handleAddToQueue = useCallback(() => {
+    const items = Array.from(selection.values());
+    if (items.length === 0) return;
     const freshWs = useConnectionStore.getState().ws;
-    freshWs?.send("queue.add", { id: String(pendingAction.hymnId), type: "hymns" });
-    setPendingAction(null);
-  }, [pendingAction]);
+    freshWs?.send("queue.add", { items: items.map((r) => r.payload) });
+    setSelection(new Map());
+  }, [selection]);
 
-  const handleActionCancel = useCallback(() => setPendingAction(null), []);
+  const handleClearSelection = useCallback(() => setSelection(new Map()), []);
 
   const handleRecentChipClick = useCallback(
     (recentQuery: string) => {
@@ -422,11 +583,6 @@ export default function SearchRoute() {
   }, [handleQueryChange]);
 
   // ─── Bible browse handlers ──────────────────────────────────────────────────
-
-  // Step advancement is OPTIMISTIC (client-side on click), not driven by server response.
-  // This isolates the step machine from WS round-trip races, response envelope signing,
-  // error paths, and re-mounts — the user's navigation is always reflected immediately.
-  // The server response only populates the list for the already-advanced step.
 
   const handleBibleVersionSelect = useCallback(
     (version: RawBibleVersion) => {
@@ -486,18 +642,28 @@ export default function SearchRoute() {
 
   const handleBibleVerseSelect = useCallback((verse: RawBibleVerse) => {
     const bookName = bibleStateRef.current.selectedBook?.name ?? verse.book;
-    setPendingAction({
-      kind: "bible",
+    // Bible verse from browse — treat as toggle in selection
+    const item: SearchResultItem = {
+      id: String(verse.id),
       title: `${bookName} ${verse.chapter}:${verse.verse}`,
       subtitle: verse.text,
       bibleRef: {
-        id: verse.id,
         book: verse.book,
         chapter: verse.chapter,
         verse: verse.verse,
         text: verse.text,
         bookName,
       },
+    };
+    const key = compositeId("bible", String(verse.id));
+    setSelection((prev) => {
+      const next = new Map(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.set(key, buildSelectedItem("bible", item, bibleStateRef.current));
+      }
+      return next;
     });
   }, []);
 
@@ -521,11 +687,17 @@ export default function SearchRoute() {
       ? t("remote.search.placeholder_hymns")
       : tab === "bible"
         ? t("remote.search.placeholder_bible")
-        : t("remote.search.placeholder_service");
+        : tab === "videos"
+          ? t("remote.search.placeholder_videos")
+          : tab === "presentations"
+            ? t("remote.search.placeholder_presentations")
+            : t("remote.search.placeholder_service");
 
   const tabs: { id: SearchTab; label: string }[] = [
     { id: "hymns", label: t("remote.search.tab_hymns") },
     { id: "bible", label: t("remote.search.tab_bible") },
+    { id: "videos", label: t("remote.search.tab_videos") },
+    { id: "presentations", label: t("remote.search.tab_presentations") },
     { id: "services", label: t("remote.search.tab_services") },
   ];
 
@@ -534,10 +706,13 @@ export default function SearchRoute() {
   // Bible browse: only show browse UI when no active text search
   const showBibleBrowse = tab === "bible" && !query.trim();
 
+  // Search input hidden on services (no query support)
+  const showSearchInput = tab !== "services";
+
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div role="tablist" aria-label="Search categories" className="flex border-b border-border">
+      <div role="tablist" aria-label="Search categories" className="flex border-b border-border overflow-x-auto">
         {tabs.map(({ id, label }) => (
           <button
             key={id}
@@ -545,7 +720,7 @@ export default function SearchRoute() {
             aria-selected={tab === id}
             onClick={() => setTab(id)}
             className={cn(
-              "flex-1 py-2.5 text-sm font-medium transition-colors",
+              "flex-1 py-2.5 text-sm font-medium transition-colors whitespace-nowrap px-2",
               tab === id
                 ? "border-b-2 border-primary text-primary"
                 : "text-fg-muted hover:text-fg",
@@ -557,35 +732,35 @@ export default function SearchRoute() {
       </div>
 
       {/* Search input — hidden on services tab (no query support) */}
-      {tab !== "services" && (
-      <div className="px-4 py-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" aria-hidden="true" />
-          <input
-            type="search"
-            placeholder={placeholder}
-            value={query}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            className={cn(
-              "w-full h-10 pl-9 pr-9 rounded-lg border border-border bg-surface-1 text-sm text-fg placeholder:text-fg-subtle",
-              "focus:outline-none focus:ring-2 focus:ring-primary",
+      {showSearchInput && (
+        <div className="px-4 py-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" aria-hidden="true" />
+            <input
+              type="search"
+              placeholder={placeholder}
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              className={cn(
+                "w-full h-10 pl-9 pr-9 rounded-lg border border-border bg-surface-1 text-sm text-fg placeholder:text-fg-subtle",
+                "focus:outline-none focus:ring-2 focus:ring-primary",
+              )}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={handleClearQuery}
+                aria-label={t("remote.search.clear")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             )}
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={handleClearQuery}
-              aria-label={t("remote.search.clear")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          )}
+          </div>
         </div>
-      </div>
       )}
 
-      {/* Recent searches chips (hymns only — services has no search, bible has browse UI) */}
+      {/* Recent searches chips */}
       {showRecentChips && (
         <div className="px-4 pb-2">
           <p className="text-xs text-fg-muted mb-1.5">{t("remote.search.recent")}</p>
@@ -612,6 +787,7 @@ export default function SearchRoute() {
       {showBibleBrowse && (
         <BibleBrowse
           state={bibleState}
+          selection={selection}
           onVersionSelect={handleBibleVersionSelect}
           onBookSelect={handleBibleBookSelect}
           onChapterSelect={handleBibleChapterSelect}
@@ -620,64 +796,87 @@ export default function SearchRoute() {
         />
       )}
 
-      {/* Results list (hymns, services, and bible text-search results) */}
+      {/* Results list */}
       {!showBibleBrowse && (
         <div className="flex-1 overflow-y-auto">
           {results.length === 0 && query.trim() !== "" && (
             <p className="text-center text-sm text-fg-muted py-8">{t("remote.search.no_results")}</p>
           )}
           <ul>
-            {results.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(item.id)}
-                  className={cn(
-                    "w-full text-left px-4 py-3 border-b border-border last:border-0",
-                    "hover:bg-surface-2 active:bg-surface-2 transition-colors",
-                  )}
-                >
-                  <p className="text-sm font-medium text-fg">{item.title}</p>
-                  {item.snippetHtml ? (
-                    <p className="text-xs text-fg-muted mt-0.5 leading-snug">
-                      <HighlightedSnippet html={item.snippetHtml} />
-                    </p>
-                  ) : item.subtitle ? (
-                    <p className="text-xs text-fg-muted mt-0.5">{item.subtitle}</p>
-                  ) : null}
-                </button>
-              </li>
-            ))}
+            {results.map((item) => {
+              const key = compositeId(tab as QueueableTab, item.id);
+              const checked = tab !== "services" && selection.has(key);
+              const isServices = tab === "services";
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleSelected(item)}
+                    aria-checked={!isServices ? checked : undefined}
+                    role={!isServices ? "checkbox" : undefined}
+                    className={cn(
+                      "w-full text-left px-4 py-3 border-b border-border last:border-0 flex items-start gap-3",
+                      "hover:bg-surface-2 active:bg-surface-2 transition-colors",
+                      checked && "bg-primary/5",
+                    )}
+                  >
+                    {!isServices && (
+                      <span className={cn(
+                        "mt-0.5 h-5 w-5 rounded border-2 flex items-center justify-center flex-shrink-0",
+                        checked ? "bg-primary border-primary" : "border-border",
+                      )}>
+                        {checked && <svg className="h-3 w-3 text-white" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="2" fill="none"/></svg>}
+                      </span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-fg">{item.title}</p>
+                      {item.snippetHtml ? (
+                        <p className="text-xs text-fg-muted mt-0.5 leading-snug">
+                          <HighlightedSnippet html={item.snippetHtml} />
+                        </p>
+                      ) : item.subtitle ? (
+                        <p className="text-xs text-fg-muted mt-0.5">{item.subtitle}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
-      {/* Action confirmation sheet */}
-      {pendingAction && (
-        <ActionSheet
-          action={pendingAction}
-          onProjectNow={handleActionProjectNow}
-          onAddToQueue={handleActionAddToQueue}
-          onCancel={handleActionCancel}
+      {/* Selection action bar (multi-select, queueable tabs only) */}
+      <SelectionActionBar
+        count={selection.size}
+        onPlayNow={handlePlayNow}
+        onAddToQueue={handleAddToQueue}
+        onClear={handleClearSelection}
+      />
+
+      {/* Services confirmation sheet (single-item, legacy flow) */}
+      {pendingService && (
+        <ServiceActionSheet
+          action={pendingService}
+          onProjectNow={handleServiceProjectNow}
+          onCancel={handleServiceCancel}
         />
       )}
     </div>
   );
 }
 
-// ─── Action Sheet ─────────────────────────────────────────────────────────────
+// ─── Service Action Sheet (services-only) ────────────────────────────────────
 
-interface ActionSheetProps {
+interface ServiceActionSheetProps {
   action: PendingAction;
   onProjectNow: () => void;
-  onAddToQueue: () => void;
   onCancel: () => void;
 }
 
-function ActionSheet({ action, onProjectNow, onAddToQueue, onCancel }: ActionSheetProps) {
+function ServiceActionSheet({ action, onProjectNow, onCancel }: ServiceActionSheetProps) {
   const { t } = useTranslation();
 
-  // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
@@ -685,8 +884,6 @@ function ActionSheet({ action, onProjectNow, onAddToQueue, onCancel }: ActionShe
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
-
-  const showAddToQueue = action.kind === "hymn";
 
   return (
     <div
@@ -722,22 +919,6 @@ function ActionSheet({ action, onProjectNow, onAddToQueue, onCancel }: ActionShe
             <span className="flex-1 text-left">{t("remote.search.action_project_now")}</span>
           </button>
 
-          {showAddToQueue && (
-            <button
-              type="button"
-              onClick={onAddToQueue}
-              className={cn(
-                "flex items-center gap-3 w-full h-14 rounded-lg px-4",
-                "bg-surface-1 border border-border text-fg font-medium text-sm",
-                "active:scale-[0.98] transition-transform",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              )}
-            >
-              <ListPlus className="h-5 w-5" aria-hidden="true" />
-              <span className="flex-1 text-left">{t("remote.search.action_add_to_queue")}</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={onCancel}
@@ -759,6 +940,7 @@ function ActionSheet({ action, onProjectNow, onAddToQueue, onCancel }: ActionShe
 
 interface BibleBrowseProps {
   state: BibleBrowseState;
+  selection: Map<string, SelectedItem>;
   onVersionSelect: (v: RawBibleVersion) => void;
   onBookSelect: (b: RawBibleBook) => void;
   onChapterSelect: (ch: number) => void;
@@ -768,6 +950,7 @@ interface BibleBrowseProps {
 
 function BibleBrowse({
   state,
+  selection,
   onVersionSelect,
   onBookSelect,
   onChapterSelect,
@@ -901,23 +1084,38 @@ function BibleBrowse({
             </p>
           )}
           <ul>
-            {verses.map((v) => (
-              <li key={v.id}>
-                <button
-                  type="button"
-                  onClick={() => onVerseSelect(v)}
-                  className={cn(
-                    "w-full text-left px-4 py-3 border-b border-border last:border-0",
-                    "hover:bg-surface-2 active:bg-surface-2 transition-colors",
-                  )}
-                >
-                  <p className="text-xs text-primary font-semibold mb-0.5">
-                    {selectedBook?.name} {selectedChapter}:{v.verse}
-                  </p>
-                  <p className="text-sm text-fg leading-snug">{v.text}</p>
-                </button>
-              </li>
-            ))}
+            {verses.map((v) => {
+              const key = compositeId("bible", String(v.id));
+              const checked = selection.has(key);
+              return (
+                <li key={v.id}>
+                  <button
+                    type="button"
+                    onClick={() => onVerseSelect(v)}
+                    aria-checked={checked}
+                    role="checkbox"
+                    className={cn(
+                      "w-full text-left px-4 py-3 border-b border-border last:border-0 flex items-start gap-3",
+                      "hover:bg-surface-2 active:bg-surface-2 transition-colors",
+                      checked && "bg-primary/5",
+                    )}
+                  >
+                    <span className={cn(
+                      "mt-0.5 h-5 w-5 rounded border-2 flex items-center justify-center flex-shrink-0",
+                      checked ? "bg-primary border-primary" : "border-border",
+                    )}>
+                      {checked && <svg className="h-3 w-3 text-white" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="2" fill="none"/></svg>}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-primary font-semibold mb-0.5">
+                        {selectedBook?.name} {selectedChapter}:{v.verse}
+                      </p>
+                      <p className="text-sm text-fg leading-snug">{v.text}</p>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
