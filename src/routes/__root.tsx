@@ -521,6 +521,19 @@ function RootLayout() {
           case "open-shortcuts":
             openKeyboardShortcutsPanel();
             break;
+          case "start-remote":
+            import("../lib/bindings").then(({ commands }) =>
+              commands.startRemoteServer(null)
+            );
+            break;
+          case "stop-remote":
+            import("../lib/bindings").then(({ commands }) =>
+              commands.stopRemoteServer()
+            );
+            break;
+          case "remote-settings":
+            router.navigate({ to: "/settings", search: { tab: "remote" } as never });
+            break;
         }
       }),
       "spotlight-action",
