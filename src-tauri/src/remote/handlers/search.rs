@@ -232,6 +232,25 @@ pub async fn select(app: &AppHandle, id: String, item_type: &str, payload: &Valu
             app.emit("remote-service-start", serde_json::json!({ "serviceId": service_id }))
                 .map_err(|e| AppError::Tauri(e.to_string()))?;
         }
+        "video" => {
+            let video_source = payload.get("videoSource").and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("search.select video requires `videoSource`".into()))?;
+            let video_id = payload.get("videoId").and_then(|v| v.as_str());
+            let video_url = payload.get("videoUrl").and_then(|v| v.as_str());
+            let video_title = payload.get("videoTitle").and_then(|v| v.as_str());
+            app.emit("remote-video-select", serde_json::json!({
+                "videoSource": video_source,
+                "videoId": video_id,
+                "videoUrl": video_url,
+                "videoTitle": video_title,
+            })).map_err(|e| AppError::Tauri(e.to_string()))?;
+        }
+        "presentation" => {
+            let pid: i64 = id.parse()
+                .map_err(|_| AppError::Internal(format!("search.select: invalid presentation id: {id}")))?;
+            app.emit("remote-presentation-select", serde_json::json!({ "presentationId": pid }))
+                .map_err(|e| AppError::Tauri(e.to_string()))?;
+        }
         other => {
             return Err(AppError::Internal(format!("search.select: unknown type: {other}")));
         }
