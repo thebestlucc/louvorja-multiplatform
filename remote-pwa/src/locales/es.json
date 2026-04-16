@@ -103,7 +103,10 @@
       "pause": "Pausar",
       "skip_prev": "Pista anterior",
       "skip_next": "Siguiente pista",
-      "video_targets": "Video en"
+      "video_targets": "Video en",
+      "action_dismiss": "Cerrar",
+      "action_remove": "Eliminar",
+      "action_play_now": "Reproducir ahora"
     },
     "connection": {
       "connected": "Conectado",

@@ -103,7 +103,10 @@
       "pause": "Pausar",
       "skip_prev": "Faixa anterior",
       "skip_next": "Próxima faixa",
-      "video_targets": "Vídeo em"
+      "video_targets": "Vídeo em",
+      "action_dismiss": "Fechar",
+      "action_remove": "Remover",
+      "action_play_now": "Tocar agora"
     },
     "connection": {
       "connected": "Conectado",
