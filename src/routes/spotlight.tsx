@@ -27,6 +27,9 @@ import {
   Loader2,
   MonitorPlay,
   Search,
+  Smartphone,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -252,6 +255,9 @@ function SpotlightWindow() {
     { id: "toggle-logo", icon: Image, label: t("commandPalette.actions.toggleLogo"), action: "toggle-logo" },
     { id: "clear-projection", icon: Eraser, label: t("commandPalette.actions.clearProjection"), action: "clear-projection" },
     { id: "open-shortcuts", icon: Keyboard, label: t("commandPalette.actions.openShortcuts"), action: "open-shortcuts" },
+    { id: "start-remote", icon: Wifi, label: t("commandPalette.actions.startRemote"), action: "start-remote" },
+    { id: "stop-remote", icon: WifiOff, label: t("commandPalette.actions.stopRemote"), action: "stop-remote" },
+    { id: "remote-settings", icon: Smartphone, label: t("commandPalette.actions.remoteSettings"), action: "remote-settings" },
   ];
 
   const filteredNav = hasQuery

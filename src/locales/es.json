@@ -177,7 +177,10 @@
       "toggleBlack": "Alternar pantalla negra",
       "toggleLogo": "Alternar pantalla de logo",
       "toggleProjector": "Alternar ventana del proyector",
-      "toggleReturn": "Alternar ventana de retorno"
+      "toggleReturn": "Alternar ventana de retorno",
+      "startRemote": "Iniciar servidor de control remoto",
+      "stopRemote": "Detener servidor de control remoto",
+      "remoteSettings": "Configuración del control remoto"
     },
     "bible": "Versículos Bíblicos",
     "bibleReference": "Referencia Bíblica",

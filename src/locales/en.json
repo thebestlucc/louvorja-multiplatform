@@ -177,7 +177,10 @@
       "toggleBlack": "Toggle black screen",
       "toggleLogo": "Toggle logo screen",
       "toggleProjector": "Toggle projector window",
-      "toggleReturn": "Toggle return window"
+      "toggleReturn": "Toggle return window",
+      "startRemote": "Start remote control server",
+      "stopRemote": "Stop remote control server",
+      "remoteSettings": "Remote control settings"
     },
     "bible": "Bible Verses",
     "bibleReference": "Bible Reference",
