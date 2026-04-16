@@ -1,0 +1,71 @@
+name: remote-pwa performance
+
+on:
+  push:
+    paths:
+      - "remote-pwa/**"
+  pull_request:
+    paths:
+      - "remote-pwa/**"
+
+concurrency:
+  group: remote-perf-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle-size-and-lighthouse:
+    name: Bundle size + Lighthouse CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build remote-pwa
+        run: pnpm --filter remote-pwa build
+
+      - name: Check gzipped bundle size (200 KB limit)
+        run: |
+          GZIP_BYTES=$(find remote-pwa/dist -name "*.js" -o -name "*.css" | sort | xargs gzip -c | wc -c)
+          LIMIT=204800
+          echo "Gzipped dist size: ${GZIP_BYTES} bytes (limit: ${LIMIT})"
+          if [ "${GZIP_BYTES}" -gt "${LIMIT}" ]; then
+            echo "ERROR: Gzipped bundle ${GZIP_BYTES} bytes exceeds 200 KB limit (${LIMIT} bytes)."
+            exit 1
+          fi
+          echo "OK: Bundle size within limit."
+
+      - name: Install http-server and Lighthouse CI
+        run: pnpm add -g @lhci/cli http-server
+
+      - name: Start static file server
+        run: |
+          http-server remote-pwa/dist --port 9001 --silent &
+          echo "HTTP_SERVER_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 10); do
+            curl -s http://localhost:9001 > /dev/null && break
+            sleep 1
+          done
+
+      - name: Run Lighthouse CI
+        run: lhci autorun --config=remote-pwa/lighthouserc.json --collect.url=http://localhost:9001
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Stop static file server
+        if: always()
+        run: kill "$HTTP_SERVER_PID" 2>/dev/null || true
