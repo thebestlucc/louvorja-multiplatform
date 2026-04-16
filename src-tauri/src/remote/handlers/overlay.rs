@@ -70,6 +70,7 @@ pub async fn logo(app: &AppHandle) -> Result<serde_json::Value, AppError> {
 
 /// `overlay.clear` — clear all overlays.
 pub async fn clear(app: &AppHandle) -> Result<serde_json::Value, AppError> {
+    use tauri::Emitter;
     let state = app_state(app)?;
     {
         let mut overlay = state
@@ -80,6 +81,9 @@ pub async fn clear(app: &AppHandle) -> Result<serde_json::Value, AppError> {
         overlay.is_logo_screen = false;
     }
     emit_overlay(app, false, false)?;
+    // Also clear the current slide/projection — matches desktop Escape behavior
+    app.emit("remote-slide-clear", ())
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
     Ok(serde_json::json!({ "blackScreen": false, "logoScreen": false }))
 }
 
