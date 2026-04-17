@@ -8,6 +8,7 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -51,11 +52,15 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
         if (p.getPlayerState() === 1) p.pauseVideo();
         return;
       }
-      // Drift correction: resync if follower is >0.5s off master
+      // Drift correction: resync aggressively. WKWebView + two independent
+      // YT iframes drift because they autoplay from URL params at different
+      // scheduling ticks. Tight threshold keeps audio (master) and image
+      // (follower) in lockstep.
       if (!paused) {
         try {
           const followerTime = p.getCurrentTime();
-          if (Math.abs(followerTime - currentTime) > 0.5) {
+          const drift = Math.abs(followerTime - currentTime);
+          if (drift > 0.25) {
             p.seekTo(currentTime, true);
           }
         } catch (_) {}
@@ -95,8 +100,16 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
     // Each mount gets a stable unique id for YT.Player
     const uid = `yt-${videoId}-${Math.random().toString(36).slice(2)}`;
 
+    console.log("[YouTubePlayer]", isFollower ? "follower" : "master", "creating for", videoId);
     void loadYouTubeAPI().then(() => {
-      if (destroyed || !containerRef.current) return;
+      if (destroyed || !containerRef.current) {
+        console.warn("[YouTubePlayer] skipping create — destroyed=", destroyed, "ref=", !!containerRef.current);
+        return;
+      }
+      if (!window.YT || !window.YT.Player) {
+        console.error("[YouTubePlayer] window.YT.Player unavailable after loadYouTubeAPI");
+        return;
+      }
       containerRef.current.id = uid;
 
       const player = new window.YT.Player(uid, {
@@ -118,6 +131,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
         },
         events: {
           onReady: ({ target }) => {
+            console.log("[YouTubePlayer]", isFollower ? "follower" : "master", "onReady for", videoId);
             playerRef.current = target;
             if (isFollower) {
               // Seek to last known master position on init.
@@ -132,6 +146,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
             }
           },
           onStateChange: ({ data, target }) => {
+            console.log("[YouTubePlayer]", isFollower ? "follower" : "master", "onStateChange", data, "for", videoId);
             if (!isFollower) {
               emitState(target);
               clearInterval(pollRef.current);
@@ -140,9 +155,14 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
               }
             }
           },
+          onError: ({ data }) => {
+            console.error("[YouTubePlayer]", isFollower ? "follower" : "master", "onError", data, "for", videoId);
+          },
         },
       });
       playerRef.current = player;
+    }).catch((err) => {
+      console.error("[YouTubePlayer] loadYouTubeAPI failed:", err);
     });
 
     // Listen for video-control events
@@ -209,6 +229,7 @@ interface OnlineVideoSlideProps {
 
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
+  const targets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
 
   // Live video renderer for projector/return screens
   const renderLiveVideo = () => {
@@ -234,12 +255,28 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
     );
   };
 
+  // Static thumbnail fallback for screens that are NOT configured to render
+  // live video (per videoPlaybackTargets). Still shows title so operators see
+  // something meaningful on that screen.
+  const renderThumbnailOnly = () => {
+    const thumbUrl = slide.video_id
+      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
+      : null;
+    return (
+      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
+        {thumbUrl && (
+          <img src={thumbUrl} alt="" className="h-full w-full object-contain opacity-60" />
+        )}
+      </div>
+    );
+  };
+
   if (renderMode === "projector") {
-    return renderLiveVideo();
+    return targets.includes("projector") ? renderLiveVideo() : renderThumbnailOnly();
   }
 
   if (renderMode === "return-current") {
-    return renderLiveVideo();
+    return targets.includes("return") ? renderLiveVideo() : renderThumbnailOnly();
   }
 
   if (renderMode === "return-next") {
