@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
@@ -8,7 +9,7 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
-import { useVideoPlayerStore } from "../../stores/video-player-store";
+import { useVideoPlayerStore, type LocalTarget } from "../../stores/video-player-store";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -229,54 +230,69 @@ interface OnlineVideoSlideProps {
 
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
-  const targets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
+  const mode = useVideoPlayerStore((s) => s.mode);
+  const localTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
+  const liveTarget = useVideoPlayerStore((s) => s.liveTarget);
 
-  // Live video renderer for projector/return screens
-  const renderLiveVideo = () => {
-    const isLocalFile = slide.source === "local" && !!slide.url;
-    return (
-      <div className={cn("h-full w-full bg-black", className)}>
-        {isLocalFile ? (
-          <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
-        ) : slide.video_id ? (
-          <YouTubePlayer
-            videoId={slide.video_id}
-            title={slide.title ?? slide.video_id}
-            className="h-full w-full"
-            muted
-            isFollower
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
-            {t("presentations.types.onlineVideo")}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const windowLabel = typeof window !== "undefined" ? getCurrentWebviewWindow().label : "main";
+  const currentTarget: LocalTarget =
+    windowLabel === "projector" || windowLabel === "return" ? windowLabel : "main";
 
-  // Static thumbnail fallback for screens that are NOT configured to render
-  // live video (per videoPlaybackTargets). Still shows title so operators see
-  // something meaningful on that screen.
   const renderThumbnailOnly = () => {
     const thumbUrl = slide.video_id
       ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
       : null;
     return (
       <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
-        {thumbUrl && (
-          <img src={thumbUrl} alt="" className="h-full w-full object-contain opacity-60" />
-        )}
+        {thumbUrl && <img src={thumbUrl} alt="" className="h-full w-full object-contain opacity-60" />}
       </div>
     );
   };
 
-  if (renderMode === "projector") {
-    return targets.includes("projector") ? renderLiveVideo() : renderThumbnailOnly();
-  }
+  const renderLiveVideo = () => {
+    // Decision: what does THIS window render for this slide?
+    // 1. mode=local + this window in videoPlaybackTargets → muted follower.
+    // 2. mode=live-youtube + this window === liveTarget → THE YT iframe (not a follower).
+    // 3. else → thumbnail.
+    if (mode?.kind === "local") {
+      if (!localTargets.includes(currentTarget)) return renderThumbnailOnly();
+      return (
+        <div className={cn("h-full w-full bg-black", className)}>
+          <LocalVideoFollower videoPath={mode.path} className="h-full w-full" />
+        </div>
+      );
+    }
 
-  if (renderMode === "return-current") {
-    return targets.includes("return") ? renderLiveVideo() : renderThumbnailOnly();
+    if (mode?.kind === "live-youtube") {
+      if (liveTarget !== currentTarget) return renderThumbnailOnly();
+      // Sole iframe — NOT a follower. Audio-bearing. Never drift-corrected.
+      return (
+        <div className={cn("h-full w-full bg-black", className)}>
+          <YouTubePlayer
+            videoId={mode.videoId}
+            title={mode.title ?? mode.videoId}
+            className="h-full w-full"
+            muted={false}
+            isFollower={false}
+          />
+        </div>
+      );
+    }
+
+    // mode === null: fall back to slide.source inspection, still respecting targets.
+    const isLocalFile = slide.source === "local" && !!slide.url;
+    if (isLocalFile && localTargets.includes(currentTarget)) {
+      return (
+        <div className={cn("h-full w-full bg-black", className)}>
+          <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
+        </div>
+      );
+    }
+    return renderThumbnailOnly();
+  };
+
+  if (renderMode === "projector" || renderMode === "return-current") {
+    return renderLiveVideo();
   }
 
   if (renderMode === "return-next") {
