@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { getPreferenceSync, setPreference } from "../lib/store";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -9,11 +10,15 @@ interface VideoPlayerState {
   videoId: string | null;
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState">>) => void;
+  useRustVideoPipeline: boolean;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline">>) => void;
   resetVideoState: () => void;
+  setUseRustVideoPipeline: (v: boolean) => void;
 }
 
 type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource">;
+
+const USE_RUST_VIDEO_PIPELINE_KEY = "use_rust_video_pipeline";
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -27,8 +32,13 @@ const initialState: VideoPlayerData = {
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
+  useRustVideoPipeline: getPreferenceSync<boolean>(USE_RUST_VIDEO_PIPELINE_KEY, false),
   setVideoState: (partial) => set(partial),
   resetVideoState: () => set(initialState),
+  setUseRustVideoPipeline: (v) => {
+    set({ useRustVideoPipeline: v });
+    setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v);
+  },
 }));
 
 // ─── Streaming sync ────────────────────────────────────────────────────────────

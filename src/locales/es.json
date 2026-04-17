@@ -1169,6 +1169,7 @@
     "tabs": {
       "appearance": "Apariencia",
       "data": "Datos",
+      "experimental": "Experimental",
       "general": "General",
       "migration": "Migración",
       "monitor": "Monitor",
@@ -1178,6 +1179,14 @@
       "sync": "Sincronización",
       "youtube": "YouTube",
       "remote": "Remoto"
+    },
+    "experimental": {
+      "title": "Funciones experimentales",
+      "warning": "Estas funciones son inestables y pueden cambiar o ser eliminadas.",
+      "rustVideoPipeline": {
+        "label": "Canalización de video en Rust",
+        "description": "Usa la nueva canalización de video autoritativa en Rust para videos en línea. Requiere reiniciar las ventanas del proyector/retorno si ya están abiertas."
+      }
     },
     "theme": "Tema",
     "themeDesc": "Elija el estilo visual de la aplicación.",
