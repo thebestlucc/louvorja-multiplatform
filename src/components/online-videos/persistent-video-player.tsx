@@ -13,7 +13,7 @@ import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
 
 /** Heartbeat interval for progress bar updates and drift detection (ms). */
-const HEARTBEAT_INTERVAL_MS = 250;
+const HEARTBEAT_INTERVAL_MS = 100;
 
 /**
  * Checks if there is a next item in the queue (accounting for repeat mode).
@@ -61,6 +61,22 @@ function LocalVideoMaster({
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
     videoRef.current = el;
     localVideoMasterRef.current = el;
+  }, []);
+
+  // High-frequency broadcast while playing — browser onTimeUpdate is ~4Hz, too coarse
+  // for tight follower sync. Emit every 100ms so followers can correct drift quickly.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const v = videoRef.current;
+      if (!v || v.paused) return;
+      onBroadcastRef.current({
+        paused: false,
+        currentTime: v.currentTime,
+        duration: v.duration || 0,
+        volume: v.volume,
+      });
+    }, HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   // Listen to video-control events and apply to local video element
@@ -180,7 +196,7 @@ export function PersistentVideoPlayer() {
   const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }, force = false) => {
     if (seekingRef.current && !force) return;
     useVideoPlayerStore.getState().setVideoState({ ...snap, ...meta });
-    const enriched = { ...snap, seeking: seekingRef.current };
+    const enriched = { ...snap, seeking: seekingRef.current, emitTs: performance.now() };
     for (const target of ["main", "projector", "return"]) {
       void emitTo(target, "video-state", enriched).catch(() => {});
     }
