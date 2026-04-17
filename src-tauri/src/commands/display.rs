@@ -360,12 +360,10 @@ pub fn set_slide_on_projector(
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
-    // Emit only to the projector window — not to all windows, not to SSE
-    if let Some(projector_win) = app.get_webview_window("projector") {
-        projector_win
-            .emit("slide-changed", &slide_data)
-            .map_err(|e| AppError::Tauri(e.to_string()))?;
-    }
+    // Emit app-globally so main (controls) and projector both update.
+    // Projector-specific targeting is handled in the frontend.
+    app.emit("slide-changed", &slide_data)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
     Ok(())
 }
 
@@ -402,12 +400,10 @@ pub fn set_slide_on_return(
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
-    // Emit only to the return window — not to projector, not to main
-    if let Some(return_win) = app.get_webview_window("return") {
-        return_win
-            .emit("slide-changed", &slide_data)
-            .map_err(|e| AppError::Tauri(e.to_string()))?;
-    }
+    // Emit app-globally so main (controls) and return window both update.
+    // Return-specific targeting is handled in the frontend.
+    app.emit("slide-changed", &slide_data)
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
     // Broadcast to SSE streaming viewers
     let app_data_dir = app.path().app_data_dir().ok();
     let adr = app_data_dir.as_deref();
