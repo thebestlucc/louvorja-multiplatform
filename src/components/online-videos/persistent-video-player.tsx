@@ -377,7 +377,9 @@ function PersistentVideoPlayerMain() {
     return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
-  // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
+  // Listen to video-control for YouTube (local video handled in LocalVideoMaster).
+  // In live-youtube mode, if the iframe lives in projector/return, forward the
+  // event to that window instead of applying it locally (main has no iframe).
   useEffect(() => {
     const unsub = listen<VideoControlEvent>("video-control", (e) => {
       const { action, value } = e.payload;
@@ -387,6 +389,19 @@ function PersistentVideoPlayerMain() {
         setTimeout(() => { seekingRef.current = false; }, 500);
       }
 
+      const snapshot = useVideoPlayerStore.getState();
+      const m = snapshot.mode;
+      const lt = snapshot.liveTarget;
+
+      // Live-YouTube mode + iframe lives in projector/return:
+      // forward the control event to that window; nothing to do locally.
+      if (m?.kind === "live-youtube" && lt !== "main" && lt !== "none") {
+        emitTo(lt, "video-control", e.payload).catch(() => {});
+        return;
+      }
+
+      // Live-YouTube main/none OR local mode: if we have a local YT master,
+      // apply action to it.
       if (ytPlayerRef.current) {
         const p = ytPlayerRef.current;
         if (action === "play") {
@@ -417,7 +432,15 @@ function PersistentVideoPlayerMain() {
 
   // ── YouTube player lifecycle ──────────────────────────────────────────────
 
-  const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source !== "local" ? activeSlide.video_id : undefined;
+  // Main only owns the YT iframe when we are in live-youtube mode AND the
+  // target is "main" or "none" (hidden audio-only). When target is projector
+  // or return, OnlineVideoSlide in that window creates the sole iframe — main
+  // must NOT create one, or we end up with two iframes and double audio.
+  const mode = useVideoPlayerStore((s) => s.mode);
+  const liveTarget = useVideoPlayerStore((s) => s.liveTarget);
+  const mainOwnsYtMaster =
+    mode?.kind === "live-youtube" && (liveTarget === "main" || liveTarget === "none");
+  const activeVideoId = mainOwnsYtMaster ? mode.videoId : undefined;
   const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
 
   useEffect(() => {
