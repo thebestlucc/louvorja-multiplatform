@@ -1,6 +1,7 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emit, emitTo } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
@@ -31,7 +32,7 @@ function handleVideoEnded() {
   if (hasNextQueueItem()) {
     useQueueStore.getState().next();
   } else {
-    void clearCurrentSlide();
+    clearCurrentSlide().catch(() => {});
     useVideoPlayerStore.getState().resetVideoState();
   }
 }
@@ -72,26 +73,29 @@ function LocalVideoMaster({
       if (!video) return;
       const { action, value } = e.payload;
       if (action === "play") {
-        void video.play().catch(() => {});
+        video.play().catch(() => {});
         // Broadcast to all windows
-        for (const target of ["main", "projector", "return"] as const) {
-          void emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
+        for (const target of ["projector", "return"] as const) {
+          emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
         }
+        emit("video-control-cmd", { action: "play" }).catch(() => {});
       } else if (action === "pause") {
         video.pause();
-        for (const target of ["main", "projector", "return"] as const) {
-          void emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
+        for (const target of ["projector", "return"] as const) {
+          emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
         }
+        emit("video-control-cmd", { action: "pause" }).catch(() => {});
       } else if (action === "seek" && value !== undefined) {
         video.currentTime = value;
-        for (const target of ["main", "projector", "return"] as const) {
-          void emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
+        for (const target of ["projector", "return"] as const) {
+          emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
         }
+        emit("video-control-cmd", { action: "seek", value }).catch(() => {});
       } else if (action === "volume" && value !== undefined) {
         video.volume = value;
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   if (!videoUrl) return null;
@@ -167,6 +171,14 @@ function LocalVideoMaster({
  * throttling / YouTube pause that the old DOM-transplant approach caused.
  */
 export function PersistentVideoPlayer() {
+  // Only the main window hosts the master player. Projector/return get
+  // followers via <FollowerVideoSlide> in slide-renderer.
+  const windowLabel = getCurrentWebviewWindow().label;
+  if (windowLabel !== "main") return null;
+  return <PersistentVideoPlayerMain />;
+}
+
+function PersistentVideoPlayerMain() {
   const playerHostRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -184,9 +196,9 @@ export function PersistentVideoPlayer() {
     useVideoPlayerStore.getState().setVideoState({ ...snap, ...meta });
     const enriched = { ...snap, seeking: seekingRef.current };
     // Global emit so Rust event.rs can bridge video-state to WS clients.
-    void emit("video-state", enriched).catch(() => {});
-    for (const target of ["main", "projector", "return"]) {
-      void emitTo(target, "video-state", enriched).catch(() => {});
+    emit("video-state", enriched).catch(() => {});
+    for (const target of ["projector", "return"] as const) {
+      emitTo(target, "video-state", enriched).catch(() => {});
     }
   }, []);
 
@@ -251,12 +263,13 @@ export function PersistentVideoPlayer() {
         setActiveSlide(null);
         activeSlideRef.current = null;
         const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
-        for (const target of ["main", "projector", "return"]) {
-          void emitTo(target, "video-state", resetSnap).catch(() => {});
+        for (const target of ["projector", "return"] as const) {
+          emitTo(target, "video-state", resetSnap).catch(() => {});
         }
+        emit("video-state", resetSnap).catch(() => {});
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // Keep every webview's videoPlaybackTargets in sync. The Rust handler emits
@@ -272,7 +285,7 @@ export function PersistentVideoPlayer() {
         useVideoPlayerStore.getState().setVideoPlaybackTargets(validTargets);
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
@@ -293,11 +306,12 @@ export function PersistentVideoPlayer() {
       setActiveSlide(null);
       activeSlideRef.current = null;
       const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
-      for (const target of ["main", "projector", "return"]) {
-        void emitTo(target, "video-state", resetSnap).catch(() => {});
+      for (const target of ["projector", "return"] as const) {
+        emitTo(target, "video-state", resetSnap).catch(() => {});
       }
+      emit("video-state", resetSnap).catch(() => {});
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
@@ -315,24 +329,27 @@ export function PersistentVideoPlayer() {
         if (action === "play") {
           p.playVideo();
           for (const target of ["projector", "return"] as const) {
-            void emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
+            emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
           }
+          emit("video-control-cmd", { action: "play" }).catch(() => {});
         } else if (action === "pause") {
           p.pauseVideo();
           for (const target of ["projector", "return"] as const) {
-            void emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
+            emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
           }
+          emit("video-control-cmd", { action: "pause" }).catch(() => {});
         } else if (action === "seek" && value !== undefined) {
           p.seekTo(value, true);
           for (const target of ["projector", "return"] as const) {
-            void emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
+            emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
           }
+          emit("video-control-cmd", { action: "seek", value }).catch(() => {});
         } else if (action === "volume" && value !== undefined) {
           p.setVolume(Math.round(value * 100));
         }
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // ── YouTube player lifecycle ──────────────────────────────────────────────
@@ -362,7 +379,7 @@ export function PersistentVideoPlayer() {
     container.id = uid;
 
     console.log("[PersistentVideoPlayer] creating YT master for", videoId);
-    void loadYouTubeAPI().then(() => {
+    loadYouTubeAPI().then(() => {
       if (destroyed || !container.isConnected) {
         console.warn("[PersistentVideoPlayer] skipping YT create — destroyed=", destroyed, "connected=", container.isConnected);
         return;
