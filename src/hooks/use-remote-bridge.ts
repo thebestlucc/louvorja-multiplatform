@@ -12,7 +12,6 @@ import { useEffect } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
-import { useVideoPlayerStore } from "../stores/video-player-store";
 import { useMonitorsControl } from "./use-monitors";
 import { useDisplayStore } from "../stores/display-store";
 import { setMonitorConfig, setCurrentSlide } from "../lib/tauri/display";
@@ -26,11 +25,6 @@ import { buildQueueItemsFromRemote, type RemoteQueueAddPayload } from "./build-q
 interface RemoteVideoCmdPayload {
   action: "play" | "pause" | "seek";
   value?: number;
-}
-
-interface RemoteVideoSetTargetsPayload {
-  /** Array of screen names that should render live video, e.g. ["projector", "return"]. */
-  targets: string[];
 }
 
 interface RemoteServiceStartPayload {
@@ -107,15 +101,6 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
         // ── Video control (bridge remote-video-cmd → video-control) ───────
         listen<RemoteVideoCmdPayload>("remote-video-cmd", (e) => {
           emit("video-control", e.payload).catch(() => {});
-        }),
-
-        // ── Video targets (remote-video-set-targets) ──────────────────────
-        listen<RemoteVideoSetTargetsPayload>("remote-video-set-targets", (e) => {
-          const validTargets = e.payload.targets.filter(
-            (t): t is "projector" | "return" =>
-              t === "projector" || t === "return",
-          );
-          useVideoPlayerStore.getState().setVideoPlaybackTargets(validTargets);
         }),
 
         // ── Audio skip next / prev ────────────────────────────────────────

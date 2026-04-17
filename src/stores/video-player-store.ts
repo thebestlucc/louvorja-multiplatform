@@ -1,13 +1,5 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { getPreferenceSync, setPreference } from "../lib/store";
-
-export type VideoPlaybackMode =
-  | { kind: "local"; path: string; videoId: string | null; title: string | null }
-  | { kind: "live-youtube"; videoId: string; title: string | null };
-
-export type LiveTarget = "projector" | "return";
-export type LocalTarget = "projector" | "return";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -17,55 +9,11 @@ interface VideoPlayerState {
   videoId: string | null;
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
-  /** Playback mode for the active video. null when no video is active. */
-  mode: VideoPlaybackMode | null;
-  /** Screens that render muted follower <video> in local mode. Persisted via plugin-store. */
-  videoPlaybackTargets: LocalTarget[];
-  /** Operator-chosen screen for the single live-YouTube iframe. Persisted via plugin-store. */
-  liveTarget: LiveTarget;
-  /** When true, current video restarts on end instead of advancing queue. Persisted. */
-  loop: boolean;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setVideoPlaybackTargets" | "setLiveTarget" | "setMode" | "setLoop">>) => void;
-  setVideoPlaybackTargets: (targets: LocalTarget[]) => void;
-  setLiveTarget: (t: LiveTarget) => void;
-  setMode: (m: VideoPlaybackMode | null) => void;
-  setLoop: (v: boolean) => void;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState">>) => void;
   resetVideoState: () => void;
 }
 
-type VideoPlayerData = Pick<
-  VideoPlayerState,
-  | "currentTime" | "duration" | "paused" | "volume"
-  | "videoId" | "videoSrc" | "videoSource"
-  | "mode" | "videoPlaybackTargets" | "liveTarget" | "loop"
->;
-
-const LIVE_TARGET_STORE_KEY = "video_live_target";
-const PLAYBACK_TARGETS_STORE_KEY = "video_playback_targets";
-const LOOP_STORE_KEY = "video_loop";
-const DEFAULT_LIVE_TARGET: LiveTarget = "projector";
-
-const VALID_LIVE_TARGETS: ReadonlyArray<LiveTarget> = ["projector", "return"];
-const VALID_LOCAL_TARGETS: ReadonlyArray<LocalTarget> = ["projector", "return"];
-
-function readLiveTargetSync(): LiveTarget {
-  const v = getPreferenceSync<string>(LIVE_TARGET_STORE_KEY, DEFAULT_LIVE_TARGET);
-  return (VALID_LIVE_TARGETS as ReadonlyArray<string>).includes(v) ? (v as LiveTarget) : DEFAULT_LIVE_TARGET;
-}
-
-function readPlaybackTargetsSync(): LocalTarget[] {
-  const raw = getPreferenceSync<unknown>(PLAYBACK_TARGETS_STORE_KEY, ["projector"]);
-  if (!Array.isArray(raw)) return ["projector"];
-  // Preserve intentional empty array (audio-only across all screens).
-  return raw.filter(
-    (x): x is LocalTarget =>
-      typeof x === "string" && (VALID_LOCAL_TARGETS as ReadonlyArray<string>).includes(x),
-  );
-}
-
-function readLoopSync(): boolean {
-  return getPreferenceSync<boolean>(LOOP_STORE_KEY, false);
-}
+type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource">;
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -75,36 +23,12 @@ const initialState: VideoPlayerData = {
   videoId: null,
   videoSrc: null,
   videoSource: null,
-  mode: null,
-  videoPlaybackTargets: readPlaybackTargetsSync(),
-  liveTarget: readLiveTargetSync(),
-  loop: readLoopSync(),
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   setVideoState: (partial) => set(partial),
-  setVideoPlaybackTargets: (targets) => {
-    set({ videoPlaybackTargets: targets });
-    setPreference(PLAYBACK_TARGETS_STORE_KEY, targets);
-  },
-  setLiveTarget: (t) => {
-    set({ liveTarget: t });
-    setPreference(LIVE_TARGET_STORE_KEY, t);
-  },
-  setMode: (m) => set({ mode: m }),
-  setLoop: (v) => {
-    set({ loop: v });
-    setPreference(LOOP_STORE_KEY, v);
-  },
-  resetVideoState: () =>
-    set((s) => ({
-      ...initialState,
-      // Preserve user preferences across resets
-      videoPlaybackTargets: s.videoPlaybackTargets,
-      liveTarget: s.liveTarget,
-      loop: s.loop,
-    })),
+  resetVideoState: () => set(initialState),
 }));
 
 // ─── Streaming sync ────────────────────────────────────────────────────────────

@@ -2,6 +2,11 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "../../lib/utils";
 
+interface VideoControlCmd {
+  action: "play" | "pause" | "seek";
+  value?: number;
+}
+
 interface VideoFollowerElementProps {
   videoUrl: string;
   className?: string;
@@ -13,107 +18,46 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    console.log("[VideoFollower] loading src:", videoUrl);
     video.src = videoUrl;
-    video.play().catch(() => {});
+    video.play().catch((err) => {
+      console.warn("[VideoFollower] play() rejected:", err?.message ?? err);
+    });
   }, [videoUrl]);
 
-  // Sync is driven entirely by `video-state` broadcasts from the master —
-  // play/pause is applied from lastMaster.paused and seeks from drift correction.
-  // No `video-control-cmd` listener needed.
-
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    let lastMaster: {
-      currentTime: number;
-      paused: boolean;
-      seeking: boolean;
-      receivedAt: number;
-      masterTimestampMs: number | null;
-    } | null = null;
-    let rVFCHandle = 0;
-
-    const unlistenPromise = listen<{
-      currentTime: number;
-      duration: number;
-      paused: boolean;
-      volume: number;
-      seeking?: boolean;
-      masterTimestampMs?: number;
-    }>("video-state", (event) => {
-      lastMaster = {
-        currentTime: event.payload.currentTime,
-        paused: event.payload.paused,
-        seeking: event.payload.seeking === true,
-        receivedAt: performance.now(),
-        masterTimestampMs: event.payload.masterTimestampMs ?? null,
-      };
+    const unlisten = listen<VideoControlCmd>("video-control-cmd", (event) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const { action, value } = event.payload;
+      if (action === "play") {
+        video.play().catch(() => {});
+      } else if (action === "pause") {
+        video.pause();
+      } else if (action === "seek" && value !== undefined) {
+        video.currentTime = value;
+      }
     });
 
-    const hasRVFC = typeof video.requestVideoFrameCallback === "function";
-
-    const scheduleNext = (cb: () => void): number => {
-      return hasRVFC
-        ? video.requestVideoFrameCallback(cb)
-        : requestAnimationFrame(cb);
-    };
-
-    const cancel = (handle: number) => {
-      if (hasRVFC && typeof video.cancelVideoFrameCallback === "function") {
-        video.cancelVideoFrameCallback(handle);
-      } else {
-        cancelAnimationFrame(handle);
-      }
-    };
-
-    const tick = () => {
-      if (!lastMaster) {
-        rVFCHandle = scheduleNext(tick);
-        return;
-      }
-      const now = performance.now();
-      const masterEstimate = lastMaster.masterTimestampMs != null
-        ? lastMaster.currentTime + (now - lastMaster.masterTimestampMs) / 1000
-        : lastMaster.currentTime + (now - lastMaster.receivedAt) / 1000;
-
-      if (lastMaster.seeking) {
-        if (!video.paused) video.pause();
-        rVFCHandle = scheduleNext(tick);
-        return;
-      }
-
-      if (lastMaster.paused) {
-        if (!video.paused) video.pause();
-        video.playbackRate = 1.0;
-        rVFCHandle = scheduleNext(tick);
-        return;
-      }
-      if (video.paused) {
-        video.play().catch(() => {});
-      }
-
-      const drift = video.currentTime - masterEstimate; // >0 means follower is AHEAD
-      const absDrift = Math.abs(drift);
-      if (absDrift > 0.15) {
-        // >150 ms — hard seek
-        video.playbackRate = 1.0;
-        video.currentTime = masterEstimate;
-      } else if (absDrift > 0.02) {
-        // 20–150 ms — rate nudge (±3%)
-        video.playbackRate = drift > 0 ? 0.97 : 1.03;
-      } else {
-        video.playbackRate = 1.0;
-      }
-      rVFCHandle = scheduleNext(tick);
-    };
-
-    rVFCHandle = scheduleNext(tick);
-
     return () => {
-      unlistenPromise.then((fn) => fn()).catch(() => {});
-      cancel(rVFCHandle);
+      unlisten.then((fn) => fn());
     };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<{ currentTime: number; duration: number; paused: boolean; seeking?: boolean }>("video-state", (event) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const { currentTime, paused, seeking } = event.payload;
+      if (seeking) return; // master is mid-seek, don't correct yet
+      // Correct drift > 0.5 seconds
+      if (Math.abs(video.currentTime - currentTime) > 0.5) {
+        video.currentTime = currentTime;
+      }
+      if (paused && !video.paused) video.pause();
+      else if (!paused && video.paused) video.play().catch(() => {});
+    });
+    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   return (
@@ -131,6 +75,7 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
           "src:", v.src,
         );
       }}
+      onCanPlay={() => console.log("[VideoFollower] canplay — ready to render")}
       className={cn("w-full h-full bg-black object-contain", className)}
     />
   );
