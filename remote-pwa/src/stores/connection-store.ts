@@ -237,9 +237,15 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
     ws.on("slide.changed", (payload) => {
       const p = payload as Record<string, unknown>;
       if (p && typeof p === "object") {
+        // Raw SlideContent events carry the discriminator as `slideType`
+        // (serde tag, camelCase). Older streaming payloads used `type`.
+        // Accept either so remote controls render regardless of source.
+        const rawType = typeof p.slideType === "string"
+          ? (p.slideType as string)
+          : typeof p.type === "string" ? (p.type as string) : undefined;
         get()._setCurrentSlide({
           text: typeof p.text === "string" ? p.text : undefined,
-          type: typeof p.type === "string" ? p.type : undefined,
+          type: rawType,
           title: typeof p.title === "string" ? p.title : undefined,
           index: typeof p.index === "number" ? p.index : undefined,
           total: typeof p.total === "number" ? p.total : undefined,
@@ -317,9 +323,15 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
     ws.on("slide.changed", (payload) => {
       const p = payload as Record<string, unknown>;
       if (p && typeof p === "object") {
+        // Raw SlideContent events carry the discriminator as `slideType`
+        // (serde tag, camelCase). Older streaming payloads used `type`.
+        // Accept either so remote controls render regardless of source.
+        const rawType = typeof p.slideType === "string"
+          ? (p.slideType as string)
+          : typeof p.type === "string" ? (p.type as string) : undefined;
         get()._setCurrentSlide({
           text: typeof p.text === "string" ? p.text : undefined,
-          type: typeof p.type === "string" ? p.type : undefined,
+          type: rawType,
           title: typeof p.title === "string" ? p.title : undefined,
           index: typeof p.index === "number" ? p.index : undefined,
           total: typeof p.total === "number" ? p.total : undefined,
