@@ -205,7 +205,23 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
     <LogoContent className={className} />
   );
 
+  const renderMainThumbnail = () => {
+    const thumbUrl = slide.video_id
+      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
+      : null;
+    return (
+      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
+        {thumbUrl && (
+          <img src={thumbUrl} alt="" className="h-full w-full object-contain opacity-60" />
+        )}
+      </div>
+    );
+  };
+
   const renderLiveVideo = () => {
+    // Main window never renders live video — thumbnail for operator UX only.
+    if (windowLabel === "main") return renderMainThumbnail();
+
     // Decision: what does THIS window render for this slide?
     // 1. mode=local + this window in videoPlaybackTargets → muted follower.
     // 2. mode=live-youtube + this window === liveTarget → THE YT iframe (not a follower).

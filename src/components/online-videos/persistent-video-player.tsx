@@ -2,8 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emit, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { loadYouTubeAPI } from "../../lib/youtube-api";
-import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useQueueStore } from "../../stores/queue-store";
@@ -12,9 +10,6 @@ import { clearCurrentSlide } from "../../lib/tauri/display";
 import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/media";
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
-
-/** Heartbeat interval for progress bar updates and drift detection (ms). */
-const HEARTBEAT_INTERVAL_MS = 250;
 
 /**
  * Checks if there is a next item in the queue (accounting for repeat mode).
@@ -163,12 +158,10 @@ function LocalVideoMaster({
 /**
  * Always-mounted master player. Place in __root.tsx outside <Outlet>.
  *
- * The player host div uses position: fixed behind all app UI (z-index: -1),
- * visible to the browser (so YouTube keeps playing) but not to the user.
- * Playing Now shows a thumbnail instead of this live player.
- *
- * The iframe/video element NEVER changes DOM parent — eliminating the browser
- * throttling / YouTube pause that the old DOM-transplant approach caused.
+ * Main window never renders live video. The only DOM it hosts is the hidden
+ * <LocalVideoMaster> audio/timer master when a local file is active. Live
+ * YouTube is rendered in the projector or return window (whichever is the
+ * current liveTarget) via OnlineVideoSlide.
  */
 export function PersistentVideoPlayer() {
   // Only the main window hosts the master player. Projector/return get
@@ -179,14 +172,9 @@ export function PersistentVideoPlayer() {
 }
 
 function PersistentVideoPlayerMain() {
-  const playerHostRef = useRef<HTMLDivElement>(null);
-  const ytPlayerRef = useRef<YTPlayer | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const seekingRef = useRef(false);
-  const playSessionIdRef = useRef(0);
   const [activeSlide, setActiveSlide] = useState<SlideContent | null>(null);
   const activeSlideRef = useRef<SlideContent | null>(null);
-  const [playSessionId, setPlaySessionId] = useState(0);
 
   // Helper: broadcast current player state to all windows + update Zustand store.
   // Must use emitTo() for each window — JS emit() only reaches the current webview.
@@ -220,20 +208,6 @@ function PersistentVideoPlayerMain() {
     const unsub = listen<SlideContent>("slide-changed", (e) => {
       const slide = e.payload;
       if (slide.slideType === "onlineVideo") {
-        // Only bump the play session (destroys + rebuilds the YT player) when
-        // the video identity actually changes. Re-emits of the same video —
-        // e.g. `state.sync` when a remote reconnects — must NOT restart
-        // playback.
-        const prev = activeSlideRef.current;
-        const isSameVideo =
-          prev?.slideType === "onlineVideo" &&
-          prev.source === slide.source &&
-          prev.video_id === slide.video_id &&
-          prev.url === slide.url;
-        if (!isSameVideo) {
-          playSessionIdRef.current += 1;
-          setPlaySessionId(playSessionIdRef.current);
-        }
         setActiveSlide(slide);
         activeSlideRef.current = slide;
 
@@ -275,14 +249,6 @@ function PersistentVideoPlayerMain() {
         }
       } else if (activeSlideRef.current) {
         // Non-video slide replaced the video: fully stop and clean up
-        clearInterval(pollTimerRef.current ?? undefined);
-        pollTimerRef.current = null;
-
-        if (ytPlayerRef.current) {
-          try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
-          ytPlayerRef.current = null;
-        }
-
         useVideoPlayerStore.getState().resetVideoState();
         useVideoPlayerStore.getState().setMode(null);
         setActiveSlide(null);
@@ -312,8 +278,8 @@ function PersistentVideoPlayerMain() {
     const unsub = listen<{ targets: string[] }>("remote-video-set-targets", (e) => {
       if (e.payload && Array.isArray(e.payload.targets)) {
         const validTargets = e.payload.targets.filter(
-          (t): t is "main" | "projector" | "return" =>
-            t === "main" || t === "projector" || t === "return",
+          (t): t is "projector" | "return" =>
+            t === "projector" || t === "return",
         );
         useVideoPlayerStore.getState().setVideoPlaybackTargets(validTargets);
       }
@@ -323,16 +289,11 @@ function PersistentVideoPlayerMain() {
 
   // Keep every webview's liveTarget in sync (live-YouTube mode).
   useEffect(() => {
-    const unsub = listen<{ target: "main" | "projector" | "return" | "none" }>(
+    const unsub = listen<{ target: "projector" | "return" }>(
       "remote-video-set-live-target",
       (e) => {
         if (e.payload && typeof e.payload.target === "string") {
-          const valid: Array<"main" | "projector" | "return" | "none"> = [
-            "main",
-            "projector",
-            "return",
-            "none",
-          ];
+          const valid: Array<"projector" | "return"> = ["projector", "return"];
           if (valid.includes(e.payload.target)) {
             useVideoPlayerStore.getState().setLiveTarget(e.payload.target);
           }
@@ -346,14 +307,6 @@ function PersistentVideoPlayerMain() {
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
       if (!activeSlideRef.current) return;
-
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = null;
-
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
-        ytPlayerRef.current = null;
-      }
 
       // For local video: clearing activeSlide unmounts LocalVideoMaster
       useVideoPlayerStore.getState().resetVideoState();
@@ -378,11 +331,10 @@ function PersistentVideoPlayerMain() {
   }, []);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster).
-  // In live-youtube mode, if the iframe lives in projector/return, forward the
-  // event to that window instead of applying it locally (main has no iframe).
+  // YT iframe now lives in projector/return window, so main forwards the event.
   useEffect(() => {
     const unsub = listen<VideoControlEvent>("video-control", (e) => {
-      const { action, value } = e.payload;
+      const { action } = e.payload;
 
       if (action === "seek") {
         seekingRef.current = true;
@@ -393,191 +345,25 @@ function PersistentVideoPlayerMain() {
       const m = snapshot.mode;
       const lt = snapshot.liveTarget;
 
-      // Live-YouTube mode + iframe lives in projector/return:
-      // forward the control event to that window; nothing to do locally.
-      if (m?.kind === "live-youtube" && lt !== "main" && lt !== "none") {
+      // Live-YouTube mode: forward control to the window that owns the iframe.
+      if (m?.kind === "live-youtube" && (lt === "projector" || lt === "return")) {
         emitTo(lt, "video-control", e.payload).catch(() => {});
         return;
       }
-
-      // Live-YouTube main/none OR local mode: if we have a local YT master,
-      // apply action to it.
-      if (ytPlayerRef.current) {
-        const p = ytPlayerRef.current;
-        if (action === "play") {
-          p.playVideo();
-          for (const target of ["projector", "return"] as const) {
-            emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
-          }
-          emit("video-control-cmd", { action: "play" }).catch(() => {});
-        } else if (action === "pause") {
-          p.pauseVideo();
-          for (const target of ["projector", "return"] as const) {
-            emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
-          }
-          emit("video-control-cmd", { action: "pause" }).catch(() => {});
-        } else if (action === "seek" && value !== undefined) {
-          p.seekTo(value, true);
-          for (const target of ["projector", "return"] as const) {
-            emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
-          }
-          emit("video-control-cmd", { action: "seek", value }).catch(() => {});
-        } else if (action === "volume" && value !== undefined) {
-          p.setVolume(Math.round(value * 100));
-        }
-      }
+      // Local mode handled by LocalVideoMaster; nothing else to do here.
     }).catch(() => () => {});
     return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
-  // ── YouTube player lifecycle ──────────────────────────────────────────────
-
-  // Main only owns the YT iframe when we are in live-youtube mode AND the
-  // target is "main" or "none" (hidden audio-only). When target is projector
-  // or return, OnlineVideoSlide in that window creates the sole iframe — main
-  // must NOT create one, or we end up with two iframes and double audio.
-  const mode = useVideoPlayerStore((s) => s.mode);
-  const liveTarget = useVideoPlayerStore((s) => s.liveTarget);
-  const mainOwnsYtMaster =
-    mode?.kind === "live-youtube" && (liveTarget === "main" || liveTarget === "none");
-  const activeVideoId = mainOwnsYtMaster ? mode.videoId : undefined;
-  const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
-
-  useEffect(() => {
-    const videoId = activeVideoId ?? null;
-    if (!videoId || !playerHostRef.current) return;
-
-    let destroyed = false;
-
-    // Clean up any previous YouTube player
-    clearInterval(pollTimerRef.current ?? undefined);
-    pollTimerRef.current = null;
-    if (ytPlayerRef.current) {
-      try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
-      ytPlayerRef.current = null;
-    }
-
-    // Create container div imperatively (React must not manage this node)
-    const container = document.createElement("div");
-    container.style.cssText = "width:100%;height:100%;overflow:hidden;";
-    playerHostRef.current.appendChild(container);
-    const uid = `yt-master-${Math.random().toString(36).slice(2)}`;
-    container.id = uid;
-
-    console.log("[PersistentVideoPlayer] creating YT master for", videoId);
-    loadYouTubeAPI().then(() => {
-      if (destroyed || !container.isConnected) {
-        console.warn("[PersistentVideoPlayer] skipping YT create — destroyed=", destroyed, "connected=", container.isConnected);
-        return;
-      }
-      if (!window.YT || !window.YT.Player) {
-        console.error("[PersistentVideoPlayer] window.YT.Player unavailable after loadYouTubeAPI");
-        return;
-      }
-
-      const player = new window.YT.Player(uid, {
-        videoId,
-        width: "100%",
-        height: "100%",
-        playerVars: {
-          autoplay: 1, controls: 0, rel: 0,
-          modestbranding: 1, showinfo: 0,
-          disablekb: 1, iv_load_policy: 3, cc_load_policy: 0,
-          // Start muted so WKWebView/browser autoplay policy doesn't block.
-          // We unmute on first state-change to "playing".
-          mute: 1,
-          playsinline: 1,
-          origin: window.location.origin,
-        },
-        events: {
-          onReady: ({ target }) => {
-            console.log("[PersistentVideoPlayer] YT onReady for", videoId);
-            if (destroyed) return;
-            ytPlayerRef.current = target;
-            const iframe = target.getIframe();
-            iframe.style.cssText =
-              "width:100%;height:100%;pointer-events:none;border:none;" +
-              "transform:scale(1.06);transform-origin:center;display:block;";
-
-            pollTimerRef.current = setInterval(() => {
-              if (target.getPlayerState() !== 1) return; // only heartbeat while playing
-              const snap: VideoStateEvent = {
-                paused: false,
-                currentTime: target.getCurrentTime(),
-                duration: target.getDuration(),
-                volume: target.getVolume() / 100,
-              };
-              broadcastState(snap, { videoId, videoSrc: null, videoSource: "youtube" });
-            }, HEARTBEAT_INTERVAL_MS);
-          },
-          onStateChange: ({ data, target }) => {
-            console.log("[PersistentVideoPlayer] YT onStateChange", data, "for", videoId);
-            if (destroyed) return;
-            seekingRef.current = false;
-            // Unmute on first transition to PLAYING (1) — bypasses autoplay policy.
-            if (data === 1 && target.isMuted && target.isMuted()) {
-              try { target.unMute?.(); } catch (_) { /* ignore */ }
-            }
-            const snap: VideoStateEvent = {
-              paused: data !== 1,
-              currentTime: target.getCurrentTime(),
-              duration: target.getDuration(),
-              volume: target.getVolume() / 100,
-            };
-            broadcastState(snap, { videoId, videoSrc: null, videoSource: "youtube" }, true);
-            // data === 0 means ENDED
-            if (data === 0) {
-              handleVideoEnded();
-            }
-          },
-          onError: ({ data }) => {
-            console.error("[PersistentVideoPlayer] YT onError", data, "for", videoId);
-          },
-        },
-      });
-      ytPlayerRef.current = player;
-    }).catch((err) => {
-      console.error("[PersistentVideoPlayer] loadYouTubeAPI failed:", err);
-    });
-
-    return () => {
-      destroyed = true;
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = null;
-      try { ytPlayerRef.current?.destroy(); } catch (_) { /* ignore */ }
-      ytPlayerRef.current = null;
-      container.remove();
-    };
-  }, [activeVideoId, activeVideoSource, broadcastState, playSessionId]);
-
   const isLocalVideo = activeSlide?.slideType === "onlineVideo" && activeSlide.source === "local" && !!activeSlide.url;
   const localVideoUrl = activeSlide?.slideType === "onlineVideo" ? activeSlide.url : null;
 
+  if (!isLocalVideo || !localVideoUrl) return null;
+
   return (
-    <div
-      ref={playerHostRef}
-      aria-hidden
-      style={RESTING_STYLE}
-    >
-      {isLocalVideo && localVideoUrl && (
-        <LocalVideoMaster
-          videoPath={localVideoUrl}
-          onBroadcast={broadcastLocalState}
-        />
-      )}
-    </div>
+    <LocalVideoMaster
+      videoPath={localVideoUrl}
+      onBroadcast={broadcastLocalState}
+    />
   );
 }
-
-// ── Style helper ──────────────────────────────────────────────────────────────
-
-const RESTING_STYLE: React.CSSProperties = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  width: 640,
-  height: 360,
-  pointerEvents: "none",
-  zIndex: -1,
-  overflow: "hidden",
-};
