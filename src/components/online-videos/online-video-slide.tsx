@@ -19,6 +19,8 @@ export type VideoStateEvent = {
   volume: number;
   seeking?: boolean;
   seeked?: boolean;
+  /** performance.now() at emit time, for one-way latency compensation on followers. */
+  emitTs?: number;
 };
 
 export type OnlineVideoRenderMode =
@@ -46,17 +48,22 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       lastStateRef.current = e.payload;
       const p = playerRef.current;
       if (!p || typeof p.getPlayerState !== "function") return;
-      const { paused, seeking, currentTime } = e.payload;
+      const { paused, seeking, currentTime, emitTs } = e.payload;
       if (seeking) {
         if (p.getPlayerState() === 1) p.pauseVideo();
         return;
       }
-      // Drift correction: resync if follower is >0.5s off master
+      // Latency compensation: target master's real-time position, not snapshot
+      const latencySec = emitTs != null ? Math.max(0, (performance.now() - emitTs) / 1000) : 0;
+      const target = currentTime + latencySec;
+      // Drift correction: YT API's setPlaybackRate only accepts discrete values
+      // (0.25/0.5/1/1.25/...), so rate nudging isn't viable. Use tighter seek
+      // threshold (0.3s) — trade small seek stutter for much tighter sync.
       if (!paused) {
         try {
           const followerTime = p.getCurrentTime();
-          if (Math.abs(followerTime - currentTime) > 0.5) {
-            p.seekTo(currentTime, true);
+          if (Math.abs(followerTime - target) > 0.3) {
+            p.seekTo(target, true);
           }
         } catch (_) {}
       }
@@ -128,11 +135,12 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
           onReady: ({ target }) => {
             playerRef.current = target;
             if (isFollower) {
-              // Seek to last known master position on init.
+              // Seek to last known master position on init + latency compensation.
               // If no state yet (late joiner), autoplay — master is already active.
               const last = lastStateRef.current;
               if (last && last.currentTime > 2) {
-                target.seekTo(last.currentTime, true);
+                const latencySec = last.emitTs != null ? Math.max(0, (performance.now() - last.emitTs) / 1000) : 0;
+                target.seekTo(last.currentTime + latencySec, true);
               }
               if (!last || !last.paused) target.playVideo();
 

@@ -45,17 +45,40 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<{ currentTime: number; duration: number; paused: boolean; seeking?: boolean }>("video-state", (event) => {
+    const unlisten = listen<{ currentTime: number; duration: number; paused: boolean; seeking?: boolean; emitTs?: number }>("video-state", (event) => {
       const video = videoRef.current;
       if (!video) return;
-      const { currentTime, paused, seeking } = event.payload;
+      const { currentTime, paused, seeking, emitTs } = event.payload;
       if (seeking) return; // master is mid-seek, don't correct yet
-      // Correct drift > 0.5 seconds
-      if (Math.abs(video.currentTime - currentTime) > 0.5) {
-        video.currentTime = currentTime;
+
+      if (paused && !video.paused) {
+        video.pause();
+        video.playbackRate = 1;
+        return;
       }
-      if (paused && !video.paused) video.pause();
-      else if (!paused && video.paused) video.play().catch(() => {});
+      if (!paused && video.paused) {
+        video.play().catch(() => {});
+      }
+      if (paused) return;
+
+      // Latency compensation: master's currentTime was captured at emitTs.
+      // One-way latency ≈ (now - emitTs). Add it so follower targets master's
+      // current real-time position, not its stale snapshot.
+      const latencySec = emitTs != null ? Math.max(0, (performance.now() - emitTs) / 1000) : 0;
+      const target = currentTime + latencySec;
+      const drift = video.currentTime - target; // + = ahead, − = behind
+
+      if (Math.abs(drift) < 0.08) {
+        // In sync — restore normal rate
+        if (video.playbackRate !== 1) video.playbackRate = 1;
+      } else if (Math.abs(drift) < 1.0) {
+        // Small drift — nudge playbackRate smoothly (imperceptible)
+        video.playbackRate = drift < 0 ? 1.05 : 0.95;
+      } else {
+        // Big jump — hard seek
+        video.currentTime = target;
+        video.playbackRate = 1;
+      }
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
