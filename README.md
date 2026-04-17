@@ -75,6 +75,14 @@ Download the latest release for your platform from the [Releases page](https://g
 - [Rust](https://rustup.rs/) stable toolchain
 - [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS
 
+#### Video pipeline (GStreamer)
+
+The Rust video pipeline links against GStreamer 1.24+ at compile time. Install on the host before running `pnpm tauri dev` or `cargo build`:
+
+- **macOS:** `brew install gstreamer`
+- **Windows:** install the official MSVC GStreamer **runtime + development** installers (1.24 or later) from <https://gstreamer.freedesktop.org/download/>
+- **Linux (Debian/Ubuntu):** `sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-nice`
+
 ### Getting Started
 
 ```bash
