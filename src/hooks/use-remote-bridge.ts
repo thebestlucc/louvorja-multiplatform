@@ -111,7 +111,11 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
 
         // ── Video targets (remote-video-set-targets) ──────────────────────
         listen<RemoteVideoSetTargetsPayload>("remote-video-set-targets", (e) => {
-          useVideoPlayerStore.getState().setVideoPlaybackTargets(e.payload.targets);
+          const validTargets = e.payload.targets.filter(
+            (t): t is "main" | "projector" | "return" =>
+              t === "main" || t === "projector" || t === "return",
+          );
+          useVideoPlayerStore.getState().setVideoPlaybackTargets(validTargets);
         }),
 
         // ── Audio skip next / prev ────────────────────────────────────────
