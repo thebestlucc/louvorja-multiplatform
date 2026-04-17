@@ -1,10 +1,15 @@
 import { test, describe, beforeEach } from "node:test";
 import * as assert from "node:assert";
+
+// Stub Tauri IPC so plugin-store calls don't throw in Node
+(globalThis as any).window = { __TAURI_INTERNALS__: { invoke: () => Promise.resolve(null) } };
+
 import { useVideoPlayerStore } from "../../src/stores/video-player-store";
 
 describe("videoPlayerStore", () => {
   beforeEach(() => {
     useVideoPlayerStore.getState().resetVideoState();
+    useVideoPlayerStore.getState().setUseRustVideoPipeline(false);
   });
 
   test("initial state", () => {
@@ -40,5 +45,20 @@ describe("videoPlayerStore", () => {
     assert.strictEqual(s.videoId, null);
     assert.strictEqual(s.videoSrc, null);
     assert.strictEqual(s.videoSource, null);
+  });
+
+  test("useRustVideoPipeline defaults to false", () => {
+    assert.strictEqual(useVideoPlayerStore.getState().useRustVideoPipeline, false);
+  });
+
+  test("setUseRustVideoPipeline(true) updates state", () => {
+    useVideoPlayerStore.getState().setUseRustVideoPipeline(true);
+    assert.strictEqual(useVideoPlayerStore.getState().useRustVideoPipeline, true);
+  });
+
+  test("setUseRustVideoPipeline(false) resets to false", () => {
+    useVideoPlayerStore.getState().setUseRustVideoPipeline(true);
+    useVideoPlayerStore.getState().setUseRustVideoPipeline(false);
+    assert.strictEqual(useVideoPlayerStore.getState().useRustVideoPipeline, false);
   });
 });
