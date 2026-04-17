@@ -18,11 +18,8 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    console.log("[VideoFollower] loading src:", videoUrl);
     video.src = videoUrl;
-    video.play().catch((err) => {
-      console.warn("[VideoFollower] play() rejected:", err?.message ?? err);
-    });
+    video.play().catch(() => {});
   }, [videoUrl]);
 
   useEffect(() => {
@@ -74,9 +71,25 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
       };
     });
 
+    const hasRVFC = typeof video.requestVideoFrameCallback === "function";
+
+    const scheduleNext = (cb: () => void): number => {
+      return hasRVFC
+        ? video.requestVideoFrameCallback(cb)
+        : requestAnimationFrame(cb);
+    };
+
+    const cancel = (handle: number) => {
+      if (hasRVFC && typeof video.cancelVideoFrameCallback === "function") {
+        video.cancelVideoFrameCallback(handle);
+      } else {
+        cancelAnimationFrame(handle);
+      }
+    };
+
     const tick = () => {
       if (!lastMaster) {
-        rVFCHandle = video.requestVideoFrameCallback(tick);
+        rVFCHandle = scheduleNext(tick);
         return;
       }
       const now = performance.now();
@@ -86,14 +99,14 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
 
       if (lastMaster.seeking) {
         if (!video.paused) video.pause();
-        rVFCHandle = video.requestVideoFrameCallback(tick);
+        rVFCHandle = scheduleNext(tick);
         return;
       }
 
       if (lastMaster.paused) {
         if (!video.paused) video.pause();
         video.playbackRate = 1.0;
-        rVFCHandle = video.requestVideoFrameCallback(tick);
+        rVFCHandle = scheduleNext(tick);
         return;
       }
       if (video.paused) {
@@ -112,24 +125,14 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
       } else {
         video.playbackRate = 1.0;
       }
-      rVFCHandle = video.requestVideoFrameCallback(tick);
+      rVFCHandle = scheduleNext(tick);
     };
 
-    if (typeof video.requestVideoFrameCallback === "function") {
-      rVFCHandle = video.requestVideoFrameCallback(tick);
-    } else {
-      // Fallback to rAF for browsers without rVFC
-      const rafTick = () => { tick(); rVFCHandle = requestAnimationFrame(rafTick); };
-      rVFCHandle = requestAnimationFrame(rafTick);
-    }
+    rVFCHandle = scheduleNext(tick);
 
     return () => {
       unlistenPromise.then((fn) => fn()).catch(() => {});
-      if (typeof video.cancelVideoFrameCallback === "function") {
-        video.cancelVideoFrameCallback(rVFCHandle);
-      } else {
-        cancelAnimationFrame(rVFCHandle);
-      }
+      cancel(rVFCHandle);
     };
   }, []);
 
@@ -148,7 +151,6 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
           "src:", v.src,
         );
       }}
-      onCanPlay={() => console.log("[VideoFollower] canplay — ready to render")}
       className={cn("w-full h-full bg-black object-contain", className)}
     />
   );
