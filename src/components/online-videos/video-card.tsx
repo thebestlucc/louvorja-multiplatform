@@ -6,14 +6,13 @@ import type { OnlineVideo, SlideContent } from "../../lib/bindings";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { catcher } from "../../lib/catcher";
-import { downloadOnlineVideo, cancelDownload, setCurrentSlide, setSlideOnProjector, setSlideOnReturn } from "../../lib/tauri";
+import { downloadOnlineVideo, cancelDownload, setSlideOnProjector, setSlideOnReturn } from "../../lib/tauri";
 import { clearActivePlayback } from "../../lib/projection-playback";
 import { getPreference } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { useDownloadStore } from "../../stores/download-store";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { useQueueStore } from "../../stores/queue-store";
-import { useMediaPlayerStore } from "../../stores/media-player-store";
+import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 
 interface VideoCardProps {
   video: OnlineVideo;
@@ -111,24 +110,39 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
       return;
     }
 
-    // "all" target: stop current playback, clear queue, project video
+    // "all" target: stop current playback, enqueue video, let coordinator drive
+    // playback. Coordinator (use-playback-coordinator) handles setMode,
+    // media-player-store load, setCurrentSlide, and projection type.
     await clearActivePlayback();
-    useQueueStore.getState().clearQueue();
 
-    if (video.localPath) {
-      useMediaPlayerStore.getState().load({ type: "offline_video", videoPath: video.localPath, title: video.title ?? "", isManaged: true });
-    } else {
-      useMediaPlayerStore.getState().load({ type: "online_video", videoId: video.videoId, videoSource: "youtube", title: video.title ?? "" });
-    }
+    const queueItem: QueueItem = {
+      id: crypto.randomUUID(),
+      kind: "video",
+      type: "projection",
+      title: video.title ?? video.videoId,
+      videoMedia: video.localPath
+        ? {
+            videoSource: "local",
+            videoId: video.videoId,
+            videoUrl: video.localPath,
+            videoTitle: video.title ?? undefined,
+            duration: video.durationSeconds ?? undefined,
+          }
+        : {
+            videoSource: "youtube",
+            videoId: video.videoId,
+            videoTitle: video.title ?? undefined,
+            duration: video.durationSeconds ?? undefined,
+          },
+    };
 
-    const payload = buildVideoSlidePayload(video);
-    const [, err] = await catcher(setCurrentSlide(payload), { notify: true });
-    if (!err) {
-      usePresentationStore.getState().setCurrentVideoProjectionId(video.videoId);
-      const { useDisplayStore } = await import("../../stores/display-store");
-      useDisplayStore.getState().setCurrentProjectionType("presentation");
-      void navigate({ to: "/playing-now" });
-    }
+    const qs = useQueueStore.getState();
+    qs.clearQueue();
+    qs.addToQueue([queueItem], true);
+    qs.setCurrentIndex(0);
+
+    usePresentationStore.getState().setCurrentVideoProjectionId(video.videoId);
+    void navigate({ to: "/playing-now" });
   };
 
   const thumbnailUrl = parseThumbnail(video.images);
