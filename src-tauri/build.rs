@@ -39,5 +39,13 @@ fn main() {
         println!("cargo:rustc-env=CDN_MANIFEST_URL=");
     }
 
+    // ─── GStreamer dylib bundling (stub — implemented in Task 5 of Rust video pipeline plan) ─────
+    // For dev builds, the system GStreamer (Homebrew on macOS, MSVC installer on Windows,
+    // apt packages on Linux) is linked at compile time via pkg-config. No copy needed.
+    // For release/distribution builds, native dylibs/DLLs must be bundled into the .app/.exe
+    // and GST_PLUGIN_PATH set at runtime. See docs/plans/2026-04-17-rust-video-pipeline.md
+    // Task 5.x for the bundling implementation.
+    // TODO(Task 5): copy GStreamer plugins on cfg(target_os = "macos"|"windows") release builds.
+
     tauri_build::build()
 }
