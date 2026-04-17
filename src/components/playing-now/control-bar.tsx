@@ -19,6 +19,7 @@ import {
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+import { VideoTargetToggle } from "../online-videos/video-target-toggle";
 import type { MediaItem, MediaStatus } from "../../types/media";
 import { mediaHasSlides, mediaHasTimeline } from "../../types/media";
 
@@ -319,8 +320,10 @@ export function ControlBar({
           )}
         </div>
 
-        {/* Right: volume */}
-        <div className="flex items-center gap-1">
+        {/* Right: video targets + volume */}
+        <div className="flex items-center gap-3">
+          <VideoTargetToggle />
+          <div className="flex items-center gap-1">
           {hasTimeline && (
             <>
               <Tooltip>
@@ -346,6 +349,7 @@ export function ControlBar({
               />
             </>
           )}
+          </div>
         </div>
       </div>
     </div>
