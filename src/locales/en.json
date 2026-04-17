@@ -1889,5 +1889,15 @@
       "video": "Video",
       "presentation": "Presentation"
     }
+  },
+  "videoTargets": {
+    "label": "Video on",
+    "liveLabel": "Live video on",
+    "main": "Operator",
+    "projector": "Projector",
+    "return": "Return",
+    "audioOnly": "Audio only",
+    "modeLocal": "Local",
+    "modeLive": "Live"
   }
 }

@@ -321,6 +321,27 @@ function PersistentVideoPlayerMain() {
     return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
+  // Keep every webview's liveTarget in sync (live-YouTube mode).
+  useEffect(() => {
+    const unsub = listen<{ target: "main" | "projector" | "return" | "none" }>(
+      "remote-video-set-live-target",
+      (e) => {
+        if (e.payload && typeof e.payload.target === "string") {
+          const valid: Array<"main" | "projector" | "return" | "none"> = [
+            "main",
+            "projector",
+            "return",
+            "none",
+          ];
+          if (valid.includes(e.payload.target)) {
+            useVideoPlayerStore.getState().setLiveTarget(e.payload.target);
+          }
+        }
+      },
+    ).catch(() => () => {});
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
+  }, []);
+
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
   useEffect(() => {
     const unsub = listen("slide-cleared", () => {
