@@ -133,7 +133,12 @@ export default function LiveRoute() {
   // Contextual control gates — show audio controls when audio is active (playing or has duration)
   const hasAudio = audioStatus != null && (audioStatus.playing || (audioStatus.duration ?? 0) > 0);
   const slideType = slide?.type;
-  const hasVideo = slideType === "online_video" || slideType === "video";
+  // Accept both camelCase (raw SlideContent serde tag) and snake_case
+  // (legacy streaming payloads) for forward/back compatibility.
+  const hasVideo =
+    slideType === "online_video" ||
+    slideType === "onlineVideo" ||
+    slideType === "video";
 
   return (
     <div
