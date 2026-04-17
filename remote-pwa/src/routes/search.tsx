@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, X, ChevronRight, ChevronLeft, Monitor } from "lucide-react";
+import { Search, X, ChevronRight, ChevronLeft, Monitor, Link2 } from "lucide-react";
 import { useConnectionStore } from "@/stores/connection-store";
 import { cn } from "@/lib/utils";
 import { HighlightedSnippet } from "@/components/ui/highlighted-snippet";
@@ -265,6 +265,55 @@ function buildSelectPayload(selected: SelectedItem): Record<string, unknown> {
   }
   // presentation
   return { id: String(payload.presentationId), type: "presentation" };
+}
+
+function YouTubeUrlInput({ onSubmit }: { onSubmit: (url: string) => void }) {
+  const { t } = useTranslation();
+  const [url, setUrl] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const handleSubmit = () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    setSent(true);
+    setTimeout(() => { setSent(false); setUrl(""); }, 1500);
+  };
+
+  return (
+    <div className="px-4 pb-2">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" aria-hidden="true" />
+          <input
+            type="url"
+            placeholder={t("remote.search.youtube_url_placeholder")}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+            className={cn(
+              "w-full h-9 pl-9 pr-3 rounded-lg border border-border bg-surface-1 text-xs text-fg placeholder:text-fg-subtle",
+              "focus:outline-none focus:ring-2 focus:ring-primary",
+            )}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!url.trim() || sent}
+          className={cn(
+            "h-9 px-3 rounded-lg text-xs font-medium flex-shrink-0",
+            sent
+              ? "bg-success text-white"
+              : "bg-primary text-white active:scale-[0.98] transition-transform",
+            (!url.trim() || sent) && "opacity-60",
+          )}
+        >
+          {sent ? "✓" : t("remote.search.youtube_url_add")}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function SearchRoute() {
@@ -757,6 +806,16 @@ export default function SearchRoute() {
             )}
           </div>
         </div>
+      )}
+
+      {/* YouTube URL quick-add (videos tab only) */}
+      {tab === "videos" && (
+        <YouTubeUrlInput
+          onSubmit={(url) => {
+            const freshWs = useConnectionStore.getState().ws;
+            freshWs?.send("video.queue_url", { url });
+          }}
+        />
       )}
 
       {/* Recent searches chips */}
