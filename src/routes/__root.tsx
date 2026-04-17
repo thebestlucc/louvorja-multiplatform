@@ -445,22 +445,37 @@ function RootLayout() {
         emit("service-state", null);
       }
 
-      // Re-broadcast queue state
+      // Re-broadcast queue state with enriched metadata per kind
       const { items, currentIndex } = useQueueStore.getState();
+      const mapItem = (i: import("../stores/queue-store").QueueItem) => {
+        const base = {
+          id: i.id,
+          kind: i.kind,
+          title: i.hymn?.title ?? i.title ?? "",
+          artist: i.hymn?.author ?? undefined,
+        };
+        if (i.kind === "video" && i.videoMedia) {
+          return {
+            ...base,
+            title: i.videoMedia.videoTitle ?? i.title ?? "Video",
+            duration: i.videoMedia.duration,
+            videoId: i.videoMedia.videoId,
+            thumbnail: i.videoMedia.videoId
+              ? `https://img.youtube.com/vi/${i.videoMedia.videoId}/mqdefault.jpg`
+              : undefined,
+          };
+        }
+        if (i.kind === "bible" && i.bibleContext) {
+          return { ...base, title: i.title ?? `${i.bibleContext.bookName} ${i.bibleContext.chapter}` };
+        }
+        return base;
+      };
       const nowPlaying =
         currentIndex >= 0 && currentIndex < items.length
-          ? {
-              id: items[currentIndex].id,
-              title: items[currentIndex].hymn?.title ?? items[currentIndex].title ?? "",
-              artist: items[currentIndex].hymn?.author ?? undefined,
-            }
+          ? mapItem(items[currentIndex])
           : null;
-      const history = items
-        .slice(0, Math.max(0, currentIndex))
-        .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
-      const upNext = items
-        .slice(currentIndex + 1)
-        .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
+      const history = items.slice(0, Math.max(0, currentIndex)).map(mapItem);
+      const upNext = items.slice(currentIndex + 1).map(mapItem);
       emit("queue-state", { nowPlaying, upNext, history });
     });
     return () => { unlistenPromise.then((fn) => fn()); };
