@@ -209,14 +209,14 @@ export function ControlBar({
             </Tooltip>
           )}
 
-          {isActive && onRestart && (
+          {(isActive || isVideoActive) && onRestart && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRestart} aria-label="Restart">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRestart} aria-label={t("shortcuts.items.restart")}>
                   <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Restart</TooltipContent>
+              <TooltipContent side="top">{t("shortcuts.items.restart")}</TooltipContent>
             </Tooltip>
           )}
 
