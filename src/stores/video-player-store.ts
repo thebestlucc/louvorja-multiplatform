@@ -1,5 +1,13 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { getPreference, setPreference } from "../lib/store";
+
+export type VideoPlaybackMode =
+  | { kind: "local"; path: string; videoId: string | null; title: string | null }
+  | { kind: "live-youtube"; videoId: string; title: string | null };
+
+export type LiveTarget = "main" | "projector" | "return" | "none";
+export type LocalTarget = "main" | "projector" | "return";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -9,14 +17,28 @@ interface VideoPlayerState {
   videoId: string | null;
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
-  /** Which screens render live video. Default: projector only. Persisted via plugin-store. */
-  videoPlaybackTargets: string[];
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setVideoPlaybackTargets">>) => void;
-  setVideoPlaybackTargets: (targets: string[]) => void;
+  /** Playback mode for the active video. null when no video is active. */
+  mode: VideoPlaybackMode | null;
+  /** Screens that render muted follower <video> in local mode. Persisted via plugin-store. */
+  videoPlaybackTargets: LocalTarget[];
+  /** Operator-chosen screen for the single live-YouTube iframe. Persisted via plugin-store. */
+  liveTarget: LiveTarget;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setVideoPlaybackTargets" | "setLiveTarget" | "setMode">>) => void;
+  setVideoPlaybackTargets: (targets: LocalTarget[]) => void;
+  setLiveTarget: (t: LiveTarget) => void;
+  setMode: (m: VideoPlaybackMode | null) => void;
   resetVideoState: () => void;
 }
 
-type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource" | "videoPlaybackTargets">;
+type VideoPlayerData = Pick<
+  VideoPlayerState,
+  | "currentTime" | "duration" | "paused" | "volume"
+  | "videoId" | "videoSrc" | "videoSource"
+  | "mode" | "videoPlaybackTargets" | "liveTarget"
+>;
+
+const LIVE_TARGET_STORE_KEY = "video_live_target";
+const DEFAULT_LIVE_TARGET: LiveTarget = "projector";
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -26,15 +48,38 @@ const initialState: VideoPlayerData = {
   videoId: null,
   videoSrc: null,
   videoSource: null,
+  mode: null,
   videoPlaybackTargets: ["projector"],
+  liveTarget: DEFAULT_LIVE_TARGET,
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   setVideoState: (partial) => set(partial),
   setVideoPlaybackTargets: (targets) => set({ videoPlaybackTargets: targets }),
-  resetVideoState: () => set(initialState),
+  setLiveTarget: (t) => {
+    set({ liveTarget: t });
+    setPreference(LIVE_TARGET_STORE_KEY, t).catch(() => {});
+  },
+  setMode: (m) => set({ mode: m }),
+  resetVideoState: () =>
+    set((s) => ({
+      ...initialState,
+      // Preserve user preferences across resets
+      videoPlaybackTargets: s.videoPlaybackTargets,
+      liveTarget: s.liveTarget,
+    })),
 }));
+
+// Eager-load persisted liveTarget once at module import. Fire-and-forget so a
+// plugin-store failure (e.g. in test environments) doesn't break in-memory state.
+getPreference<LiveTarget>(LIVE_TARGET_STORE_KEY, DEFAULT_LIVE_TARGET)
+  .then((stored) => {
+    if (stored !== DEFAULT_LIVE_TARGET) {
+      useVideoPlayerStore.setState({ liveTarget: stored });
+    }
+  })
+  .catch(() => {});
 
 // ─── Streaming sync ────────────────────────────────────────────────────────────
 // Forward video state changes to the streaming SSE server so external browsers

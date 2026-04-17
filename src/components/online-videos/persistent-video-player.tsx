@@ -265,7 +265,11 @@ export function PersistentVideoPlayer() {
   useEffect(() => {
     const unsub = listen<{ targets: string[] }>("remote-video-set-targets", (e) => {
       if (e.payload && Array.isArray(e.payload.targets)) {
-        useVideoPlayerStore.getState().setVideoPlaybackTargets(e.payload.targets);
+        const validTargets = e.payload.targets.filter(
+          (t): t is "main" | "projector" | "return" =>
+            t === "main" || t === "projector" || t === "return",
+        );
+        useVideoPlayerStore.getState().setVideoPlaybackTargets(validTargets);
       }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
