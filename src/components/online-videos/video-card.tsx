@@ -45,7 +45,9 @@ function buildVideoSlidePayload(video: OnlineVideo): SlideContent {
   return {
     slideType: "onlineVideo",
     url: isLocal ? (video.localPath ?? "") : "",
-    video_id: isLocal ? "" : (video.videoId ?? ""),
+    // Always preserve videoId — enricher (thumbnail, metadata) needs it
+    // regardless of source. Local items with a YouTube videoId keep both.
+    video_id: video.videoId ?? "",
     source: isLocal ? "local" : "youtube",
     title: video.title ?? null,
   };
