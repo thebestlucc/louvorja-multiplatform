@@ -118,6 +118,15 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
                 if (!muted && target.isMuted && target.isMuted()) {
                   try { target.unMute?.(); } catch (_) { /* ignore */ }
                 }
+              } else if (data === 0) { // ENDED
+                const { loop } = useVideoPlayerStore.getState();
+                if (loop) {
+                  try {
+                    target.seekTo(0, true);
+                    target.playVideo();
+                  } catch (_) { /* ignore */ }
+                }
+                // queue-advance handled by main-window listener on video-state
               }
             }
           },

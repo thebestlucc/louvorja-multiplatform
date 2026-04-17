@@ -23,10 +23,13 @@ interface VideoPlayerState {
   videoPlaybackTargets: LocalTarget[];
   /** Operator-chosen screen for the single live-YouTube iframe. Persisted via plugin-store. */
   liveTarget: LiveTarget;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setVideoPlaybackTargets" | "setLiveTarget" | "setMode">>) => void;
+  /** When true, current video restarts on end instead of advancing queue. Persisted. */
+  loop: boolean;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setVideoPlaybackTargets" | "setLiveTarget" | "setMode" | "setLoop">>) => void;
   setVideoPlaybackTargets: (targets: LocalTarget[]) => void;
   setLiveTarget: (t: LiveTarget) => void;
   setMode: (m: VideoPlaybackMode | null) => void;
+  setLoop: (v: boolean) => void;
   resetVideoState: () => void;
 }
 
@@ -34,11 +37,12 @@ type VideoPlayerData = Pick<
   VideoPlayerState,
   | "currentTime" | "duration" | "paused" | "volume"
   | "videoId" | "videoSrc" | "videoSource"
-  | "mode" | "videoPlaybackTargets" | "liveTarget"
+  | "mode" | "videoPlaybackTargets" | "liveTarget" | "loop"
 >;
 
 const LIVE_TARGET_STORE_KEY = "video_live_target";
 const PLAYBACK_TARGETS_STORE_KEY = "video_playback_targets";
+const LOOP_STORE_KEY = "video_loop";
 const DEFAULT_LIVE_TARGET: LiveTarget = "projector";
 
 const VALID_LIVE_TARGETS: ReadonlyArray<LiveTarget> = ["projector", "return"];
@@ -59,6 +63,10 @@ function readPlaybackTargetsSync(): LocalTarget[] {
   );
 }
 
+function readLoopSync(): boolean {
+  return getPreferenceSync<boolean>(LOOP_STORE_KEY, false);
+}
+
 const initialState: VideoPlayerData = {
   currentTime: 0,
   duration: 0,
@@ -70,6 +78,7 @@ const initialState: VideoPlayerData = {
   mode: null,
   videoPlaybackTargets: readPlaybackTargetsSync(),
   liveTarget: readLiveTargetSync(),
+  loop: readLoopSync(),
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
@@ -84,12 +93,17 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
     setPreference(LIVE_TARGET_STORE_KEY, t);
   },
   setMode: (m) => set({ mode: m }),
+  setLoop: (v) => {
+    set({ loop: v });
+    setPreference(LOOP_STORE_KEY, v);
+  },
   resetVideoState: () =>
     set((s) => ({
       ...initialState,
       // Preserve user preferences across resets
       videoPlaybackTargets: s.videoPlaybackTargets,
       liveTarget: s.liveTarget,
+      loop: s.loop,
     })),
 }));
 

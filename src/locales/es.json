@@ -577,7 +577,10 @@
     "modeSilent": "Solo diapositivas",
     "videoTargetProjector": "Reproducir video en proyector",
     "videoTargetReturn": "Reproducir video en pantalla de retorno",
-    "goToBible": "Ir a la Biblia"
+    "goToBible": "Ir a la Biblia",
+    "loopToggle": "Bucle",
+    "loopToggleActive": "Bucle activo",
+    "loopToggleInactive": "Bucle desactivado"
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",

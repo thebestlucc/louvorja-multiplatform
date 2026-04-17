@@ -577,7 +577,10 @@
     "modeSilent": "Só slides",
     "videoTargetProjector": "Reproduzir vídeo no projetor",
     "videoTargetReturn": "Reproduzir vídeo na tela de retorno",
-    "goToBible": "Ir para Bíblia"
+    "goToBible": "Ir para Bíblia",
+    "loopToggle": "Repetir",
+    "loopToggleActive": "Repetição ativa",
+    "loopToggleInactive": "Repetição desativada"
   },
   "presentations": {
     "aspectRatio": "Proporção",

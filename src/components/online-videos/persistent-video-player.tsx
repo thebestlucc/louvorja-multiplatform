@@ -24,6 +24,8 @@ function hasNextQueueItem(): boolean {
 
 /** Advances queue or clears projection screens when a video ends. */
 function handleVideoEnded() {
+  const { loop } = useVideoPlayerStore.getState();
+  if (loop) return; // native loop attribute handles restart
   if (hasNextQueueItem()) {
     useQueueStore.getState().next();
   } else {
@@ -52,6 +54,7 @@ function LocalVideoMaster({
   onBroadcast: (snap: VideoStateEvent) => void;
 }) {
   const videoUrl = useVideoSource(videoPath);
+  const loop = useVideoPlayerStore((s) => s.loop);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onBroadcastRef = useRef(onBroadcast);
   onBroadcastRef.current = onBroadcast;
@@ -90,6 +93,7 @@ function LocalVideoMaster({
       src={videoUrl}
       autoPlay
       playsInline
+      loop={loop}
       style={{ width: 1, height: 1, opacity: 0, position: "absolute", pointerEvents: "none" }}
       onError={(e) => {
         const v = e.currentTarget;
