@@ -1,13 +1,53 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Music, ChevronDown, ChevronUp, Trash2, Play, X } from "lucide-react";
-import { useConnectionStore } from "@/stores/connection-store";
+import { Music, BookOpen, Film, Presentation, ChevronDown, ChevronUp, Trash2, Play, X } from "lucide-react";
+import { useConnectionStore, type QueueItem } from "@/stores/connection-store";
 import { cn } from "@/lib/utils";
 
-interface QueueItem {
-  id: string;
-  title: string;
-  artist?: string;
+function KindIcon({ kind }: { kind?: QueueItem["kind"] }) {
+  const cls = "h-3.5 w-3.5 flex-shrink-0 text-fg-muted";
+  switch (kind) {
+    case "bible":        return <BookOpen className={cls} aria-hidden="true" />;
+    case "video":        return <Film className={cls} aria-hidden="true" />;
+    case "presentation": return <Presentation className={cls} aria-hidden="true" />;
+    default:             return <Music className={cls} aria-hidden="true" />;
+  }
+}
+
+function ItemContent({ item }: { item: QueueItem }) {
+  if (item.kind === "video" && item.thumbnail) {
+    return (
+      <div className="flex items-center gap-3 min-w-0">
+        <img
+          src={item.thumbnail}
+          alt=""
+          className="h-10 w-16 rounded object-cover flex-shrink-0 bg-surface-2"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-fg truncate">{item.title}</p>
+          {item.duration != null && (
+            <p className="text-xs text-fg-muted">{formatDuration(item.duration)}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <KindIcon kind={item.kind} />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-fg truncate">{item.title}</p>
+        {item.artist && <p className="text-xs text-fg-muted truncate">{item.artist}</p>}
+      </div>
+    </div>
+  );
+}
+
+function formatDuration(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export default function QueueRoute() {
@@ -62,11 +102,8 @@ export default function QueueRoute() {
           </h3>
           <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <span className="h-2.5 w-2.5 rounded-full bg-primary motion-safe:animate-pulse flex-shrink-0" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg truncate">{queue.nowPlaying.title}</p>
-              {queue.nowPlaying.artist && (
-                <p className="text-xs text-fg-muted truncate">{queue.nowPlaying.artist}</p>
-              )}
+            <div className="min-w-0 flex-1">
+              <ItemContent item={queue.nowPlaying} />
             </div>
           </div>
         </section>
@@ -95,8 +132,7 @@ export default function QueueRoute() {
                         : "border-border bg-surface-1 hover:bg-surface-2",
                     )}
                   >
-                    <p className="text-sm font-medium text-fg truncate">{item.title}</p>
-                    {item.artist && <p className="text-xs text-fg-muted truncate">{item.artist}</p>}
+                    <ItemContent item={item} />
                   </button>
                 </li>
               );
@@ -129,8 +165,7 @@ export default function QueueRoute() {
               {queue.history.map((item) => (
                 <li key={item.id}>
                   <div className="rounded-lg border border-border p-3">
-                    <p className="text-sm font-medium text-fg truncate">{item.title}</p>
-                    {item.artist && <p className="text-xs text-fg-muted truncate">{item.artist}</p>}
+                    <ItemContent item={item} />
                   </div>
                 </li>
               ))}

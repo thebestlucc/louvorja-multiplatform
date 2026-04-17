@@ -43,8 +43,13 @@ export interface ServiceState {
 
 export interface QueueItem {
   id: string;
+  kind?: "hymn" | "bible" | "video" | "presentation";
   title: string;
   artist?: string;
+  // Video metadata (only when kind === "video")
+  duration?: number;
+  videoId?: string;
+  thumbnail?: string;
 }
 
 export interface QueueState {
