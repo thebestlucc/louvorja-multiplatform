@@ -257,6 +257,22 @@ function PersistentVideoPlayerMain() {
           };
           mpState.load(item);
         }
+
+        // Mirror into video-player-store mode (Stage 2 cache-aware decisions + ControlBar UI)
+        if (slide.source === "local" && slide.url) {
+          useVideoPlayerStore.getState().setMode({
+            kind: "local",
+            path: slide.url,
+            videoId: slide.video_id || null,
+            title: slide.title ?? null,
+          });
+        } else if (slide.video_id) {
+          useVideoPlayerStore.getState().setMode({
+            kind: "live-youtube",
+            videoId: slide.video_id,
+            title: slide.title ?? null,
+          });
+        }
       } else if (activeSlideRef.current) {
         // Non-video slide replaced the video: fully stop and clean up
         clearInterval(pollTimerRef.current ?? undefined);
@@ -268,6 +284,7 @@ function PersistentVideoPlayerMain() {
         }
 
         useVideoPlayerStore.getState().resetVideoState();
+        useVideoPlayerStore.getState().setMode(null);
         setActiveSlide(null);
         activeSlideRef.current = null;
         const resetSnap: VideoStateEvent = {
@@ -319,6 +336,7 @@ function PersistentVideoPlayerMain() {
 
       // For local video: clearing activeSlide unmounts LocalVideoMaster
       useVideoPlayerStore.getState().resetVideoState();
+      useVideoPlayerStore.getState().setMode(null);
       setActiveSlide(null);
       activeSlideRef.current = null;
       const resetSnap: VideoStateEvent = {
