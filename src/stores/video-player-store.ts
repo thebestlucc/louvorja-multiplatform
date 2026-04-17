@@ -52,11 +52,11 @@ function readLiveTargetSync(): LiveTarget {
 function readPlaybackTargetsSync(): LocalTarget[] {
   const raw = getPreferenceSync<unknown>(PLAYBACK_TARGETS_STORE_KEY, ["projector"]);
   if (!Array.isArray(raw)) return ["projector"];
-  const filtered = raw.filter(
+  // Preserve intentional empty array (audio-only across all screens).
+  return raw.filter(
     (x): x is LocalTarget =>
       typeof x === "string" && (VALID_LOCAL_TARGETS as ReadonlyArray<string>).includes(x),
   );
-  return filtered.length > 0 ? filtered : ["projector"];
 }
 
 const initialState: VideoPlayerData = {
