@@ -106,14 +106,14 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
 
         // ── Video control (bridge remote-video-cmd → video-control) ───────
         listen<RemoteVideoCmdPayload>("remote-video-cmd", (e) => {
-          void emit("video-control", e.payload);
+          emit("video-control", e.payload).catch(() => {});
         }),
 
         // ── Video targets (remote-video-set-targets) ──────────────────────
         listen<RemoteVideoSetTargetsPayload>("remote-video-set-targets", (e) => {
           const validTargets = e.payload.targets.filter(
-            (t): t is "main" | "projector" | "return" =>
-              t === "main" || t === "projector" || t === "return",
+            (t): t is "projector" | "return" =>
+              t === "projector" || t === "return",
           );
           useVideoPlayerStore.getState().setVideoPlaybackTargets(validTargets);
         }),
