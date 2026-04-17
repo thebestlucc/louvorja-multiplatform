@@ -577,7 +577,10 @@
     "modeSilent": "Slides only",
     "videoTargetProjector": "Play video on projector",
     "videoTargetReturn": "Play video on return screen",
-    "goToBible": "Go to Bible"
+    "goToBible": "Go to Bible",
+    "loopToggle": "Loop",
+    "loopToggleActive": "Loop on",
+    "loopToggleInactive": "Loop off"
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",

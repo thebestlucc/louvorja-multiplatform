@@ -15,6 +15,7 @@ import {
   Music2,
   MonitorPlay,
   BookOpen,
+  Repeat,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Slider } from "../ui/slider";
@@ -22,6 +23,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { VideoTargetToggle } from "../online-videos/video-target-toggle";
 import type { MediaItem, MediaStatus } from "../../types/media";
 import { mediaHasSlides, mediaHasTimeline } from "../../types/media";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
+import { cn } from "../../lib/utils";
 
 interface ControlBarProps {
   currentItem: MediaItem | null;
@@ -84,6 +87,10 @@ export function ControlBar({
 }: ControlBarProps) {
   const { t } = useTranslation();
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
+  const videoMode = useVideoPlayerStore((s) => s.mode);
+  const loop = useVideoPlayerStore((s) => s.loop);
+  const setLoop = useVideoPlayerStore((s) => s.setLoop);
+  const isVideoActive = videoMode?.kind === "local" || videoMode?.kind === "live-youtube";
 
   const hasTimeline = currentItem ? mediaHasTimeline(currentItem) : false;
   const hasSlides = currentItem ? mediaHasSlides(currentItem) : totalSlides > 0;
@@ -221,6 +228,23 @@ export function ControlBar({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{t("playingNow.stop")}</TooltipContent>
+            </Tooltip>
+          )}
+
+          {isVideoActive && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-8 w-8", loop && "text-primary")}
+                  onClick={() => setLoop(!loop)}
+                  aria-label={t(loop ? "playingNow.loopToggleActive" : "playingNow.loopToggleInactive")}
+                >
+                  <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("playingNow.loopToggle")}</TooltipContent>
             </Tooltip>
           )}
 
