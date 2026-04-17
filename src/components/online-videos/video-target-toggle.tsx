@@ -7,8 +7,8 @@ import {
   type LiveTarget,
 } from "../../stores/video-player-store";
 
-const LOCAL_OPTIONS: readonly LocalTarget[] = ["main", "projector", "return"];
-const LIVE_OPTIONS: readonly LiveTarget[] = ["main", "projector", "return", "none"];
+const LOCAL_OPTIONS: readonly LocalTarget[] = ["projector", "return"];
+const LIVE_OPTIONS: readonly LiveTarget[] = ["projector", "return"];
 
 export function VideoTargetToggle() {
   const { t } = useTranslation();
@@ -22,9 +22,12 @@ export function VideoTargetToggle() {
 
   if (mode.kind === "local") {
     const toggle = (target: LocalTarget) => {
-      const next = targets.includes(target)
+      const options = targets.includes(target)
         ? targets.filter((x) => x !== target)
         : [...targets, target];
+      const next = options.filter(
+        (x): x is LocalTarget => x === "projector" || x === "return",
+      );
       setTargets(next);
       emit("remote-video-set-targets", { targets: next }).catch(() => {});
     };
@@ -53,24 +56,24 @@ export function VideoTargetToggle() {
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="text-muted-foreground">{t("videoTargets.liveLabel")}</span>
-      {LIVE_OPTIONS.map((target) => {
-        const key = target === "none" ? "audioOnly" : target;
-        return (
-          <label key={target} className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="radio"
-              name="live-target"
-              checked={liveTarget === target}
-              onChange={() => {
-                setLiveTarget(target);
-                emit("remote-video-set-live-target", { target }).catch(() => {});
-              }}
-              className="accent-primary"
-            />
-            {t(`videoTargets.${key}`)}
-          </label>
-        );
-      })}
+      {LIVE_OPTIONS.map((target) => (
+        <label key={target} className="flex items-center gap-1 cursor-pointer">
+          <input
+            type="radio"
+            name="live-target"
+            checked={liveTarget === target}
+            onChange={() => {
+              const v = target as LiveTarget;
+              if (v === "projector" || v === "return") {
+                setLiveTarget(v);
+                emit("remote-video-set-live-target", { target: v }).catch(() => {});
+              }
+            }}
+            className="accent-primary"
+          />
+          {t(`videoTargets.${target}`)}
+        </label>
+      ))}
       <Badge variant="outline" className="ml-1 text-[10px]">
         {t("videoTargets.modeLive")}
       </Badge>
