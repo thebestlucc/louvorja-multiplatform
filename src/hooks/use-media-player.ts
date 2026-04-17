@@ -104,7 +104,7 @@ export function useMediaPlayer() {
       const audioState = useAudioStore.getState();
       audioState.resume();
     } else if (state.timelineSource === "video") {
-      emit("video-control", { action: "play" });
+      emit("video-control", { action: "play" }).catch(() => {});
     }
     store.getState().setStatus("playing");
   }, []);
@@ -114,7 +114,7 @@ export function useMediaPlayer() {
     if (state.timelineSource === "audio") {
       useAudioStore.getState().pause();
     } else if (state.timelineSource === "video") {
-      emit("video-control", { action: "pause" });
+      emit("video-control", { action: "pause" }).catch(() => {});
     }
     store.getState().setStatus("paused");
   }, []);
@@ -123,7 +123,7 @@ export function useMediaPlayer() {
     resetCoordinatorPlaybackState();
     // Seek video to beginning before clearing screens
     if (store.getState().timelineSource === "video") {
-      emit("video-control", { action: "seek", value: 0 });
+      emit("video-control", { action: "seek", value: 0 }).catch(() => {});
     }
     useAudioStore.getState().stop();
     clearCurrentSlide();
@@ -139,6 +139,9 @@ export function useMediaPlayer() {
     store.getState().stop();
     useQueueStore.getState().clearQueue();
     store.getState().unload();
+    // Clear presentation-store slides so the playing-now effectiveSlides fallback
+    // doesn't display a stale onlineVideo slide thumbnail after the queue is stopped.
+    usePresentationStore.getState().setSlides([]);
   }, []);
 
   const seek = useCallback((timeMs: number) => {
@@ -146,7 +149,7 @@ export function useMediaPlayer() {
     if (state.timelineSource === "audio") {
       useAudioStore.getState().seek(timeMs);
     } else if (state.timelineSource === "video") {
-      emit("video-control", { action: "seek", value: timeMs / 1000 });
+      emit("video-control", { action: "seek", value: timeMs / 1000 }).catch(() => {});
     }
   }, []);
 
@@ -289,8 +292,9 @@ export function useMediaPlayer() {
   const restart = useCallback(() => {
     const state = store.getState();
     if (state.timelineSource === "video") {
-      emit("video-control", { action: "seek", value: 0 });
-      emit("video-control", { action: "play" });
+      emit("video-control", { action: "pause" }).catch(() => {});
+      emit("video-control", { action: "seek", value: 0 }).catch(() => {});
+      emit("video-control", { action: "play" }).catch(() => {});
     } else {
       useAudioStore.getState().seek(0);
       useAudioStore.getState().resume();
@@ -302,7 +306,7 @@ export function useMediaPlayer() {
     if (store.getState().timelineSource === "video") {
       // Bypass rodio command (no audio player active in video mode)
       useAudioStore.setState({ volume });
-      emit("video-control", { action: "volume", value: volume });
+      emit("video-control", { action: "volume", value: volume }).catch(() => {});
     } else {
       useAudioStore.getState().setVolume(volume);
     }

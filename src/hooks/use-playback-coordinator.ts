@@ -52,7 +52,6 @@ async function playHymnItem(
   const videoState = useVideoPlayerStore.getState();
   if (videoState.videoId || videoState.videoSrc) {
     videoState.resetVideoState();
-    videoState.setMode(null);
   }
 
   // 1. Resolve sync points
@@ -157,7 +156,6 @@ async function playBibleItem(item: QueueItem) {
   const vs = useVideoPlayerStore.getState();
   if (vs.videoId || vs.videoSrc) {
     vs.resetVideoState();
-    vs.setMode(null);
   }
 
   // Populate presentation store with the WHOLE chapter
@@ -177,21 +175,6 @@ async function playVideoItem(item: QueueItem) {
   await audioStore.getState().stop();
 
   const vm = item.videoMedia;
-  const { useVideoPlayerStore } = await import("../stores/video-player-store");
-  if (vm.videoSource === "local" && vm.videoUrl) {
-    useVideoPlayerStore.getState().setMode({
-      kind: "local",
-      path: vm.videoUrl,
-      videoId: vm.videoId ?? null,
-      title: vm.videoTitle ?? null,
-    });
-  } else if (vm.videoId) {
-    useVideoPlayerStore.getState().setMode({
-      kind: "live-youtube",
-      videoId: vm.videoId,
-      title: vm.videoTitle ?? null,
-    });
-  }
   // onlineVideo SlideContent: { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null }
   // youtube: url is empty (player uses video_id), local: url is the path
   const slide: import("../lib/bindings").SlideContent = {
@@ -256,7 +239,6 @@ async function playPresentationItem(item: QueueItem) {
   const vs = useVideoPlayerStore.getState();
   if (vs.videoId || vs.videoSrc) {
     vs.resetVideoState();
-    vs.setMode(null);
   }
 
   usePresentationStore.getState().setSlides(slides);
@@ -330,9 +312,11 @@ export function usePlaybackCoordinator() {
       stopAudio();
       useMediaPlayerStore.getState().unload();
       useDisplayStore.getState().setCurrentProjectionType(null);
-      import("../stores/video-player-store").then(({ useVideoPlayerStore }) => {
-        useVideoPlayerStore.getState().setMode(null);
-      }).catch(console.error);
+      // Clear presentation-store slides so the effectiveSlides fallback in
+      // playing-now doesn't render a stale onlineVideo thumbnail after queue ends.
+      import("../stores/presentation-store").then(({ usePresentationStore }) => {
+        usePresentationStore.getState().setSlides([]);
+      }).catch(() => {});
     }
   }, [currentIndex, items.length, replayTrigger, playItem, stopAudio]);
 

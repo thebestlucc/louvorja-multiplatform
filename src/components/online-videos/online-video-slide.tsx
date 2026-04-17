@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
@@ -9,8 +8,6 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
-import { useVideoPlayerStore, type LocalTarget } from "../../stores/video-player-store";
-import { LogoContent } from "../slides/logo-content";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -22,8 +19,6 @@ export type VideoStateEvent = {
   volume: number;
   seeking?: boolean;
   seeked?: boolean;
-  masterTimestampMs?: number;
-  mode?: "local" | "live-youtube" | null;
 };
 
 export type OnlineVideoRenderMode =
@@ -44,11 +39,58 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const lastStateRef = useRef<VideoStateEvent | null>(null);
 
-  // Followers in live-youtube mode no longer exist — Stage 1 design makes live-youtube
-  // single-iframe. Drift correction on muted YT iframes triggered buffer stalls; removed.
+  // Track master video-state for follower sync + drift correction
+  useEffect(() => {
+    if (!isFollower) return;
+    const unsub = listen<VideoStateEvent>("video-state", (e) => {
+      lastStateRef.current = e.payload;
+      const p = playerRef.current;
+      if (!p || typeof p.getPlayerState !== "function") return;
+      const { paused, seeking, currentTime } = e.payload;
+      if (seeking) {
+        if (p.getPlayerState() === 1) p.pauseVideo();
+        return;
+      }
+      // Drift correction: resync if follower is >0.5s off master
+      if (!paused) {
+        try {
+          const followerTime = p.getCurrentTime();
+          if (Math.abs(followerTime - currentTime) > 0.5) {
+            p.seekTo(currentTime, true);
+          }
+        } catch (_) {}
+      }
+      const state = p.getPlayerState();
+      if (paused && state === 1) p.pauseVideo();
+      else if (!paused && state !== 1) p.playVideo();
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, [isFollower]);
+
+  // Direct command listener for immediate follower response (play/pause/seek).
+  // Commands arriving before the YT player is ready are queued and replayed on onReady.
+  const pendingCmdRef = useRef<VideoControlEvent | null>(null);
+
+  useEffect(() => {
+    if (!isFollower) return;
+    const unsub = listen<VideoControlEvent>("video-control-cmd", (e) => {
+      const p = playerRef.current;
+      if (!p || typeof p.getPlayerState !== "function") {
+        // Player not ready yet — remember the last command so onReady can apply it
+        pendingCmdRef.current = e.payload;
+        return;
+      }
+      pendingCmdRef.current = null;
+      const { action, value } = e.payload;
+      if (action === "play") p.playVideo();
+      else if (action === "pause") p.pauseVideo();
+      else if (action === "seek" && value !== undefined) p.seekTo(value, true);
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, [isFollower]);
 
   const emitState = useCallback((player: YTPlayer) => {
-    emitTo("main", "video-state", {
+    void emitTo("main", "video-state", {
       paused: player.getPlayerState() !== 1, // 1 = PLAYING
       currentTime: player.getCurrentTime(),
       duration: player.getDuration(),
@@ -61,16 +103,8 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
     // Each mount gets a stable unique id for YT.Player
     const uid = `yt-${videoId}-${Math.random().toString(36).slice(2)}`;
 
-    console.log("[YouTubePlayer]", isFollower ? "follower" : "master", "creating for", videoId);
-    loadYouTubeAPI().then(() => {
-      if (destroyed || !containerRef.current) {
-        console.warn("[YouTubePlayer] skipping create — destroyed=", destroyed, "ref=", !!containerRef.current);
-        return;
-      }
-      if (!window.YT || !window.YT.Player) {
-        console.error("[YouTubePlayer] window.YT.Player unavailable after loadYouTubeAPI");
-        return;
-      }
+    void loadYouTubeAPI().then(() => {
+      if (destroyed || !containerRef.current) return;
       containerRef.current.id = uid;
 
       const player = new window.YT.Player(uid, {
@@ -86,13 +120,12 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
           disablekb: 1,
           iv_load_policy: 3,
           cc_load_policy: 0,
-          mute: 1,
+          mute: (isFollower || muted) ? 1 : 0,
           playsinline: 1,
           origin: window.location.origin,
         },
         events: {
           onReady: ({ target }) => {
-            console.log("[YouTubePlayer]", isFollower ? "follower" : "master", "onReady for", videoId);
             playerRef.current = target;
             if (isFollower) {
               // Seek to last known master position on init.
@@ -102,42 +135,31 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
                 target.seekTo(last.currentTime, true);
               }
               if (!last || !last.paused) target.playVideo();
+
+              // Replay any command that arrived before the player was ready
+              const pending = pendingCmdRef.current;
+              if (pending) {
+                pendingCmdRef.current = null;
+                if (pending.action === "play") target.playVideo();
+                else if (pending.action === "pause") target.pauseVideo();
+                else if (pending.action === "seek" && pending.value !== undefined) target.seekTo(pending.value, true);
+              }
             } else {
               emitState(target);
             }
           },
           onStateChange: ({ data, target }) => {
-            console.log("[YouTubePlayer]", isFollower ? "follower" : "master", "onStateChange", data, "for", videoId);
             if (!isFollower) {
               emitState(target);
               clearInterval(pollRef.current);
               if (data === 1) { // PLAYING
                 pollRef.current = setInterval(() => emitState(target), 250);
-                // Autoplay policy: iframe inits muted even when operator wants audio.
-                // Unmute on first PLAYING transition to restore audio.
-                if (!muted && target.isMuted && target.isMuted()) {
-                  try { target.unMute?.(); } catch (_) { /* ignore */ }
-                }
-              } else if (data === 0) { // ENDED
-                const { loop } = useVideoPlayerStore.getState();
-                if (loop) {
-                  try {
-                    target.seekTo(0, true);
-                    target.playVideo();
-                  } catch (_) { /* ignore */ }
-                }
-                // queue-advance handled by main-window listener on video-state
               }
             }
-          },
-          onError: ({ data }) => {
-            console.error("[YouTubePlayer]", isFollower ? "follower" : "master", "onError", data, "for", videoId);
           },
         },
       });
       playerRef.current = player;
-    }).catch((err) => {
-      console.error("[YouTubePlayer] loadYouTubeAPI failed:", err);
     });
 
     // Listen for video-control events
@@ -158,7 +180,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       clearInterval(pollRef.current);
       try { playerRef.current?.destroy(); } catch (_) {}
       playerRef.current = undefined;
-      unsub.then((fn) => fn()).catch(() => {});
+      void unsub.then((fn) => fn());
     };
   }, [videoId, muted, isFollower, emitState]);
 
@@ -204,80 +226,36 @@ interface OnlineVideoSlideProps {
 
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
-  const mode = useVideoPlayerStore((s) => s.mode);
-  const localTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
-  const liveTarget = useVideoPlayerStore((s) => s.liveTarget);
 
-  const windowLabel = typeof window !== "undefined" ? getCurrentWebviewWindow().label : "main";
-  // windowLabel === "main" branches never reach renderLiveVideo (see early-return
-  // in A4, but A3 runs before A4). For main window the later checks still return
-  // LogoContent via the target-miss branches, so keep a safe sentinel.
-  const currentTarget: LocalTarget | null =
-    windowLabel === "projector" || windowLabel === "return" ? windowLabel : null;
-
-  const renderOffTargetContent = () => (
-    <LogoContent className={className} />
-  );
-
-  const renderMainThumbnail = () => {
-    const thumbUrl = slide.video_id
-      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
-      : null;
+  // Live video renderer for projector/return screens
+  const renderLiveVideo = () => {
+    const isLocalFile = slide.source === "local" && !!slide.url;
     return (
-      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
-        {thumbUrl && (
-          <img src={thumbUrl} alt="" className="h-full w-full object-contain opacity-60" />
+      <div className={cn("h-full w-full bg-black", className)}>
+        {isLocalFile ? (
+          <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
+        ) : slide.video_id ? (
+          <YouTubePlayer
+            videoId={slide.video_id}
+            title={slide.title ?? slide.video_id}
+            className="h-full w-full"
+            muted
+            isFollower
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-white/40 text-sm">
+            {t("presentations.types.onlineVideo")}
+          </div>
         )}
       </div>
     );
   };
 
-  const renderLiveVideo = () => {
-    // Main window never renders live video — thumbnail for operator UX only.
-    if (windowLabel === "main") return renderMainThumbnail();
+  if (renderMode === "projector") {
+    return renderLiveVideo();
+  }
 
-    // Decision: what does THIS window render for this slide?
-    // 1. mode=local + this window in videoPlaybackTargets → muted follower.
-    // 2. mode=live-youtube + this window === liveTarget → THE YT iframe (not a follower).
-    // 3. else → LogoContent (off-target).
-    if (mode?.kind === "local") {
-      if (!currentTarget || !localTargets.includes(currentTarget)) return renderOffTargetContent();
-      return (
-        <div className={cn("h-full w-full bg-black", className)}>
-          <LocalVideoFollower videoPath={mode.path} className="h-full w-full" />
-        </div>
-      );
-    }
-
-    if (mode?.kind === "live-youtube") {
-      if (!currentTarget || liveTarget !== currentTarget) return renderOffTargetContent();
-      // Sole iframe — NOT a follower. Audio-bearing. Never drift-corrected.
-      return (
-        <div className={cn("h-full w-full bg-black", className)}>
-          <YouTubePlayer
-            videoId={mode.videoId}
-            title={mode.title ?? mode.videoId}
-            className="h-full w-full"
-            muted={false}
-            isFollower={false}
-          />
-        </div>
-      );
-    }
-
-    // mode === null: fall back to slide.source inspection, still respecting targets.
-    const isLocalFile = slide.source === "local" && !!slide.url;
-    if (isLocalFile && currentTarget && localTargets.includes(currentTarget)) {
-      return (
-        <div className={cn("h-full w-full bg-black", className)}>
-          <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
-        </div>
-      );
-    }
-    return renderOffTargetContent();
-  };
-
-  if (renderMode === "projector" || renderMode === "return-current") {
+  if (renderMode === "return-current") {
     return renderLiveVideo();
   }
 
