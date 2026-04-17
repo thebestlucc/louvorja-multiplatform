@@ -171,7 +171,6 @@ async function playVideoItem(item: QueueItem) {
   const { setCurrentSlide } = await import("../lib/tauri/display");
 
   await audioStore.getState().stop();
-  useMediaPlayerStore.getState().unload();
 
   const vm = item.videoMedia;
   // onlineVideo SlideContent: { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null }
@@ -184,9 +183,29 @@ async function playVideoItem(item: QueueItem) {
     title: vm.videoTitle ?? null,
   };
 
+  // Populate media-player-store so Playing Now shows preview + control bar.
+  // Symmetry with playHymnItem (which also calls load()).
+  if (vm.videoSource === "local" && vm.videoUrl) {
+    useMediaPlayerStore.getState().load({
+      type: "offline_video",
+      videoPath: vm.videoUrl,
+      title: vm.videoTitle ?? "Video",
+      isManaged: vm.videoUrl.startsWith("media/"),
+    });
+  } else if (vm.videoId) {
+    useMediaPlayerStore.getState().load({
+      type: "online_video",
+      videoId: vm.videoId,
+      videoSource: "youtube",
+      title: vm.videoTitle ?? "Video",
+    });
+  } else {
+    useMediaPlayerStore.getState().unload();
+  }
+
   usePresentationStore.getState().setSlides([slide]);
   usePresentationStore.getState().setActiveSlideIndex(0);
-  // "presentation" is used for any non-standard projection type not explicitly in the union
+  useDisplayStore.getState().setCurrentProjectionType("presentation");
   // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle
   await catcher(setCurrentSlide(slide));
 }

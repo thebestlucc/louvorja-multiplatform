@@ -200,9 +200,20 @@ export function PersistentVideoPlayer() {
     const unsub = listen<SlideContent>("slide-changed", (e) => {
       const slide = e.payload;
       if (slide.slideType === "onlineVideo") {
-        // Increment session so YouTube player lifecycle effect re-runs even for same videoId
-        playSessionIdRef.current += 1;
-        setPlaySessionId(playSessionIdRef.current);
+        // Only bump the play session (destroys + rebuilds the YT player) when
+        // the video identity actually changes. Re-emits of the same video —
+        // e.g. `state.sync` when a remote reconnects — must NOT restart
+        // playback.
+        const prev = activeSlideRef.current;
+        const isSameVideo =
+          prev?.slideType === "onlineVideo" &&
+          prev.source === slide.source &&
+          prev.video_id === slide.video_id &&
+          prev.url === slide.url;
+        if (!isSameVideo) {
+          playSessionIdRef.current += 1;
+          setPlaySessionId(playSessionIdRef.current);
+        }
         setActiveSlide(slide);
         activeSlideRef.current = slide;
 
@@ -243,6 +254,18 @@ export function PersistentVideoPlayer() {
         for (const target of ["main", "projector", "return"]) {
           void emitTo(target, "video-state", resetSnap).catch(() => {});
         }
+      }
+    }).catch(() => () => {});
+    return () => { void unsub.then((fn) => fn()); };
+  }, []);
+
+  // Keep every webview's videoPlaybackTargets in sync. The Rust handler emits
+  // `remote-video-set-targets` globally, but only the main window's remote
+  // bridge was consuming it; projector and return windows kept their default.
+  useEffect(() => {
+    const unsub = listen<{ targets: string[] }>("remote-video-set-targets", (e) => {
+      if (e.payload && Array.isArray(e.payload.targets)) {
+        useVideoPlayerStore.getState().setVideoPlaybackTargets(e.payload.targets);
       }
     }).catch(() => () => {});
     return () => { void unsub.then((fn) => fn()); };
@@ -334,8 +357,16 @@ export function PersistentVideoPlayer() {
     const uid = `yt-master-${Math.random().toString(36).slice(2)}`;
     container.id = uid;
 
+    console.log("[PersistentVideoPlayer] creating YT master for", videoId);
     void loadYouTubeAPI().then(() => {
-      if (destroyed || !container.isConnected) return;
+      if (destroyed || !container.isConnected) {
+        console.warn("[PersistentVideoPlayer] skipping YT create — destroyed=", destroyed, "connected=", container.isConnected);
+        return;
+      }
+      if (!window.YT || !window.YT.Player) {
+        console.error("[PersistentVideoPlayer] window.YT.Player unavailable after loadYouTubeAPI");
+        return;
+      }
 
       const player = new window.YT.Player(uid, {
         videoId,
@@ -345,12 +376,15 @@ export function PersistentVideoPlayer() {
           autoplay: 1, controls: 0, rel: 0,
           modestbranding: 1, showinfo: 0,
           disablekb: 1, iv_load_policy: 3, cc_load_policy: 0,
-          mute: 0,
+          // Start muted so WKWebView/browser autoplay policy doesn't block.
+          // We unmute on first state-change to "playing".
+          mute: 1,
           playsinline: 1,
           origin: window.location.origin,
         },
         events: {
           onReady: ({ target }) => {
+            console.log("[PersistentVideoPlayer] YT onReady for", videoId);
             if (destroyed) return;
             ytPlayerRef.current = target;
             const iframe = target.getIframe();
@@ -370,8 +404,13 @@ export function PersistentVideoPlayer() {
             }, HEARTBEAT_INTERVAL_MS);
           },
           onStateChange: ({ data, target }) => {
+            console.log("[PersistentVideoPlayer] YT onStateChange", data, "for", videoId);
             if (destroyed) return;
             seekingRef.current = false;
+            // Unmute on first transition to PLAYING (1) — bypasses autoplay policy.
+            if (data === 1 && target.isMuted && target.isMuted()) {
+              try { target.unMute?.(); } catch (_) { /* ignore */ }
+            }
             const snap: VideoStateEvent = {
               paused: data !== 1,
               currentTime: target.getCurrentTime(),
@@ -384,9 +423,14 @@ export function PersistentVideoPlayer() {
               handleVideoEnded();
             }
           },
+          onError: ({ data }) => {
+            console.error("[PersistentVideoPlayer] YT onError", data, "for", videoId);
+          },
         },
       });
       ytPlayerRef.current = player;
+    }).catch((err) => {
+      console.error("[PersistentVideoPlayer] loadYouTubeAPI failed:", err);
     });
 
     return () => {
