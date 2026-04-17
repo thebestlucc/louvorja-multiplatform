@@ -86,7 +86,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
           disablekb: 1,
           iv_load_policy: 3,
           cc_load_policy: 0,
-          mute: (isFollower || muted) ? 1 : 0,
+          mute: 1,
           playsinline: 1,
           origin: window.location.origin,
         },
@@ -113,6 +113,11 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
               clearInterval(pollRef.current);
               if (data === 1) { // PLAYING
                 pollRef.current = setInterval(() => emitState(target), 250);
+                // Autoplay policy: iframe inits muted even when operator wants audio.
+                // Unmute on first PLAYING transition to restore audio.
+                if (!muted && target.isMuted && target.isMuted()) {
+                  try { target.unMute?.(); } catch (_) { /* ignore */ }
+                }
               }
             }
           },
