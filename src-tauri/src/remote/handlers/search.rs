@@ -314,6 +314,24 @@ pub async fn queue_add(
     Ok(serde_json::json!({}))
 }
 
+/// `video.queue_url { url }` — extract YouTube video ID from a URL and add as a
+/// temporary video queue item (not saved to any collection/playlist).
+pub async fn video_queue_url(app: &AppHandle, url: &str) -> Result<Value, AppError> {
+    use tauri::Emitter;
+    let video_id = crate::commands::youtube::extract_video_id_pub(url)
+        .ok_or_else(|| AppError::Internal(format!("Could not extract video ID from: {url}")))?;
+    let title = format!("YouTube: {video_id}");
+    let item = serde_json::json!({
+        "kind": "video",
+        "videoSource": "youtube",
+        "videoId": video_id,
+        "videoTitle": title,
+    });
+    app.emit("remote-queue-add", serde_json::json!({ "items": [item] }))
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    Ok(serde_json::json!({ "videoId": video_id }))
+}
+
 /// `queue.play { id }` — jump to a specific item in the playing queue by its UUID.
 /// Emits `remote-queue-play { id }` which the React bridge handles.
 pub async fn queue_play(app: &AppHandle, id: String) -> Result<Value, AppError> {

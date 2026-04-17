@@ -193,6 +193,11 @@ pub async fn dispatch(
             let q = payload.get("query").and_then(|v| v.as_str()).unwrap_or("").to_string();
             search_handler::video_list(&ctx.app, q).await
         }
+        "video.queue_url" => {
+            let url = payload.get("url").and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Internal("video.queue_url requires `url`".into()))?;
+            search_handler::video_queue_url(&ctx.app, url).await
+        }
 
         // ── Video control (E5) ───────────────────────────────────────────────
         "video.play"        => video_handler::play(&ctx.app).await,

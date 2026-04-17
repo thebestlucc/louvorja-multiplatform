@@ -76,7 +76,9 @@
       "tab_videos": "Videos",
       "tab_presentations": "Presentations",
       "placeholder_videos": "Search videos...",
-      "placeholder_presentations": "Search presentations..."
+      "placeholder_presentations": "Search presentations...",
+      "youtube_url_placeholder": "Paste YouTube URL...",
+      "youtube_url_add": "Add"
     },
     "service": {
       "start": "Start service",

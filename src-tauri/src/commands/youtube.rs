@@ -433,6 +433,11 @@ pub fn find_online_video_by_yt_id(
 }
 
 /// Extract a YouTube video ID from a URL or bare ID string.
+/// Extract YouTube video ID from various URL formats. Also used by remote WS handler.
+pub fn extract_video_id_pub(url: &str) -> Option<String> {
+    extract_video_id(url)
+}
+
 fn extract_video_id(url: &str) -> Option<String> {
     // youtu.be/<id>
     if let Some(pos) = url.find("youtu.be/") {

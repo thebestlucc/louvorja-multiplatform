@@ -76,7 +76,9 @@
       "tab_videos": "Videos",
       "tab_presentations": "Presentaciones",
       "placeholder_videos": "Buscar videos...",
-      "placeholder_presentations": "Buscar presentaciones..."
+      "placeholder_presentations": "Buscar presentaciones...",
+      "youtube_url_placeholder": "Pegar URL de YouTube...",
+      "youtube_url_add": "Añadir"
     },
     "service": {
       "start": "Iniciar culto",
