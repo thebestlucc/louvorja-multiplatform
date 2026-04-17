@@ -10,6 +10,7 @@ import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
 import { useVideoPlayerStore, type LocalTarget } from "../../stores/video-player-store";
+import { LogoContent } from "../slides/logo-content";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -194,27 +195,23 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   const liveTarget = useVideoPlayerStore((s) => s.liveTarget);
 
   const windowLabel = typeof window !== "undefined" ? getCurrentWebviewWindow().label : "main";
-  const currentTarget: LocalTarget =
-    windowLabel === "projector" || windowLabel === "return" ? windowLabel : "main";
+  // windowLabel === "main" branches never reach renderLiveVideo (see early-return
+  // in A4, but A3 runs before A4). For main window the later checks still return
+  // LogoContent via the target-miss branches, so keep a safe sentinel.
+  const currentTarget: LocalTarget | null =
+    windowLabel === "projector" || windowLabel === "return" ? windowLabel : null;
 
-  const renderThumbnailOnly = () => {
-    const thumbUrl = slide.video_id
-      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
-      : null;
-    return (
-      <div className={cn("relative h-full w-full bg-black overflow-hidden", className)}>
-        {thumbUrl && <img src={thumbUrl} alt="" className="h-full w-full object-contain opacity-60" />}
-      </div>
-    );
-  };
+  const renderOffTargetContent = () => (
+    <LogoContent className={className} />
+  );
 
   const renderLiveVideo = () => {
     // Decision: what does THIS window render for this slide?
     // 1. mode=local + this window in videoPlaybackTargets → muted follower.
     // 2. mode=live-youtube + this window === liveTarget → THE YT iframe (not a follower).
-    // 3. else → thumbnail.
+    // 3. else → LogoContent (off-target).
     if (mode?.kind === "local") {
-      if (!localTargets.includes(currentTarget)) return renderThumbnailOnly();
+      if (!currentTarget || !localTargets.includes(currentTarget)) return renderOffTargetContent();
       return (
         <div className={cn("h-full w-full bg-black", className)}>
           <LocalVideoFollower videoPath={mode.path} className="h-full w-full" />
@@ -223,7 +220,7 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
     }
 
     if (mode?.kind === "live-youtube") {
-      if (liveTarget !== currentTarget) return renderThumbnailOnly();
+      if (!currentTarget || liveTarget !== currentTarget) return renderOffTargetContent();
       // Sole iframe — NOT a follower. Audio-bearing. Never drift-corrected.
       return (
         <div className={cn("h-full w-full bg-black", className)}>
@@ -240,14 +237,14 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
 
     // mode === null: fall back to slide.source inspection, still respecting targets.
     const isLocalFile = slide.source === "local" && !!slide.url;
-    if (isLocalFile && localTargets.includes(currentTarget)) {
+    if (isLocalFile && currentTarget && localTargets.includes(currentTarget)) {
       return (
         <div className={cn("h-full w-full bg-black", className)}>
           <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
         </div>
       );
     }
-    return renderThumbnailOnly();
+    return renderOffTargetContent();
   };
 
   if (renderMode === "projector" || renderMode === "return-current") {
