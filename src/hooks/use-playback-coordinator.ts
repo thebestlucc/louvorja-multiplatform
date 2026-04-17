@@ -155,8 +155,10 @@ async function playBibleItem(item: QueueItem) {
   // Reset any active video
   const { useVideoPlayerStore } = await import("../stores/video-player-store");
   const vs = useVideoPlayerStore.getState();
-  if (vs.videoId || vs.videoSrc) vs.resetVideoState();
-  vs.setMode(null);
+  if (vs.videoId || vs.videoSrc) {
+    vs.resetVideoState();
+    vs.setMode(null);
+  }
 
   // Populate presentation store with the WHOLE chapter
   const pres = usePresentationStore.getState();
@@ -252,8 +254,10 @@ async function playPresentationItem(item: QueueItem) {
   // Reset any active video
   const { useVideoPlayerStore } = await import("../stores/video-player-store");
   const vs = useVideoPlayerStore.getState();
-  if (vs.videoId || vs.videoSrc) vs.resetVideoState();
-  vs.setMode(null);
+  if (vs.videoId || vs.videoSrc) {
+    vs.resetVideoState();
+    vs.setMode(null);
+  }
 
   usePresentationStore.getState().setSlides(slides);
   usePresentationStore.getState().setActiveSlideIndex(0);
@@ -328,7 +332,7 @@ export function usePlaybackCoordinator() {
       useDisplayStore.getState().setCurrentProjectionType(null);
       import("../stores/video-player-store").then(({ useVideoPlayerStore }) => {
         useVideoPlayerStore.getState().setMode(null);
-      }).catch(() => {});
+      }).catch(console.error);
     }
   }, [currentIndex, items.length, replayTrigger, playItem, stopAudio]);
 
