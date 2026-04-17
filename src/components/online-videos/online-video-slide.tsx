@@ -21,6 +21,8 @@ export type VideoStateEvent = {
   volume: number;
   seeking?: boolean;
   seeked?: boolean;
+  masterTimestampMs?: number;
+  mode?: "local" | "live-youtube" | null;
 };
 
 export type OnlineVideoRenderMode =
@@ -41,51 +43,8 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const lastStateRef = useRef<VideoStateEvent | null>(null);
 
-  // Track master video-state for follower sync + drift correction
-  useEffect(() => {
-    if (!isFollower) return;
-    const unsub = listen<VideoStateEvent>("video-state", (e) => {
-      lastStateRef.current = e.payload;
-      const p = playerRef.current;
-      if (!p || typeof p.getPlayerState !== "function") return;
-      const { paused, seeking, currentTime } = e.payload;
-      if (seeking) {
-        if (p.getPlayerState() === 1) p.pauseVideo();
-        return;
-      }
-      // Drift correction: resync aggressively. WKWebView + two independent
-      // YT iframes drift because they autoplay from URL params at different
-      // scheduling ticks. Tight threshold keeps audio (master) and image
-      // (follower) in lockstep.
-      if (!paused) {
-        try {
-          const followerTime = p.getCurrentTime();
-          const drift = Math.abs(followerTime - currentTime);
-          if (drift > 0.25) {
-            p.seekTo(currentTime, true);
-          }
-        } catch (_) {}
-      }
-      const state = p.getPlayerState();
-      if (paused && state === 1) p.pauseVideo();
-      else if (!paused && state !== 1) p.playVideo();
-    }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()).catch(() => {}); };
-  }, [isFollower]);
-
-  // Direct command listener for immediate follower response (play/pause/seek)
-  useEffect(() => {
-    if (!isFollower) return;
-    const unsub = listen<VideoControlEvent>("video-control-cmd", (e) => {
-      const p = playerRef.current;
-      if (!p || typeof p.getPlayerState !== "function") return;
-      const { action, value } = e.payload;
-      if (action === "play") p.playVideo();
-      else if (action === "pause") p.pauseVideo();
-      else if (action === "seek" && value !== undefined) p.seekTo(value, true);
-    }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()).catch(() => {}); };
-  }, [isFollower]);
+  // Followers in live-youtube mode no longer exist — Stage 1 design makes live-youtube
+  // single-iframe. Drift correction on muted YT iframes triggered buffer stalls; removed.
 
   const emitState = useCallback((player: YTPlayer) => {
     emitTo("main", "video-state", {
