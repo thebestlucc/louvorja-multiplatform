@@ -6,8 +6,8 @@ export type VideoPlaybackMode =
   | { kind: "local"; path: string; videoId: string | null; title: string | null }
   | { kind: "live-youtube"; videoId: string; title: string | null };
 
-export type LiveTarget = "main" | "projector" | "return" | "none";
-export type LocalTarget = "main" | "projector" | "return";
+export type LiveTarget = "projector" | "return";
+export type LocalTarget = "projector" | "return";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -41,8 +41,8 @@ const LIVE_TARGET_STORE_KEY = "video_live_target";
 const PLAYBACK_TARGETS_STORE_KEY = "video_playback_targets";
 const DEFAULT_LIVE_TARGET: LiveTarget = "projector";
 
-const VALID_LIVE_TARGETS: ReadonlyArray<LiveTarget> = ["main", "projector", "return", "none"];
-const VALID_LOCAL_TARGETS: ReadonlyArray<LocalTarget> = ["main", "projector", "return"];
+const VALID_LIVE_TARGETS: ReadonlyArray<LiveTarget> = ["projector", "return"];
+const VALID_LOCAL_TARGETS: ReadonlyArray<LocalTarget> = ["projector", "return"];
 
 function readLiveTargetSync(): LiveTarget {
   const v = getPreferenceSync<string>(LIVE_TARGET_STORE_KEY, DEFAULT_LIVE_TARGET);
