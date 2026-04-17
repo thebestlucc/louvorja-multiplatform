@@ -193,8 +193,16 @@ function PersistentVideoPlayerMain() {
   // Skips broadcasts while master is seeking (prevents state flood + follower seek storm).
   const broadcastState = useCallback((snap: VideoStateEvent, meta: { videoId: string | null; videoSrc: string | null; videoSource: "youtube" | "local" | null }, force = false) => {
     if (seekingRef.current && !force) return;
-    useVideoPlayerStore.getState().setVideoState({ ...snap, ...meta });
-    const enriched = { ...snap, seeking: seekingRef.current };
+    // Strip broadcast-only fields (mode, masterTimestampMs) before persisting
+    // to store — the store's `mode` is a different shape (VideoPlaybackMode | null).
+    const { mode: _m, masterTimestampMs: _ts, ...storeSnap } = snap;
+    useVideoPlayerStore.getState().setVideoState({ ...storeSnap, ...meta });
+    const enriched = {
+      ...snap,
+      seeking: seekingRef.current,
+      masterTimestampMs: performance.now(),
+      mode: useVideoPlayerStore.getState().mode?.kind ?? null,
+    };
     // Global emit so Rust event.rs can bridge video-state to WS clients.
     emit("video-state", enriched).catch(() => {});
     for (const target of ["projector", "return"] as const) {
@@ -262,7 +270,15 @@ function PersistentVideoPlayerMain() {
         useVideoPlayerStore.getState().resetVideoState();
         setActiveSlide(null);
         activeSlideRef.current = null;
-        const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
+        const resetSnap: VideoStateEvent = {
+          paused: true,
+          currentTime: 0,
+          duration: 0,
+          volume: 1,
+          seeking: false,
+          masterTimestampMs: performance.now(),
+          mode: null,
+        };
         for (const target of ["projector", "return"] as const) {
           emitTo(target, "video-state", resetSnap).catch(() => {});
         }
@@ -305,7 +321,15 @@ function PersistentVideoPlayerMain() {
       useVideoPlayerStore.getState().resetVideoState();
       setActiveSlide(null);
       activeSlideRef.current = null;
-      const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
+      const resetSnap: VideoStateEvent = {
+        paused: true,
+        currentTime: 0,
+        duration: 0,
+        volume: 1,
+        seeking: false,
+        masterTimestampMs: performance.now(),
+        mode: null,
+      };
       for (const target of ["projector", "return"] as const) {
         emitTo(target, "video-state", resetSnap).catch(() => {});
       }

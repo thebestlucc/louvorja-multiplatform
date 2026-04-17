@@ -45,19 +45,92 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<{ currentTime: number; duration: number; paused: boolean; seeking?: boolean }>("video-state", (event) => {
-      const video = videoRef.current;
-      if (!video) return;
-      const { currentTime, paused, seeking } = event.payload;
-      if (seeking) return; // master is mid-seek, don't correct yet
-      // Correct drift > 0.5 seconds
-      if (Math.abs(video.currentTime - currentTime) > 0.5) {
-        video.currentTime = currentTime;
-      }
-      if (paused && !video.paused) video.pause();
-      else if (!paused && video.paused) video.play().catch(() => {});
+    const video = videoRef.current;
+    if (!video) return;
+
+    let lastMaster: {
+      currentTime: number;
+      paused: boolean;
+      seeking: boolean;
+      receivedAt: number;
+      masterTimestampMs: number | null;
+    } | null = null;
+    let rVFCHandle = 0;
+
+    const unlistenPromise = listen<{
+      currentTime: number;
+      duration: number;
+      paused: boolean;
+      volume: number;
+      seeking?: boolean;
+      masterTimestampMs?: number;
+    }>("video-state", (event) => {
+      lastMaster = {
+        currentTime: event.payload.currentTime,
+        paused: event.payload.paused,
+        seeking: event.payload.seeking === true,
+        receivedAt: performance.now(),
+        masterTimestampMs: event.payload.masterTimestampMs ?? null,
+      };
     });
-    return () => { unlisten.then((fn) => fn()); };
+
+    const tick = () => {
+      if (!lastMaster) {
+        rVFCHandle = video.requestVideoFrameCallback(tick);
+        return;
+      }
+      const now = performance.now();
+      const masterEstimate = lastMaster.masterTimestampMs != null
+        ? lastMaster.currentTime + (now - lastMaster.masterTimestampMs) / 1000
+        : lastMaster.currentTime + (now - lastMaster.receivedAt) / 1000;
+
+      if (lastMaster.seeking) {
+        if (!video.paused) video.pause();
+        rVFCHandle = video.requestVideoFrameCallback(tick);
+        return;
+      }
+
+      if (lastMaster.paused) {
+        if (!video.paused) video.pause();
+        video.playbackRate = 1.0;
+        rVFCHandle = video.requestVideoFrameCallback(tick);
+        return;
+      }
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
+
+      const drift = video.currentTime - masterEstimate; // >0 means follower is AHEAD
+      const absDrift = Math.abs(drift);
+      if (absDrift > 0.15) {
+        // >150 ms — hard seek
+        video.playbackRate = 1.0;
+        video.currentTime = masterEstimate;
+      } else if (absDrift > 0.02) {
+        // 20–150 ms — rate nudge (±3%)
+        video.playbackRate = drift > 0 ? 0.97 : 1.03;
+      } else {
+        video.playbackRate = 1.0;
+      }
+      rVFCHandle = video.requestVideoFrameCallback(tick);
+    };
+
+    if (typeof video.requestVideoFrameCallback === "function") {
+      rVFCHandle = video.requestVideoFrameCallback(tick);
+    } else {
+      // Fallback to rAF for browsers without rVFC
+      const rafTick = () => { tick(); rVFCHandle = requestAnimationFrame(rafTick); };
+      rVFCHandle = requestAnimationFrame(rafTick);
+    }
+
+    return () => {
+      unlistenPromise.then((fn) => fn()).catch(() => {});
+      if (typeof video.cancelVideoFrameCallback === "function") {
+        video.cancelVideoFrameCallback(rVFCHandle);
+      } else {
+        cancelAnimationFrame(rVFCHandle);
+      }
+    };
   }, []);
 
   return (
