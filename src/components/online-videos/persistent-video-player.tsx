@@ -61,7 +61,9 @@ function LocalVideoMaster({
     localVideoMasterRef.current = el;
   }, []);
 
-  // Listen to video-control events and apply to local video element
+  // Listen to video-control events and apply to local video element.
+  // Followers sync via video-state broadcasts driven by native DOM events —
+  // no need to re-emit video-control-cmd here.
   useEffect(() => {
     const unsub = listen<VideoControlEvent>("video-control", (e) => {
       const video = videoRef.current;
@@ -69,23 +71,10 @@ function LocalVideoMaster({
       const { action, value } = e.payload;
       if (action === "play") {
         video.play().catch(() => {});
-        // Broadcast to all windows
-        for (const target of ["projector", "return"] as const) {
-          emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
-        }
-        emit("video-control-cmd", { action: "play" }).catch(() => {});
       } else if (action === "pause") {
         video.pause();
-        for (const target of ["projector", "return"] as const) {
-          emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
-        }
-        emit("video-control-cmd", { action: "pause" }).catch(() => {});
       } else if (action === "seek" && value !== undefined) {
         video.currentTime = value;
-        for (const target of ["projector", "return"] as const) {
-          emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
-        }
-        emit("video-control-cmd", { action: "seek", value }).catch(() => {});
       } else if (action === "volume" && value !== undefined) {
         video.volume = value;
       }

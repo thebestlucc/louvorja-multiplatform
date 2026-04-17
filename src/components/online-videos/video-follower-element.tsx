@@ -2,11 +2,6 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "../../lib/utils";
 
-interface VideoControlCmd {
-  action: "play" | "pause" | "seek";
-  value?: number;
-}
-
 interface VideoFollowerElementProps {
   videoUrl: string;
   className?: string;
@@ -22,24 +17,9 @@ export function VideoFollowerElement({ videoUrl, className }: VideoFollowerEleme
     video.play().catch(() => {});
   }, [videoUrl]);
 
-  useEffect(() => {
-    const unlisten = listen<VideoControlCmd>("video-control-cmd", (event) => {
-      const video = videoRef.current;
-      if (!video) return;
-      const { action, value } = event.payload;
-      if (action === "play") {
-        video.play().catch(() => {});
-      } else if (action === "pause") {
-        video.pause();
-      } else if (action === "seek" && value !== undefined) {
-        video.currentTime = value;
-      }
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  // Sync is driven entirely by `video-state` broadcasts from the master —
+  // play/pause is applied from lastMaster.paused and seeks from drift correction.
+  // No `video-control-cmd` listener needed.
 
   useEffect(() => {
     const video = videoRef.current;
