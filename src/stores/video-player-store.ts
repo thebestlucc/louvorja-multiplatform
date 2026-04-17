@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { getPreference, setPreference } from "../lib/store";
+import { getPreferenceSync, setPreference } from "../lib/store";
 
 export type VideoPlaybackMode =
   | { kind: "local"; path: string; videoId: string | null; title: string | null }
@@ -38,7 +38,26 @@ type VideoPlayerData = Pick<
 >;
 
 const LIVE_TARGET_STORE_KEY = "video_live_target";
+const PLAYBACK_TARGETS_STORE_KEY = "video_playback_targets";
 const DEFAULT_LIVE_TARGET: LiveTarget = "projector";
+
+const VALID_LIVE_TARGETS: ReadonlyArray<LiveTarget> = ["main", "projector", "return", "none"];
+const VALID_LOCAL_TARGETS: ReadonlyArray<LocalTarget> = ["main", "projector", "return"];
+
+function readLiveTargetSync(): LiveTarget {
+  const v = getPreferenceSync<string>(LIVE_TARGET_STORE_KEY, DEFAULT_LIVE_TARGET);
+  return (VALID_LIVE_TARGETS as ReadonlyArray<string>).includes(v) ? (v as LiveTarget) : DEFAULT_LIVE_TARGET;
+}
+
+function readPlaybackTargetsSync(): LocalTarget[] {
+  const raw = getPreferenceSync<unknown>(PLAYBACK_TARGETS_STORE_KEY, ["projector"]);
+  if (!Array.isArray(raw)) return ["projector"];
+  const filtered = raw.filter(
+    (x): x is LocalTarget =>
+      typeof x === "string" && (VALID_LOCAL_TARGETS as ReadonlyArray<string>).includes(x),
+  );
+  return filtered.length > 0 ? filtered : ["projector"];
+}
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -49,17 +68,20 @@ const initialState: VideoPlayerData = {
   videoSrc: null,
   videoSource: null,
   mode: null,
-  videoPlaybackTargets: ["projector"],
-  liveTarget: DEFAULT_LIVE_TARGET,
+  videoPlaybackTargets: readPlaybackTargetsSync(),
+  liveTarget: readLiveTargetSync(),
 };
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   setVideoState: (partial) => set(partial),
-  setVideoPlaybackTargets: (targets) => set({ videoPlaybackTargets: targets }),
+  setVideoPlaybackTargets: (targets) => {
+    set({ videoPlaybackTargets: targets });
+    setPreference(PLAYBACK_TARGETS_STORE_KEY, targets);
+  },
   setLiveTarget: (t) => {
     set({ liveTarget: t });
-    setPreference(LIVE_TARGET_STORE_KEY, t).catch(() => {});
+    setPreference(LIVE_TARGET_STORE_KEY, t);
   },
   setMode: (m) => set({ mode: m }),
   resetVideoState: () =>
@@ -70,16 +92,6 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
       liveTarget: s.liveTarget,
     })),
 }));
-
-// Eager-load persisted liveTarget once at module import. Fire-and-forget so a
-// plugin-store failure (e.g. in test environments) doesn't break in-memory state.
-getPreference<LiveTarget>(LIVE_TARGET_STORE_KEY, DEFAULT_LIVE_TARGET)
-  .then((stored) => {
-    if (stored !== DEFAULT_LIVE_TARGET) {
-      useVideoPlayerStore.setState({ liveTarget: stored });
-    }
-  })
-  .catch(() => {});
 
 // ─── Streaming sync ────────────────────────────────────────────────────────────
 // Forward video state changes to the streaming SSE server so external browsers
