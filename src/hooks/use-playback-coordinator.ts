@@ -369,4 +369,39 @@ export function usePlaybackCoordinator() {
       setOnFinished(null);
     };
   }, [setOnFinished, next]);
+
+  // Effect: Auto-advance the queue when the Rust video pipeline reports EOS
+  // (Task 3.2). Mirrors the audio-store onFinished hook for video items.
+  //
+  // Guards:
+  // - Only fires when the `useRustVideoPipeline` flag is ON (safety net in
+  //   case a stale event arrives after a flag toggle).
+  // - Only fires when the current queue item is a video — an EOS from a
+  //   prior session must not misfire if the queue moved on to an audio item.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    (async () => {
+      const [{ events }, { useVideoPlayerStore }] = await Promise.all([
+        import("../lib/bindings"),
+        import("../stores/video-player-store"),
+      ]);
+      const unlistenFn = await events.videoPipelineEnded.listen(() => {
+        if (!useVideoPlayerStore.getState().useRustVideoPipeline) return;
+        const qs = useQueueStore.getState();
+        const cur = qs.items[qs.currentIndex];
+        if (cur?.kind !== "video") return;
+        next();
+      });
+      if (cancelled) {
+        unlistenFn();
+        return;
+      }
+      unlisten = unlistenFn;
+    })();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [next]);
 }
