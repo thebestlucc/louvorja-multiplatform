@@ -327,11 +327,9 @@ export function useMediaPlayer() {
     const state = store.getState();
     if (state.timelineSource === "video") {
       if (useRustPipeline()) {
-        // Preserve the pause → seek → play sequence semantics.
+        // Task 3.1: collapsed pause → seek → play sequence into one Rust call.
         videoPipeline
-          .pause()
-          .then(() => videoPipeline.seek(0))
-          .then(() => videoPipeline.play())
+          .restart()
           .catch((err) => console.error("[video-pipeline] restart", err));
       } else {
         emit("video-control", { action: "pause" }).catch(() => {});

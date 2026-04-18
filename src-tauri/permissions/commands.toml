@@ -352,6 +352,7 @@ allow = [
     "video_pipeline_seek",
     "video_pipeline_set_volume",
     "video_pipeline_set_loop",
+    "video_pipeline_restart",
     "video_pipeline_subscribe",
     "video_pipeline_unsubscribe",
     "video_pipeline_answer",

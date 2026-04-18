@@ -1265,6 +1265,7 @@
       "toggleReturn": "Toggle return window",
       "stop": "Stop playback",
       "restart": "Restart playback",
+      "loop": "Loop",
       "volumeUp": "Volume up",
       "volumeDown": "Volume down",
       "prevSlide": "Previous slide (playback)",

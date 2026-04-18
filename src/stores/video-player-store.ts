@@ -4,6 +4,8 @@ import { getPreferenceSync, setPreference } from "../lib/store";
 import * as videoPipeline from "../lib/tauri/video-pipeline";
 import { useRustVideoPipelineStore } from "./rust-video-pipeline-store";
 
+export type LoopMode = "none" | "one";
+
 interface VideoPlayerState {
   currentTime: number;
   duration: number;
@@ -13,14 +15,17 @@ interface VideoPlayerState {
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
   useRustVideoPipeline: boolean;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline">>) => void;
+  loopMode: LoopMode;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline" | "loopMode" | "setLoopMode">>) => void;
   resetVideoState: () => void;
   setUseRustVideoPipeline: (v: boolean) => void;
+  setLoopMode: (mode: LoopMode) => void;
 }
 
 type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource">;
 
 const USE_RUST_VIDEO_PIPELINE_KEY = "use_rust_video_pipeline";
+const VIDEO_LOOP_MODE_KEY = "video_loop_mode";
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -35,6 +40,7 @@ const initialState: VideoPlayerData = {
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   useRustVideoPipeline: getPreferenceSync<boolean>(USE_RUST_VIDEO_PIPELINE_KEY, false),
+  loopMode: getPreferenceSync<LoopMode>(VIDEO_LOOP_MODE_KEY, "none"),
   setVideoState: (partial) => set(partial),
   resetVideoState: () => set(initialState),
   setUseRustVideoPipeline: (v) => {
@@ -44,6 +50,15 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
     if (prev && !v) {
       videoPipeline.unload().catch(() => {});
       useRustVideoPipelineStore.getState().reset();
+    }
+  },
+  setLoopMode: (mode) => {
+    set({ loopMode: mode });
+    setPreference(VIDEO_LOOP_MODE_KEY, mode);
+    // Mirror to Rust pipeline only when the flag is on; legacy HTML5 path
+    // does not implement loop (rolled back in dc942d3).
+    if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+      videoPipeline.setLoop(mode).catch((err) => console.error("[video-pipeline] setLoop", err));
     }
   },
 }));

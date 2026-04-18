@@ -299,6 +299,7 @@ pub fn run() {
             commands::video_pipeline::video_pipeline_seek,
             commands::video_pipeline::video_pipeline_set_volume,
             commands::video_pipeline::video_pipeline_set_loop,
+            commands::video_pipeline::video_pipeline_restart,
             commands::video_pipeline::video_pipeline_subscribe,
             commands::video_pipeline::video_pipeline_unsubscribe,
             commands::video_pipeline::video_pipeline_answer,

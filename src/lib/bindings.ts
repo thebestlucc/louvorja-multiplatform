@@ -1729,11 +1729,22 @@ async videoPipelineSetVolume(volume: number) : Promise<Result<null, AppErrorResp
 }
 },
 /**
- * Set the loop mode (Task 3.1 — currently stubbed).
+ * Set the loop mode (Task 3.1). Accepts `"none"` or `"one"`.
  */
 async videoPipelineSetLoop(loopMode: string) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("video_pipeline_set_loop", { loopMode }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Seek to 0 and resume PLAYING (Task 3.1).
+ */
+async videoPipelineRestart() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_restart") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

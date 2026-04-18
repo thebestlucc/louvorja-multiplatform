@@ -9,10 +9,9 @@
 //! `yt-dlp`) are wrapped in `std::thread::spawn` to avoid blocking the IPC
 //! bridge — the main loop must stay responsive.
 //!
-//! `video_pipeline_set_loop` is registered but stubbed: Task 3.1 implements
-//! the actual loop semantics (segment seek + EOS handling). Stubs return
-//! `AppError::Internal("…not yet implemented…")` so frontend dev work can
-//! exercise the full command surface immediately.
+//! `video_pipeline_set_loop` parses `"none"` / `"one"` into [`LoopMode`] and
+//! delegates to the runtime (Task 3.1). `video_pipeline_restart` collapses
+//! the legacy pause → seek(0) → play trio into a single server call.
 
 use crate::error::AppError;
 use crate::state::AppState;
@@ -20,6 +19,7 @@ use crate::video_pipeline::{
     runtime::VideoPipelineRuntime,
     signaling::{AnswerPayload, IcePayload},
     source::MediaSource,
+    state::LoopMode,
 };
 use std::sync::Arc;
 use tauri::Manager;
@@ -114,18 +114,30 @@ pub fn video_pipeline_set_volume(
     runtime(&state)?.set_volume(volume)
 }
 
-/// Set the loop mode (Task 3.1 — currently stubbed).
+/// Set the loop mode (Task 3.1). Accepts `"none"` or `"one"`.
 #[tauri::command]
 #[specta::specta]
 pub fn video_pipeline_set_loop(
     loop_mode: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let _ = loop_mode;
-    let _ = state;
-    Err(AppError::Internal(
-        "video_pipeline_set_loop is not yet implemented (Task 3.1)".into(),
-    ))
+    let mode = match loop_mode.as_str() {
+        "none" => LoopMode::None,
+        "one" => LoopMode::One,
+        other => {
+            return Err(AppError::Internal(format!(
+                "video_pipeline_set_loop: unknown loop mode '{other}' (expected 'none' or 'one')"
+            )));
+        }
+    };
+    runtime(&state)?.set_loop(mode)
+}
+
+/// Seek to 0 and resume PLAYING (Task 3.1).
+#[tauri::command]
+#[specta::specta]
+pub fn video_pipeline_restart(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
+    runtime(&state)?.restart()
 }
 
 /// Attach a WebRTC consumer for `window_label`. Triggers an SDP offer to

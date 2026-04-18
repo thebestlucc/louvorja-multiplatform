@@ -60,6 +60,8 @@ function PlayingNowScreen() {
   // currentTime/duration/volume from the 10 Hz Rust state stream instead of
   // the legacy `video-state` Tauri events bridged into useMediaPlayerStore.
   const useRustPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+  const loopMode = useVideoPlayerStore((s) => s.loopMode);
+  const setLoopMode = useVideoPlayerStore((s) => s.setLoopMode);
   const rustPositionSecs = useRustVideoPipelineStore((s) => s.positionSecs);
   const rustDurationSecs = useRustVideoPipelineStore((s) => s.durationSecs);
   const rustVolume = useRustVideoPipelineStore((s) => s.volume);
@@ -147,6 +149,12 @@ function PlayingNowScreen() {
             onModeChange={actions.switchMode}
             isBibleProjection={isBibleProjection}
             onGoToBible={handleGoToBible}
+            isLooping={loopMode === "one"}
+            onLoopToggle={
+              usePipelineState
+                ? () => setLoopMode(loopMode === "one" ? "none" : "one")
+                : undefined
+            }
           />
           </div>
         </div>
