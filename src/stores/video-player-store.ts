@@ -68,7 +68,7 @@ function forwardVideoStateToStreaming(state: VideoPlayerData, action: string) {
   invoke("broadcast_video_state_to_streaming", { payload }).catch(() => {});
 }
 
-const _unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
+export const __unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
   // Skip if no video is active
   if (!state.videoSource) return;
 
@@ -114,12 +114,10 @@ const _unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
   forwardVideoStateToStreaming(state, action);
 });
 
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    _unsubStreaming();
-    if (_streamingThrottleTimer) {
-      clearTimeout(_streamingThrottleTimer);
-      _streamingThrottleTimer = null;
-    }
-  });
+/** Internal: clear any pending streaming-throttle timer. Used by HMR cleanup. */
+export function __clearStreamingThrottle() {
+  if (_streamingThrottleTimer) {
+    clearTimeout(_streamingThrottleTimer);
+    _streamingThrottleTimer = null;
+  }
 }
