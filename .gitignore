@@ -16,6 +16,8 @@ dist-ssr
 .tanstack/
 src-tauri/target/
 src-tauri/binaries/
+# Generated test fixtures (Phase 1.2 video pipeline integration test creates short.mp4)
+src-tauri/tests/fixtures/
 
 # SQLite database files — never commit runtime data to the repo
 *.db

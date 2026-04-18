@@ -17,7 +17,7 @@ mod state;
 mod streaming;
 mod utils;
 mod video;
-mod video_pipeline;
+pub mod video_pipeline;
 mod video_server;
 mod youtube;
 mod ytdlp;
