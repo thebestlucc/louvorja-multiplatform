@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { getPreferenceSync, setPreference } from "../lib/store";
+import * as videoPipeline from "../lib/tauri/video-pipeline";
+import { useRustVideoPipelineStore } from "./rust-video-pipeline-store";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -36,8 +38,13 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   setVideoState: (partial) => set(partial),
   resetVideoState: () => set(initialState),
   setUseRustVideoPipeline: (v) => {
+    const prev = useVideoPlayerStore.getState().useRustVideoPipeline;
     set({ useRustVideoPipeline: v });
     setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v);
+    if (prev && !v) {
+      videoPipeline.unload().catch(() => {});
+      useRustVideoPipelineStore.getState().reset();
+    }
   },
 }));
 
