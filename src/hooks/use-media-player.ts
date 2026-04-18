@@ -9,6 +9,7 @@ import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 import { useDisplayStore } from "../stores/display-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
+import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
 import { useSlides } from "./use-slides";
 import { resolveSlideSeekTimestamp, resolvePlaybackVariantPaths } from "../lib/audio-sync";
 import { resetCoordinatorPlaybackState } from "./use-playback-coordinator";
@@ -154,6 +155,7 @@ export function useMediaPlayer() {
       store.getState().unload();
       if (useRustPipeline()) {
         videoPipeline.unload().catch((err) => console.error("[video-pipeline] unload", err));
+        useRustVideoPipelineStore.getState().reset();
       }
       return;
     }
@@ -163,6 +165,7 @@ export function useMediaPlayer() {
     store.getState().unload();
     if (useRustPipeline()) {
       videoPipeline.unload().catch((err) => console.error("[video-pipeline] unload", err));
+      useRustVideoPipelineStore.getState().reset();
     }
     // Clear presentation-store slides so the playing-now effectiveSlides fallback
     // doesn't display a stale onlineVideo slide thumbnail after the queue is stopped.

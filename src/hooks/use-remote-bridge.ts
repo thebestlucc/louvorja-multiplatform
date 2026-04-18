@@ -19,6 +19,8 @@ import { catcher } from "../lib/catcher";
 import { commands } from "../lib/bindings";
 import { defaultBackground } from "../types/presentation";
 import { buildQueueItemsFromRemote, type RemoteQueueAddPayload } from "./build-queue-items-from-remote";
+import { useVideoPlayerStore } from "../stores/video-player-store";
+import * as videoPipeline from "../lib/tauri/video-pipeline";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +102,17 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
 
         // ── Video control (bridge remote-video-cmd → video-control) ───────
         listen<RemoteVideoCmdPayload>("remote-video-cmd", (e) => {
+          if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+            const { action, value } = e.payload;
+            if (action === "play") {
+              videoPipeline.play().catch(() => {});
+            } else if (action === "pause") {
+              videoPipeline.pause().catch(() => {});
+            } else if (action === "seek" && typeof value === "number") {
+              videoPipeline.seek(value).catch(() => {});
+            }
+            return;
+          }
           emit("video-control", e.payload).catch(() => {});
         }),
 

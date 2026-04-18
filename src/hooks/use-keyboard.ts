@@ -18,6 +18,8 @@ import {
 } from "../lib/shortcut-definitions";
 import { spotlightOpen } from "../lib/tauri";
 import { emit } from "@tauri-apps/api/event";
+import { useVideoPlayerStore } from "../stores/video-player-store";
+import * as videoPipeline from "../lib/tauri/video-pipeline";
 
 export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
   const { nextSlide, prevSlide, goToSlide } = useSlides();
@@ -103,14 +105,22 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
             if (mpState.timelineSource === "audio") {
               useAudioStore.getState().pause();
             } else if (mpState.timelineSource === "video") {
-              emit("video-control", { action: "pause" });
+              if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+                videoPipeline.pause().catch(() => {});
+              } else {
+                emit("video-control", { action: "pause" });
+              }
             }
             mpState.setStatus("paused");
           } else if (mpState.status === "paused") {
             if (mpState.timelineSource === "audio") {
               useAudioStore.getState().resume();
             } else if (mpState.timelineSource === "video") {
-              emit("video-control", { action: "play" });
+              if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+                videoPipeline.play().catch(() => {});
+              } else {
+                emit("video-control", { action: "play" });
+              }
             }
             mpState.setStatus("playing");
           } else {
