@@ -1,4 +1,4 @@
-import { commands, type AppErrorResponse, type Result } from "../bindings";
+import { commands, type AppErrorResponse, type MediaSource, type Result } from "../bindings";
 
 function unwrap<T>(result: Result<T, AppErrorResponse>): T {
   if (result.status === "error") {
@@ -40,4 +40,39 @@ export async function sendIce(
   sdpMLineIndex: number,
 ): Promise<null> {
   return unwrap(await commands.videoPipelineIce(windowLabel, candidate, sdpMLineIndex));
+}
+
+/**
+ * Resolve `source` to a GStreamer URI and load it on the pipeline.
+ */
+export async function load(source: MediaSource): Promise<null> {
+  return unwrap(await commands.videoPipelineLoad(source));
+}
+
+/** Transition the pipeline to PLAYING. */
+export async function play(): Promise<null> {
+  return unwrap(await commands.videoPipelinePlay());
+}
+
+/** Transition the pipeline to PAUSED. */
+export async function pause(): Promise<null> {
+  return unwrap(await commands.videoPipelinePause());
+}
+
+/** Seek the pipeline to `secs`. */
+export async function seek(secs: number): Promise<null> {
+  return unwrap(await commands.videoPipelineSeek(secs));
+}
+
+/**
+ * Update the playback volume (0.0–1.0). Snapshot-only until the audio chain
+ * grows a `volume` element (Task 3.x).
+ */
+export async function setVolume(volume: number): Promise<null> {
+  return unwrap(await commands.videoPipelineSetVolume(volume));
+}
+
+/** Tear down the pipeline and reset the snapshot. */
+export async function unload(): Promise<null> {
+  return unwrap(await commands.videoPipelineUnload());
 }

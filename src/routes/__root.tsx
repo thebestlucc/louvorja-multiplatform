@@ -20,6 +20,7 @@ import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
 import { useMonitorsControl } from "../hooks/use-monitors";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
+import { useRustVideoPipelineStateBridge } from "../hooks/use-rust-video-pipeline-state";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { usePresentationStore } from "../stores/presentation-store";
@@ -342,6 +343,7 @@ function RootLayout() {
 
   usePlaybackCoordinator();
   useDownloadEvents();
+  useRustVideoPipelineStateBridge();
   useKeyboard({ enabled: !isBareRoute });
   useRemoteBridge({ enabled: !isBareRoute });
   useSlidePasser({ enabled: !isBareRoute });
