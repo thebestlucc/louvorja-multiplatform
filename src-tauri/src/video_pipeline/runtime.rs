@@ -93,8 +93,28 @@ impl VideoPipelineRuntime {
 
     /// Set the URI on the shared pipeline and transition to PAUSED so
     /// caps + transceivers negotiate before the first `play()`.
+    ///
+    /// Task 3.2: when a URI was previously loaded, cycle the pipeline through
+    /// NULL before swapping the URI. That forces `uridecodebin` to release
+    /// its internal decoders + auto-plugged pads from the previous stream —
+    /// simply re-setting the `uri` property leaves stale elements behind and
+    /// can fail or produce stale output on the next load. The `vtee` and any
+    /// attached `webrtcbin` consumer branches are separate elements in the
+    /// pipeline topology; they stay linked across the NULL→PAUSED transition.
     pub fn load(&self, uri: &str) -> Result<(), AppError> {
         let pipeline = self.get_or_init_pipeline()?;
+
+        // If a URI was previously set, tear the pipeline down to NULL first
+        // so uridecodebin releases its internal decoders + src pads cleanly.
+        let had_previous_uri = self.state.snapshot()?.uri.is_some();
+        if had_previous_uri {
+            pipeline
+                .set_state(gst::State::Null)
+                .map_err(|e| {
+                    AppError::Internal(format!("video_pipeline.load set_state(NULL): {e}"))
+                })?;
+        }
+
         pipeline::set_source_uri(&pipeline, uri)?;
         pipeline
             .set_state(gst::State::Paused)
@@ -103,7 +123,19 @@ impl VideoPipelineRuntime {
         // Task 3.1: start the bus watcher if it isn't already running so we
         // can observe EOS and either re-seek (loop=one) or emit the ended
         // event. Idempotent — no-op when already alive.
+        //
+        // Task 3.2: respawn is critical here. After a prior `on_eos` fired in
+        // `LoopMode::None`, the watcher set `bus_watcher_stop=true` and the
+        // worker exited. Without this call, the next load() would have no
+        // EOS detection armed and the queue-advance path would never fire.
+        // The CAS inside `spawn_bus_watcher` keeps this idempotent when the
+        // watcher is still alive from an earlier load.
         self.spawn_bus_watcher();
+        // Task 3.2: also ensure the state broadcaster is alive. Normally it's
+        // spawned in `play()` which follows load() on the queue-advance path,
+        // but respawn-on-load is cheap (CAS-guarded) and makes load() self-
+        // sufficient for tests / callers that pause-then-subscribe.
+        self.spawn_state_broadcaster();
         Ok(())
     }
 
@@ -521,6 +553,19 @@ mod tests {
         let rt = runtime();
         // `spawn_bus_watcher` is a no-op when there's no AppHandle to re-fetch
         // the runtime from. The running flag must stay false.
+        rt.spawn_bus_watcher();
+        assert!(!rt.bus_watcher_running.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn bus_watcher_spawn_is_idempotent_without_app_handle() {
+        // Task 3.2: load() calls spawn_bus_watcher() on every invocation so
+        // the watcher re-arms after a prior LoopMode::None EOS shut it down.
+        // Without an app handle the spawn is a no-op — the key invariant is
+        // that repeated calls leave the running flag false (no orphan threads).
+        let rt = runtime();
+        rt.spawn_bus_watcher();
+        rt.spawn_bus_watcher();
         rt.spawn_bus_watcher();
         assert!(!rt.bus_watcher_running.load(Ordering::Relaxed));
     }
