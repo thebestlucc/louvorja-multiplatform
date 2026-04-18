@@ -7,6 +7,26 @@ use crate::error::AppError;
 use gstreamer as gst;
 use std::sync::Mutex;
 
+/// Loop mode for the active media (Task 3.1).
+///
+/// `None` lets the pipeline reach EOS and emits [`VideoPipelineEnded`]
+/// (`crate::video_pipeline::events::VideoPipelineEnded`). `One` re-seeks to 0
+/// on EOS and stays in PLAYING.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum LoopMode {
+    None,
+    One,
+}
+
+impl Default for LoopMode {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 /// Serializable snapshot of the current playback state, mirrored to the frontend.
 #[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +37,7 @@ pub struct PlaybackStateSnapshot {
     pub paused: bool,
     pub volume: f32,
     pub ready: bool,
+    pub loop_mode: LoopMode,
 }
 
 impl Default for PlaybackStateSnapshot {
@@ -28,6 +49,7 @@ impl Default for PlaybackStateSnapshot {
             paused: false,
             volume: 0.0,
             ready: false,
+            loop_mode: LoopMode::None,
         }
     }
 }
@@ -54,6 +76,9 @@ impl PlaybackState {
     }
 
     /// Set the active URI and reset transient playback fields.
+    ///
+    /// Preserves `loop_mode` across media swaps so the user's toggle
+    /// survives queue advances (Task 3.1).
     pub fn load(&self, uri: String) -> Result<(), AppError> {
         let mut inner = self.inner.lock()?;
         inner.snapshot.uri = Some(uri);
@@ -92,7 +117,23 @@ impl PlaybackState {
         Ok(())
     }
 
+    /// Update the loop mode (Task 3.1).
+    pub fn set_loop(&self, mode: LoopMode) -> Result<(), AppError> {
+        let mut inner = self.inner.lock()?;
+        inner.snapshot.loop_mode = mode;
+        Ok(())
+    }
+
+    /// Read the current loop mode (Task 3.1).
+    pub fn loop_mode(&self) -> Result<LoopMode, AppError> {
+        let inner = self.inner.lock()?;
+        Ok(inner.snapshot.loop_mode)
+    }
+
     /// Drop any pipeline and reset the snapshot to its default values.
+    ///
+    /// Resets `loop_mode` back to [`LoopMode::None`] — the loop toggle is
+    /// scoped to a single active media.
     pub fn unload(&self) -> Result<(), AppError> {
         let mut inner = self.inner.lock()?;
         inner.pipeline = None;
@@ -208,5 +249,47 @@ mod tests {
         let fresh = state.snapshot().expect("snapshot");
         assert_eq!(fresh.uri.as_deref(), Some("file:///foo.mp4"));
         assert_eq!(fresh.position_secs, 0.0);
+    }
+
+    #[test]
+    fn loop_mode_defaults_to_none() {
+        let state = PlaybackState::new();
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::None);
+        assert_eq!(
+            state.snapshot().expect("snapshot").loop_mode,
+            LoopMode::None
+        );
+    }
+
+    #[test]
+    fn set_loop_persists_across_load_and_seek() {
+        let state = PlaybackState::new();
+        state.set_loop(LoopMode::One).expect("set_loop");
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::One);
+
+        // Swapping media must keep the loop toggle active (user expectation).
+        state.load("file:///foo.mp4".into()).expect("load");
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::One);
+
+        // Seeks must not reset it either.
+        state.seek(7.5).expect("seek");
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::One);
+    }
+
+    #[test]
+    fn unload_resets_loop_mode() {
+        let state = PlaybackState::new();
+        state.set_loop(LoopMode::One).expect("set_loop");
+        state.unload().expect("unload");
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::None);
+    }
+
+    #[test]
+    fn set_loop_round_trips_between_variants() {
+        let state = PlaybackState::new();
+        state.set_loop(LoopMode::One).expect("set_loop one");
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::One);
+        state.set_loop(LoopMode::None).expect("set_loop none");
+        assert_eq!(state.loop_mode().expect("loop_mode"), LoopMode::None);
     }
 }

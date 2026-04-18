@@ -1265,6 +1265,7 @@
       "toggleReturn": "Alternar janela de retorno",
       "stop": "Parar reprodução",
       "restart": "Reiniciar reprodução",
+      "loop": "Repetir",
       "volumeUp": "Aumentar volume",
       "volumeDown": "Diminuir volume",
       "prevSlide": "Slide anterior (reprodução)",

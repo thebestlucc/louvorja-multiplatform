@@ -76,3 +76,13 @@ export async function setVolume(volume: number): Promise<null> {
 export async function unload(): Promise<null> {
   return unwrap(await commands.videoPipelineUnload());
 }
+
+/** Seek to 0 and resume PLAYING (Task 3.1). */
+export async function restart(): Promise<null> {
+  return unwrap(await commands.videoPipelineRestart());
+}
+
+/** Set the loop mode (Task 3.1). */
+export async function setLoop(mode: "none" | "one"): Promise<null> {
+  return unwrap(await commands.videoPipelineSetLoop(mode));
+}

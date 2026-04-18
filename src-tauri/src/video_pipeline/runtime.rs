@@ -11,10 +11,10 @@
 use crate::error::AppError;
 use crate::video_pipeline::{
     consumer::ConsumerRegistry,
-    events::VideoPipelineState,
+    events::{VideoPipelineEnded, VideoPipelineState},
     pipeline,
     signaling::{AnswerPayload, IcePayload, SignalingChannel},
-    state::{PlaybackState, PlaybackStateSnapshot},
+    state::{LoopMode, PlaybackState, PlaybackStateSnapshot},
 };
 use gstreamer::{self as gst, prelude::*};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,6 +24,11 @@ use tauri_specta::Event;
 
 /// 100 ms between state ticks → 10 Hz broadcast rate (Task 2.3).
 const BROADCAST_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Blocking timeout for bus message polling (Task 3.1). 500 ms keeps the EOS
+/// latency well under a video-frame boundary while letting the thread exit
+/// promptly on shutdown.
+const BUS_POLL_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// Process-wide handle for the Rust video pipeline.
 ///
@@ -47,6 +52,12 @@ pub struct VideoPipelineRuntime {
     /// `true` while a broadcaster thread is alive — guards against spawning
     /// multiple broadcasters when `play()` is called repeatedly.
     broadcaster_running: Arc<AtomicBool>,
+    /// Set to `true` to signal the bus watcher thread (Task 3.1) to exit at
+    /// the next poll boundary. Same shutdown contract as `broadcaster_stop`.
+    bus_watcher_stop: Arc<AtomicBool>,
+    /// `true` while a bus watcher thread is alive. Guards against spawning
+    /// duplicate watchers when `load()` is called repeatedly.
+    bus_watcher_running: Arc<AtomicBool>,
 }
 
 impl VideoPipelineRuntime {
@@ -65,6 +76,8 @@ impl VideoPipelineRuntime {
             app,
             broadcaster_stop: Arc::new(AtomicBool::new(false)),
             broadcaster_running: Arc::new(AtomicBool::new(false)),
+            bus_watcher_stop: Arc::new(AtomicBool::new(false)),
+            bus_watcher_running: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -87,6 +100,10 @@ impl VideoPipelineRuntime {
             .set_state(gst::State::Paused)
             .map_err(|e| AppError::Internal(format!("video_pipeline.load set_state(PAUSED): {e}")))?;
         self.state.load(uri.to_string())?;
+        // Task 3.1: start the bus watcher if it isn't already running so we
+        // can observe EOS and either re-seek (loop=one) or emit the ended
+        // event. Idempotent — no-op when already alive.
+        self.spawn_bus_watcher();
         Ok(())
     }
 
@@ -148,11 +165,60 @@ impl VideoPipelineRuntime {
         self.state.set_volume(volume)
     }
 
+    /// Update the loop mode (Task 3.1).
+    pub fn set_loop(&self, mode: LoopMode) -> Result<(), AppError> {
+        self.state.set_loop(mode)
+    }
+
+    /// Seek to 0 and ensure the pipeline is PLAYING (Task 3.1).
+    ///
+    /// Matches the legacy pause → seek → play sequence but collapsed server-
+    /// side so the frontend doesn't need to issue three round trips.
+    pub fn restart(&self) -> Result<(), AppError> {
+        self.seek(0.0)?;
+        self.play()
+    }
+
+    /// Bus-watcher callback for end-of-stream (Task 3.1).
+    ///
+    /// Loop one → re-seek to 0 and stay in PLAYING. Loop none → emit the
+    /// typed [`VideoPipelineEnded`] event so the frontend can advance the
+    /// queue.
+    fn on_eos(&self) {
+        let mode = match self.state.loop_mode() {
+            Ok(m) => m,
+            Err(e) => {
+                log::warn!("video_pipeline: on_eos loop_mode read failed: {e}");
+                return;
+            }
+        };
+
+        match mode {
+            LoopMode::One => {
+                if let Err(e) = self.seek(0.0) {
+                    log::warn!("video_pipeline: on_eos seek(0) failed: {e}");
+                }
+                if let Err(e) = self.play() {
+                    log::warn!("video_pipeline: on_eos play() failed: {e}");
+                }
+            }
+            LoopMode::None => {
+                if let Some(app) = self.app.as_ref() {
+                    let event = VideoPipelineEnded {};
+                    if let Err(e) = event.emit(app) {
+                        log::warn!("video_pipeline: VideoPipelineEnded emit failed: {e}");
+                    }
+                }
+            }
+        }
+    }
+
     /// Drop the pipeline (set to NULL and free) and reset the snapshot.
     pub fn unload(&self) -> Result<(), AppError> {
-        // Signal the broadcaster (if any) to exit BEFORE we tear down the
-        // pipeline so it can't observe a half-disposed pipeline.
+        // Signal background threads to exit BEFORE we tear down the pipeline
+        // so they can't observe a half-disposed pipeline.
         self.broadcaster_stop.store(true, Ordering::Relaxed);
+        self.bus_watcher_stop.store(true, Ordering::Relaxed);
         let mut guard = self.pipeline.lock()?;
         if let Some(pipeline) = guard.take() {
             pipeline
@@ -290,6 +356,80 @@ impl VideoPipelineRuntime {
             running_flag.store(false, Ordering::Relaxed);
         });
     }
+
+    /// Spawn the EOS bus-watcher thread if none is running (Task 3.1).
+    ///
+    /// Polls `pipeline.bus().timed_pop(500 ms)` in a loop. Exits cleanly when
+    /// `bus_watcher_stop` is set (unload/app shutdown) or when the pipeline
+    /// slot is cleared. EOS messages dispatch to [`Self::on_eos`].
+    ///
+    /// We avoid `bus.add_watch(...)` + `BusWatchGuard` because that path needs
+    /// a running GLib main loop, which we don't own. The timed-pop pattern
+    /// mirrors the 10 Hz broadcaster's shutdown contract.
+    fn spawn_bus_watcher(&self) {
+        if self.app.is_none() {
+            // Without an AppHandle we can't re-fetch the runtime; unit tests
+            // bypass this path.
+            return;
+        }
+        if self
+            .bus_watcher_running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return;
+        }
+        self.bus_watcher_stop.store(false, Ordering::Relaxed);
+
+        let stop_flag = self.bus_watcher_stop.clone();
+        let running_flag = self.bus_watcher_running.clone();
+        let app_for_thread = self
+            .app
+            .as_ref()
+            .expect("app handle checked above")
+            .clone();
+
+        std::thread::spawn(move || {
+            loop {
+                if stop_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                // Re-fetch the runtime on each iteration so we don't alias
+                // `self` across threads.
+                let runtime = match runtime_from_app(&app_for_thread) {
+                    Some(rt) => rt,
+                    None => break,
+                };
+
+                // Snapshot the bus (cloneable) without holding the pipeline
+                // lock across the blocking `timed_pop`.
+                let bus = {
+                    let guard = match runtime.pipeline.lock() {
+                        Ok(g) => g,
+                        Err(_) => break,
+                    };
+                    match guard.as_ref() {
+                        Some(pipeline) => pipeline.bus(),
+                        None => None,
+                    }
+                };
+                let bus = match bus {
+                    Some(b) => b,
+                    None => break,
+                };
+
+                if let Some(msg) = bus.timed_pop(gst::ClockTime::from_mseconds(
+                    BUS_POLL_TIMEOUT.as_millis() as u64,
+                )) {
+                    if let gst::MessageView::Eos(_) = msg.view() {
+                        runtime.on_eos();
+                    }
+                }
+            }
+            running_flag.store(false, Ordering::Relaxed);
+        });
+    }
 }
 
 /// Resolve the singleton runtime from the Tauri app state. Returns `None`
@@ -350,5 +490,31 @@ mod tests {
         // still succeed and the running flag must remain false.
         rt.spawn_state_broadcaster();
         assert!(!rt.broadcaster_running.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn set_loop_round_trips_through_runtime() {
+        let rt = runtime();
+        rt.set_loop(LoopMode::One).expect("set_loop");
+        assert_eq!(rt.snapshot().expect("snapshot").loop_mode, LoopMode::One);
+        rt.set_loop(LoopMode::None).expect("set_loop");
+        assert_eq!(rt.snapshot().expect("snapshot").loop_mode, LoopMode::None);
+    }
+
+    #[test]
+    fn unload_resets_loop_mode_through_runtime() {
+        let rt = runtime();
+        rt.set_loop(LoopMode::One).expect("set_loop");
+        rt.unload().expect("unload");
+        assert_eq!(rt.snapshot().expect("snapshot").loop_mode, LoopMode::None);
+    }
+
+    #[test]
+    fn bus_watcher_does_not_spawn_without_app_handle() {
+        let rt = runtime();
+        // `spawn_bus_watcher` is a no-op when there's no AppHandle to re-fetch
+        // the runtime from. The running flag must stay false.
+        rt.spawn_bus_watcher();
+        assert!(!rt.bus_watcher_running.load(Ordering::Relaxed));
     }
 }
