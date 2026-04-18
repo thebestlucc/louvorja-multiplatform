@@ -365,14 +365,33 @@ pub fn run() {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             {
                 if let Ok(resource_dir) = app.path().resource_dir() {
-                    let plugin_path = resource_dir
-                        .join("gstreamer-runtime")
-                        .join("gstreamer-1.0");
+                    let runtime = resource_dir.join("gstreamer-runtime");
+                    let plugin_path = runtime.join("gstreamer-1.0");
                     if plugin_path.exists() {
                         // Safety: single-threaded setup phase — no other
                         // threads observe env vars concurrently here.
                         unsafe {
                             std::env::set_var("GST_PLUGIN_PATH", &plugin_path);
+                        }
+                    }
+                    // Windows: `LoadLibrary` searches the exe dir, system dirs,
+                    // current dir, and PATH — but NOT `bundle.resources`
+                    // subdirectories. Core DLLs (gstreamer-1.0-0.dll, etc.)
+                    // land at `gstreamer-runtime/bin/`, so prepend that dir
+                    // to PATH before any gst::init() runs.
+                    // macOS core dylibs live at `gstreamer-runtime/lib/` and
+                    // are found via dyld's @rpath / fallback paths, so no
+                    // equivalent is needed there.
+                    #[cfg(target_os = "windows")]
+                    {
+                        let bin_dir = runtime.join("bin");
+                        if bin_dir.exists() {
+                            let current_path = std::env::var("PATH").unwrap_or_default();
+                            let new_path =
+                                format!("{};{}", bin_dir.display(), current_path);
+                            unsafe {
+                                std::env::set_var("PATH", new_path);
+                            }
                         }
                     }
                 }
