@@ -86,6 +86,26 @@ fn main() {
         // Linux: not bundled here. AppImage relies on system packages; deb/rpm
         // declare gstreamer1.0-* package dependencies. README documents the
         // required apt/dnf packages for end users.
+    } else {
+        // Dev builds: clear any leftover populated runtime from a prior release
+        // build. `tauri_build::build()` below walks `bundle.resources` and hits
+        // `Permission denied` on a populated gstreamer-runtime/ in dev mode
+        // (tauri validates/hashes every resource file even without packaging).
+        // An empty runtime dir with just `.gitkeep` keeps dev builds fast and
+        // avoids the bundle-scan crash.
+        let plugin_dir = runtime_dir.join("gstreamer-1.0");
+        let lib_dir = runtime_dir.join("lib");
+        let bin_dir = runtime_dir.join("bin");
+        for dir in [&plugin_dir, &lib_dir, &bin_dir] {
+            if dir.exists() {
+                if let Err(e) = std::fs::remove_dir_all(dir) {
+                    println!(
+                        "cargo:warning=Failed to clear {} for dev build: {e}",
+                        dir.display()
+                    );
+                }
+            }
+        }
     }
 
     tauri_build::build()
@@ -251,9 +271,10 @@ fn bundle_gstreamer_windows(runtime_dir: &std::path::Path) {
     println!("cargo:rerun-if-changed={}", bin_src.display());
     println!("cargo:rerun-if-changed={}", plugin_src.display());
     let plugin_dst = runtime_dir.join("gstreamer-1.0");
-    // Core DLLs go in a `bin/` subdir; lib.rs puts plugin path on GST_PLUGIN_PATH
-    // and Tauri bundles all files beside the exe, so Windows DLL search finds
-    // core libs automatically (same-directory-as-exe rule).
+    // Core DLLs go in a `bin/` subdir. `lib.rs` setup() prepends this dir to
+    // PATH before gst::init() so Windows LoadLibrary can find them — Tauri's
+    // bundle.resources preserves directory structure, so the DLLs land in
+    // `<install>/gstreamer-runtime/bin/`, NOT next to the exe.
     let bin_dst = runtime_dir.join("bin");
 
     if let Err(e) = recreate_dir(&plugin_dst) {
