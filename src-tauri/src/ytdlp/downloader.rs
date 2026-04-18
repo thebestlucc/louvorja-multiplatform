@@ -195,3 +195,57 @@ fn find_output_file(output_dir: &Path, video_id: &str) -> Option<PathBuf> {
     }
     None
 }
+
+/// Resolve a YouTube video to a single direct streaming URL via yt-dlp.
+///
+/// v1 prefers a single muxed format (`best[ext=mp4]/best`) to avoid the
+/// ffmpeg-mux requirement for split video+audio formats. Lower quality is
+/// acceptable for v1; see plan Section 10
+/// (`docs/plans/2026-04-17-rust-video-pipeline.md`) for v2 split-format
+/// work.
+///
+/// Blocking: spawns `yt-dlp` and waits for it to print a URL on stdout.
+/// Callers from async contexts should wrap with
+/// `tokio::task::spawn_blocking`.
+pub fn resolve_streaming_url(binary_path: &Path, video_id: &str) -> Result<String, AppError> {
+    let url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+    let mut cmd = Command::new(binary_path);
+    cmd.arg("-f")
+        .arg("best[ext=mp4]/best")
+        .arg("--get-url")
+        .arg("--no-warnings")
+        .arg("--no-playlist")
+        .arg(&url)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Internal(format!("yt-dlp spawn failed: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Internal(format!(
+            "yt-dlp exit {}: {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        )));
+    }
+
+    let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if resolved.is_empty() {
+        return Err(AppError::Internal(
+            "yt-dlp returned empty URL".to_string(),
+        ));
+    }
+    if !resolved.starts_with("http") {
+        return Err(AppError::Internal(format!(
+            "yt-dlp returned non-HTTP URL: {resolved}"
+        )));
+    }
+    Ok(resolved)
+}
