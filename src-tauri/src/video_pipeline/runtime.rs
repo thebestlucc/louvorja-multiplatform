@@ -113,6 +113,23 @@ impl VideoPipelineRuntime {
                 .map_err(|e| {
                     AppError::Internal(format!("video_pipeline.load set_state(NULL): {e}"))
                 })?;
+            // Wait for the NULL transition to complete before swapping the URI
+            // so uridecodebin is fully torn down (async state changes are
+            // otherwise queued and race with the URI swap on internal pads).
+            let (change_result, _current, _pending) = pipeline.state(gst::ClockTime::NONE);
+            change_result.map_err(|e| {
+                AppError::Internal(format!("video_pipeline.load NULL state wait: {e}"))
+            })?;
+            // Drain any pending bus messages queued from the previous URI
+            // (stale EOS, async-done, errors) so the re-armed bus watcher at
+            // the end of load() starts fresh. Without this, a stale EOS from
+            // the prior URI would fire on_eos() → emit VideoPipelineEnded →
+            // coordinator calls queueStore.next() and skips the new video.
+            if let Some(bus) = pipeline.bus() {
+                while bus.pop().is_some() {
+                    // Discard.
+                }
+            }
         }
 
         pipeline::set_source_uri(&pipeline, uri)?;
@@ -261,6 +278,12 @@ impl VideoPipelineRuntime {
             pipeline
                 .set_state(gst::State::Null)
                 .map_err(|e| AppError::Internal(format!("video_pipeline.unload set_state(NULL): {e}")))?;
+            // Wait for NULL transition to complete before dropping the
+            // pipeline so uridecodebin finishes tearing down its decoders.
+            let (change_result, _current, _pending) = pipeline.state(gst::ClockTime::NONE);
+            change_result.map_err(|e| {
+                AppError::Internal(format!("video_pipeline.unload NULL state wait: {e}"))
+            })?;
         }
         drop(guard);
         self.state.unload()
