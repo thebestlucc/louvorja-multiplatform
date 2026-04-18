@@ -209,6 +209,10 @@ impl VideoPipelineRuntime {
                         log::warn!("video_pipeline: VideoPipelineEnded emit failed: {e}");
                     }
                 }
+                // After emitting Ended, stop the bus watcher — the bus retains
+                // the EOS message, so the next timed_pop would re-fire on_eos
+                // in a loop.
+                self.bus_watcher_stop.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -216,9 +220,10 @@ impl VideoPipelineRuntime {
     /// Drop the pipeline (set to NULL and free) and reset the snapshot.
     pub fn unload(&self) -> Result<(), AppError> {
         // Signal background threads to exit BEFORE we tear down the pipeline
-        // so they can't observe a half-disposed pipeline.
-        self.broadcaster_stop.store(true, Ordering::Relaxed);
-        self.bus_watcher_stop.store(true, Ordering::Relaxed);
+        // so they can't observe a half-disposed pipeline. SeqCst pairs with
+        // the spawn-side reset + CAS to give total ordering across the race.
+        self.broadcaster_stop.store(true, Ordering::SeqCst);
+        self.bus_watcher_stop.store(true, Ordering::SeqCst);
         let mut guard = self.pipeline.lock()?;
         if let Some(pipeline) = guard.take() {
             pipeline
@@ -277,6 +282,9 @@ impl VideoPipelineRuntime {
         let Some(app) = self.app.clone() else {
             return;
         };
+        // Reset the stop flag BEFORE the CAS so a racing unload() that sets
+        // stop=true always wins (SeqCst gives total ordering).
+        self.broadcaster_stop.store(false, Ordering::SeqCst);
         // CAS so only the first concurrent caller wins.
         if self
             .broadcaster_running
@@ -285,9 +293,6 @@ impl VideoPipelineRuntime {
         {
             return;
         }
-
-        // Reset the stop flag for this new lifecycle.
-        self.broadcaster_stop.store(false, Ordering::Relaxed);
 
         let stop_flag = self.broadcaster_stop.clone();
         let running_flag = self.broadcaster_running.clone();
@@ -298,7 +303,7 @@ impl VideoPipelineRuntime {
 
         std::thread::spawn(move || {
             loop {
-                if stop_flag.load(Ordering::Relaxed) {
+                if stop_flag.load(Ordering::SeqCst) {
                     break;
                 }
 
@@ -353,7 +358,7 @@ impl VideoPipelineRuntime {
 
                 std::thread::sleep(BROADCAST_INTERVAL);
             }
-            running_flag.store(false, Ordering::Relaxed);
+            running_flag.store(false, Ordering::SeqCst);
         });
     }
 
@@ -372,6 +377,9 @@ impl VideoPipelineRuntime {
             // bypass this path.
             return;
         }
+        // Reset the stop flag BEFORE the CAS so a racing unload() that sets
+        // stop=true always wins (SeqCst gives total ordering).
+        self.bus_watcher_stop.store(false, Ordering::SeqCst);
         if self
             .bus_watcher_running
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -379,7 +387,6 @@ impl VideoPipelineRuntime {
         {
             return;
         }
-        self.bus_watcher_stop.store(false, Ordering::Relaxed);
 
         let stop_flag = self.bus_watcher_stop.clone();
         let running_flag = self.bus_watcher_running.clone();
@@ -391,7 +398,7 @@ impl VideoPipelineRuntime {
 
         std::thread::spawn(move || {
             loop {
-                if stop_flag.load(Ordering::Relaxed) {
+                if stop_flag.load(Ordering::SeqCst) {
                     break;
                 }
 
@@ -427,7 +434,7 @@ impl VideoPipelineRuntime {
                     }
                 }
             }
-            running_flag.store(false, Ordering::Relaxed);
+            running_flag.store(false, Ordering::SeqCst);
         });
     }
 }
