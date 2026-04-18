@@ -208,6 +208,41 @@ async function playVideoItem(item: QueueItem) {
   usePresentationStore.getState().setSlides([slide]);
   usePresentationStore.getState().setActiveSlideIndex(0);
   useDisplayStore.getState().setCurrentProjectionType("presentation");
+
+  // When the Rust video pipeline flag is on, load the URI into the Rust runtime
+  // so Phase 2 controls (play/pause/seek/volume) actually drive a backed pipeline.
+  // Must run BEFORE setCurrentSlide so projector/return RustVideoConsumers find a
+  // loaded + playing pipeline the moment they subscribe on slide-changed.
+  const { useVideoPlayerStore } = await import("../stores/video-player-store");
+  if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+    const videoPipeline = await import("../lib/tauri/video-pipeline");
+    let mediaSource: import("../lib/bindings").MediaSource | null = null;
+    if (vm.videoSource === "local" && vm.videoUrl) {
+      // Managed-media local videos (vm.videoUrl starts with "media/") are NOT
+      // supported by the Rust pipeline yet — MediaSource::Local requires an
+      // absolute path (see src-tauri/src/video_pipeline/source.rs validation).
+      // Restore parity in Phase 3.x. For now, warn and skip.
+      if (!vm.videoUrl.startsWith("media/") && vm.videoUrl.startsWith("/")) {
+        mediaSource = { type: "local", absolutePath: vm.videoUrl };
+      }
+    } else if (vm.videoId) {
+      mediaSource = { type: "youtube", videoId: vm.videoId };
+    }
+
+    if (mediaSource) {
+      try {
+        await videoPipeline.load(mediaSource);
+        // Pipeline transitions to PAUSED on load (preroll). Mirror legacy queue
+        // behavior of autoplay on advance by transitioning to PLAYING here.
+        await videoPipeline.play();
+      } catch (err) {
+        console.error("[video-pipeline] load/play failed", err);
+      }
+    } else {
+      console.warn("[video-pipeline] no resolvable MediaSource for", vm);
+    }
+  }
+
   // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle
   await catcher(setCurrentSlide(slide));
 }
