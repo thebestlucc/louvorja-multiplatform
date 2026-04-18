@@ -211,8 +211,11 @@ pub fn resolve_streaming_url(binary_path: &Path, video_id: &str) -> Result<Strin
     let url = format!("https://www.youtube.com/watch?v={}", video_id);
 
     let mut cmd = Command::new(binary_path);
+    // Prefer formats that include audio: video-only streams cause GStreamer's
+    // autoaudiosink to receive no data and produce silent playback. The final
+    // `/best` keeps the v1 single-URL contract (no ffmpeg mux) as last resort.
     cmd.arg("-f")
-        .arg("best[ext=mp4]/best")
+        .arg("best[ext=mp4][acodec!=none]/best[acodec!=none]/best")
         .arg("--get-url")
         .arg("--no-warnings")
         .arg("--no-playlist")
