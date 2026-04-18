@@ -66,6 +66,24 @@ Download the latest release for your platform from the [Releases page](https://g
 
 > **Older hardware:** Windows 32-bit builds are provided for machines with 32-bit Windows 10. Windows 7/8 is not supported (WebView2 requirement).
 
+### Video playback runtime (GStreamer)
+
+Video slides, YouTube offline playback, and the persistent video player run on a Rust GStreamer pipeline.
+
+- **macOS DMG / Windows installers:** ship the required GStreamer plugins and core libraries inside the app bundle — no extra install needed.
+- **Linux (AppImage/deb/rpm):** install the system GStreamer packages so video playback has codecs and element factories. The deb/rpm packages already declare these as dependencies; AppImage users must install manually on the host:
+  ```bash
+  # Debian / Ubuntu
+  sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+                   gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+                   gstreamer1.0-libav gstreamer1.0-nice
+  # Fedora / RHEL
+  sudo dnf install gstreamer1-plugins-base gstreamer1-plugins-good \
+                   gstreamer1-plugins-bad-free gstreamer1-plugins-ugly \
+                   gstreamer1-libav gstreamer1-plugin-libnice
+  ```
+  Ubuntu 22.04 LTS and later ship most of these in the default desktop install; only `gstreamer1.0-plugins-ugly` and `gstreamer1.0-nice` are typically missing.
+
 ## Development
 
 ### Prerequisites

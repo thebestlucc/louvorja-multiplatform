@@ -16,6 +16,11 @@ dist-ssr
 .tanstack/
 src-tauri/target/
 src-tauri/binaries/
+# GStreamer runtime bundled into release builds by build.rs (Phase 5).
+# Populated on release `cargo build` / `tauri build`; referenced as a Tauri
+# bundle resource. Never commit — vendored dylibs/DLLs are large and platform-
+# specific.
+src-tauri/gstreamer-runtime/
 # Generated test fixtures (Phase 1.2 video pipeline integration test creates short.mp4)
 src-tauri/tests/fixtures/
 
