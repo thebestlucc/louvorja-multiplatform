@@ -126,23 +126,27 @@ pub fn set_source_uri(pipeline: &gst::Pipeline, uri: &str) -> Result<(), AppErro
 
 /// Attaches a new webrtcbin consumer to the video tee.
 ///
-/// Sets up the tee fan-out branch (tee → `<name>_queue` → `<name>_caps`
-/// forcing `video/x-raw,format=I420`) and adds an unlinked `webrtcbin` named
-/// `<name>` to the pipeline, returning the webrtcbin element.
+/// Builds the full per-consumer fan-out branch:
 ///
-/// **The `<name>_caps` → webrtcbin link is intentionally NOT made here.**
-/// webrtcbin requires RTP-formatted (`application/x-rtp`) input on its
-/// `sink_%u` request pads, so each consumer must insert its own
-/// encoder + RTP payloader between the I420 capsfilter and the webrtcbin.
-/// That wiring belongs to Task 1.3 (`consumer.rs`), which knows the codec
-/// preferences negotiated through SDP. Task 1.2 only owns the shared head
-/// of the branch (queue + I420 caps) and the empty webrtcbin shell.
+/// ```text
+/// vtee → <name>_queue → <name>_caps (video/x-raw,format=I420)
+///      → <name>_videoconvert → <name>_enc (x264enc, zerolatency)
+///      → <name>_pay (rtph264pay) → <name>_paycaps (application/x-rtp,
+///        media=video, encoding-name=H264, payload=96, clock-rate=90000)
+///      → <name> (webrtcbin)
+/// ```
 ///
-/// After Task 1.3 wires the encoder/payloader, it must call
-/// `sync_state_with_parent()` on the new elements (and on `webrtc` itself
-/// once a sink pad has been requested) before the pipeline rolls.
+/// The encoder + RTP payloader insertion completes a Task 1.2 deferral noted
+/// inline in this file (and in Task 1.3 of the plan). webrtcbin requires
+/// `application/x-rtp` on its `sink_%u` request pads, so the chain ends with
+/// a capsfilter that pins payload type / clock rate before linking into a
+/// freshly requested webrtcbin sink pad.
 ///
-/// Returns the webrtcbin element so Task 1.3's signaling code can wire SDP/ICE.
+/// All new elements (including the webrtcbin) are sync'd to the parent
+/// pipeline state via `sync_state_with_parent()` before this function returns.
+///
+/// Stuns/turns and per-transceiver NACK retransmission are configured by
+/// `consumer::Consumer::new`, which receives the webrtcbin returned here.
 pub fn attach_webrtc_consumer(
     pipeline: &gst::Pipeline,
     name: &str,
@@ -153,6 +157,10 @@ pub fn attach_webrtc_consumer(
 
     let queue_name = format!("{name}_queue");
     let caps_name = format!("{name}_caps");
+    let convert_name = format!("{name}_videoconvert");
+    let enc_name = format!("{name}_enc");
+    let pay_name = format!("{name}_pay");
+    let paycaps_name = format!("{name}_paycaps");
 
     let queue = make_element("queue", &queue_name)?;
     let capsfilter = make_element("capsfilter", &caps_name)?;
@@ -161,23 +169,62 @@ pub fn attach_webrtc_consumer(
         .build();
     capsfilter.set_property("caps", &caps);
 
+    let videoconvert = make_element("videoconvert", &convert_name)?;
+    let enc = make_element("x264enc", &enc_name)?;
+    enc.set_property_from_str("speed-preset", "ultrafast");
+    enc.set_property_from_str("tune", "zerolatency");
+    // 0 = auto/CFR; setting key-int-max keeps NACK-recoverable GOPs short
+    // for loopback delivery to a fresh consumer.
+    enc.set_property("key-int-max", 30u32);
+
+    let pay = make_element("rtph264pay", &pay_name)?;
+    // Predictable payload type so the SDP always advertises pt=96.
+    pay.set_property("pt", 96u32);
+    // aggregate-mode=zero-latency keeps RTP packets going out per-NAL,
+    // matching the encoder's zerolatency tuning.
+    pay.set_property_from_str("aggregate-mode", "zero-latency");
+
+    let paycaps = make_element("capsfilter", &paycaps_name)?;
+    let rtp_caps = gst::Caps::builder("application/x-rtp")
+        .field("media", "video")
+        .field("encoding-name", "H264")
+        .field("payload", 96i32)
+        .field("clock-rate", 90000i32)
+        .build();
+    paycaps.set_property("caps", &rtp_caps);
+
     let webrtc = make_element("webrtcbin", name)?;
-    // `latency` is a u32 millisecond value on webrtcbin.
+    // `latency` is a u32 millisecond value on webrtcbin. Loopback => 0.
     webrtc.set_property("latency", 0u32);
-    // NOTE: NACK retransmission is configured per-transceiver in Task 1.3
-    // (signaling.rs) — webrtcbin (>=1.18) does not expose a top-level
-    // `do-retransmission` property. The plan's property name was a shorthand
-    // for the transceiver `do-nack` flag, which must be flipped after
-    // negotiation begins. See docs/plans/2026-04-17-rust-video-pipeline.md
-    // Task 1.2 → 1.3.
+    // Plan §6 Task 1.3: stun-server=null. Loopback finds host candidates
+    // without needing STUN reflexive discovery.
+    webrtc.set_property("stun-server", None::<&str>);
 
     pipeline
-        .add_many([&queue, &capsfilter, &webrtc])
+        .add_many([
+            &queue,
+            &capsfilter,
+            &videoconvert,
+            &enc,
+            &pay,
+            &paycaps,
+            &webrtc,
+        ])
         .map_err(|e| AppError::Internal(format!("gstreamer add_many (consumer): {e}")))?;
 
-    // queue -> capsfilter (both have static pads).
-    gst::Element::link_many([&queue, &capsfilter])
-        .map_err(|e| AppError::Internal(format!("gstreamer link queue->caps: {e}")))?;
+    // Link the static-pad chain queue → caps → videoconvert → enc → pay → paycaps.
+    gst::Element::link_many([&queue, &capsfilter, &videoconvert, &enc, &pay, &paycaps])
+        .map_err(|e| AppError::Internal(format!("gstreamer link consumer chain: {e}")))?;
+
+    // webrtcbin's `sink_%u` is a request pad whose template caps are
+    // `application/x-rtp`. `request_pad_simple("sink_%u")` returns None when
+    // the GStreamer build resolves the request via caps negotiation instead
+    // of a name-only allocation. Use `link_pads_filtered` which asks
+    // webrtcbin to allocate the sink pad whose caps match `rtp_caps`,
+    // mirroring the official C examples for sendonly pipelines.
+    paycaps
+        .link_pads_filtered(Some("src"), &webrtc, None, &rtp_caps)
+        .map_err(|e| AppError::Internal(format!("gstreamer link paycaps->webrtcbin: {e}")))?;
 
     let tee_pad = vtee
         .request_pad_simple("src_%u")
@@ -189,25 +236,22 @@ pub fn attach_webrtc_consumer(
         .link(&queue_sink)
         .map_err(|e| AppError::Internal(format!("gstreamer link tee->queue: {e}")))?;
 
-    // Bring the head of the new branch (queue + capsfilter) up to the parent's
-    // current state. The webrtcbin stays at NULL until Task 1.3 wires its
-    // encoder/payloader and requests a sink pad — at that point Task 1.3 is
-    // responsible for syncing webrtcbin state.
-    queue
-        .sync_state_with_parent()
-        .map_err(|e| AppError::Internal(format!("gstreamer sync queue state: {e}")))?;
-    capsfilter
-        .sync_state_with_parent()
-        .map_err(|e| AppError::Internal(format!("gstreamer sync capsfilter state: {e}")))?;
+    // Bring every newly added element up to the parent's current state.
+    // Task 1.3 (consumer.rs) is now free to begin SDP negotiation.
+    for elem in [&queue, &capsfilter, &videoconvert, &enc, &pay, &paycaps, &webrtc] {
+        elem.sync_state_with_parent()
+            .map_err(|e| AppError::Internal(format!("gstreamer sync state ({}): {e}", elem.name())))?;
+    }
 
     Ok(webrtc)
 }
 
 /// Detaches a previously-attached webrtcbin consumer.
 ///
-/// Tears down the consumer branch (`<name>_queue` + `<name>_caps` + `<name>`):
-/// releases the linked tee request pad, sets the elements to `NULL`, and
-/// removes them from the pipeline.
+/// Tears down the full per-consumer chain (`queue`, `caps`, `videoconvert`,
+/// `enc`, `pay`, `paycaps`, and the `webrtcbin` itself), releasing the tee
+/// request pad and the webrtcbin sink request pad before transitioning the
+/// elements to `NULL` and removing them from the pipeline.
 ///
 /// Best-effort on individual element lookup — missing elements are ignored
 /// so callers can use this as an idempotent cleanup. Returns an error only
@@ -215,9 +259,17 @@ pub fn attach_webrtc_consumer(
 pub fn detach_webrtc_consumer(pipeline: &gst::Pipeline, name: &str) -> Result<(), AppError> {
     let queue_name = format!("{name}_queue");
     let caps_name = format!("{name}_caps");
+    let convert_name = format!("{name}_videoconvert");
+    let enc_name = format!("{name}_enc");
+    let pay_name = format!("{name}_pay");
+    let paycaps_name = format!("{name}_paycaps");
 
     let queue = pipeline.by_name(&queue_name);
     let capsfilter = pipeline.by_name(&caps_name);
+    let videoconvert = pipeline.by_name(&convert_name);
+    let enc = pipeline.by_name(&enc_name);
+    let pay = pipeline.by_name(&pay_name);
+    let paycaps = pipeline.by_name(&paycaps_name);
     let webrtc = pipeline.by_name(name);
 
     // Release the tee request pad linked to this consumer's queue, if any.
@@ -232,9 +284,7 @@ pub fn detach_webrtc_consumer(pipeline: &gst::Pipeline, name: &str) -> Result<()
         }
     }
 
-    // Release any webrtcbin request sink pad that Task 1.3's encoder chain
-    // may have linked into. Task 1.2 does NOT link to webrtcbin itself, so
-    // this peer-walk is a no-op until Task 1.3 wires the chain.
+    // Release any webrtcbin request sink pads (one per linked transceiver).
     if let Some(w) = webrtc.as_ref() {
         for pad in w.sink_pads() {
             if let Some(peer) = pad.peer() {
@@ -252,12 +302,24 @@ pub fn detach_webrtc_consumer(pipeline: &gst::Pipeline, name: &str) -> Result<()
         }
     }
 
-    for elem in [&queue, &capsfilter, &webrtc].into_iter().flatten() {
+    let elems = [
+        &queue,
+        &capsfilter,
+        &videoconvert,
+        &enc,
+        &pay,
+        &paycaps,
+        &webrtc,
+    ];
+    for elem in elems.into_iter().flatten() {
         elem.set_state(gst::State::Null)
             .map_err(|e| AppError::Internal(format!("gstreamer set_state(NULL): {e}")))?;
     }
 
-    let owned: Vec<gst::Element> = [queue, capsfilter, webrtc].into_iter().flatten().collect();
+    let owned: Vec<gst::Element> = [queue, capsfilter, videoconvert, enc, pay, paycaps, webrtc]
+        .into_iter()
+        .flatten()
+        .collect();
     if !owned.is_empty() {
         let refs: Vec<&gst::Element> = owned.iter().collect();
         pipeline
