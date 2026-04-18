@@ -1667,12 +1667,151 @@ async checkAccessibilityPermission() : Promise<Result<boolean, AppErrorResponse>
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Resolve `source` to a GStreamer URI and load it on the pipeline.
+ * 
+ * YouTube sources require shelling out to `yt-dlp` for streaming URL
+ * resolution, which can take a few seconds. The resolution + load runs on a
+ * dedicated thread so the IPC reply returns immediately.
+ */
+async videoPipelineLoad(source: MediaSource) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_load", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Transition the pipeline to PLAYING.
+ */
+async videoPipelinePlay() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_play") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Transition the pipeline to PAUSED.
+ */
+async videoPipelinePause() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_pause") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Seek to `secs` (sub-second precision via microseconds).
+ */
+async videoPipelineSeek(secs: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_seek", { secs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Update playback volume (0.0–1.0). Snapshot-only until Task 3.x adds a
+ * `volume` element to the audio chain.
+ */
+async videoPipelineSetVolume(volume: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_set_volume", { volume }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Set the loop mode (Task 3.1 — currently stubbed).
+ */
+async videoPipelineSetLoop(loopMode: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_set_loop", { loopMode }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Attach a WebRTC consumer for `window_label`. Triggers an SDP offer to
+ * flow back through the [`VideoPipelineOffer`](crate::video_pipeline::events::VideoPipelineOffer)
+ * event once the upstream caps reach the encoder.
+ */
+async videoPipelineSubscribe(windowLabel: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_subscribe", { windowLabel }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Tear down the WebRTC consumer for `window_label`.
+ */
+async videoPipelineUnsubscribe(windowLabel: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_unsubscribe", { windowLabel }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Forward an SDP answer from the frontend `RTCPeerConnection`.
+ */
+async videoPipelineAnswer(windowLabel: string, sdp: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_answer", { windowLabel, sdp }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Forward a remote ICE candidate from the frontend `RTCPeerConnection`.
+ */
+async videoPipelineIce(windowLabel: string, candidate: string, sdpMLineIndex: number) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_ice", { windowLabel, candidate, sdpMLineIndex }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Tear down the pipeline and reset the snapshot.
+ */
+async videoPipelineUnload() : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_unload") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
 /** user-defined events **/
 
 
+export const events = __makeEvents__<{
+videoPipelineEnded: VideoPipelineEnded,
+videoPipelineIce: VideoPipelineIce,
+videoPipelineOffer: VideoPipelineOffer,
+videoPipelineState: VideoPipelineState
+}>({
+videoPipelineEnded: "video-pipeline-ended",
+videoPipelineIce: "video-pipeline-ice",
+videoPipelineOffer: "video-pipeline-offer",
+videoPipelineState: "video-pipeline-state"
+})
 
 /** user-defined constants **/
 
@@ -1722,6 +1861,23 @@ export type MediaLibraryCategory = { id: number; name: string; sortOrder: number
 export type MediaLibraryCategoryInput = { id: number | null; name: string; sortOrder: number; idLanguage: string }
 export type MediaLibraryItem = { id: number; categoryId: number; name: string; filePath: string; fileType: string; thumbnailPath: string | null; scheduledDate: string | null; sortOrder: number; createdAt: string }
 export type MediaLibraryItemInput = { id: number | null; categoryId: number; name: string; filePath: string; fileType: string; thumbnailPath: string | null; scheduledDate: string | null; sortOrder: number }
+/**
+ * A media source that can be resolved to a GStreamer-compatible URI.
+ * 
+ * Wire format (Tauri IPC, internally tagged):
+ * - `{ "type": "local", "absolutePath": "/abs/path.mp4" }`
+ * - `{ "type": "youtube", "videoId": "dQw4w9WgXcQ" }`
+ */
+export type MediaSource = 
+/**
+ * Local file on disk. `absolute_path` MUST be absolute; relative paths
+ * are rejected at resolution time.
+ */
+{ type: "local"; absolutePath: string } | 
+/**
+ * YouTube video, identified by its 11-character video ID.
+ */
+{ type: "youtube"; videoId: string }
 export type MigrationDomainReport = { domain: string; imported: number; skipped: number }
 export type MigrationErrorItem = { domain: string; code: string; message: string; context?: string | null }
 export type MigrationOptions = { includeHymns?: boolean; includeBible?: boolean; includeFavorites?: boolean; includeServices?: boolean; includeSettings?: boolean; replaceExisting?: boolean }
@@ -1792,6 +1948,22 @@ export type UpdateInfo = { version: string; currentVersion: string; notes: strin
 export type Verse = { id: number; versionId: number; book: string; chapter: number; verse: number; text: string }
 export type VideoMetadata = { durationMs: number; width: number; height: number; fileSize: number; format: string }
 export type VideoMode = "fullscreen" | "background"
+/**
+ * Outbound: the active media reached EOS (end-of-stream).
+ */
+export type VideoPipelineEnded = Record<string, never>
+/**
+ * Outbound: webrtcbin gathered a local ICE candidate for `window_label`.
+ */
+export type VideoPipelineIce = { windowLabel: string; candidate: string; sdpMLineIndex: number }
+/**
+ * Outbound: a webrtcbin produced an SDP offer for `window_label`.
+ */
+export type VideoPipelineOffer = { windowLabel: string; sdp: string }
+/**
+ * Outbound: periodic playback snapshot (position/duration/paused/volume).
+ */
+export type VideoPipelineState = { positionSecs: number; durationSecs: number; paused: boolean; volume: number }
 export type VideoServerInfo = { isRunning: boolean; port: number; accessToken: string }
 export type VideoSource = "local" | "youtube"
 /**
