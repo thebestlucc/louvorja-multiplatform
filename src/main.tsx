@@ -9,6 +9,7 @@ import { ProjectorView } from "./components/slides/projector-view";
 import { ReturnPage } from "./routes/return";
 import "./styles/fonts.css";
 import "./lib/i18n";
+import "./stores/video-player-store-hmr";
 import { catcher, catcherSync } from "./lib/catcher";
 import { initStorePreferences } from "./lib/store";
 
