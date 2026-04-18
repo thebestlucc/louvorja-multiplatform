@@ -75,14 +75,14 @@ function PlayingNowScreen() {
 
   const handleGoToBible = () => {
     if (bibleContext) {
-      void navigate({
+      navigate({
         to: "/bible",
         search: {
           book: bibleContext.book,
           chapter: bibleContext.chapter,
           verse: bibleContext.verseNumber,
         },
-      });
+      }).catch(() => {});
     }
   };
 
