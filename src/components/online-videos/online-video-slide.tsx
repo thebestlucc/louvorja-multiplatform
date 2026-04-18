@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
@@ -8,6 +9,8 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
+import { RustVideoConsumer } from "./rust-video-consumer";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -234,10 +237,22 @@ interface OnlineVideoSlideProps {
 
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
+  const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
 
   // Live video renderer for projector/return screens
   const renderLiveVideo = () => {
     const isLocalFile = slide.source === "local" && !!slide.url;
+    if (useRustVideoPipeline) {
+      return (
+        <div className={cn("h-full w-full bg-black", className)}>
+          <RustVideoConsumer
+            windowLabel={getCurrentWindow().label}
+            muted
+            className="h-full w-full"
+          />
+        </div>
+      );
+    }
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile ? (
