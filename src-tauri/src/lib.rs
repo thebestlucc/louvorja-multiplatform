@@ -292,6 +292,24 @@ pub fn run() {
             // Slide Passer
             commands::slide_passer::send_keystroke,
             commands::slide_passer::check_accessibility_permission,
+            // Video Pipeline (Rust GStreamer pipeline)
+            commands::video_pipeline::video_pipeline_load,
+            commands::video_pipeline::video_pipeline_play,
+            commands::video_pipeline::video_pipeline_pause,
+            commands::video_pipeline::video_pipeline_seek,
+            commands::video_pipeline::video_pipeline_set_volume,
+            commands::video_pipeline::video_pipeline_set_loop,
+            commands::video_pipeline::video_pipeline_subscribe,
+            commands::video_pipeline::video_pipeline_unsubscribe,
+            commands::video_pipeline::video_pipeline_answer,
+            commands::video_pipeline::video_pipeline_ice,
+            commands::video_pipeline::video_pipeline_unload,
+        ])
+        .events(tauri_specta::collect_events![
+            crate::video_pipeline::events::VideoPipelineOffer,
+            crate::video_pipeline::events::VideoPipelineIce,
+            crate::video_pipeline::events::VideoPipelineState,
+            crate::video_pipeline::events::VideoPipelineEnded,
         ]);
 
     #[cfg(debug_assertions)]
@@ -401,6 +419,17 @@ pub fn run() {
                 }
             }
 
+            // Build the video pipeline runtime singleton up front so it can
+            // be moved into AppState. Signaling channel forwards offers/ICE
+            // through the typed `VideoPipeline*` events to the frontend.
+            let video_signaling: std::sync::Arc<dyn crate::video_pipeline::SignalingChannel> =
+                std::sync::Arc::new(crate::video_pipeline::TauriSignalingChannel::new(
+                    app.handle().clone(),
+                ));
+            let video_pipeline_runtime = std::sync::Arc::new(
+                crate::video_pipeline::VideoPipelineRuntime::new(video_signaling),
+            );
+
             app.manage(AppState {
                 db: pool.clone(),
                 bible_db: bible_pool,
@@ -432,6 +461,7 @@ pub fn run() {
                     part_index: 0,
                 }),
                 remote: crate::remote::state::RemoteServerState::default(),
+                video_pipeline: Some(video_pipeline_runtime),
             });
 
             // Manage a disabled AudioState immediately (non-blocking).

@@ -106,6 +106,48 @@ impl SignalingChannel for MpscSignalingChannel {
     }
 }
 
+/// `SignalingChannel` that forwards every payload to the Tauri frontend
+/// via the typed events declared in [`crate::video_pipeline::events`].
+///
+/// Wired in `lib.rs` `setup()` so consumers automatically reach the frontend
+/// `RTCPeerConnection`. Errors during emit are logged but never propagated —
+/// signaling is best-effort and a single dropped event must not crash the
+/// Rust pipeline thread that fired it.
+pub struct TauriSignalingChannel {
+    app: tauri::AppHandle,
+}
+
+impl TauriSignalingChannel {
+    pub fn new(app: tauri::AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl SignalingChannel for TauriSignalingChannel {
+    fn emit_offer(&self, payload: OfferPayload) {
+        use tauri_specta::Event;
+        let event = crate::video_pipeline::events::VideoPipelineOffer {
+            window_label: payload.window_label,
+            sdp: payload.sdp,
+        };
+        if let Err(e) = event.emit(&self.app) {
+            log::warn!("video_pipeline VideoPipelineOffer emit failed: {e}");
+        }
+    }
+
+    fn emit_ice(&self, payload: IcePayload) {
+        use tauri_specta::Event;
+        let event = crate::video_pipeline::events::VideoPipelineIce {
+            window_label: payload.window_label,
+            candidate: payload.candidate,
+            sdp_m_line_index: payload.sdp_m_line_index,
+        };
+        if let Err(e) = event.emit(&self.app) {
+            log::warn!("video_pipeline VideoPipelineIce emit failed: {e}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

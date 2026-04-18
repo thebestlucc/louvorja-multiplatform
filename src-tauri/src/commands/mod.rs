@@ -20,6 +20,7 @@ pub mod utility;
 pub mod video_copy;
 pub mod pack_sync;
 pub mod remote;
+pub mod video_pipeline;
 pub mod video_server;
 pub mod youtube;
 pub mod slide_passer;
