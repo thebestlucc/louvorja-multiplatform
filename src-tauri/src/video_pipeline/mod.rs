@@ -5,10 +5,12 @@
 pub mod consumer;
 pub mod pipeline;
 pub mod signaling;
+pub mod source;
 pub mod state;
 pub use consumer::{Consumer, ConsumerRegistry};
 pub use signaling::{
     AnswerPayload, IcePayload, MpscSignalingChannel, NoopSignalingChannel, OfferPayload,
     SignalingChannel, SignalingEvent,
 };
+pub use source::MediaSource;
 pub use state::{PlaybackState, PlaybackStateSnapshot};
