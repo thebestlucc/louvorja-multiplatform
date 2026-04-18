@@ -26,13 +26,20 @@ use std::path::{Path, PathBuf};
 use crate::error::AppError;
 
 /// A media source that can be resolved to a GStreamer-compatible URI.
-#[derive(Debug, Clone)]
+///
+/// Wire format (Tauri IPC, internally tagged):
+/// - `{ "type": "local", "absolutePath": "/abs/path.mp4" }`
+/// - `{ "type": "youtube", "videoId": "dQw4w9WgXcQ" }`
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum MediaSource {
     /// Local file on disk. `absolute_path` MUST be absolute; relative paths
     /// are rejected at resolution time.
+    #[serde(rename_all = "camelCase")]
     Local { absolute_path: PathBuf },
     /// YouTube video, identified by its 11-character video ID.
-    YouTube { video_id: String },
+    #[serde(rename_all = "camelCase")]
+    Youtube { video_id: String },
 }
 
 impl MediaSource {
@@ -56,7 +63,7 @@ impl MediaSource {
                 let path_str = absolute_path.display().to_string().replace('\\', "/");
                 Ok(format!("file://{}", path_str))
             }
-            MediaSource::YouTube { video_id } => {
+            MediaSource::Youtube { video_id } => {
                 crate::ytdlp::downloader::resolve_streaming_url(ytdlp_binary, video_id)
             }
         }
@@ -134,7 +141,7 @@ mod tests {
     #[ignore]
     fn youtube_resolves_known_video() {
         let binary = which::which("yt-dlp").expect("yt-dlp on PATH for ignored test");
-        let source = MediaSource::YouTube {
+        let source = MediaSource::Youtube {
             video_id: "dQw4w9WgXcQ".to_string(), // famously stable
         };
         let url = source.resolve_uri(&binary).expect("resolve");
