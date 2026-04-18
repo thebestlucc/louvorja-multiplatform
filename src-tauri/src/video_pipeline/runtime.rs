@@ -11,12 +11,19 @@
 use crate::error::AppError;
 use crate::video_pipeline::{
     consumer::ConsumerRegistry,
+    events::VideoPipelineState,
     pipeline,
     signaling::{AnswerPayload, IcePayload, SignalingChannel},
     state::{PlaybackState, PlaybackStateSnapshot},
 };
 use gstreamer::{self as gst, prelude::*};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tauri_specta::Event;
+
+/// 100 ms between state ticks → 10 Hz broadcast rate (Task 2.3).
+const BROADCAST_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Process-wide handle for the Rust video pipeline.
 ///
@@ -30,16 +37,34 @@ pub struct VideoPipelineRuntime {
     state: PlaybackState,
     consumers: ConsumerRegistry,
     signaling: Arc<dyn SignalingChannel>,
+    /// `Some` in production, `None` in unit tests that bypass `lib.rs` setup.
+    app: Option<tauri::AppHandle>,
+    /// Set to `true` to signal the running broadcaster thread (if any) to
+    /// terminate at its next tick. Reset to `false` whenever a new broadcaster
+    /// is spawned. Required by CLAUDE.md error #8 (spawned threads must exit
+    /// on app shutdown).
+    broadcaster_stop: Arc<AtomicBool>,
+    /// `true` while a broadcaster thread is alive — guards against spawning
+    /// multiple broadcasters when `play()` is called repeatedly.
+    broadcaster_running: Arc<AtomicBool>,
 }
 
 impl VideoPipelineRuntime {
-    /// Create a new runtime with the supplied signaling channel.
-    pub fn new(signaling: Arc<dyn SignalingChannel>) -> Self {
+    /// Create a new runtime with the supplied signaling channel and Tauri
+    /// app handle.
+    ///
+    /// The handle is kept so the runtime can emit the typed
+    /// [`VideoPipelineState`] event from a background broadcaster thread.
+    /// Pass `None` from unit tests.
+    pub fn new(app: Option<tauri::AppHandle>, signaling: Arc<dyn SignalingChannel>) -> Self {
         Self {
             pipeline: Mutex::new(None),
             state: PlaybackState::new(),
             consumers: ConsumerRegistry::new(),
             signaling,
+            app,
+            broadcaster_stop: Arc::new(AtomicBool::new(false)),
+            broadcaster_running: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -75,6 +100,9 @@ impl VideoPipelineRuntime {
         }
         drop(guard);
         self.state.play()?;
+        // Spawn the 10 Hz broadcaster on the *first* play (or after a previous
+        // unload tore it down). Subsequent play() calls are a no-op.
+        self.spawn_state_broadcaster();
         Ok(())
     }
 
@@ -122,6 +150,9 @@ impl VideoPipelineRuntime {
 
     /// Drop the pipeline (set to NULL and free) and reset the snapshot.
     pub fn unload(&self) -> Result<(), AppError> {
+        // Signal the broadcaster (if any) to exit BEFORE we tear down the
+        // pipeline so it can't observe a half-disposed pipeline.
+        self.broadcaster_stop.store(true, Ordering::Relaxed);
         let mut guard = self.pipeline.lock()?;
         if let Some(pipeline) = guard.take() {
             pipeline
@@ -166,6 +197,108 @@ impl VideoPipelineRuntime {
     pub fn dispatch_ice(&self, payload: IcePayload) -> Result<(), AppError> {
         self.consumers.dispatch_ice(payload)
     }
+
+    /// Spawn the 10 Hz broadcaster thread if none is running and we have a
+    /// Tauri app handle. Idempotent — repeated calls are a no-op.
+    ///
+    /// The thread polls position/duration/state from the live pipeline plus
+    /// volume from the snapshot, emits a [`VideoPipelineState`] event each
+    /// tick, and exits cleanly when either:
+    /// - `broadcaster_stop` is set (`unload()` or app shutdown),
+    /// - the pipeline slot drops to `None`.
+    fn spawn_state_broadcaster(&self) {
+        // No app handle in unit tests — emit would have nowhere to go.
+        let Some(app) = self.app.clone() else {
+            return;
+        };
+        // CAS so only the first concurrent caller wins.
+        if self
+            .broadcaster_running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return;
+        }
+
+        // Reset the stop flag for this new lifecycle.
+        self.broadcaster_stop.store(false, Ordering::Relaxed);
+
+        let stop_flag = self.broadcaster_stop.clone();
+        let running_flag = self.broadcaster_running.clone();
+        // The runtime lives inside an `Arc<VideoPipelineRuntime>` on `AppState`.
+        // Re-fetch that Arc through the AppHandle on each tick rather than
+        // aliasing `self.pipeline` directly — `&self` can't outlive this call.
+        let app_for_thread = app.clone();
+
+        std::thread::spawn(move || {
+            loop {
+                if stop_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                // Snapshot pipeline + volume by re-borrowing the runtime.
+                let runtime = match runtime_from_app(&app_for_thread) {
+                    Some(rt) => rt,
+                    None => break,
+                };
+
+                let (position_secs, duration_secs, paused, pipeline_present) = {
+                    let guard = match runtime.pipeline.lock() {
+                        Ok(g) => g,
+                        Err(_) => break,
+                    };
+                    if let Some(pipeline) = guard.as_ref() {
+                        let pos = pipeline
+                            .query_position::<gst::ClockTime>()
+                            .map(|t| t.useconds() as f64 / 1_000_000.0)
+                            .unwrap_or(0.0);
+                        let dur = pipeline
+                            .query_duration::<gst::ClockTime>()
+                            .map(|t| t.useconds() as f64 / 1_000_000.0)
+                            .unwrap_or(0.0);
+                        let cur = pipeline.current_state();
+                        let paused = cur != gst::State::Playing;
+                        (pos, dur, paused, true)
+                    } else {
+                        (0.0, 0.0, true, false)
+                    }
+                };
+
+                if !pipeline_present {
+                    // Pipeline gone (unload after a play); stop broadcasting.
+                    break;
+                }
+
+                let volume = runtime
+                    .state
+                    .snapshot()
+                    .map(|s| s.volume)
+                    .unwrap_or(0.0);
+
+                let event = VideoPipelineState {
+                    position_secs,
+                    duration_secs,
+                    paused,
+                    volume,
+                };
+                if let Err(e) = event.emit(&app_for_thread) {
+                    log::warn!("video_pipeline VideoPipelineState emit failed: {e}");
+                }
+
+                std::thread::sleep(BROADCAST_INTERVAL);
+            }
+            running_flag.store(false, Ordering::Relaxed);
+        });
+    }
+}
+
+/// Resolve the singleton runtime from the Tauri app state. Returns `None`
+/// when the runtime hasn't been initialised (should never happen at runtime
+/// past `setup()` but we treat absence as a clean shutdown signal).
+fn runtime_from_app(app: &tauri::AppHandle) -> Option<Arc<VideoPipelineRuntime>> {
+    use tauri::Manager;
+    let state = app.try_state::<crate::state::AppState>()?;
+    state.video_pipeline.as_ref().cloned()
 }
 
 #[cfg(test)]
@@ -175,7 +308,7 @@ mod tests {
 
     fn runtime() -> VideoPipelineRuntime {
         let signaling: Arc<dyn SignalingChannel> = Arc::new(NoopSignalingChannel);
-        VideoPipelineRuntime::new(signaling)
+        VideoPipelineRuntime::new(None, signaling)
     }
 
     #[test]
@@ -208,5 +341,14 @@ mod tests {
     fn unsubscribe_without_pipeline_is_noop() {
         let rt = runtime();
         rt.unsubscribe("ghost").expect("unsubscribe is no-op");
+    }
+
+    #[test]
+    fn broadcaster_does_not_spawn_without_app_handle() {
+        let rt = runtime();
+        // Without an AppHandle the broadcaster must short-circuit; play() should
+        // still succeed and the running flag must remain false.
+        rt.spawn_state_broadcaster();
+        assert!(!rt.broadcaster_running.load(Ordering::Relaxed));
     }
 }

@@ -422,12 +422,17 @@ pub fn run() {
             // Build the video pipeline runtime singleton up front so it can
             // be moved into AppState. Signaling channel forwards offers/ICE
             // through the typed `VideoPipeline*` events to the frontend.
+            // The AppHandle is also passed to the runtime so its 10 Hz state
+            // broadcaster (Task 2.3) can emit `VideoPipelineState` events.
             let video_signaling: std::sync::Arc<dyn crate::video_pipeline::SignalingChannel> =
                 std::sync::Arc::new(crate::video_pipeline::TauriSignalingChannel::new(
                     app.handle().clone(),
                 ));
             let video_pipeline_runtime = std::sync::Arc::new(
-                crate::video_pipeline::VideoPipelineRuntime::new(video_signaling),
+                crate::video_pipeline::VideoPipelineRuntime::new(
+                    Some(app.handle().clone()),
+                    video_signaling,
+                ),
             );
 
             app.manage(AppState {
