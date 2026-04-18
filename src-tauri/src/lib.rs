@@ -355,6 +355,29 @@ pub fn run() {
         .setup(move |app| {
             specta_builder.mount_events(app);
 
+            // Point GStreamer at the bundled plugin directory BEFORE any
+            // video_pipeline command can run `gst::init()`. Release builds
+            // ship `Resources/gstreamer-runtime/gstreamer-1.0/` via build.rs
+            // (see Phase 5 in docs/plans/2026-04-17-rust-video-pipeline.md).
+            // On dev builds the dir doesn't exist and this silently points at
+            // a nonexistent path, which GStreamer gracefully falls back from
+            // to the system default.
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            {
+                if let Ok(resource_dir) = app.path().resource_dir() {
+                    let plugin_path = resource_dir
+                        .join("gstreamer-runtime")
+                        .join("gstreamer-1.0");
+                    if plugin_path.exists() {
+                        // Safety: single-threaded setup phase — no other
+                        // threads observe env vars concurrently here.
+                        unsafe {
+                            std::env::set_var("GST_PLUGIN_PATH", &plugin_path);
+                        }
+                    }
+                }
+            }
+
             let app_data_dir = app
                 .path()
                 .app_data_dir()

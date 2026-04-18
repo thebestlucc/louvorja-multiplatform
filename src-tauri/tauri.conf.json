@@ -40,7 +40,8 @@
     "targets": "all",
     "resources": [
       "resources/bible/*.sqlite",
-      "fonts/*.ttf"
+      "fonts/*.ttf",
+      "gstreamer-runtime/**/*"
     ],
     "windows": {
       "nsis": {
