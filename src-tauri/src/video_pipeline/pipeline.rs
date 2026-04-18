@@ -7,7 +7,7 @@
 //!
 //! Element naming conventions inside the pipeline:
 //! - `src` — `uridecodebin`
-//! - `audio_queue`, `audio_convert`, `audio_resample`, `audio_sink`
+//! - `audio_queue`, `audio_convert`, `audio_resample`, `audio_volume`, `audio_sink`
 //! - `video_queue`, `video_convert`, `vtee`
 //! - per consumer (Task 1.3): `<name>_queue`, `<name>_caps`, `<name>` (webrtcbin)
 #![allow(dead_code)]
@@ -59,10 +59,11 @@ pub fn build_base_pipeline() -> Result<gst::Pipeline, AppError> {
     // --- uridecodebin (URI set later by `set_source_uri`) ---
     let src = make_element("uridecodebin", "src")?;
 
-    // --- audio chain: queue -> audioconvert -> audioresample -> autoaudiosink ---
+    // --- audio chain: queue -> audioconvert -> audioresample -> volume -> autoaudiosink ---
     let audio_queue = make_element("queue", "audio_queue")?;
     let audio_convert = make_element("audioconvert", "audio_convert")?;
     let audio_resample = make_element("audioresample", "audio_resample")?;
+    let audio_volume = make_element("volume", "audio_volume")?;
     let audio_sink = make_element("autoaudiosink", "audio_sink")?;
 
     // --- video chain: queue -> videoconvert -> tee(name=vtee) ---
@@ -79,6 +80,7 @@ pub fn build_base_pipeline() -> Result<gst::Pipeline, AppError> {
             &audio_queue,
             &audio_convert,
             &audio_resample,
+            &audio_volume,
             &audio_sink,
             &video_queue,
             &video_convert,
@@ -86,9 +88,15 @@ pub fn build_base_pipeline() -> Result<gst::Pipeline, AppError> {
         ])
         .map_err(|e| AppError::Internal(format!("gstreamer add_many: {e}")))?;
 
-    // Statically link the audio chain: queue -> convert -> resample -> sink.
-    gst::Element::link_many([&audio_queue, &audio_convert, &audio_resample, &audio_sink])
-        .map_err(|e| AppError::Internal(format!("gstreamer link audio chain: {e}")))?;
+    // Statically link the audio chain: queue -> convert -> resample -> volume -> sink.
+    gst::Element::link_many([
+        &audio_queue,
+        &audio_convert,
+        &audio_resample,
+        &audio_volume,
+        &audio_sink,
+    ])
+    .map_err(|e| AppError::Internal(format!("gstreamer link audio chain: {e}")))?;
 
     // Statically link the video chain: queue -> convert -> tee.
     gst::Element::link_many([&video_queue, &video_convert, &vtee])
@@ -422,6 +430,7 @@ mod tests {
             "audio_queue",
             "audio_convert",
             "audio_resample",
+            "audio_volume",
             "audio_sink",
             "video_queue",
             "video_convert",

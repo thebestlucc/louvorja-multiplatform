@@ -103,8 +103,8 @@ pub fn video_pipeline_seek(secs: f64, state: tauri::State<'_, AppState>) -> Resu
     runtime(&state)?.seek(secs)
 }
 
-/// Update playback volume (0.0–1.0). Snapshot-only until Task 3.x adds a
-/// `volume` element to the audio chain.
+/// Update playback volume (0.0–1.0). Sets the `volume` property on the live
+/// `audio_volume` element and mirrors to the state snapshot.
 #[tauri::command]
 #[specta::specta]
 pub fn video_pipeline_set_volume(

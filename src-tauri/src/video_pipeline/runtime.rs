@@ -205,12 +205,22 @@ impl VideoPipelineRuntime {
         Ok(())
     }
 
-    /// Update the snapshot's volume.
+    /// Update playback volume on the live audio chain AND mirror to the
+    /// snapshot so the 10 Hz broadcaster keeps the UI in sync.
     ///
-    /// TODO(Task 3.x): the base pipeline (Task 1.2) does NOT include a
-    /// `volume` element in the audio chain, so this currently mutates only
-    /// the snapshot. Phase 3 will add the element + propagate the property.
+    /// The input is clamped to `[0.0, 1.0]` (we don't expose >1.0 gain yet)
+    /// and pushed as an `f64` onto the `audio_volume` element's `volume`
+    /// property. When the pipeline hasn't been built yet (first call before
+    /// `load()`), the property-set is a no-op and only the snapshot updates.
     pub fn set_volume(&self, volume: f32) -> Result<(), AppError> {
+        let clamped = volume.clamp(0.0, 1.0);
+        let guard = self.pipeline.lock()?;
+        if let Some(pipeline) = guard.as_ref() {
+            if let Some(elem) = pipeline.by_name("audio_volume") {
+                elem.set_property("volume", clamped as f64);
+            }
+        }
+        drop(guard);
         self.state.set_volume(volume)
     }
 

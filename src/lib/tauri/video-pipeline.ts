@@ -65,8 +65,8 @@ export async function seek(secs: number): Promise<null> {
 }
 
 /**
- * Update the playback volume (0.0–1.0). Snapshot-only until the audio chain
- * grows a `volume` element (Task 3.x).
+ * Update the playback volume (0.0–1.0). Sets the `volume` property on the
+ * live `audio_volume` element and mirrors to the state snapshot.
  */
 export async function setVolume(volume: number): Promise<null> {
   return unwrap(await commands.videoPipelineSetVolume(volume));
