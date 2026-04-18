@@ -151,7 +151,11 @@ fn bundle_gstreamer_macos(runtime_dir: &std::path::Path) {
     let lib_dst = runtime_dir.join("lib");
 
     // Re-run if the source dirs change so rebuilds pick up upgraded GStreamer.
+    // Track both the plugin dir AND the core dylib dir (lib/) — a GStreamer
+    // upgrade on the dev host touches libgst*.dylib files under lib/ that are
+    // NOT reached by watching lib/gstreamer-1.0/ alone.
     println!("cargo:rerun-if-changed={}", plugin_src.display());
+    println!("cargo:rerun-if-changed={}", lib_src.display());
     println!("cargo:rerun-if-env-changed=GSTREAMER_1_0_ROOT");
 
     if let Err(e) = recreate_dir(&plugin_dst) {
@@ -241,6 +245,11 @@ fn bundle_gstreamer_windows(runtime_dir: &std::path::Path) {
 
     let bin_src = prefix.join("bin");
     let plugin_src = prefix.join("lib").join("gstreamer-1.0");
+
+    // Re-run if either source dir changes so a GStreamer upgrade on the dev
+    // host triggers a bundle refresh on the next release build.
+    println!("cargo:rerun-if-changed={}", bin_src.display());
+    println!("cargo:rerun-if-changed={}", plugin_src.display());
     let plugin_dst = runtime_dir.join("gstreamer-1.0");
     // Core DLLs go in a `bin/` subdir; lib.rs puts plugin path on GST_PLUGIN_PATH
     // and Tauri bundles all files beside the exe, so Windows DLL search finds
