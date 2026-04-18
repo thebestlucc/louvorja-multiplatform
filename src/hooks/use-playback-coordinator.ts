@@ -235,6 +235,10 @@ async function playVideoItem(item: QueueItem) {
         // Pipeline transitions to PAUSED on load (preroll). Mirror legacy queue
         // behavior of autoplay on advance by transitioning to PLAYING here.
         await videoPipeline.play();
+        // Optimistically reflect playing state so ControlBar enables
+        // immediately. The bridge hook keeps this in sync from
+        // videoPipelineState events (~10 Hz).
+        useMediaPlayerStore.getState().setStatus("playing");
       } catch (err) {
         console.error("[video-pipeline] load/play failed", err);
       }

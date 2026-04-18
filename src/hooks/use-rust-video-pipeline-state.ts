@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 import { events } from "../lib/bindings";
 import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 
 export function useRustVideoPipelineStateBridge() {
   useEffect(() => {
@@ -23,6 +24,21 @@ export function useRustVideoPipelineStateBridge() {
             volume: event.payload.volume,
             ended: false,
           });
+
+          // Mirror status to media-player-store so ControlBar reflects actual
+          // pipeline state. Only flip status when the new state is different
+          // (avoids re-render churn) and only from `playing|paused|loading` —
+          // never overwrite `idle|error|ended` (managed elsewhere).
+          const mpStore = useMediaPlayerStore.getState();
+          const desiredStatus = event.payload.paused ? "paused" : "playing";
+          if (
+            mpStore.status !== desiredStatus &&
+            (mpStore.status === "playing" ||
+              mpStore.status === "paused" ||
+              mpStore.status === "loading")
+          ) {
+            mpStore.setStatus(desiredStatus);
+          }
         });
         const u2 = await events.videoPipelineEnded.listen(() => {
           useRustVideoPipelineStore.getState().setState({ ended: true });
