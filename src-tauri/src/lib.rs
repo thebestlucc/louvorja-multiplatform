@@ -653,11 +653,21 @@ pub fn run() {
                         let state = window.state::<AppState>();
                         state.projector_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("projector-state-changed", false);
+                        // Tear down the WebRTC consumer so the Rust pipeline
+                        // doesn't retain a peer connection for a dead window
+                        // (audit finding #4 — WebView teardown skips React
+                        // useEffect cleanup on abrupt close).
+                        if let Some(vp) = &state.video_pipeline {
+                            let _ = vp.unsubscribe("projector");
+                        }
                     }
                     "return" => {
                         let state = window.state::<AppState>();
                         state.return_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("return-state-changed", false);
+                        if let Some(vp) = &state.video_pipeline {
+                            let _ = vp.unsubscribe("return");
+                        }
                     }
                     "main" => {
                         let state = window.state::<AppState>();
