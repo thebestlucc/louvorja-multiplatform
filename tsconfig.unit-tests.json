@@ -38,6 +38,7 @@
     "tests/components/remote-panel.test.ts",
     "tests/hooks/build-queue-items-from-remote.test.ts",
     "tests/hooks/use-playback-coordinator.test.ts",
+    "tests/hooks/use-rust-video-pipeline.test.ts",
     "src/lib/audio-sync.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
@@ -68,6 +69,8 @@
     "src/hooks/build-queue-items-from-remote.ts",
     "src/hooks/use-playback-coordinator.ts",
     "src/hooks/use-hymn-playback.ts",
+    "src/hooks/use-rust-video-pipeline.ts",
+    "src/lib/tauri/video-pipeline.ts",
     "src/types/presentation.ts"
   ]
 }
