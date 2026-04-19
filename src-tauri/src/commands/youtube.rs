@@ -198,6 +198,7 @@ pub fn refresh_youtube_playlist(
 ) -> Result<(), AppError> {
     let pool = state.db.clone();
 
+    let app_for_thread = app.clone();
     std::thread::spawn(move || {
         let result = (|| -> Result<(), AppError> {
             let conn = pool.get().map_err(|e| AppError::Internal(e.to_string()))?;
@@ -222,6 +223,36 @@ pub fn refresh_youtube_playlist(
                 playlist.id,
                 &video_tuples,
             )?;
+
+            // Self-heal the cover: if the stored path is missing on disk (or
+            // was never set), fetch the current playlist thumbnail URL via
+            // the YouTube API and re-download. Non-fatal — a failure here
+            // just leaves the UI on the placeholder icon.
+            if let Ok(app_data_dir) = app_for_thread.path().app_data_dir() {
+                let needs_cover = match playlist.cover_path.as_deref() {
+                    None => true,
+                    Some(rel) => !app_data_dir.join(rel).exists(),
+                };
+                if needs_cover {
+                    if let Ok((info, _chan_id, _chan_title)) =
+                        api::fetch_playlist_info(&api_key, &playlist_id)
+                    {
+                        if !info.thumbnail_url.is_empty() {
+                            if let Ok(rel) = thumbnails::download_thumbnail(
+                                &app_data_dir,
+                                &info.thumbnail_url,
+                                &playlist_id,
+                            ) {
+                                let _ = crate::db::queries::online_videos::update_playlist_cover(
+                                    &conn,
+                                    &playlist_id,
+                                    Some(&rel),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
 
             Ok(())
         })();
