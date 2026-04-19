@@ -359,10 +359,19 @@ pub fn run() {
             // video_pipeline command can run `gst::init()`. Release builds
             // ship `Resources/gstreamer-runtime/gstreamer-1.0/` via build.rs
             // (see Phase 5 in docs/plans/2026-04-17-rust-video-pipeline.md).
-            // On dev builds the dir doesn't exist and this silently points at
-            // a nonexistent path, which GStreamer gracefully falls back from
-            // to the system default.
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            //
+            // Dev builds intentionally skip this: `cargo build` doesn't
+            // repopulate the runtime dir (build.rs clears it in debug), but
+            // stale files from a prior release build can linger in
+            // `target/debug/gstreamer-runtime/`. Those stale plugins have
+            // @rpath references to core libs that aren't co-located, and
+            // `gst-plugin-scanner` logs a scary dlopen failure for each. The
+            // system Homebrew install (/opt/homebrew, /usr/local) or the
+            // framework install at /Library/Frameworks handles dev fine.
+            #[cfg(all(
+                not(debug_assertions),
+                any(target_os = "macos", target_os = "windows"),
+            ))]
             {
                 if let Ok(resource_dir) = app.path().resource_dir() {
                     let runtime = resource_dir.join("gstreamer-runtime");
