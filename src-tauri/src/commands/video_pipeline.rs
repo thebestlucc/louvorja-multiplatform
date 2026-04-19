@@ -51,6 +51,11 @@ pub fn video_pipeline_load(
 
     // Resolve fully on a worker thread; both yt-dlp probing and the
     // GStreamer state transition can briefly block.
+    //
+    // Auto-play after load completes so the frontend doesn't race against
+    // this thread by issuing a separate `play()` IPC call (which would run
+    // before the URI is set, get dropped against an empty pipeline, then
+    // get overridden when this thread transitions to PAUSED).
     let app_for_thread = app.clone();
     std::thread::spawn(move || {
         let result = (|| -> Result<(), AppError> {
@@ -71,7 +76,8 @@ pub fn video_pipeline_load(
                 }
             };
 
-            runtime.load(&uri)
+            runtime.load(&uri)?;
+            runtime.play()
         })();
 
         if let Err(e) = result {

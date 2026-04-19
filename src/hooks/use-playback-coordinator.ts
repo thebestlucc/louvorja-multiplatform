@@ -239,16 +239,18 @@ async function playVideoItem(item: QueueItem) {
 
     if (mediaSource) {
       try {
+        // Rust-side worker thread auto-transitions to PLAYING after the URI
+        // is set (commands/video_pipeline.rs). Calling videoPipeline.play()
+        // here would race the worker — play() runs first against an empty
+        // pipeline (no-op), then the worker's set_state(PAUSED) inside load()
+        // overrides it, leaving the user staring at a paused video.
         await videoPipeline.load(mediaSource);
-        // Pipeline transitions to PAUSED on load (preroll). Mirror legacy queue
-        // behavior of autoplay on advance by transitioning to PLAYING here.
-        await videoPipeline.play();
         // Optimistically reflect playing state so ControlBar enables
         // immediately. The bridge hook keeps this in sync from
         // videoPipelineState events (~10 Hz).
         useMediaPlayerStore.getState().setStatus("playing");
       } catch (err) {
-        console.error("[video-pipeline] load/play failed", err);
+        console.error("[video-pipeline] load failed", err);
       }
     } else {
       console.warn("[video-pipeline] no resolvable MediaSource for", vm);
