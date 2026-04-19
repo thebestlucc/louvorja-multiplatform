@@ -155,10 +155,26 @@ pub fn update_online_playlist_cover(
 #[tauri::command]
 #[specta::specta]
 pub fn get_youtube_playlists(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<OnlineVideoPlaylist>, AppError> {
     let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::online_videos::get_playlists(&conn)
+    let mut playlists = crate::db::queries::online_videos::get_playlists(&conn)?;
+    // Drop stale cover_path entries whose file no longer exists on disk.
+    // Happens when the user clears managed media, syncs a DB from another
+    // machine, or a download half-succeeded. Returning the stale path would
+    // surface as a 500 from the Tauri asset protocol on the frontend.
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        for p in playlists.iter_mut() {
+            if let Some(rel) = p.cover_path.as_deref() {
+                let abs = app_data_dir.join(rel);
+                if !abs.exists() {
+                    p.cover_path = None;
+                }
+            }
+        }
+    }
+    Ok(playlists)
 }
 
 #[tauri::command]
