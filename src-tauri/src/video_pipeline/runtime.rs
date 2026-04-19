@@ -378,7 +378,7 @@ impl VideoPipelineRuntime {
                     None => break,
                 };
 
-                let (position_secs, duration_secs, paused, pipeline_present) = {
+                let (position_secs, duration_secs, pipeline_present) = {
                     let guard = match runtime.pipeline.lock() {
                         Ok(g) => g,
                         Err(_) => break,
@@ -392,11 +392,9 @@ impl VideoPipelineRuntime {
                             .query_duration::<gst::ClockTime>()
                             .map(|t| t.useconds() as f64 / 1_000_000.0)
                             .unwrap_or(0.0);
-                        let cur = pipeline.current_state();
-                        let paused = cur != gst::State::Playing;
-                        (pos, dur, paused, true)
+                        (pos, dur, true)
                     } else {
-                        (0.0, 0.0, true, false)
+                        (0.0, 0.0, false)
                     }
                 };
 
@@ -405,11 +403,23 @@ impl VideoPipelineRuntime {
                     break;
                 }
 
-                let volume = runtime
+                // CRITICAL: read `paused` + `volume` from the snapshot, NOT
+                // from `pipeline.current_state()`. `current_state()` returns
+                // the last-cached state and lags async transitions (PAUSED →
+                // PLAYING for live HTTP/HLS sources can take hundreds of ms
+                // to flush). The snapshot reflects intent: it's updated
+                // synchronously by play()/pause()/load()/seek()/set_volume().
+                //
+                // Reading the cached state instead would cause the bridge in
+                // `use-rust-video-pipeline-state.ts` to mirror PLAYING back
+                // into mpStore.status right after the user clicked pause,
+                // bouncing the UI back inside one tick — symptom: every
+                // control "silently fails".
+                let (paused, volume) = runtime
                     .state
                     .snapshot()
-                    .map(|s| s.volume)
-                    .unwrap_or(0.0);
+                    .map(|s| (s.paused, s.volume))
+                    .unwrap_or((true, 0.0));
 
                 let event = VideoPipelineState {
                     position_secs,
