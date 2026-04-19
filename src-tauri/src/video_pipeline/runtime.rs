@@ -546,7 +546,7 @@ mod tests {
         // No pipeline built yet; unload should still succeed and reset snapshot.
         rt.set_volume(0.5).expect("set_volume");
         rt.unload().expect("unload");
-        assert_eq!(rt.snapshot().expect("snapshot").volume, 0.0);
+        assert_eq!(rt.snapshot().expect("snapshot").volume, 1.0);
     }
 
     #[test]

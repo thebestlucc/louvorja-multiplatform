@@ -218,12 +218,20 @@ async function playVideoItem(item: QueueItem) {
     const videoPipeline = await import("../lib/tauri/video-pipeline");
     let mediaSource: import("../lib/bindings").MediaSource | null = null;
     if (vm.videoSource === "local" && vm.videoUrl) {
-      // Managed-media local videos (vm.videoUrl starts with "media/") are NOT
-      // supported by the Rust pipeline yet — MediaSource::Local requires an
-      // absolute path (see src-tauri/src/video_pipeline/source.rs validation).
-      // Restore parity in Phase 3.x. For now, warn and skip.
-      if (!vm.videoUrl.startsWith("media/") && vm.videoUrl.startsWith("/")) {
+      // MediaSource::Local needs an absolute path. Managed-media paths
+      // (`media/videos/...`) are stored relative to the Tauri app data dir;
+      // resolve them on the fly so the Rust pipeline can open the file:// URI.
+      // Absolute paths (user-linked local files) pass through unchanged.
+      if (vm.videoUrl.startsWith("/")) {
         mediaSource = { type: "local", absolutePath: vm.videoUrl };
+      } else if (vm.videoUrl.startsWith("media/")) {
+        const { appDataDir, join } = await import("@tauri-apps/api/path");
+        try {
+          const abs = await join(await appDataDir(), vm.videoUrl);
+          mediaSource = { type: "local", absolutePath: abs };
+        } catch (err) {
+          console.error("[video-pipeline] managed media path resolve failed", err);
+        }
       }
     } else if (vm.videoId) {
       mediaSource = { type: "youtube", videoId: vm.videoId };

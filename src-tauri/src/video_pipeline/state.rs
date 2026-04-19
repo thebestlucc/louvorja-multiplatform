@@ -47,7 +47,9 @@ impl Default for PlaybackStateSnapshot {
             position_secs: 0.0,
             duration_secs: 0.0,
             paused: false,
-            volume: 0.0,
+            // GStreamer `volume` element defaults to 1.0. Match so the UI slider
+            // reflects unattenuated output on first paint rather than "muted".
+            volume: 1.0,
             ready: false,
             loop_mode: LoopMode::None,
         }
@@ -166,7 +168,7 @@ mod tests {
         assert_eq!(snap.position_secs, 0.0);
         assert_eq!(snap.duration_secs, 0.0);
         assert!(!snap.paused);
-        assert_eq!(snap.volume, 0.0);
+        assert_eq!(snap.volume, 1.0);
         assert!(!snap.ready);
     }
 
