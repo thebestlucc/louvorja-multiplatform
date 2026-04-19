@@ -1717,8 +1717,8 @@ async videoPipelineSeek(secs: number) : Promise<Result<null, AppErrorResponse>> 
 }
 },
 /**
- * Update playback volume (0.0–1.0). Snapshot-only until Task 3.x adds a
- * `volume` element to the audio chain.
+ * Update playback volume (0.0–1.0). Sets the `volume` property on the live
+ * `audio_volume` element and mirrors to the state snapshot.
  */
 async videoPipelineSetVolume(volume: number) : Promise<Result<null, AppErrorResponse>> {
     try {

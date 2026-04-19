@@ -390,17 +390,25 @@ enum PadKind {
 }
 
 fn classify_pad(pad: &gst::Pad) -> PadKind {
+    // Prefer current_caps (the last-sent CAPS event) — uridecodebin typically
+    // has these populated at `pad-added` time.
     if let Some(caps) = pad.current_caps() {
-        if let Some(s) = caps.structure(0) {
-            let name = s.name();
-            if name.starts_with("audio/") {
-                return PadKind::Audio;
-            }
-            if name.starts_with("video/") {
-                return PadKind::Video;
-            }
+        if let Some(kind) = kind_from_caps(&caps) {
+            return kind;
         }
     }
+    // Fallback: query the pad for its allowed caps. This works even before the
+    // first CAPS event, which uridecodebin's `src_%u` pads can hit for slow
+    // demuxers (the audio pad often trails the video pad). Without this,
+    // audio pads emitted caps-less classify as Unknown → never link → silence.
+    let queried = pad.query_caps(None);
+    if let Some(kind) = kind_from_caps(&queried) {
+        return kind;
+    }
+    // Last-resort name heuristic — `uridecodebin3` and `decodebin3` emit
+    // `audio_%u` / `video_%u`; `uridecodebin` (classic) emits `src_%u` which
+    // won't match either branch and lands in Unknown (with a log line via
+    // the caller so it's visible in GST_DEBUG).
     let pad_name = pad.name();
     if pad_name.starts_with("audio_") {
         PadKind::Audio
@@ -408,6 +416,18 @@ fn classify_pad(pad: &gst::Pad) -> PadKind {
         PadKind::Video
     } else {
         PadKind::Unknown
+    }
+}
+
+fn kind_from_caps(caps: &gst::Caps) -> Option<PadKind> {
+    let s = caps.structure(0)?;
+    let name = s.name();
+    if name.starts_with("audio/") {
+        Some(PadKind::Audio)
+    } else if name.starts_with("video/") {
+        Some(PadKind::Video)
+    } else {
+        None
     }
 }
 
