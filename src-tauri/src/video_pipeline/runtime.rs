@@ -494,8 +494,34 @@ impl VideoPipelineRuntime {
                 if let Some(msg) = bus.timed_pop(gst::ClockTime::from_mseconds(
                     BUS_POLL_TIMEOUT.as_millis() as u64,
                 )) {
-                    if let gst::MessageView::Eos(_) = msg.view() {
-                        runtime.on_eos();
+                    match msg.view() {
+                        gst::MessageView::Eos(_) => runtime.on_eos(),
+                        gst::MessageView::Error(err) => {
+                            // Surface async pipeline failures (HTTP 403 from
+                            // expired yt-dlp URLs, missing codecs, etc.)
+                            // that would otherwise be swallowed silently.
+                            let src = err
+                                .src()
+                                .map(|s| s.path_string().to_string())
+                                .unwrap_or_else(|| "<unknown>".into());
+                            log::warn!(
+                                "video_pipeline bus ERROR from {src}: {} ({:?})",
+                                err.error(),
+                                err.debug()
+                            );
+                        }
+                        gst::MessageView::Warning(w) => {
+                            let src = w
+                                .src()
+                                .map(|s| s.path_string().to_string())
+                                .unwrap_or_else(|| "<unknown>".into());
+                            log::warn!(
+                                "video_pipeline bus WARNING from {src}: {} ({:?})",
+                                w.error(),
+                                w.debug()
+                            );
+                        }
+                        _ => {}
                     }
                 }
             }
