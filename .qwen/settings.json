@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//Users/**)"
-    ]
-  },
-  "$version": 3
-}
