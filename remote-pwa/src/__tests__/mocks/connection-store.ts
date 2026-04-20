@@ -41,7 +41,9 @@ const current: { value: ReturnType<typeof buildState> } = {
 
 export const connectionStoreMockFactory = () => {
   const useConnectionStore = Object.assign(
-    vi.fn((selector: (s: unknown) => unknown) => selector(current.value)),
+    vi.fn((selector?: (s: unknown) => unknown) =>
+      typeof selector === "function" ? selector(current.value) : current.value,
+    ),
     { getState: () => current.value },
   );
   return { useConnectionStore };
