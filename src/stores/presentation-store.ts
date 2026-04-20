@@ -1,11 +1,9 @@
 import { create } from "zustand";
-import type { SlideContent } from "../lib/bindings";
 
 interface PresentationState {
   currentPresentationId: number | null;
   activeSlideIndex: number;
   isProjectorOpen: boolean;
-  slides: SlideContent[];
   activeLiturgyId: number | null;
   isPlayingLiturgy: boolean;
   activeLiturgyItemIndex: number;
@@ -14,7 +12,6 @@ interface PresentationState {
   setCurrentPresentation: (id: number | null) => void;
   setActiveSlideIndex: (index: number) => void;
   setProjectorOpen: (open: boolean) => void;
-  setSlides: (slides: SlideContent[]) => void;
   setActiveLiturgy: (id: number | null) => void;
   setPlayingLiturgy: (playing: boolean) => void;
   setActiveLiturgyItemIndex: (index: number) => void;
@@ -52,7 +49,6 @@ export const usePresentationStore = create<PresentationState>((set) => {
     currentPresentationId: null,
     activeSlideIndex: 0,
     isProjectorOpen: false,
-    slides: [],
     activeLiturgyId: null,
     isPlayingLiturgy: false,
     activeLiturgyItemIndex: -1,
@@ -64,7 +60,6 @@ export const usePresentationStore = create<PresentationState>((set) => {
     setActiveLiturgyItemIndex,
     setActiveSlideIndex: (index) => set({ activeSlideIndex: index }),
     setProjectorOpen: (open) => set({ isProjectorOpen: open }),
-    setSlides: (slides) => set({ slides, activeSlideIndex: 0 }),
     setLiturgyItemsCount: (count) => set({ liturgyItemsCount: count }),
     setCurrentVideoProjectionId: (id) => set({ currentVideoProjectionId: id }),
 

@@ -167,9 +167,9 @@ export function useMediaPlayer() {
       videoPipeline.unload().catch((err) => console.error("[video-pipeline] unload", err));
       useRustVideoPipelineStore.getState().reset();
     }
-    // Clear presentation-store slides so the playing-now effectiveSlides fallback
+    // Clear media-player-store slides so the playing-now effectiveSlides fallback
     // doesn't display a stale onlineVideo slide thumbnail after the queue is stopped.
-    usePresentationStore.getState().setSlides([]);
+    useMediaPlayerStore.getState().setSlides([]);
   }, []);
 
   const seek = useCallback((timeMs: number) => {
@@ -190,16 +190,9 @@ export function useMediaPlayer() {
   const goToSlide = useCallback(
     async (index: number) => {
       const state = store.getState();
-      // Fall back to presentation-store slides when media-player-store has none
-      const effectiveSlides = state.slides.length > 0
-        ? state.slides
-        : usePresentationStore.getState().slides;
+      const effectiveSlides = state.slides;
       if (index < 0 || index >= effectiveSlides.length) return;
       store.getState().setActiveSlideIndex(index);
-      // Also sync presentation-store index for the fallback path
-      if (state.slides.length === 0) {
-        usePresentationStore.getState().setActiveSlideIndex(index);
-      }
 
       const slide = effectiveSlides[index];
       if (!slide) return;
@@ -230,12 +223,8 @@ export function useMediaPlayer() {
 
   const nextSlide = useCallback(async () => {
     const state = store.getState();
-    const effectiveSlides = state.slides.length > 0
-      ? state.slides
-      : usePresentationStore.getState().slides;
-    const effectiveIndex = state.slides.length > 0
-      ? state.activeSlideIndex
-      : usePresentationStore.getState().activeSlideIndex;
+    const effectiveSlides = state.slides;
+    const effectiveIndex = state.activeSlideIndex;
     if (effectiveIndex < effectiveSlides.length - 1) {
       await goToSlide(effectiveIndex + 1);
     }
@@ -243,9 +232,7 @@ export function useMediaPlayer() {
 
   const prevSlide = useCallback(async () => {
     const state = store.getState();
-    const effectiveIndex = state.slides.length > 0
-      ? state.activeSlideIndex
-      : usePresentationStore.getState().activeSlideIndex;
+    const effectiveIndex = state.activeSlideIndex;
     if (effectiveIndex > 0) {
       await goToSlide(effectiveIndex - 1);
     }

@@ -324,7 +324,7 @@ function RootLayout() {
         useDisplayStore.getState().setBibleContext(ctx);
         // Sync all split parts to presentationStore for sidebar thumbnails
         if (allSlides && allSlides.length > 0) {
-          usePresentationStore.setState({ slides: allSlides, activeSlideIndex: ctx.partIndex ?? 0 });
+          useMediaPlayerStore.setState({ slides: allSlides, activeSlideIndex: ctx.partIndex ?? 0 });
         }
       }),
       "bible-context-changed",

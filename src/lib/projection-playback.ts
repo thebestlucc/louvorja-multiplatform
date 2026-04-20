@@ -100,22 +100,15 @@ export async function ensureProjectionScreensStarted(): Promise<void> {
 }
 
 export async function projectSlideIndex(index: number): Promise<void> {
-  // Try presentation-store first, fall back to media-player-store (Playing Now queue)
   const presentationState = usePresentationStore.getState();
   const mediaPlayerState = useMediaPlayerStore.getState();
-  const slides = presentationState.slides.length > 0
-    ? presentationState.slides
-    : mediaPlayerState.slides;
+  const slides = mediaPlayerState.slides;
 
   if (index < 0 || index >= slides.length) {
     return;
   }
 
-  if (presentationState.slides.length > 0) {
-    presentationState.setActiveSlideIndex(index);
-  } else {
-    mediaPlayerState.setActiveSlideIndex(index);
-  }
+  mediaPlayerState.setActiveSlideIndex(index);
 
   const currentSlide = slides[index];
   const nextSlide = index + 1 < slides.length ? slides[index + 1] : null;
@@ -136,14 +129,9 @@ export async function projectSlideIndex(index: number): Promise<void> {
 }
 
 export async function projectCurrentSlideFromStore(): Promise<void> {
-  const presentationState = usePresentationStore.getState();
   const mediaPlayerState = useMediaPlayerStore.getState();
-  const slides = presentationState.slides.length > 0
-    ? presentationState.slides
-    : mediaPlayerState.slides;
-  const activeIndex = presentationState.slides.length > 0
-    ? presentationState.activeSlideIndex
-    : mediaPlayerState.activeSlideIndex;
+  const slides = mediaPlayerState.slides;
+  const activeIndex = mediaPlayerState.activeSlideIndex;
 
   if (slides.length === 0) {
     return;

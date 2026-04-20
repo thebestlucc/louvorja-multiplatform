@@ -11,6 +11,7 @@
 import { useEffect } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useQueueStore } from "../stores/queue-store";
 import { useMonitorsControl } from "./use-monitors";
 import { useDisplayStore } from "../stores/display-store";
@@ -168,7 +169,7 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
             text_color: null,
             text_size: null,
           };
-          usePresentationStore.getState().setSlides([slide]);
+          useMediaPlayerStore.getState().setSlides([slide]);
           usePresentationStore.getState().setActiveSlideIndex(0);
           // Light up the playing-now indicator — sidebar checks currentProjectionType.
           useDisplayStore.getState().setCurrentProjectionType("bible");

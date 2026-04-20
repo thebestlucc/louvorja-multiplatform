@@ -24,6 +24,7 @@ import { getCollection, getCollectionHymns, getSlidesBatch } from "../../lib/tau
 import { getPreference, setPreference } from "../../lib/store";
 import { parseSlideRow } from "../../types/presentation";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useQueueStore, type QueueItem } from "../../stores/queue-store";
 import { useHymnPlayback } from "../../hooks/use-hymn-playback";
 import { clearActivePlayback } from "../../lib/projection-playback";
@@ -62,7 +63,7 @@ function CollectionsIndex() {
   const deleteMutation = useDeleteCollection();
   const importSongMutation = useImportCollectionSong();
 
-  const setPresentationSlides = usePresentationStore((state) => state.setSlides);
+  const setMediaSlides = useMediaPlayerStore((state) => state.setSlides);
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const { bindHymnToPlaybackQueue } = useHymnPlayback();
   const addToQueue = useQueueStore((state) => state.addToQueue);
@@ -198,11 +199,11 @@ function CollectionsIndex() {
 
       if (allSlides.length > 0) {
         setCurrentPresentation(null);
-        setPresentationSlides(allSlides);
+        setMediaSlides(allSlides);
         notify.success(t("collections.projectedAll", { count: allSlides.length }));
       }
     }, { notify: true, fallbackMessage: t("collections.projectFailed") });
-  }, [bindHymnToPlaybackQueue, setCurrentPresentation, setPresentationSlides, t]);
+  }, [bindHymnToPlaybackQueue, setCurrentPresentation, setMediaSlides, t]);
 
   const handlePlayCollectionSongs = useCallback(async (collection: Collection) => {
     await catcher(async () => {
