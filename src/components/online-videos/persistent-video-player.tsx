@@ -105,7 +105,7 @@ function LocalVideoMaster({
         video.volume = value;
       }
     }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   if (!videoUrl) return null;
@@ -264,7 +264,7 @@ export function PersistentVideoPlayer() {
         }
       }
     }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
@@ -289,7 +289,7 @@ export function PersistentVideoPlayer() {
         emitTo(target, "video-state", resetSnap).catch(() => {});
       }
     }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
@@ -324,7 +324,7 @@ export function PersistentVideoPlayer() {
         }
       }
     }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, []);
 
   // ── YouTube player lifecycle ──────────────────────────────────────────────

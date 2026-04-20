@@ -37,7 +37,7 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
       else if (action === "volume" && value !== undefined) video.volume = value;
     }).catch(() => () => {});
 
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, [renderMode]);
 
   const emitVideoState = () => {
