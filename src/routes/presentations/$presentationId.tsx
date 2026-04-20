@@ -1,26 +1,14 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
-  Download,
-  Play,
-  ChevronRight,
-  ChevronDown,
   Layers,
   Plus,
-  Copy,
-  Trash2,
-  PanelRightClose,
-  PanelRightOpen,
   Type,
   Image,
   Film,
   BookOpen,
   Pause,
   LayoutTemplate,
-  Palette,
-  SlidersHorizontal,
-  FileText,
   Globe,
 } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -29,13 +17,9 @@ import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
 import { usePresentation2 } from "../../hooks/use-presentation";
 import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Badge } from "../../components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { SlideList } from "../../components/slides/slide-list";
 import { SlideEditor } from "../../components/slides/slide-editor";
-import { AspectRatioSelector } from "../../components/slides/aspect-ratio-selector";
-import { TransitionSelector } from "../../components/slides/transition-selector";
 import { SlideRenderer } from "../../components/slides/slide-renderer";
 import type { SlideContent } from "../../lib/bindings";
 import { defaultSlide } from "../../types/presentation";
@@ -44,9 +28,10 @@ import { projectSlideIndex, clearActivePlayback } from "../../lib/projection-pla
 import { usePresentationStore } from "../../stores/presentation-store";
 import { useUpdateSlideNotes } from "../../lib/queries/slides";
 import { cn } from "../../lib/utils";
-
 import { useQueueStore } from "../../stores/queue-store";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
+import { PresentationToolbar } from "./_presentation-toolbar";
+import { PresentationPropertyPanel } from "./_presentation-property-panel";
 
 export const Route = createFileRoute("/presentations/$presentationId")({
   component: PresentationDetail,
@@ -90,10 +75,6 @@ function PresentationDetail() {
 
   const [transition, setTransition] = useState("fade");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [bgOpen, setBgOpen] = useState(true);
-  const [typoOpen, setTypoOpen] = useState(true);
-  const [transOpen, setTransOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(true);
 
   // Notes state
   const updateNotesMutation = useUpdateSlideNotes();
@@ -189,18 +170,6 @@ function PresentationDetail() {
     updateSlideContent(activeSlideIndex, defaultSlide(newType as SlideType));
   };
 
-  // Check if slide type supports text styling
-  const hasTextStyling = activeSlideContent && (
-    activeSlideContent.slideType === "cover" ||
-    activeSlideContent.slideType === "lyrics" ||
-    activeSlideContent.slideType === "text" ||
-    activeSlideContent.slideType === "bible"
-  );
-
-  // Check if slide type has background config
-  const hasBackground = activeSlideContent && activeSlideContent.slideType !== "pause" &&
-    activeSlideContent.slideType !== "video" && activeSlideContent.slideType !== "onlineVideo";
-
   if (!presentation) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -213,125 +182,20 @@ function PresentationDetail() {
 
   return (
     <div className="flex h-full flex-col bg-[#0d1117]" data-theme="black">
-      {/* Top toolbar */}
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#161b22] px-3 py-1.5">
-        {/* Left: Back + breadcrumb + title */}
-        <Link to="/presentations" className="shrink-0">
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/60 hover:text-white" aria-label={t("actions.back")}>
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
-
-        <nav className="flex min-w-0 items-center gap-1 text-sm" aria-label="Breadcrumb">
-          <Link
-            to="/presentations"
-            className="shrink-0 text-xs text-white/40 transition-colors duration-150 hover:text-white/70"
-          >
-            {t("nav.presentations")}
-          </Link>
-          <ChevronRight className="h-3 w-3 shrink-0 text-white/20" aria-hidden="true" />
-          <Input
-            value={localTitle}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            className="h-7 max-w-50 border-none bg-transparent text-sm font-semibold text-white shadow-none focus-visible:bg-white/5 focus-visible:ring-1 focus-visible:ring-amber-500/50 px-1.5"
-            aria-label={t("presentations.title")}
-          />
-        </nav>
-
-        {/* Center: info badges */}
-        <div className="flex items-center gap-2 ml-auto">
-          <Badge variant="outline" className="text-[10px] font-normal h-5 px-1.5 border-white/20 text-white/50">
-            {presentation.aspectRatio}
-          </Badge>
-          <Badge variant="secondary" className="text-[10px] font-normal h-5 px-1.5 bg-white/10 text-white/50 border-0">
-            <Layers className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
-            {slideContents.length} {t("presentations.slides").toLowerCase()}
-          </Badge>
-        </div>
-
-        <div className="mx-1 h-5 w-px bg-white/10" aria-hidden="true" />
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-white/60 hover:text-white" onClick={addSlide} aria-label={t("actions.add")}>
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("actions.add")} {t("presentations.slide")}</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-white/60 hover:text-white"
-                onClick={() => slides[activeSlideIndex] && duplicateSlide(activeSlideIndex)}
-                disabled={!slides[activeSlideIndex]}
-                aria-label={t("services.duplicate")}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("services.duplicate")}</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-white/60 hover:text-destructive"
-                onClick={() => slides[activeSlideIndex] && deleteSlideAt(activeSlideIndex)}
-                disabled={!slides[activeSlideIndex]}
-                aria-label={t("actions.delete")}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("actions.delete")}</TooltipContent>
-          </Tooltip>
-
-          <div className="mx-1 h-5 w-px bg-white/10" aria-hidden="true" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-400 hover:text-amber-300" onClick={handleLoadSlides} aria-label={t("presentations.project")}>
-                <Play className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("presentations.project")}</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-white/60 hover:text-white" onClick={handleExport} aria-label={t("presentations.export")}>
-                <Download className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("presentations.export")}</TooltipContent>
-          </Tooltip>
-
-          <div className="mx-1 h-5 w-px bg-white/10" aria-hidden="true" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-white/60 hover:text-white"
-                onClick={() => setRightPanelOpen((v) => !v)}
-                aria-label={rightPanelOpen ? t("actions.close") : t("actions.open")}
-              >
-                {rightPanelOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("presentations.settings")}</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+      <PresentationToolbar
+        presentation={presentation}
+        hasActiveSlide={!!activeSlide}
+        slideCount={slideContents.length}
+        localTitle={localTitle}
+        rightPanelOpen={rightPanelOpen}
+        onTitleChange={handleTitleChange}
+        onAddSlide={addSlide}
+        onDuplicateSlide={() => duplicateSlide(activeSlideIndex)}
+        onDeleteSlide={() => deleteSlideAt(activeSlideIndex)}
+        onLoadSlides={handleLoadSlides}
+        onExport={handleExport}
+        onToggleRightPanel={() => setRightPanelOpen((v) => !v)}
+      />
 
       {/* Main content area - 3 columns */}
       <div className="flex flex-1 overflow-hidden">
@@ -459,222 +323,22 @@ function PresentationDetail() {
           )}
         </div>
 
-        {/* Right: Property panel (collapsible sections) */}
+        {/* Right: Property panel */}
         {rightPanelOpen && (
-          <div className="flex w-72 shrink-0 flex-col border-l border-white/10 bg-[#161b22]">
-            <div className="flex-1 overflow-auto">
-              {/* Background section */}
-              {hasBackground && (
-                <CollapsibleSection
-                  title={t("presentations.bgSolid")}
-                  icon={<Palette className="h-3.5 w-3.5" />}
-                  open={bgOpen}
-                  onToggle={() => setBgOpen((v) => !v)}
-                >
-                  <div className="space-y-3">
-                    <div>
-                      <label className="mb-1.5 block text-xs font-medium text-white/40">
-                        {t("presentations.aspectRatio")}
-                      </label>
-                      <AspectRatioSelector
-                        value={presentation.aspectRatio}
-                        onChange={handleAspectRatioChange}
-                      />
-                    </div>
-
-                    {activeSlideContent && "background" in activeSlideContent && (
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-white/40">
-                          {t("presentations.bgSolid")}
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={getBgColor(activeSlideContent)}
-                            onChange={(e) => updateBgColor(activeSlideContent, e.target.value, activeSlideIndex, updateSlideContent)}
-                            className="h-8 w-8 cursor-pointer rounded border border-white/10 bg-transparent"
-                            aria-label={t("presentations.bgSolid")}
-                          />
-                          <Input
-                            value={getBgColor(activeSlideContent)}
-                            onChange={(e) => updateBgColor(activeSlideContent, e.target.value, activeSlideIndex, updateSlideContent)}
-                            className="h-8 flex-1 text-xs font-mono bg-white/5 border-white/10 text-white/70"
-                            aria-label={t("presentations.bgSolid")}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleSection>
-              )}
-
-              {/* Typography section */}
-              {hasTextStyling && (
-                <CollapsibleSection
-                  title={t("presentations.editorTypography")}
-                  icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
-                  open={typoOpen}
-                  onToggle={() => setTypoOpen((v) => !v)}
-                >
-                  <div className="space-y-3">
-                    {activeSlideContent && "text_color" in activeSlideContent && (
-                      <>
-                        <div>
-                          <label className="mb-1.5 block text-xs font-medium text-white/40">
-                            {t("presentations.videoTextColor")}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={getTextColor(activeSlideContent)}
-                              onChange={(e) => updateSlideContent(activeSlideIndex, { ...activeSlideContent, text_color: e.target.value } as SlideContent)}
-                              className="h-8 w-8 cursor-pointer rounded border border-white/10 bg-transparent"
-                              aria-label={t("presentations.videoTextColor")}
-                            />
-                            <Input
-                              value={getTextColor(activeSlideContent)}
-                              onChange={(e) => updateSlideContent(activeSlideIndex, { ...activeSlideContent, text_color: e.target.value } as SlideContent)}
-                              className="h-8 flex-1 text-xs font-mono bg-white/5 border-white/10 text-white/70"
-                              aria-label={t("presentations.videoTextColor")}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1.5 flex items-center justify-between text-xs font-medium text-white/40">
-                            <span>{t("presentations.videoTextSize")}</span>
-                            <span className="font-mono text-amber-400">{getTextSize(activeSlideContent)}px</span>
-                          </label>
-                          <input
-                            type="range"
-                            min={12}
-                            max={120}
-                            step={1}
-                            value={getTextSize(activeSlideContent)}
-                            onChange={(e) => updateSlideContent(activeSlideIndex, { ...activeSlideContent, text_size: Number(e.target.value) } as SlideContent)}
-                            className="w-full accent-amber-500"
-                            aria-label={t("presentations.videoTextSize")}
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </CollapsibleSection>
-              )}
-
-              {/* Transition section */}
-              <CollapsibleSection
-                title={t("presentations.transition")}
-                icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
-                open={transOpen}
-                onToggle={() => setTransOpen((v) => !v)}
-              >
-                <TransitionSelector
-                  value={transition}
-                  onChange={setTransition}
-                />
-              </CollapsibleSection>
-
-              {/* Notes section */}
-              {activeSlide && (
-                <CollapsibleSection
-                  title={t("presentations.speakerNotes")}
-                  icon={<FileText className="h-3.5 w-3.5" />}
-                  open={notesOpen}
-                  onToggle={() => setNotesOpen((v) => !v)}
-                >
-                  <textarea
-                    className={cn(
-                      "w-full min-h-25 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70",
-                      "font-mono placeholder:text-white/20",
-                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/50",
-                      "resize-y",
-                    )}
-                    value={localNotes}
-                    onChange={(e) => handleNotesChange(e.target.value)}
-                    placeholder={t("presentations.notesPlaceholder")}
-                    aria-label={t("presentations.speakerNotes")}
-                  />
-                </CollapsibleSection>
-              )}
-            </div>
-          </div>
+          <PresentationPropertyPanel
+            presentation={presentation}
+            hasActiveSlide={!!activeSlide}
+            activeSlideContent={activeSlideContent}
+            activeSlideIndex={activeSlideIndex}
+            localNotes={localNotes}
+            transition={transition}
+            onAspectRatioChange={handleAspectRatioChange}
+            onUpdateSlideContent={updateSlideContent}
+            onNotesChange={handleNotesChange}
+            onTransitionChange={setTransition}
+          />
         )}
       </div>
-    </div>
-  );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getBgColor(slide: SlideContent): string {
-  if ("background" in slide) {
-    return (slide as { background: { color: string | null } }).background.color || "#000000";
-  }
-  return "#000000";
-}
-
-function updateBgColor(
-  slide: SlideContent,
-  color: string,
-  index: number,
-  updateFn: (index: number, content: SlideContent) => void,
-) {
-  if ("background" in slide) {
-    const bg = { ...(slide as { background: Record<string, unknown> }).background, color };
-    updateFn(index, { ...slide, background: bg } as SlideContent);
-  }
-}
-
-function getTextColor(slide: SlideContent): string {
-  if ("text_color" in slide) {
-    return (slide as { text_color: string | null }).text_color || "#ffffff";
-  }
-  return "#ffffff";
-}
-
-function getTextSize(slide: SlideContent): number {
-  if ("text_size" in slide) {
-    return (slide as { text_size: number | null }).text_size || 42;
-  }
-  return 42;
-}
-
-// ─── Collapsible Section ──────────────────────────────────────────────────────
-
-function CollapsibleSection({
-  title,
-  icon,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b border-white/10">
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-white/60 hover:text-white/80 transition-colors"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        {icon}
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          className={cn("h-3.5 w-3.5 transition-transform duration-200", open && "rotate-180")}
-          aria-hidden="true"
-        />
-      </button>
-      {open && (
-        <div className="px-4 pb-4">
-          {children}
-        </div>
-      )}
     </div>
   );
 }
