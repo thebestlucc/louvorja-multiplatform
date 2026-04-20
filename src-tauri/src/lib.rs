@@ -123,6 +123,7 @@ pub fn run() {
             commands::slides::update_presentation,
             commands::slides::delete_presentation,
             commands::slides::get_slides,
+            commands::slides::get_slides_batch,
             commands::slides::create_slide,
             commands::slides::update_slide,
             commands::slides::delete_slide,

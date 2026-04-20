@@ -34,6 +34,11 @@ export async function getSlides(presentationId: number): Promise<Slide[]> {
   return tauriInvoke<Slide[]>("get_slides", { presentationId });
 }
 
+/** Batch variant: fetch slides for N presentations in a single IPC call. */
+export async function getSlidesBatch(presentationIds: number[]): Promise<Slide[]> {
+  return tauriInvoke<Slide[]>("get_slides_batch", { presentationIds });
+}
+
 /** @deprecated Use createSlideTyped — this wrapper serialises content to JSON string for backward compat */
 export async function createSlide(presentationId: number, contentJson: string, sortOrder: number): Promise<Slide> {
   const content = JSON.parse(contentJson) as SlideContent;

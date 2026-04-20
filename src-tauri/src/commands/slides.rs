@@ -63,6 +63,18 @@ pub fn get_slides(
     crate::db::queries::slides::get_slides(&conn, presentation_id)
 }
 
+/// Batch variant: fetch slides for multiple presentation IDs in a single query.
+/// Collapses N IPC calls (one per presentation) into one.
+#[tauri::command]
+#[specta::specta]
+pub fn get_slides_batch(
+    presentation_ids: Vec<i64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Slide>, AppError> {
+    let conn = state.db.get()?;
+    crate::db::queries::slides::get_slides_batch(&conn, &presentation_ids)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn create_slide(
