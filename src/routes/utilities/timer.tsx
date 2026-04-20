@@ -40,17 +40,16 @@ import {
   TIMER_ALERTS_SETTING_KEY,
 } from "../../lib/timer-alerts";
 import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Slider } from "../../components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { TimerDisplay } from "../../components/utilities/timer-display";
 import { cn } from "../../lib/utils";
+import { TimerConfigPanel } from "./_timer-config-panel";
+import { TimerAlertPanel } from "./_timer-alert-panel";
 
 export const Route = createFileRoute("/utilities/timer")({
   component: UtilitiesTimerPage,
 });
 
-const COUNTDOWN_QUICK_ADJUSTMENTS_MINUTES = [-10, -5, -1, 1, 5, 10] as const;
 const DEFAULT_COUNTDOWN_MS = 5 * 60_000;
 
 function UtilitiesTimerPage() {
@@ -365,6 +364,8 @@ function UtilitiesTimerPage() {
     }
   }, [isProjecting]);
 
+  const isCountdownRuntime = timerState?.mode === "countdown" && timerState.durationMs != null;
+
   return (
     <section className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
       <Card>
@@ -388,45 +389,16 @@ function UtilitiesTimerPage() {
           </div>
 
           {mode === "countdown" && (
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <div className="grid grid-cols-2 gap-3 md:max-w-sm">
-                <Input
-                  type="number"
-                  min={0}
-                  value={countdownMinutesValue}
-                  label={t("utilities.timer.minutes")}
-                  onChange={(e) => handleMinutesInputChange(e.target.value)}
-                  disabled={isRunning && timerState?.mode === "countdown"}
-                />
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={countdownSecondsValue}
-                  label={t("utilities.timer.seconds")}
-                  onChange={(e) => handleSecondsInputChange(e.target.value)}
-                  disabled={isRunning && timerState?.mode === "countdown"}
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("utilities.timer.adjustTitle")}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {COUNTDOWN_QUICK_ADJUSTMENTS_MINUTES.map((value) => (
-                    <Button
-                      key={value}
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleAdjustCountdownMinutes(value)}
-                      disabled={adjustCountdownTimer.isPending}
-                    >
-                      {value > 0 ? `+${value}` : String(value)}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <TimerConfigPanel
+              countdownMinutesValue={countdownMinutesValue}
+              countdownSecondsValue={countdownSecondsValue}
+              isRunning={isRunning}
+              isCountdownRuntime={isCountdownRuntime}
+              isPending={adjustCountdownTimer.isPending}
+              onMinutesChange={handleMinutesInputChange}
+              onSecondsChange={handleSecondsInputChange}
+              onAdjustMinutes={handleAdjustCountdownMinutes}
+            />
           )}
         </CardHeader>
 
@@ -497,7 +469,6 @@ function UtilitiesTimerPage() {
               {isProjecting ? t("utilities.projection.clear") : t("utilities.projection.project")}
             </Button>
           </div>
-
         </CardContent>
       </Card>
 
@@ -530,100 +501,19 @@ function UtilitiesTimerPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle>{t("utilities.timer.alertsTitle")}</CardTitle>
-            <p className="text-sm text-muted-foreground">{t("utilities.timer.alertsDescription")}</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2 rounded-md border border-border bg-background p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">{t("utilities.timer.alertVolume")}</p>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {Math.round(alertVolume * 100)}%
-                </span>
-              </div>
-              <Slider
-                value={[Math.round(alertVolume * 100)]}
-                min={0}
-                max={100}
-                step={1}
-                onValueChange={handleAlertVolumeChange}
-                onValueCommit={handleAlertVolumeCommit}
-              />
-              <p className="text-xs text-muted-foreground">{t("utilities.timer.alertVolumeDescription")}</p>
-            </div>
-
-            {alertRules.map((rule) => (
-              <div
-                key={rule.minuteMark}
-                className="space-y-2 rounded-md border border-border bg-background p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">
-                    {t("utilities.timer.alertAtMinute", { minute: rule.minuteMark })}
-                  </p>
-                  {!isMandatoryAlertMinute(rule.minuteMark) && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveAlertMinute(rule.minuteMark)}
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      {t("utilities.timer.removeAlert")}
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    readOnly
-                    value={rule.audioPath ?? t("utilities.timer.defaultBeep")}
-                    className="min-w-55 flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleBrowseAlertAudio(rule.minuteMark)}
-                  >
-                    {t("utilities.timer.browseAudio")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleTestAlert(rule)}
-                  >
-                    {t("utilities.timer.testAudio")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleClearAlertAudio(rule.minuteMark)}
-                    disabled={!rule.audioPath}
-                  >
-                    {t("utilities.timer.clearAudio")}
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            <div className="flex flex-wrap items-end gap-2">
-              <Input
-                type="number"
-                min={1}
-                value={newAlertMinute}
-                label={t("utilities.timer.addAlertMinute")}
-                onChange={(event) => setNewAlertMinute(event.target.value)}
-                className="w-40"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleAddAlertMinute()}
-              >
-                {t("utilities.timer.addAlert")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <TimerAlertPanel
+          alertRules={alertRules}
+          alertVolume={alertVolume}
+          newAlertMinute={newAlertMinute}
+          onAlertVolumeChange={handleAlertVolumeChange}
+          onAlertVolumeCommit={handleAlertVolumeCommit}
+          onBrowseAlertAudio={handleBrowseAlertAudio}
+          onClearAlertAudio={handleClearAlertAudio}
+          onTestAlert={handleTestAlert}
+          onAddAlertMinute={handleAddAlertMinute}
+          onRemoveAlertMinute={handleRemoveAlertMinute}
+          onNewAlertMinuteChange={setNewAlertMinute}
+        />
       </div>
     </section>
   );
