@@ -50,11 +50,21 @@ function makeStore(isPaired: boolean) {
     device: null,
     ws: null,
     latencyMs: null,
+    peers: [],
+    currentSlide: null,
+    currentService: null,
+    currentQueue: null,
+    currentAudioStatus: null,
     init,
     completePairing: vi.fn(),
     forgetDevice: vi.fn(),
     _setWsState: vi.fn(),
     _setLatency: vi.fn(),
+    _setPeers: vi.fn(),
+    _setCurrentSlide: vi.fn(),
+    _setCurrentService: vi.fn(),
+    _setCurrentQueue: vi.fn(),
+    _setAudioStatus: vi.fn(),
   };
 }
 
@@ -63,8 +73,15 @@ describe("Routing", () => {
     vi.clearAllMocks();
   });
 
+  function applyStore(isPaired: boolean) {
+    const state = makeStore(isPaired);
+    mockUseConnectionStore.mockImplementation(
+      (sel?: (s: typeof state) => unknown) => (typeof sel === "function" ? sel(state) : state),
+    );
+  }
+
   it("shows pair screen for unauthenticated user", async () => {
-    mockUseConnectionStore.mockReturnValue(makeStore(false));
+    applyStore(false);
 
     render(<App />);
     await waitFor(() => {
@@ -73,7 +90,7 @@ describe("Routing", () => {
   });
 
   it("shows live tab for authenticated user", async () => {
-    mockUseConnectionStore.mockReturnValue(makeStore(true));
+    applyStore(true);
 
     render(<App />);
     await waitFor(() => {
@@ -82,7 +99,7 @@ describe("Routing", () => {
   });
 
   it("tab bar has 5 destinations", async () => {
-    mockUseConnectionStore.mockReturnValue(makeStore(true));
+    applyStore(true);
 
     render(<App />);
     await waitFor(() => {
@@ -92,7 +109,7 @@ describe("Routing", () => {
   });
 
   it("live tab is active by default", async () => {
-    mockUseConnectionStore.mockReturnValue(makeStore(true));
+    applyStore(true);
 
     render(<App />);
     await waitFor(() => {
