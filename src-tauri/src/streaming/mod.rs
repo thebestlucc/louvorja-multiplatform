@@ -386,6 +386,34 @@ impl StreamingServer {
     }
 }
 
+impl Drop for StreamingServer {
+    fn drop(&mut self) {
+        // Signal the accept loop to exit.
+        self.is_running.store(false, Ordering::SeqCst);
+
+        // Join the accept thread. The loop polls is_running every 50 ms
+        // (accept WouldBlock branch), so it should return within ~100 ms.
+        // Use a timer thread + channel so we don't block app shutdown on a
+        // stuck syscall (e.g. accept() waiting on a slow kernel path).
+        if let Some(handle) = self.thread_handle.take() {
+            let (tx, rx) = mpsc::channel();
+            let join_thread = std::thread::spawn(move || {
+                let _ = handle.join();
+                let _ = tx.send(());
+            });
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(_) => log::info!("[streaming] accept thread joined cleanly"),
+                Err(_) => {
+                    log::warn!("[streaming] accept thread did not join within 1s; detaching");
+                    // Intentionally leak join_thread so we don't block.
+                    // OS reclaims all threads on process exit.
+                    std::mem::forget(join_thread);
+                }
+            }
+        }
+    }
+}
+
 // --- Connection handler ---
 
 struct ConnectionContext<'a> {
