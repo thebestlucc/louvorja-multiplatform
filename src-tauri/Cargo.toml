@@ -52,7 +52,6 @@ rand = "0.8"
 display-info = "0.5.7"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "gzip", "blocking"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-urlencoding = "2"
 tauri-plugin-store = "2"
 tauri-plugin-clipboard-manager = "2"
 mimalloc = { version = "0.1.48", default-features = false }
