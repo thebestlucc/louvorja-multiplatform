@@ -236,21 +236,24 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
     // Persistent server-pushed state — survives route navigation.
     ws.on("slide.changed", (payload) => {
       const p = payload as Record<string, unknown>;
-      if (p && typeof p === "object") {
-        // Raw SlideContent events carry the discriminator as `slideType`
-        // (serde tag, camelCase). Older streaming payloads used `type`.
-        // Accept either so remote controls render regardless of source.
-        const rawType = typeof p.slideType === "string"
-          ? (p.slideType as string)
-          : typeof p.type === "string" ? (p.type as string) : undefined;
-        get()._setCurrentSlide({
-          text: typeof p.text === "string" ? p.text : undefined,
-          type: rawType,
-          title: typeof p.title === "string" ? p.title : undefined,
-          index: typeof p.index === "number" ? p.index : undefined,
-          total: typeof p.total === "number" ? p.total : undefined,
-        });
-      }
+      if (!p || typeof p !== "object") return;
+      const d =
+        p.slide && typeof p.slide === "object"
+          ? (p.slide as Record<string, unknown>)
+          : p;
+      const rawType =
+        typeof d.slideType === "string"
+          ? d.slideType
+          : typeof d.type === "string"
+          ? d.type
+          : undefined;
+      get()._setCurrentSlide({
+        text: typeof d.text === "string" ? d.text : undefined,
+        type: rawType,
+        title: typeof d.title === "string" ? d.title : undefined,
+        index: typeof d.index === "number" ? d.index : undefined,
+        total: typeof d.total === "number" ? d.total : undefined,
+      });
     });
     ws.on("service.state", (payload) => {
       // Server sends null to signal no active service.
@@ -322,21 +325,24 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
     // Persistent server-pushed state — survives route navigation.
     ws.on("slide.changed", (payload) => {
       const p = payload as Record<string, unknown>;
-      if (p && typeof p === "object") {
-        // Raw SlideContent events carry the discriminator as `slideType`
-        // (serde tag, camelCase). Older streaming payloads used `type`.
-        // Accept either so remote controls render regardless of source.
-        const rawType = typeof p.slideType === "string"
-          ? (p.slideType as string)
-          : typeof p.type === "string" ? (p.type as string) : undefined;
-        get()._setCurrentSlide({
-          text: typeof p.text === "string" ? p.text : undefined,
-          type: rawType,
-          title: typeof p.title === "string" ? p.title : undefined,
-          index: typeof p.index === "number" ? p.index : undefined,
-          total: typeof p.total === "number" ? p.total : undefined,
-        });
-      }
+      if (!p || typeof p !== "object") return;
+      const d =
+        p.slide && typeof p.slide === "object"
+          ? (p.slide as Record<string, unknown>)
+          : p;
+      const rawType =
+        typeof d.slideType === "string"
+          ? d.slideType
+          : typeof d.type === "string"
+          ? d.type
+          : undefined;
+      get()._setCurrentSlide({
+        text: typeof d.text === "string" ? d.text : undefined,
+        type: rawType,
+        title: typeof d.title === "string" ? d.title : undefined,
+        index: typeof d.index === "number" ? d.index : undefined,
+        total: typeof d.total === "number" ? d.total : undefined,
+      });
     });
     ws.on("service.state", (payload) => {
       // Server sends null to signal no active service.
