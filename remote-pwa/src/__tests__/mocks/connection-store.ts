@@ -10,6 +10,17 @@
 // when nested in a helper body. So each test file writes its own top-level
 // vi.mock(path, factory) referencing this exported factory. The factory object
 // is shared; the mock registration stays in each file.
+//
+// Alternate usage for single-mode files (all tests need the same state):
+//   vi.mock("@/stores/connection-store", async () => {
+//     const { connectionStoreMockFactory, applyConnectionStoreState }
+//       = await import("../../__tests__/mocks/connection-store");
+//     applyConnectionStoreState("paired-live");
+//     return connectionStoreMockFactory();
+//   });
+//
+// When using this pattern, add afterAll(() => applyConnectionStoreState("unpaired"))
+// to reset module-level state for subsequent test files in the same worker.
 import { vi } from "vitest";
 
 // Stable ws mock — tests that spy on send/on can import ws from getState().

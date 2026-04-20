@@ -14,6 +14,9 @@ const mockWs = {
 };
 const mockState = { wsState: "connected", ws: mockWs };
 
+// Inline connection-store mock: tests mutate closure state (e.g. _state/mockSendable) per
+// test-body BEFORE render(). Shared applyConnectionStoreState() only resets in beforeEach, so
+// it can't cover this pattern. See __tests__/mocks/connection-store.ts for the shared variant.
 vi.mock("@/stores/connection-store", () => {
   const _ws = {
     send: vi.fn().mockResolvedValue(undefined),
