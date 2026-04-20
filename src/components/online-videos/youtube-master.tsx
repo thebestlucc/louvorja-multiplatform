@@ -120,7 +120,7 @@ export function YouTubeMaster({
       ytPlayerRef.current = null;
       container.remove();
     };
-  }, [activeVideoId, activeVideoSource, onBroadcast, playSessionId, playerHostRef, pollTimerRef, seekingRef, ytPlayerRef, onVideoEnded]);
+  }, [activeVideoId, activeVideoSource, onBroadcast, playSessionId, onVideoEnded]);
 
   return null;
 }
