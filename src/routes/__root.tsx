@@ -1,8 +1,7 @@
-import { createRootRoute, Link, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
+import { createRootRoute, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Square, ExternalLink } from "lucide-react";
+import { LiturgyPlaybackBanner } from "../components/layout/liturgy-playback-banner";
 import { listen, emit } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
@@ -31,7 +30,6 @@ import type { SlideContent, LiturgyWithItems } from "../lib/bindings";
 import type { BibleContext } from "../stores/display-store";
 import { useQueueStore } from "../stores/queue-store";
 import { deletePreference } from "../lib/store";
-import { Button } from "../components/ui/button";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
 import { PackSyncDialog, PackSyncProgressDialog } from "../components/content-sync/pack-sync-dialog";
 import { queryKeys, useMonitorConfigs, useMonitors, usePlanPackSync } from "../lib/queries";
@@ -348,7 +346,6 @@ function RootLayout() {
   useKeyboard({ enabled: !isBareRoute });
   useRemoteBridge({ enabled: !isBareRoute });
   useSlidePasser({ enabled: !isBareRoute });
-  const { t } = useTranslation();
   const { service: liturgyService, items: liturgyItems } = useLiturgyPlayback();
   const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);
   const activeLiturgyId = usePresentationStore((s) => s.activeLiturgyId);
@@ -587,69 +584,16 @@ function RootLayout() {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Global liturgy playback banner */}
-        {isPlayingLiturgy && liturgyService && (
-          <div className="flex items-center gap-3 bg-primary px-4 py-2.5 text-primary-foreground shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {t("services.liveIndicator")}
-              </span>
-            </div>
-            <span className="text-sm font-semibold truncate max-w-50">
-              {liturgyService.title}
-            </span>
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium tabular-nums shrink-0">
-              {t("services.progressOf", {
-                current: activeLiturgyItemIndex + 1,
-                total: liturgyItems.length,
-              })}
-            </span>
-
-            <div className="ml-auto flex items-center gap-1.5 shrink-0">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
-                onClick={handlePrevLiturgyItem}
-                disabled={activeLiturgyItemIndex <= 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/15"
-                onClick={handleNextLiturgyItem}
-                disabled={liturgyItems.length === 0}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              {activeLiturgyId != null && (
-                <Link to="/services/$serviceId" params={{ serviceId: String(activeLiturgyId) }}>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs text-primary-foreground hover:bg-white/15"
-                  >
-                    <ExternalLink className="mr-1 h-3 w-3" />
-                    {t("services.goToLiturgy")}
-                  </Button>
-                </Link>
-              )}
-              <Button
-                size="sm"
-                variant="destructive"
-                className="ml-1 h-7 px-3 text-xs"
-                onClick={handleStopLiturgy}
-              >
-                <Square className="mr-1.5 h-3 w-3" />
-                {t("services.stopService")}
-              </Button>
-            </div>
-          </div>
+        {isPlayingLiturgy && liturgyService && activeLiturgyId != null && (
+          <LiturgyPlaybackBanner
+            service={liturgyService}
+            activeLiturgyId={activeLiturgyId}
+            activeItemIndex={activeLiturgyItemIndex}
+            items={liturgyItems}
+            onPrev={handlePrevLiturgyItem}
+            onNext={handleNextLiturgyItem}
+            onStop={handleStopLiturgy}
+          />
         )}
         <Header />
         <main id="main-scroll-area" className="flex-1 overflow-auto p-4">
