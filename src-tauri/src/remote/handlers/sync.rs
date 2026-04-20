@@ -7,6 +7,8 @@
 //! to every connected WS client automatically.
 
 use crate::{error::AppError, state::{AppState, AudioState}};
+use crate::display::projection::SlideChangedPayload;
+use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Emit current slide + audio status so freshly-connected remotes can sync.
@@ -24,7 +26,8 @@ pub async fn sync_state(app: &AppHandle) -> Result<serde_json::Value, AppError> 
             .clone();
 
         if let Some(slide) = slide_opt {
-            app.emit("slide-changed", &slide)
+            let version = app_state.current_slide_version.load(Ordering::SeqCst);
+            app.emit("slide-changed", &SlideChangedPayload { slide, version })
                 .map_err(|e| AppError::Tauri(e.to_string()))?;
         }
     }

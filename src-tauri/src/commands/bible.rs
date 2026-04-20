@@ -1,6 +1,7 @@
 use crate::bible::text_split::{split_verse, SplitParams, VerseSplitResult};
 use crate::db::models::{BibleSearchResult, BibleVersion, Book, SlideContent, SlideContext, Verse};
 use crate::db::models::slides::{BibleMode, BackgroundConfig, BackgroundKind};
+use crate::display::projection::update_current_slide;
 use crate::error::AppError;
 use crate::state::{AppState, BibleNavContext, BibleProjectionState, StreamingState};
 use crate::utils::catcher::catcher;
@@ -414,14 +415,7 @@ pub fn navigate_bible_verse(
         *context = Some(slide_context.clone());
     }
 
-    app.emit("slide-changed", &slide_data)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    app.emit("slide-context", &slide_context)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-
-    if let Ok(server) = streaming_state.server.lock() {
-        broadcast_bible_stream_payloads(&server, &slide_data, &new_reference);
-    }
+    update_current_slide(&app, &state, &streaming_state, slide_data)?;
 
     Ok(())
 }
@@ -567,16 +561,6 @@ fn project_split_slide(
     all_parts: &[SlideContent],
     part_index: usize,
 ) -> Result<(), AppError> {
-    // Update current_slide
-    {
-        let (current, err) = catcher(state.current_slide.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut current = current.unwrap();
-        *current = Some(slide.clone());
-    }
-
     let reference = slide.title().unwrap_or("").to_string();
 
     // Determine "next" slide for the return monitor preview:
@@ -612,20 +596,13 @@ fn project_split_slide(
         *ctx = Some(slide_context.clone());
     }
 
-    app.emit("slide-changed", slide)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    app.emit("slide-context", &slide_context)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    update_current_slide(app, state, streaming_state, slide.clone())?;
     // Include all parts so the frontend can show them in the sidebar
     let mut ctx = context_payload;
     ctx["allSlides"] = serde_json::to_value(all_parts).unwrap_or_default();
     ctx["partIndex"] = serde_json::json!(part_index);
     app.emit("bible-context-changed", &ctx)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
-
-    if let Ok(server) = streaming_state.server.lock() {
-        broadcast_bible_stream_payloads(&server, slide, &reference);
-    }
 
     Ok(())
 }
