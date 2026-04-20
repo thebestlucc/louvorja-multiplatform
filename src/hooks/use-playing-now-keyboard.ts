@@ -36,7 +36,10 @@ export function usePlayingNowKeyboard({ play, pause, stop, restart, prevSlide, n
         const status = useMediaPlayerStore.getState().status;
         if (status === "playing") pause();
         else play();
-      } else if (matchesShortcutCombo(e, "s")) {
+      } else if (matchesShortcutCombo(e, "s") || matchesShortcutCombo(e, "Escape")) {
+        // Escape on /playing-now mirrors the Stop button — full teardown
+        // (queue + media-player + Rust pipeline) instead of the global
+        // clearPresentation() which only clears projection.
         e.preventDefault();
         stop();
       } else if (matchesShortcutCombo(e, "r")) {
