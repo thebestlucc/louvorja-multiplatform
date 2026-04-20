@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { getCurrentSlide, getOverlayState } from "../../lib/tauri";
+import { getOverlayState } from "../../lib/tauri";
+import { useSlideVersion } from "../../hooks/use-slide-version";
 import type { AlertState, OverlayState, SlideContent } from "../../lib/bindings";
 import { SlideRenderer } from "./slide-renderer";
 import { useAllSettings, useTimerState } from "../../lib/queries";
@@ -46,45 +47,18 @@ export function ProjectorView() {
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
   const logoImageSrc = useMediaSource(screenDefaults.logoImagePath);
 
-  // Listen to slide changes
-  useEffect(() => {
-    let isMounted = true;
-    let unlistenFn: (() => void) | null = null;
-
-    listen<SlideContent>("slide-changed", (event) => {
-      if (!isMounted) return;
-      const newSlide = event.payload;
-      const prev = prevSlideRef.current;
-      // Only remount the renderer when the slide identity changes (type or background image).
-      // Same-background stanza changes (e.g. next hymn lyric) only animate the text layer.
-      if (!prev || prev.slideType !== newSlide.slideType || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(newSlide)) {
-        setSlideKey((k) => k + 1);
-      }
-      prevSlideRef.current = newSlide;
-      setSlide(newSlide);
-    }).then((fn) => {
-      if (isMounted) {
-        unlistenFn = fn;
-      } else {
-        fn();
-      }
-    });
-
-    getCurrentSlide()
-      .then((data) => {
-        if (!isMounted) return;
-        const s = data;
-        prevSlideRef.current = s;
-        setSlide(s);
-        setSlideKey((prev) => prev + 1);
-      })
-      .catch(() => {});
-
-    return () => {
-      isMounted = false;
-      unlistenFn?.();
-    };
+  const handleSlide = useCallback((slide: SlideContent) => {
+    const prev = prevSlideRef.current;
+    // Only remount the renderer when the slide identity changes (type or background image).
+    // Same-background stanza changes (e.g. next hymn lyric) only animate the text layer.
+    if (!prev || prev.slideType !== slide.slideType || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(slide)) {
+      setSlideKey((k) => k + 1);
+    }
+    prevSlideRef.current = slide;
+    setSlide(slide);
   }, []);
+
+  useSlideVersion({ onSlide: handleSlide });
 
   // Listen to overlay changes
   useEffect(() => {

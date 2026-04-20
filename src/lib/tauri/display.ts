@@ -39,8 +39,8 @@ export async function setSlideOnReturn(slideData: SlideContent): Promise<void> {
   return tauriInvoke<void>("set_slide_on_return", { slideData });
 }
 
-export async function getCurrentSlide(): Promise<SlideContent | null> {
-  return tauriInvoke<SlideContent | null>("get_current_slide");
+export async function getCurrentSlide(): Promise<{ slide: SlideContent | null; version: number }> {
+  return tauriInvoke<{ slide: SlideContent | null; version: number }>("get_current_slide");
 }
 
 export async function clearCurrentSlide(): Promise<void> {
