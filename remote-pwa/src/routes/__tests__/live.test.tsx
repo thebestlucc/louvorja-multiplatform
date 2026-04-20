@@ -2,35 +2,22 @@ import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import LiveRoute from "../live";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        "remote.live.prev": "Prev",
-        "remote.live.next": "Next",
-        "remote.live.black": "Black screen",
-        "remote.live.logo": "Logo screen",
-        "remote.live.clear": "Clear overlay",
-        "remote.live.all_slides": "All slides",
-        "remote.live.no_slide": "Waiting for content",
-        "remote.live.connected": "Connected",
-        "remote.live.disconnected": "Disconnected",
-        "remote.live.reconnecting": "Reconnecting",
-        "remote.live.swipe_up_hint": "Swipe up for all slides",
-        "remote.live.close_grid": "Close grid",
-        "remote.live.slide_counter": "Slide {{n}} of {{total}}",
-      };
-      return map[key] ?? key;
-    },
-  }),
-}));
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
+});
 
 const mockSend = vi.fn().mockResolvedValue(undefined);
 const mockOn = vi.fn().mockReturnValue(() => {});
 
 let mockWsState = "connected";
 let mockCurrentSlide: Record<string, unknown> | null = null;
+let mockCurrentQueue: { nowPlaying: { id: string; title: string; artist?: string } | null; upNext: { id: string; title: string; artist?: string }[]; history: { id: string; title: string; artist?: string }[] } | null = null;
+let mockCurrentAudioStatus: { position: number; duration: number; volume: number; playing: boolean } | null = null;
 
+// Inline connection-store mock: tests mutate closure state (e.g. mockCurrentSlide/mockWsState)
+// per test-body BEFORE render(). Shared applyConnectionStoreState() only resets in beforeEach, so
+// it can't cover this pattern. See __tests__/mocks/connection-store.ts for the shared variant.
 vi.mock("@/stores/connection-store", () => ({
   useConnectionStore: (selector: (s: unknown) => unknown) =>
     selector({
@@ -39,6 +26,8 @@ vi.mock("@/stores/connection-store", () => ({
       device: { name: "LouvorJA" },
       peers: [],
       currentSlide: mockCurrentSlide,
+      currentQueue: mockCurrentQueue,
+      currentAudioStatus: mockCurrentAudioStatus,
       _setWsState: (s: string) => { mockWsState = s; },
     }),
 }));
@@ -48,6 +37,8 @@ describe("LiveRoute — G2", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     mockCurrentSlide = null;
+    mockCurrentQueue = null;
+    mockCurrentAudioStatus = null;
     mockWsState = "connected";
   });
   afterEach(() => {
@@ -313,5 +304,127 @@ describe("LiveRoute — G2", () => {
     });
 
     expect(screen.queryByRole("dialog", { name: /all slides/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("LiveRoute — audio controls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    mockCurrentSlide = null;
+    mockCurrentQueue = null;
+    mockCurrentAudioStatus = null;
+    mockWsState = "connected";
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows play/pause/skip buttons when audio is playing", () => {
+    mockCurrentQueue = {
+      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
+      upNext: [],
+      history: [],
+    };
+    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: true };
+
+    render(<LiveRoute />);
+
+    expect(screen.getByRole("button", { name: /skip previous/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /skip next/i })).toBeInTheDocument();
+  });
+
+  it("clicking play/pause sends audio.toggle", async () => {
+    mockCurrentQueue = {
+      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
+      upNext: [],
+      history: [],
+    };
+    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
+
+    render(<LiveRoute />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /play/i }));
+    });
+
+    expect(mockSend).toHaveBeenCalledWith("audio.toggle", {});
+  });
+
+  it("clicking skip prev sends audio.skip_prev", async () => {
+    mockCurrentQueue = {
+      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
+      upNext: [],
+      history: [],
+    };
+    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
+
+    render(<LiveRoute />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /skip previous/i }));
+    });
+
+    expect(mockSend).toHaveBeenCalledWith("audio.skip_prev", {});
+  });
+
+  it("clicking skip next sends audio.skip_next", async () => {
+    mockCurrentQueue = {
+      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
+      upNext: [],
+      history: [],
+    };
+    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
+
+    render(<LiveRoute />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /skip next/i }));
+    });
+
+    expect(mockSend).toHaveBeenCalledWith("audio.skip_next", {});
+  });
+
+  it("seeking sends audio.seek with milliseconds", async () => {
+    mockCurrentQueue = {
+      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
+      upNext: [],
+      history: [],
+    };
+    mockCurrentAudioStatus = { position: 30, duration: 120, volume: 0.8, playing: false };
+
+    render(<LiveRoute />);
+
+    const slider = screen.getByRole("slider", { name: /seek/i });
+    await act(async () => {
+      fireEvent.change(slider, { target: { value: "60" } });
+      fireEvent.pointerUp(slider);
+    });
+
+    expect(mockSend).toHaveBeenCalledWith("audio.seek", { ms: 60000 });
+  });
+
+  it("volume change sends audio.volume (debounced)", async () => {
+    mockCurrentQueue = {
+      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
+      upNext: [],
+      history: [],
+    };
+    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
+
+    render(<LiveRoute />);
+
+    const slider = screen.getByRole("slider", { name: /volume/i });
+    await act(async () => {
+      fireEvent.change(slider, { target: { value: "50" } });
+      fireEvent.pointerUp(slider);
+    });
+
+    // Debounce is 150ms
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(mockSend).toHaveBeenCalledWith("audio.volume", { value: 0.5 });
   });
 });

@@ -217,10 +217,10 @@ function ScheduleDayItem({
     if (!confirmationState) return;
 
     if (confirmationState.kind === "removeDay") {
-      void handleRemoveDay().then(() => setConfirmationState(null));
+      handleRemoveDay().then(() => setConfirmationState(null));
       return;
     }
-    void handleSaveDaySettings().then(() => setConfirmationState(null));
+    handleSaveDaySettings().then(() => setConfirmationState(null));
   };
 
   const handleSaveDaySettingsClick = () => {
@@ -229,7 +229,7 @@ function ScheduleDayItem({
       setConfirmationState({ kind: "removeDepartments", count: next.removedDepartmentCount });
       return;
     }
-    void handleSaveDaySettings();
+    handleSaveDaySettings();
   };
 
   return (

@@ -5,6 +5,8 @@ import {
   Pause,
   Square,
   RotateCcw,
+  Repeat,
+  Repeat1,
   SkipBack,
   SkipForward,
   ChevronLeft,
@@ -47,6 +49,9 @@ interface ControlBarProps {
   onModeChange?: (mode: "sung" | "karaoke" | "silent") => void;
   isBibleProjection?: boolean;
   onGoToBible?: () => void;
+  /** Task 3.1: loop toggle. Only rendered when `onLoopToggle` is provided. */
+  isLooping?: boolean;
+  onLoopToggle?: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -80,6 +85,8 @@ export function ControlBar({
   onModeChange,
   isBibleProjection,
   onGoToBible,
+  isLooping,
+  onLoopToggle,
 }: ControlBarProps) {
   const { t } = useTranslation();
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
@@ -209,6 +216,24 @@ export function ControlBar({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{t("shortcuts.items.restart")}</TooltipContent>
+            </Tooltip>
+          )}
+
+          {onLoopToggle && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={isLooping ? "default" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onLoopToggle}
+                  aria-label={t("shortcuts.items.loop")}
+                  aria-pressed={isLooping ?? false}
+                >
+                  {isLooping ? <Repeat1 className="h-3.5 w-3.5" /> : <Repeat className="h-3.5 w-3.5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t("shortcuts.items.loop")}</TooltipContent>
             </Tooltip>
           )}
 

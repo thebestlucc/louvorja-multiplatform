@@ -2,60 +2,23 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import SearchRoute from "../search";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, opts?: Record<string, unknown>) => {
-      const map: Record<string, string> = {
-        "remote.search.tab_hymns": "Hymns",
-        "remote.search.tab_bible": "Bible",
-        "remote.search.tab_videos": "Videos",
-        "remote.search.tab_presentations": "Presentations",
-        "remote.search.tab_services": "Services",
-        "remote.search.placeholder_hymns": "Search hymns…",
-        "remote.search.placeholder_bible": "Book, chapter, verse…",
-        "remote.search.placeholder_videos": "Search videos…",
-        "remote.search.placeholder_presentations": "Search presentations…",
-        "remote.search.placeholder_service": "Search services…",
-        "remote.search.results_count": `${opts?.n ?? 0} results`,
-        "remote.search.no_results": "No results",
-        "remote.search.add_to_service": "Add to service",
-        "remote.search.selection_bar": "Selection bar",
-        "remote.search.selection_count": `${opts?.count ?? 0} selected`,
-        "remote.search.action_clear_selection": "Clear selection",
-        "remote.search.action_play_now": "Play now",
-        "remote.search.action_add_to_queue": "Add to queue",
-        "remote.search.action_project_now": "Project now",
-        "remote.search.action_cancel": "Cancel",
-        "remote.search.action_sheet_title": "Action",
-        "remote.search.recent": "Recent",
-        "remote.search.clear": "Clear search results",
-      };
-      return map[key] ?? key;
-    },
-  }),
-}));
-
-// Shared mock state — the ws object is stable so getState().ws === hook ws
-const mockWs = {
-  send: vi.fn().mockResolvedValue(undefined),
-  on: vi.fn().mockReturnValue(() => {}),
-};
-const mockState = { wsState: "connected", ws: mockWs };
-
-vi.mock("@/stores/connection-store", () => {
-  const _ws = {
-    send: vi.fn().mockResolvedValue(undefined),
-    on: vi.fn().mockReturnValue(() => {}),
-  };
-  const _state = { wsState: "connected", ws: _ws };
-  const useConnectionStore = (selector: (s: unknown) => unknown) => selector(_state);
-  useConnectionStore.getState = () => _state;
-  return { useConnectionStore };
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
 });
 
-// After mock is set up, grab the ws from the mocked module so tests can spy on it
-import { useConnectionStore } from "@/stores/connection-store";
-const { ws: mockSendable } = (useConnectionStore as unknown as { getState: () => { ws: { send: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> } } }).getState();
+vi.mock("@/stores/connection-store", async () => {
+  const { connectionStoreMockFactory, applyConnectionStoreState } =
+    await import("../../__tests__/mocks/connection-store");
+  applyConnectionStoreState("paired-live");
+  return connectionStoreMockFactory();
+});
+
+// Import the stable mockWs so tests can spy on send/on without reaching into getState().
+import { mockWs, applyConnectionStoreState } from "../../__tests__/mocks/connection-store";
+
+// mockSendable aliases mockWs for readability at call sites.
+const mockSendable = mockWs;
 
 describe("SearchRoute — G3 (debounce 120 ms)", () => {
   beforeEach(() => {
@@ -64,6 +27,8 @@ describe("SearchRoute — G3 (debounce 120 ms)", () => {
     // Re-add default .on behavior after clearAllMocks
     mockSendable.on.mockReturnValue(() => {});
     mockSendable.send.mockResolvedValue(undefined);
+    // Ensure paired-live state is in effect for every test
+    applyConnectionStoreState("paired-live");
   });
 
   afterEach(() => {

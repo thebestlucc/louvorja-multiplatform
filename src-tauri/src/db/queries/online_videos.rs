@@ -196,7 +196,6 @@ pub fn get_video_local_path(
 }
 
 /// Used by yt-dlp download command (Task 5) when a video is fully downloaded.
-#[allow(dead_code)]
 pub fn update_video_local_path(
     conn: &Connection,
     video_id: &str,

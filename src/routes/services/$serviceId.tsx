@@ -300,7 +300,7 @@ function LiturgyEditor() {
   useEffect(() => {
     if (isPlayingLiturgy) {
       hasPlayedRef.current = true;
-      void catcher(
+      catcher(
         setPreference<PersistedPlayState>(PLAY_STATE_KEY, {
           isPlayingLiturgy: true,
           activeLiturgyId: id,
@@ -309,7 +309,7 @@ function LiturgyEditor() {
       );
     } else if (hasPlayedRef.current) {
       hasPlayedRef.current = false;
-      void catcher(deletePreference(PLAY_STATE_KEY));
+      catcher(deletePreference(PLAY_STATE_KEY));
     }
   }, [isPlayingLiturgy, activeLiturgyItemIndex, id]);
 
@@ -317,7 +317,7 @@ function LiturgyEditor() {
     if (items.length === 0) return;
     setPlayingLiturgy(true);
     setRightTab("timeline");
-    void router.navigate({ to: "/playing-now" });
+    router.navigate({ to: "/playing-now" });
   };
 
   if (!service) {

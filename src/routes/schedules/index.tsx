@@ -233,7 +233,7 @@ function UtilitiesSchedulesPage() {
       return;
     }
 
-    void persistSelectedDates(toggleSelectedDate(selectedDates, isoDate), "manual");
+    persistSelectedDates(toggleSelectedDate(selectedDates, isoDate), "manual");
   };
 
   const handleToggleWeekdayPattern = (weekday: number) => {
@@ -256,7 +256,7 @@ function UtilitiesSchedulesPage() {
       patternDates.forEach((serviceDate) => nextSelectedDateSet.add(serviceDate));
     }
 
-    void persistSelectedDates(
+    persistSelectedDates(
       Array.from(nextSelectedDateSet).sort(),
       "weekday-pattern",
     );
@@ -267,7 +267,7 @@ function UtilitiesSchedulesPage() {
       return;
     }
 
-    void persistSelectedDates([], "manual");
+    persistSelectedDates([], "manual");
   };
 
   const handleGenerateMonth = async () => {
@@ -479,7 +479,7 @@ function UtilitiesSchedulesPage() {
           onClearSelection={handleClearSelection}
           onOpenDepartmentManager={() => setIsDepartmentManagerOpen(true)}
           onOpenPrintPreview={() => setIsPrintPreviewOpen(true)}
-          onGenerate={() => void handleGenerateMonth()}
+          onGenerate={() => handleGenerateMonth()}
           onOverwriteManualChange={setOverwriteManual}
           canPrint={scheduleDays.length > 0}
         />
@@ -528,7 +528,7 @@ function UtilitiesSchedulesPage() {
         onOpenChange={(open) => {
           setIsDepartmentManagerOpen(open);
           if (!open) {
-            void refreshAllScheduleData();
+            refreshAllScheduleData();
           }
         }}
       />

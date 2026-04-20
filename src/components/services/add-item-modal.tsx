@@ -80,7 +80,7 @@ export function AddItemModal({ open, onOpenChange, serviceId, onAdd, editItem, o
       try {
         const parsed = JSON.parse(notes) as { videoId?: string; downloadForOffline?: boolean };
         if (parsed.downloadForOffline && parsed.videoId) {
-          void downloadOnlineVideo(parsed.videoId, "standalone", "720").catch(() => {});
+          downloadOnlineVideo(parsed.videoId, "standalone", "720").catch(() => {});
         }
       } catch {
         /* invalid JSON, ignore */

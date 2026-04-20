@@ -82,9 +82,7 @@ pub fn find_by_token_hash(
     Ok(result)
 }
 
-/// Update `last_seen_at` for a device.
-/// Called by the WS lifecycle hook on each authenticated message; wired in Phase D.
-#[allow(dead_code)]
+/// Update last-seen timestamp for a remote device. Called on every WS ping — see remote/routes/ws.rs.
 pub fn touch_last_seen(conn: &Connection, id: &str) -> Result<(), AppError> {
     conn.execute(
         "UPDATE remote_devices SET last_seen_at = ?1 WHERE id = ?2",

@@ -33,7 +33,7 @@ r2d2 = "0.8"
 r2d2_sqlite = "0.24"
 specta = { version = "2.0.0-rc.20", features = ["chrono"] }
 specta-typescript = "0.0.9"
-tauri-specta = { version = "2.0.0-rc.15", features = ["typescript"] }
+tauri-specta = { version = "2.0.0-rc.15", features = ["derive", "typescript"] }
 
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -52,7 +52,6 @@ rand = "0.8"
 display-info = "0.5.7"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "gzip", "blocking"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-urlencoding = "2"
 tauri-plugin-store = "2"
 tauri-plugin-clipboard-manager = "2"
 mimalloc = { version = "0.1.48", default-features = false }
@@ -76,6 +75,14 @@ memmap2 = "0.9"
 unicode-normalization = "0.1"
 cosmic-text = "0.12"
 enigo = "0.2"
+
+# Video pipeline (Phase 0 of Rust video pipeline migration — see docs/plans/2026-04-17-rust-video-pipeline.md)
+gstreamer = "0.23"
+gstreamer-app = "0.23"
+gstreamer-audio = "0.23"
+gstreamer-sdp = "0.23"
+gstreamer-video = "0.23"
+gstreamer-webrtc = "0.23"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "a3122e894383aa068ec5365a42994e3ac94ba1b6" }

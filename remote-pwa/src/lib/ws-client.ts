@@ -191,14 +191,16 @@ export class RemoteWS {
       // Drop silently; let the caller decide whether to retry
       return;
     }
-    ++this.clientSeq;
+    const seqAtSend = ++this.clientSeq;
     const ts = nowSecs();
     const n = nonce();
     const payloadStr = JSON.stringify(payload);
     const sig = await signEnvelope(this.tokenBytes, ts, n, op, payloadStr);
 
-    // If the connection died while we were signing, don't send stale
+    // If the connection died while we were signing, or a newer send has since
+    // incremented clientSeq past our snapshot, discard this stale envelope.
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (this.clientSeq !== seqAtSend) return;
 
     const envelope = {
       id: randomUUID(),

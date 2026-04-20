@@ -199,7 +199,7 @@ function HymnDetail() {
 
     if (!error) {
       setDeleteOpen(false);
-      void navigate({ to: "/hymnal" });
+      navigate({ to: "/hymnal" });
     }
   };
 
@@ -213,7 +213,7 @@ function HymnDetail() {
           activeIndex={localActiveIndex}
           onSelect={(i) => {
             if (isProjecting) {
-              void projectHymnSlide(i);
+              projectHymnSlide(i);
             } else {
               setLocalActiveIndex(i);
             }
@@ -271,14 +271,14 @@ function HymnDetail() {
             </>
           ) : (
             <>
-              <Button size="sm" onClick={() => void onStartCantado()}>
+              <Button size="sm" onClick={() => onStartCantado()}>
                 <Monitor className="mr-2 h-4 w-4" />
                 {t("hymn.actionSung")}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => void onStartPlayback()}>
+              <Button size="sm" variant="outline" onClick={() => onStartPlayback()}>
                 {t("hymn.actionPlayback")}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => void onStartSlidesOnly()}>
+              <Button size="sm" variant="outline" onClick={() => onStartSlidesOnly()}>
                 {t("hymn.actionSlidesOnly")}
               </Button>
             </>
@@ -378,7 +378,7 @@ function HymnDetail() {
             activeSlideIndex={isProjecting ? localActiveIndex : localActiveIndex}
             onStanzaClick={(slideIndex) => {
               if (isProjecting) {
-                void projectHymnSlide(slideIndex);
+                projectHymnSlide(slideIndex);
               } else {
                 setLocalActiveIndex(slideIndex);
               }
@@ -459,7 +459,7 @@ function HymnDetail() {
         cancelLabel={t("actions.cancel")}
         isPending={deleteMutation.isPending}
         onOpenChange={setDeleteOpen}
-        onConfirm={() => void handleDelete()}
+        onConfirm={() => handleDelete()}
       />
     </div>
   );

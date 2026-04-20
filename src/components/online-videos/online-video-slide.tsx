@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
@@ -8,6 +9,8 @@ import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
+import { RustVideoConsumer } from "./rust-video-consumer";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -71,7 +74,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       if (paused && state === 1) p.pauseVideo();
       else if (!paused && state !== 1) p.playVideo();
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, [isFollower]);
 
   // Direct command listener for immediate follower response (play/pause/seek).
@@ -93,11 +96,11 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       else if (action === "pause") p.pauseVideo();
       else if (action === "seek" && value !== undefined) p.seekTo(value, true);
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, [isFollower]);
 
   const emitState = useCallback((player: YTPlayer) => {
-    void emitTo("main", "video-state", {
+    emitTo("main", "video-state", {
       paused: player.getPlayerState() !== 1, // 1 = PLAYING
       currentTime: player.getCurrentTime(),
       duration: player.getDuration(),
@@ -110,7 +113,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
     // Each mount gets a stable unique id for YT.Player
     const uid = `yt-${videoId}-${Math.random().toString(36).slice(2)}`;
 
-    void loadYouTubeAPI().then(() => {
+    loadYouTubeAPI().then(() => {
       if (destroyed || !containerRef.current) return;
       containerRef.current.id = uid;
 
@@ -188,7 +191,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       clearInterval(pollRef.current);
       try { playerRef.current?.destroy(); } catch (_) {}
       playerRef.current = undefined;
-      void unsub.then((fn) => fn());
+      unsub.then((fn) => fn()).catch(() => {});
     };
   }, [videoId, muted, isFollower, emitState]);
 
@@ -234,10 +237,22 @@ interface OnlineVideoSlideProps {
 
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
+  const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
 
   // Live video renderer for projector/return screens
   const renderLiveVideo = () => {
     const isLocalFile = slide.source === "local" && !!slide.url;
+    if (useRustVideoPipeline) {
+      return (
+        <div className={cn("h-full w-full bg-black", className)}>
+          <RustVideoConsumer
+            windowLabel={getCurrentWindow().label}
+            muted
+            className="h-full w-full"
+          />
+        </div>
+      );
+    }
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile ? (

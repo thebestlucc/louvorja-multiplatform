@@ -1169,6 +1169,7 @@
     "tabs": {
       "appearance": "Appearance",
       "data": "Data",
+      "experimental": "Experimental",
       "general": "General",
       "migration": "Migration",
       "monitor": "Monitor",
@@ -1178,6 +1179,14 @@
       "sync": "Content Sync",
       "youtube": "YouTube",
       "remote": "Remote"
+    },
+    "experimental": {
+      "title": "Experimental features",
+      "warning": "These features are unstable and may change or be removed.",
+      "rustVideoPipeline": {
+        "label": "Rust video pipeline",
+        "description": "Use the new Rust-authoritative video pipeline for online videos. Requires app restart of the projector/return windows if already open."
+      }
     },
     "theme": "Theme",
     "themeDesc": "Choose the visual style of the app.",
@@ -1256,6 +1265,7 @@
       "toggleReturn": "Toggle return window",
       "stop": "Stop playback",
       "restart": "Restart playback",
+      "loop": "Loop",
       "volumeUp": "Volume up",
       "volumeDown": "Volume down",
       "prevSlide": "Previous slide (playback)",

@@ -156,11 +156,11 @@ export function DayDetailsDialog({
     }
 
     if (confirmationState.kind === "removeDay") {
-      void handleRemoveDay().then(() => setConfirmationState(null));
+      handleRemoveDay().then(() => setConfirmationState(null));
       return;
     }
 
-    void handleSaveDaySettings().then(() => setConfirmationState(null));
+    handleSaveDaySettings().then(() => setConfirmationState(null));
   };
 
   const handleSaveDaySettingsClick = () => {
@@ -177,7 +177,7 @@ export function DayDetailsDialog({
       return;
     }
 
-    void handleSaveDaySettings();
+    handleSaveDaySettings();
   };
 
   const handleRemoveDayClick = () => {

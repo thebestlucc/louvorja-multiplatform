@@ -340,3 +340,22 @@ allow = [
     "list_paired_devices",
     "revoke_paired_device"
 ]
+
+[[permission]]
+identifier = "allow-video-pipeline-commands"
+description = "Allows all video pipeline (Rust GStreamer pipeline) commands"
+[permission.commands]
+allow = [
+    "video_pipeline_load",
+    "video_pipeline_play",
+    "video_pipeline_pause",
+    "video_pipeline_seek",
+    "video_pipeline_set_volume",
+    "video_pipeline_set_loop",
+    "video_pipeline_restart",
+    "video_pipeline_subscribe",
+    "video_pipeline_unsubscribe",
+    "video_pipeline_answer",
+    "video_pipeline_ice",
+    "video_pipeline_unload"
+]

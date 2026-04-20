@@ -113,7 +113,7 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
               variant="outline"
               size="sm"
               disabled={loadingImage}
-              onClick={() => void handleBrowseImage()}
+              onClick={() => handleBrowseImage()}
             >
               {t("presentations.videoBrowse")}
             </Button>

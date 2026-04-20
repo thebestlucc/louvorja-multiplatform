@@ -1,5 +1,10 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { getPreferenceSync, setPreference } from "../lib/store";
+import * as videoPipeline from "../lib/tauri/video-pipeline";
+import { useRustVideoPipelineStore } from "./rust-video-pipeline-store";
+
+export type LoopMode = "none" | "one";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -9,11 +14,18 @@ interface VideoPlayerState {
   videoId: string | null;
   videoSrc: string | null;
   videoSource: "youtube" | "local" | null;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState">>) => void;
+  useRustVideoPipeline: boolean;
+  loopMode: LoopMode;
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline" | "loopMode" | "setLoopMode">>) => void;
   resetVideoState: () => void;
+  setUseRustVideoPipeline: (v: boolean) => void;
+  setLoopMode: (mode: LoopMode) => void;
 }
 
 type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource">;
+
+const USE_RUST_VIDEO_PIPELINE_KEY = "use_rust_video_pipeline";
+const VIDEO_LOOP_MODE_KEY = "video_loop_mode";
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -27,8 +39,28 @@ const initialState: VideoPlayerData = {
 
 export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
+  useRustVideoPipeline: getPreferenceSync<boolean>(USE_RUST_VIDEO_PIPELINE_KEY, false),
+  loopMode: getPreferenceSync<LoopMode>(VIDEO_LOOP_MODE_KEY, "none"),
   setVideoState: (partial) => set(partial),
   resetVideoState: () => set(initialState),
+  setUseRustVideoPipeline: (v) => {
+    const prev = useVideoPlayerStore.getState().useRustVideoPipeline;
+    set({ useRustVideoPipeline: v });
+    setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v);
+    if (prev && !v) {
+      videoPipeline.unload().catch(() => {});
+      useRustVideoPipelineStore.getState().reset();
+    }
+  },
+  setLoopMode: (mode) => {
+    set({ loopMode: mode });
+    setPreference(VIDEO_LOOP_MODE_KEY, mode);
+    // Mirror to Rust pipeline only when the flag is on; legacy HTML5 path
+    // does not implement loop (rolled back in dc942d3).
+    if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+      videoPipeline.setLoop(mode).catch((err) => console.error("[video-pipeline] setLoop", err));
+    }
+  },
 }));
 
 // ─── Streaming sync ────────────────────────────────────────────────────────────
@@ -58,7 +90,7 @@ function forwardVideoStateToStreaming(state: VideoPlayerData, action: string) {
   invoke("broadcast_video_state_to_streaming", { payload }).catch(() => {});
 }
 
-const _unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
+export const __unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
   // Skip if no video is active
   if (!state.videoSource) return;
 
@@ -104,12 +136,10 @@ const _unsubStreaming = useVideoPlayerStore.subscribe((state, prev) => {
   forwardVideoStateToStreaming(state, action);
 });
 
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    _unsubStreaming();
-    if (_streamingThrottleTimer) {
-      clearTimeout(_streamingThrottleTimer);
-      _streamingThrottleTimer = null;
-    }
-  });
+/** Internal: clear any pending streaming-throttle timer. Used by HMR cleanup. */
+export function __clearStreamingThrottle() {
+  if (_streamingThrottleTimer) {
+    clearTimeout(_streamingThrottleTimer);
+    _streamingThrottleTimer = null;
+  }
 }
