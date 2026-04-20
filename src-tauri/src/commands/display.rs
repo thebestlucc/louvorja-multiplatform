@@ -13,7 +13,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use crate::commands::streaming::{
-    build_return_stream_payload,
     empty_return_stream_payload,
     empty_streaming_music_payload,
 };
@@ -334,36 +333,12 @@ pub fn set_slide_on_projector(
     slide_data: SlideContent,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
+    streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     if !is_live_utility_slide(&slide_data) {
         stop_live_utility_projection(&state)?;
     }
-    // Enrich online_video slides with local path if the video has been downloaded
-    let mut slide_data = slide_data;
-    if let crate::db::models::SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
-        let vid = video_id.clone();
-        if let Ok(conn) = state.db.get() {
-            if let Ok(Some(local_path)) =
-                crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
-            {
-                if !local_path.is_empty() {
-                    *source = crate::db::models::slides::VideoSource::Local;
-                    *url = local_path;
-                }
-            }
-        }
-    }
-    {
-        let mut current = state
-            .current_slide
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        *current = Some(slide_data.clone());
-    }
-    // Emit app-globally so main (controls) and projector both update.
-    // Projector-specific targeting is handled in the frontend.
-    app.emit("slide-changed", &slide_data)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    update_current_slide(&app, &state, &streaming_state, slide_data)?;
     Ok(())
 }
 
@@ -378,39 +353,7 @@ pub fn set_slide_on_return(
     if !is_live_utility_slide(&slide_data) {
         stop_live_utility_projection(&state)?;
     }
-    // Enrich online_video slides with local path if the video has been downloaded
-    let mut slide_data = slide_data;
-    if let crate::db::models::SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
-        let vid = video_id.clone();
-        if let Ok(conn) = state.db.get() {
-            if let Ok(Some(local_path)) =
-                crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
-            {
-                if !local_path.is_empty() {
-                    *source = crate::db::models::slides::VideoSource::Local;
-                    *url = local_path;
-                }
-            }
-        }
-    }
-    {
-        let mut current = state
-            .current_slide
-            .write()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        *current = Some(slide_data.clone());
-    }
-    // Emit app-globally so main (controls) and return window both update.
-    // Return-specific targeting is handled in the frontend.
-    app.emit("slide-changed", &slide_data)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    // Broadcast to SSE streaming viewers
-    let app_data_dir = app.path().app_data_dir().ok();
-    let adr = app_data_dir.as_deref();
-    if let Ok(server) = streaming_state.server.lock() {
-        let return_payload = build_return_stream_payload(&slide_data, None, adr);
-        server.broadcast_return(&return_payload.to_string());
-    }
+    update_current_slide(&app, &state, &streaming_state, slide_data)?;
     Ok(())
 }
 
@@ -418,13 +361,15 @@ pub fn set_slide_on_return(
 #[specta::specta]
 pub fn get_current_slide(
     state: tauri::State<'_, AppState>,
-) -> Result<Option<SlideContent>, AppError> {
-    let (current, err) = catcher(state.current_slide.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let current = current.unwrap();
-    Ok(current.clone())
+) -> Result<crate::display::projection::CurrentSlideResponse, AppError> {
+    use crate::display::projection::CurrentSlideResponse;
+    use std::sync::atomic::Ordering;
+    let current = state
+        .current_slide
+        .read()
+        .map_err(|_| AppError::Internal("lock poisoned".into()))?;
+    let version = state.current_slide_version.load(Ordering::SeqCst);
+    Ok(CurrentSlideResponse { slide: current.clone(), version })
 }
 
 #[tauri::command]
@@ -451,7 +396,9 @@ pub fn clear_current_slide(
         let mut ctx = ctx.unwrap();
         *ctx = None;
     }
-    let _ = app.emit("slide-cleared", ());
+    let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
+    app.emit("slide-cleared", serde_json::json!({ "version": version }))
+        .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     if let Ok(server) = streaming_state.server.lock() {
         server.broadcast_music(&empty_streaming_music_payload().to_string());
