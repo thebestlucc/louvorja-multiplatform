@@ -29,11 +29,11 @@ export function useUtilityProjection(_kind: UtilityProjectionKind) {
     async (payload: UtilityProjectionPayload) => {
       if (!isProjecting) {
         await clearActivePlayback();
-        const [slide, context] = await Promise.all([
+        const [slideResponse, context] = await Promise.all([
           getCurrentSlide(),
           getSlideContext(),
         ]);
-        snapshotRef.current = { slide, context };
+        snapshotRef.current = { slide: slideResponse.slide, context };
         setCurrentProjectionType("utility");
       }
 

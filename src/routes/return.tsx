@@ -3,7 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import type { SlideContent, SlideContext, OverlayState, AlertState } from "../lib/bindings";
-import { getCurrentSlide, getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
+import { getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
+import { useSlideVersion } from "../hooks/use-slide-version";
 import { SlideRenderer } from "../components/slides/slide-renderer";
 import { useAllSettings, useTimerState } from "../lib/queries";
 import { AlertOverlay } from "../components/display/alert-overlay";
@@ -73,20 +74,17 @@ function ReturnPage() {
     });
   }, [clockNow, i18n.language, screenDefaults, t, timerState]);
 
-  // Listen to slide changes
-  useEffect(() => {
-    const unlisten = listen<SlideContent>("slide-changed", (event) => {
-      setCurrentSlide(event.payload);
-    });
-
-    getCurrentSlide()
-      .then((data) => {
-        setCurrentSlide(data);
-      })
-      .catch(() => {});
-
-    return () => { unlisten.then((fn) => fn()); };
-  }, []);
+  useSlideVersion({
+    onSlide: (slide) => setCurrentSlide(slide),
+    onClear: () => {
+      setCurrentSlide(null);
+      setNextSlide(null);
+      setUtilityProjection(null);
+      setSlideTitle("");
+      setSlideIndex(0);
+      setSlideTotal(0);
+    },
+  });
 
   // Listen to slide context
   useEffect(() => {
@@ -136,18 +134,6 @@ function ReturnPage() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Listen to slide cleared — reset to logo
-  useEffect(() => {
-    const unlisten = listen("slide-cleared", () => {
-      setCurrentSlide(null);
-      setNextSlide(null);
-      setUtilityProjection(null);
-      setSlideTitle("");
-      setSlideIndex(0);
-      setSlideTotal(0);
-    });
-    return () => { unlisten.then((fn) => fn()); };
-  }, []);
 
   // Listen to utility live projection ticks
   useEffect(() => {

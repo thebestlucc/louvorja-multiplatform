@@ -1,6 +1,7 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emitTo } from "@tauri-apps/api/event";
+import { useSlideVersion } from "../../hooks/use-slide-version";
 import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
@@ -222,90 +223,69 @@ export function PersistentVideoPlayer() {
     broadcastState(snap, { videoId: null, videoSrc: null, videoSource: "local" });
   }, [broadcastState]);
 
-  // Listen to slide-changed
-  useEffect(() => {
-    const unsub = listen<SlideContent>("slide-changed", (e) => {
-      const slide = e.payload;
-      if (slide.slideType === "onlineVideo") {
-        // Increment session so YouTube player lifecycle effect re-runs even for same videoId
-        playSessionIdRef.current += 1;
-        setPlaySessionId(playSessionIdRef.current);
-        setActiveSlide(slide);
-        activeSlideRef.current = slide;
+  const handleClear = useCallback(() => {
+    if (!activeSlideRef.current) return;
 
-        // Bridge to media-player-store so Playing Now shows video preview.
-        // Guard: if the queue was cleared before this async event arrived (e.g.
-        // the user pressed Stop), do NOT re-load the item — that would leave a
-        // stale currentItem in the store after unload() already cleared it.
-        const qState = useQueueStore.getState();
-        const queueActive = qState.items.length > 0 && qState.currentIndex >= 0;
-        if (queueActive) {
-          const mpState = useMediaPlayerStore.getState();
-          if (slide.source === "local" && slide.url) {
-            const item: OfflineVideoMediaItem = {
-              type: "offline_video",
-              videoPath: slide.url,
-              title: slide.title ?? "Video",
-              isManaged: slide.url.startsWith("media/"),
-            };
-            // Always load to reset timelineSource to "video" (stop() sets it to "none")
-            mpState.load(item);
-          } else if (slide.video_id) {
-            const item: OnlineVideoMediaItem = {
-              type: "online_video",
-              videoId: slide.video_id,
-              videoSource: "youtube",
-              title: slide.title ?? "Video",
-            };
-            mpState.load(item);
-          }
-        }
-      } else if (activeSlideRef.current) {
-        // Non-video slide replaced the video: fully stop and clean up
-        clearInterval(pollTimerRef.current ?? undefined);
-        pollTimerRef.current = null;
+    clearInterval(pollTimerRef.current ?? undefined);
+    pollTimerRef.current = null;
 
-        if (ytPlayerRef.current) {
-          try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
-          ytPlayerRef.current = null;
-        }
+    if (ytPlayerRef.current) {
+      try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
+      ytPlayerRef.current = null;
+    }
 
-        useVideoPlayerStore.getState().resetVideoState();
-        setActiveSlide(null);
-        activeSlideRef.current = null;
-        const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
-        for (const target of ["main", "projector", "return"]) {
-          emitTo(target, "video-state", resetSnap).catch(() => {});
-        }
-      }
-    }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()).catch(() => {}); };
+    // For local video: clearing activeSlide unmounts LocalVideoMaster
+    useVideoPlayerStore.getState().resetVideoState();
+    setActiveSlide(null);
+    activeSlideRef.current = null;
+    const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
+    for (const target of ["main", "projector", "return"]) {
+      emitTo(target, "video-state", resetSnap).catch(() => {});
+    }
   }, []);
 
-  // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
-  useEffect(() => {
-    const unsub = listen("slide-cleared", () => {
-      if (!activeSlideRef.current) return;
+  const handleSlide = useCallback((slide: SlideContent) => {
+    if (slide.slideType === "onlineVideo") {
+      // Increment session so YouTube player lifecycle effect re-runs even for same videoId
+      playSessionIdRef.current += 1;
+      setPlaySessionId(playSessionIdRef.current);
+      setActiveSlide(slide);
+      activeSlideRef.current = slide;
 
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = null;
-
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
-        ytPlayerRef.current = null;
+      // Bridge to media-player-store so Playing Now shows video preview.
+      // Guard: if the queue was cleared before this async event arrived (e.g.
+      // the user pressed Stop), do NOT re-load the item — that would leave a
+      // stale currentItem in the store after unload() already cleared it.
+      const qState = useQueueStore.getState();
+      const queueActive = qState.items.length > 0 && qState.currentIndex >= 0;
+      if (queueActive) {
+        const mpState = useMediaPlayerStore.getState();
+        if (slide.source === "local" && slide.url) {
+          const item: OfflineVideoMediaItem = {
+            type: "offline_video",
+            videoPath: slide.url,
+            title: slide.title ?? "Video",
+            isManaged: slide.url.startsWith("media/"),
+          };
+          // Always load to reset timelineSource to "video" (stop() sets it to "none")
+          mpState.load(item);
+        } else if (slide.video_id) {
+          const item: OnlineVideoMediaItem = {
+            type: "online_video",
+            videoId: slide.video_id,
+            videoSource: "youtube",
+            title: slide.title ?? "Video",
+          };
+          mpState.load(item);
+        }
       }
+    } else if (activeSlideRef.current) {
+      // Non-video slide replaced the video: fully stop and clean up
+      handleClear();
+    }
+  }, [handleClear]);
 
-      // For local video: clearing activeSlide unmounts LocalVideoMaster
-      useVideoPlayerStore.getState().resetVideoState();
-      setActiveSlide(null);
-      activeSlideRef.current = null;
-      const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
-      for (const target of ["main", "projector", "return"]) {
-        emitTo(target, "video-state", resetSnap).catch(() => {});
-      }
-    }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()).catch(() => {}); };
-  }, []);
+  useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
   useEffect(() => {
