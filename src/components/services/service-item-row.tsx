@@ -66,7 +66,7 @@ export function getShortenedPath(path: string): string {
 
 export function SortableLiturgyItem({
   item,
-  serviceDate: _serviceDate,
+  serviceDate,
   index,
   isActive,
   onRemove,
@@ -104,6 +104,9 @@ export function SortableLiturgyItem({
   const typeLabel = t(`services.itemTypes.${item.itemType}`, item.itemType);
   const isScheduledCategory = item.itemType === "scheduled_category";
   const isChild = item.parentId !== null && item.parentId !== undefined;
+  const videoSubtitle = item.itemType === "online_video" && item.notes
+    ? getVideoSubtitle(item.notes)
+    : null;
 
   return (
     <div
@@ -149,60 +152,53 @@ export function SortableLiturgyItem({
       </span>
 
       <div className="min-w-0 flex-1">
-          <p className={cn(
-            "truncate text-sm font-medium",
-            isActive ? "text-primary" : "text-foreground",
-          )}>
-            {item.title}
+        <p className={cn(
+          "truncate text-sm font-medium",
+          isActive ? "text-primary" : "text-foreground",
+        )}>
+          {item.title}
+        </p>
+        <p className="text-xs text-muted-foreground">{typeLabel}</p>
+        {isScheduledCategory ? (
+          <ScheduledItemBadge categoryId={item.itemId ?? 0} date={serviceDate ?? new Date().toISOString().slice(0, 10)} />
+        ) : item.itemType === "file" && item.notes ? (
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60" title={item.notes}>
+            {getShortenedPath(item.notes)}
           </p>
-          <p className="text-xs text-muted-foreground">{typeLabel}</p>
-          {isScheduledCategory ? (
-            <ScheduledItemBadge categoryId={item.itemId ?? 0} date={new Date().toISOString().slice(0, 10)} />
-          ) : item.itemType === "file" && item.notes ? (
-            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60" title={item.notes}>
-              {getShortenedPath(item.notes)}
-            </p>
-          ) : item.itemType === "online_video" && item.notes ? (
-            (() => {
-              const sub = getVideoSubtitle(item.notes);
-              return sub ? (
-                <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60">{sub}</p>
-              ) : null;
-            })()
-          ) : item.itemType !== "online_video" && item.notes ? (
-            <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">{item.notes}</p>
-          ) : null}
+        ) : videoSubtitle ? (
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground/60">{videoSubtitle}</p>
+        ) : item.itemType !== "online_video" && item.notes ? (
+          <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">{item.notes}</p>
+        ) : null}
       </div>
 
       {/* Action buttons — hover only */}
-      {(
-        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          {onProject && (
-            <button
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-              onClick={onProject}
-              title={t("services.projectItem")}
-            >
-              <Monitor className="h-4 w-4" />
-            </button>
-          )}
-          {onOpenEdit && (
-            <button
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              onClick={onOpenEdit}
-              title={t("services.editItem")}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )}
+      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        {onProject && (
           <button
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            onClick={onRemove}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+            onClick={onProject}
+            title={t("services.projectItem")}
           >
-            <Trash2 className="h-4 w-4" />
+            <Monitor className="h-4 w-4" />
           </button>
-        </div>
-      )}
+        )}
+        {onOpenEdit && (
+          <button
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={onOpenEdit}
+            title={t("services.editItem")}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          onClick={onRemove}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
