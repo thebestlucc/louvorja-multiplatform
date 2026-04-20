@@ -779,7 +779,7 @@ mod tests {
     // ── extract_zip_to tests ─────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn extract_zip_to_extracts_files_correctly() {
+    async fn extract_zip_extracts_files_correctly() {
         let mut zip_bytes = Vec::new();
         {
             let cursor = std::io::Cursor::new(&mut zip_bytes);
