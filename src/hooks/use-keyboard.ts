@@ -43,7 +43,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
 
   const clearPresentation = useCallback(() => {
     resetCoordinatorPlaybackState();
-    usePresentationStore.getState().setSlides([]);
+    useMediaPlayerStore.getState().setSlides([]);
     stopProjectionAndSongAudio();
     // Clear queue when ESC is pressed with one item or at the last item
     const q = useQueueStore.getState();

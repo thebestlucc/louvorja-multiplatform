@@ -86,12 +86,9 @@ function PlayingNowScreen() {
     }
   };
 
-  // Fallback to presentation-store slides when media-player-store has none
-  // (e.g. when projecting a standalone presentation without going through the queue)
-  const presentationSlides = usePresentationStore((s) => s.slides);
   const presentationActiveIndex = usePresentationStore((s) => s.activeSlideIndex);
   const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);
-  const effectiveSlides = slides.length > 0 ? slides : presentationSlides;
+  const effectiveSlides = slides;
   const effectiveActiveIndex = slides.length > 0 ? activeSlideIndex : presentationActiveIndex;
 
   const currentSlide = effectiveSlides[effectiveActiveIndex] ?? null;

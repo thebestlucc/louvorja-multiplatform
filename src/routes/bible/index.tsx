@@ -18,6 +18,7 @@ import { Link } from "@tanstack/react-router";
 import { Monitor, Square, Settings2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { usePresentationStore } from "../../stores/presentation-store";
+import { useMediaPlayerStore } from "../../stores/media-player-store";
 
 const PERIODIC_FALLBACK_ORDER_OFFSET = 1000;
 
@@ -45,7 +46,7 @@ function BibleIndex() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showComparison, setShowComparison] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const presentationSlides = usePresentationStore((s) => s.slides);
+  const presentationSlides = useMediaPlayerStore((s) => s.slides);
   const activeSplitIndex = usePresentationStore((s) => s.activeSlideIndex);
   const deepLinkApplied = useRef(false);
   const pendingVerseNavigationRef = useRef<PendingVerseNavigation | null>(null);

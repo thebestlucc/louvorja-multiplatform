@@ -158,9 +158,9 @@ async function playBibleItem(item: QueueItem) {
     vs.resetVideoState();
   }
 
-  // Populate presentation store with the WHOLE chapter
+  // Populate media-player-store with the WHOLE chapter
+  useMediaPlayerStore.getState().setSlides(slides);
   const pres = usePresentationStore.getState();
-  pres.setSlides(slides);
   pres.setActiveSlideIndex(startIdx);
   displayStore.getState().setCurrentProjectionType("bible");
   await catcher(setCurrentSlide(slides[startIdx]));
@@ -205,7 +205,7 @@ async function playVideoItem(item: QueueItem) {
     useMediaPlayerStore.getState().unload();
   }
 
-  usePresentationStore.getState().setSlides([slide]);
+  useMediaPlayerStore.getState().setSlides([slide]);
   usePresentationStore.getState().setActiveSlideIndex(0);
   useDisplayStore.getState().setCurrentProjectionType("presentation");
 
@@ -290,7 +290,7 @@ async function playPresentationItem(item: QueueItem) {
     vs.resetVideoState();
   }
 
-  usePresentationStore.getState().setSlides(slides);
+  useMediaPlayerStore.getState().setSlides(slides);
   usePresentationStore.getState().setActiveSlideIndex(0);
   useDisplayStore.getState().setCurrentProjectionType("presentation");
   await catcher(setCurrentSlide(slides[0]));
@@ -361,11 +361,9 @@ export function usePlaybackCoordinator() {
       stopAudio();
       useMediaPlayerStore.getState().unload();
       useDisplayStore.getState().setCurrentProjectionType(null);
-      // Clear presentation-store slides so the effectiveSlides fallback in
+      // Clear media-player-store slides so the effectiveSlides fallback in
       // playing-now doesn't render a stale onlineVideo thumbnail after queue ends.
-      import("../stores/presentation-store").then(({ usePresentationStore }) => {
-        usePresentationStore.getState().setSlides([]);
-      }).catch(() => {});
+      useMediaPlayerStore.getState().setSlides([]);
     }
   }, [currentIndex, items.length, replayTrigger, playItem, stopAudio]);
 

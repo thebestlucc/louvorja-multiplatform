@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 import { setSlideContext } from "../lib/tauri";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useAudioStore } from "../stores/audio-store";
@@ -13,10 +14,8 @@ import type { PlaybackMode } from "../types/audio";
 import { projectSlideWithType } from "../lib/projection-playback";
 
 export function useSlides() {
-  const {
-    slides,
-    activeSlideIndex,
-  } = usePresentationStore();
+  const slides = useMediaPlayerStore((s) => s.slides);
+  const activeSlideIndex = useMediaPlayerStore((s) => s.activeSlideIndex);
   const currentPresentationId = usePresentationStore((s) => s.currentPresentationId);
 
   // Determine projection type based on which presentation context we're in
@@ -86,25 +85,25 @@ export function useSlides() {
 
   const goToSlide = useCallback(
     async (index: number, options?: { seekAudio?: boolean }) => {
-      const state = usePresentationStore.getState();
-      if (index >= 0 && index < state.slides.length) {
+      const mediaState = useMediaPlayerStore.getState();
+      if (index >= 0 && index < mediaState.slides.length) {
         // Only seek audio if explicitly requested (e.g., from Playing now sync-aware navigation).
         // Default: don't seek audio when user clicks a slide/verse in the UI.
         if (options?.seekAudio) {
           await seekAudioToSlideSyncPoint(index);
         }
-        state.setActiveSlideIndex(index);
-        const slide = state.slides[index];
-        const next = index + 1 < state.slides.length ? state.slides[index + 1] : null;
+        mediaState.setActiveSlideIndex(index);
+        const slide = mediaState.slides[index];
+        const next = index + 1 < mediaState.slides.length ? mediaState.slides[index + 1] : null;
         const title = getSlideTitle(slide);
-        await projectSlideWithContext(slide, next, index, state.slides.length, title);
+        await projectSlideWithContext(slide, next, index, mediaState.slides.length, title);
       }
     },
     [projectSlideWithContext, seekAudioToSlideSyncPoint],
   );
 
   const nextSlide = useCallback(async () => {
-    const { activeSlideIndex: idx, slides: currentSlides } = usePresentationStore.getState();
+    const { activeSlideIndex: idx, slides: currentSlides } = useMediaPlayerStore.getState();
 
     if (currentSlides.length === 0) return;
 
@@ -124,7 +123,7 @@ export function useSlides() {
   }, [goToSlide]);
 
   const prevSlide = useCallback(async () => {
-    const { activeSlideIndex: idx } = usePresentationStore.getState();
+    const { activeSlideIndex: idx } = useMediaPlayerStore.getState();
     await goToSlide(idx - 1, { seekAudio: true });
   }, [goToSlide]);
 

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { usePresentationStore } from "../stores/presentation-store";
+import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useAudioStore } from "../stores/audio-store";
 import { useQueueStore } from "../stores/queue-store";
 import { getSyncPoints as fetchSyncPoints } from "../lib/tauri";
@@ -27,7 +28,7 @@ export function hymnToSlides(
 
 export function useHymnPlayback() {
   const router = useRouter();
-  const setPresentationSlides = usePresentationStore((state) => state.setSlides);
+  const setMediaSlides = useMediaPlayerStore((state) => state.setSlides);
   const setPresentationActiveSlideIndex = usePresentationStore((state) => state.setActiveSlideIndex);
   const setCurrentPresentation = usePresentationStore((state) => state.setCurrentPresentation);
   const setAudioSyncPoints = useAudioStore((state) => state.setSyncPoints);
@@ -50,12 +51,12 @@ export function useHymnPlayback() {
       : parseLyricsSyncToPoints(hymn.lyricsSync);
 
     setCurrentPresentation(null);
-    setPresentationSlides(generatedSlides);
+    setMediaSlides(generatedSlides);
     setPresentationActiveSlideIndex(clampedIndex);
     setAudioSyncPoints(effectiveSyncPoints);
 
     return { generatedSlides, clampedIndex };
-  }, [setAudioSyncPoints, setCurrentPresentation, setPresentationActiveSlideIndex, setPresentationSlides]);
+  }, [setAudioSyncPoints, setCurrentPresentation, setPresentationActiveSlideIndex, setMediaSlides]);
 
   const handleStartCantado = useCallback(async (hymn: Hymn) => {
     await catcher(async () => {
