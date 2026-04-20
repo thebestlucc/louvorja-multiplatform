@@ -2,6 +2,19 @@ import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import PairRoute from "../pair";
 
+// vi.mock is hoisted — factories must use inline async imports, not top-level imports.
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
+});
+vi.mock("@/stores/connection-store", async () => {
+  const { connectionStoreMockFactory } = await import("../../__tests__/mocks/connection-store");
+  return connectionStoreMockFactory();
+});
+
+// applyConnectionStoreState must be a top-level import (runs after vi.mock hoisting).
+import { applyConnectionStoreState } from "../../__tests__/mocks/connection-store";
+
 // Mock QrScanner
 vi.mock("@/components/system/qr-scanner", () => ({
   QrScanner: ({
@@ -30,34 +43,6 @@ vi.mock("@/components/system/qr-scanner", () => ({
       </div>
     );
   },
-}));
-
-const mockCompletePairing = vi.fn();
-vi.mock("@/stores/connection-store", () => ({
-  useConnectionStore: (selector: (s: unknown) => unknown) =>
-    selector({ completePairing: mockCompletePairing }),
-}));
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, opts?: Record<string, unknown>) => {
-      const map: Record<string, string> = {
-        "remote.pair.pin_invalid": `Invalid. ${opts?.attempts ?? 0} left.`,
-        "remote.pair.pin_locked": `Locked ${opts?.seconds ?? 0}s.`,
-        "remote.pair.headline": "Pair this device",
-        "remote.pair.pin_link": "Enter code manually",
-        "remote.pair.pin_placeholder": "6-digit code",
-        "remote.pair.scan": "Scan QR",
-        "remote.pair.success": "Paired!",
-        "remote.pair.redirecting": "Redirecting to live screen...",
-        "remote.pair.find_code_hint": "Find code on your computer",
-        "remote.pair.camera_denied": "Camera access denied. Enter the code manually.",
-        "remote.pair.torch": "Toggle torch",
-        "remote.pair.pair_button": "Pair",
-      };
-      return map[key] ?? key;
-    },
-  }),
 }));
 
 // Mock PinInput — renders in both mobile and desktop modes
@@ -102,8 +87,12 @@ function errorResponse() {
   return Promise.resolve(new Response("Forbidden", { status: 403 }));
 }
 
+// Import connection-store mock after vi.mock so we can grab completePairing from state
+import { useConnectionStore } from "@/stores/connection-store";
+
 describe("PairRoute", () => {
   beforeEach(() => {
+    applyConnectionStoreState("unpaired");
     vi.clearAllMocks();
     vi.useFakeTimers();
   });
@@ -129,7 +118,8 @@ describe("PairRoute", () => {
     mockFetch.mockReturnValue(
       successResponse({ deviceId: "d1", deviceToken: "tok", serverName: "LouvorJA" }),
     );
-    mockCompletePairing.mockResolvedValue(undefined);
+    const { completePairing } = (useConnectionStore as unknown as { getState: () => { completePairing: ReturnType<typeof vi.fn> } }).getState();
+    completePairing.mockResolvedValue(undefined);
     render(<PairRoute />);
     await act(async () => {
       fireEvent.click(screen.getByText("simulate scan"));
@@ -144,7 +134,8 @@ describe("PairRoute", () => {
     mockFetch.mockReturnValue(
       successResponse({ deviceId: "d1", deviceToken: "tok", serverName: "LouvorJA" }),
     );
-    mockCompletePairing.mockResolvedValue(undefined);
+    const { completePairing } = (useConnectionStore as unknown as { getState: () => { completePairing: ReturnType<typeof vi.fn> } }).getState();
+    completePairing.mockResolvedValue(undefined);
     render(<PairRoute />);
     await act(async () => {
       fireEvent.click(screen.getByText("simulate scan"));
@@ -160,7 +151,7 @@ describe("PairRoute", () => {
       vi.advanceTimersByTime(1500);
     });
 
-    expect(mockCompletePairing).toHaveBeenCalled();
+    expect(completePairing).toHaveBeenCalled();
   });
 
   it("shows error message when PIN is wrong", async () => {
@@ -264,7 +255,8 @@ describe("PairRoute", () => {
       if (callCount <= 3) return errorResponse();
       return successResponse({ deviceId: "d1", deviceToken: "tok", serverName: "LouvorJA" });
     });
-    mockCompletePairing.mockResolvedValue(undefined);
+    const { completePairing } = (useConnectionStore as unknown as { getState: () => { completePairing: ReturnType<typeof vi.fn> } }).getState();
+    completePairing.mockResolvedValue(undefined);
 
     render(<PairRoute />);
     const pinLink = screen.getAllByRole("button", { name: "Enter code manually" })[0];
@@ -303,7 +295,8 @@ describe("PairRoute", () => {
     mockFetch.mockReturnValue(
       successResponse({ deviceId: "d1", deviceToken: "tok", serverName: "LouvorJA" }),
     );
-    mockCompletePairing.mockResolvedValue(undefined);
+    const { completePairing } = (useConnectionStore as unknown as { getState: () => { completePairing: ReturnType<typeof vi.fn> } }).getState();
+    completePairing.mockResolvedValue(undefined);
 
     render(<PairRoute />);
     // Switch to PIN mode

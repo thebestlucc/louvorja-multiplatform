@@ -2,21 +2,10 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ServiceRoute from "../service";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        "remote.service.start": "Start service",
-        "remote.service.stop": "Stop service",
-        "remote.service.next_item": "Next item",
-        "remote.service.prev_item": "Previous item",
-        "remote.service.no_service": "No active service",
-        "remote.service.item_count": "items",
-      };
-      return map[key] ?? key;
-    },
-  }),
-}));
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
+});
 
 const mockSend = vi.fn().mockResolvedValue(undefined);
 
