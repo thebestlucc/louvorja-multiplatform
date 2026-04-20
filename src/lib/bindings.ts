@@ -409,6 +409,18 @@ async getSlides(presentationId: number) : Promise<Result<Slide[], AppErrorRespon
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Batch variant: fetch slides for multiple presentation IDs in a single query.
+ * Collapses N IPC calls (one per presentation) into one.
+ */
+async getSlidesBatch(presentationIds: number[]) : Promise<Result<Slide[], AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_slides_batch", { presentationIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async createSlide(presentationId: number, content: SlideContent) : Promise<Result<Slide, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("create_slide", { presentationId, content }) };
@@ -953,7 +965,7 @@ async setSlideOnReturn(slideData: SlideContent) : Promise<Result<null, AppErrorR
     else return { status: "error", error: e  as any };
 }
 },
-async getCurrentSlide() : Promise<Result<SlideContent | null, AppErrorResponse>> {
+async getCurrentSlide() : Promise<Result<CurrentSlideResponse, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_current_slide") };
 } catch (e) {
@@ -1854,6 +1866,7 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
  * Online Videos feature — input for creating a custom single-video collection.
  */
 export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: string }
+export type CurrentSlideResponse = { slide: SlideContent | null; version: number }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number | null; createdAt: string; updatedAt: string }
