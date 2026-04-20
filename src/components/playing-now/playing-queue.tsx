@@ -116,7 +116,47 @@ interface PlayingQueueViewProps {
   emptyMessage?: string;
 }
 
-export function PlayingQueueView({ items, currentIndex, onItemClick, onRemoveItem, onMoveItem, emptyMessage }: PlayingQueueViewProps) {
+export function PlayingQueueView({ items, currentIndex, onItemClick, onRemoveItem, emptyMessage }: Omit<PlayingQueueViewProps, "onMoveItem">) {
+  if (items.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <span className="text-sm text-muted-foreground">{emptyMessage ?? "Queue is empty"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1 overflow-y-auto p-2">
+      {items.map((item, index) => (
+        <div key={item.id} className="group relative">
+          <button
+            onClick={() => onItemClick?.(index)}
+            className={cn(
+              "w-full flex items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors pr-10",
+              index === currentIndex ? "bg-primary text-primary-foreground" : "hover:bg-surface-hover text-foreground",
+            )}
+          >
+            <span className="flex-shrink-0 text-current opacity-70">{kindIcon(item.kind)}</span>
+            <span className="flex-1 truncate">{rowTitle(item)}</span>
+            <span className="text-[10px] opacity-70 uppercase font-bold">{item.kind === "hymn" ? item.type : ""}</span>
+          </button>
+          <button
+            className={cn(
+              "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
+              index === currentIndex ? "text-primary-foreground" : "text-muted-foreground",
+            )}
+            onClick={(e) => { e.stopPropagation(); onRemoveItem?.(index); }}
+            aria-label="Remove from queue"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PlayingQueueDndWrapper({ items, currentIndex, onItemClick, onRemoveItem, onMoveItem, emptyMessage }: PlayingQueueViewProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -125,7 +165,7 @@ export function PlayingQueueView({ items, currentIndex, onItemClick, onRemoveIte
   if (items.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-4">
-        <span className="text-sm text-muted-foreground">{emptyMessage || "Queue is empty"}</span>
+        <span className="text-sm text-muted-foreground">{emptyMessage ?? "Queue is empty"}</span>
       </div>
     );
   }
@@ -173,7 +213,7 @@ export function PlayingQueue() {
   );
 
   return (
-    <PlayingQueueView
+    <PlayingQueueDndWrapper
       items={items}
       currentIndex={currentIndex}
       onItemClick={setCurrentIndex}
