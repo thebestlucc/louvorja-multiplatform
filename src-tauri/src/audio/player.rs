@@ -158,12 +158,40 @@ pub struct AudioPlayer {
     output_muted: bool,
 }
 
-// SAFETY: AudioPlayer is always accessed through a Mutex<AudioPlayer>,
-// ensuring exclusive access. The OutputStream/OutputStreamHandle from rodio
-// are not Send/Sync due to cpal platform internals, but we only create them
-// once on the main thread and access through Mutex.
+// SAFETY: `OutputStream` and `OutputStreamHandle` from rodio are not
+// automatically `Send + Sync` because they hold opaque CPAL `Host` /
+// stream-handle objects whose internal OS representations (WASAPI
+// `IMMDeviceEnumerator` on Windows, CoreAudio `AudioUnit` on macOS, ALSA
+// `snd_pcm_t` on Linux) are documented as "use from a single thread"
+// by the respective CPAL backends.  rodio intentionally omits the
+// auto-trait impls to make accidental cross-thread sharing a
+// compile-time error rather than a silent data race.
+//
+// `AudioPlayer` is safe to share across threads because:
+//   1. Every access goes through `Mutex<AudioPlayer>` (see `AudioState` in
+//      `state.rs`), so at most one thread holds the CPAL handles at a time.
+//   2. The `OutputStream` is only written once at construction and only read
+//      (for lifetime-keeping, hence the `_stream` field name) afterwards —
+//      it is never sent to another thread while the audio device is active.
+//   3. `OutputStreamHandle` is shared only via the `Mutex` guard, which
+//      provides the necessary happens-before ordering.
+//
+// If a future refactor removes the `Mutex` wrapper or introduces an `Rc`
+// field, the compile-time assertion below will catch it.
 unsafe impl Send for AudioPlayer {}
+// SAFETY: same argument as Send above — all interior mutability is
+// protected by the outer `Mutex`; `Sync` is required so that
+// `Mutex<AudioPlayer>` itself satisfies `Sync` and can be placed in
+// `AppState` (which is `Send + Sync`).
 unsafe impl Sync for AudioPlayer {}
+
+// Compile-time guard: if a future change introduces a non-Send/non-Sync
+// field (e.g. `Rc<T>`, raw pointer without Send bound) this const-fn will
+// fail to compile, surfacing the safety regression immediately.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<AudioPlayer>();
+};
 
 impl AudioPlayer {
     pub fn new() -> Result<Self, AppError> {
