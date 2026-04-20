@@ -125,6 +125,44 @@ pub fn get_slides(conn: &Connection, presentation_id: i64) -> Result<Vec<Slide>,
     Ok(slides)
 }
 
+/// Fetch slides for multiple presentation IDs in a single query.
+/// Returned slides are ordered by (presentation_id, slide_index).
+/// Empty input returns an empty vec without hitting the DB.
+pub fn get_slides_batch(conn: &Connection, presentation_ids: &[i64]) -> Result<Vec<Slide>, AppError> {
+    if presentation_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let placeholders = presentation_ids
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT id, presentation_id, slide_index, slide_type, content, notes, transition
+         FROM slides WHERE presentation_id IN ({}) ORDER BY presentation_id, slide_index",
+        placeholders
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::ToSql> = presentation_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+    let slides = stmt
+        .query_map(&params[..], |row| {
+            Ok(Slide {
+                id: row.get("id")?,
+                presentation_id: row.get("presentation_id")?,
+                slide_index: row.get("slide_index")?,
+                slide_type: row.get("slide_type")?,
+                content: row.get("content")?,
+                notes: row.get("notes")?,
+                transition: row.get("transition")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(slides)
+}
+
 #[allow(dead_code)]
 pub fn insert_slide(
     conn: &Connection,

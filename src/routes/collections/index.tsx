@@ -20,7 +20,7 @@ import {
   useImportCollectionSong,
 } from "../../lib/queries";
 import type { Collection } from "../../lib/bindings";
-import { getCollection, getCollectionHymns, getSlides } from "../../lib/tauri";
+import { getCollection, getCollectionHymns, getSlidesBatch } from "../../lib/tauri";
 import { getPreference, setPreference } from "../../lib/store";
 import { parseSlideRow } from "../../types/presentation";
 import { usePresentationStore } from "../../stores/presentation-store";
@@ -180,13 +180,20 @@ function CollectionsIndex() {
       } else {
         const detail = await getCollection(collection.id);
         const songsWithCache = detail.songs.filter((s) => s.cachePresentationId);
-        const slideArrays = await Promise.all(
-          songsWithCache.map(async (song) => {
-            const [rows] = await catcher(getSlides(song.cachePresentationId!));
-            return (rows ?? []).map((r) => parseSlideRow(r).content);
-          })
-        );
-        for (const contents of slideArrays) allSlides.push(...contents);
+        // Batch: single IPC call instead of one per song (N+1 → 1).
+        const presentationIds = songsWithCache.map((s) => s.cachePresentationId!);
+        const [rows] = await catcher(getSlidesBatch(presentationIds));
+        // Group by presentation_id to maintain per-song slide ordering.
+        const byPresentationId = new Map<number, typeof rows>();
+        for (const row of rows ?? []) {
+          const key = row.presentationId;
+          if (!byPresentationId.has(key)) byPresentationId.set(key, []);
+          byPresentationId.get(key)!.push(row);
+        }
+        for (const song of songsWithCache) {
+          const songRows = byPresentationId.get(song.cachePresentationId!) ?? [];
+          allSlides.push(...songRows.map((r) => parseSlideRow(r).content));
+        }
       }
 
       if (allSlides.length > 0) {
