@@ -405,8 +405,13 @@ impl Drop for StreamingServer {
                 Ok(_) => log::info!("[streaming] accept thread joined cleanly"),
                 Err(_) => {
                     log::warn!("[streaming] accept thread did not join within 1s; detaching");
-                    // Intentionally leak join_thread so we don't block.
-                    // OS reclaims all threads on process exit.
+                    // Safety: deliberately leak the JoinHandle. The watcher thread is still
+                    // parked on `handle.join()`; dropping the handle via normal std semantics
+                    // does NOT kill the thread, but accidentally calling `.join()` on it again
+                    // elsewhere would re-introduce the hang. `mem::forget` skips the handle's
+                    // destructor so nothing re-waits on the thread. The thread itself outlives
+                    // this function and is reclaimed by the OS on process exit, which is
+                    // imminent whenever `Drop` runs (Drop only fires on shutdown).
                     std::mem::forget(join_thread);
                 }
             }
