@@ -17,6 +17,7 @@ mod state;
 mod streaming;
 mod utils;
 mod video;
+pub mod video_pipeline;
 mod video_server;
 mod youtube;
 mod ytdlp;
@@ -291,6 +292,25 @@ pub fn run() {
             // Slide Passer
             commands::slide_passer::send_keystroke,
             commands::slide_passer::check_accessibility_permission,
+            // Video Pipeline (Rust GStreamer pipeline)
+            commands::video_pipeline::video_pipeline_load,
+            commands::video_pipeline::video_pipeline_play,
+            commands::video_pipeline::video_pipeline_pause,
+            commands::video_pipeline::video_pipeline_seek,
+            commands::video_pipeline::video_pipeline_set_volume,
+            commands::video_pipeline::video_pipeline_set_loop,
+            commands::video_pipeline::video_pipeline_restart,
+            commands::video_pipeline::video_pipeline_subscribe,
+            commands::video_pipeline::video_pipeline_unsubscribe,
+            commands::video_pipeline::video_pipeline_answer,
+            commands::video_pipeline::video_pipeline_ice,
+            commands::video_pipeline::video_pipeline_unload,
+        ])
+        .events(tauri_specta::collect_events![
+            crate::video_pipeline::events::VideoPipelineOffer,
+            crate::video_pipeline::events::VideoPipelineIce,
+            crate::video_pipeline::events::VideoPipelineState,
+            crate::video_pipeline::events::VideoPipelineEnded,
         ]);
 
     #[cfg(debug_assertions)]
@@ -334,6 +354,57 @@ pub fn run() {
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);
+
+            // Point GStreamer at the bundled plugin directory BEFORE any
+            // video_pipeline command can run `gst::init()`. Release builds
+            // ship `Resources/gstreamer-runtime/gstreamer-1.0/` via build.rs
+            // (see Phase 5 in docs/plans/2026-04-17-rust-video-pipeline.md).
+            //
+            // Dev builds intentionally skip this: `cargo build` doesn't
+            // repopulate the runtime dir (build.rs clears it in debug), but
+            // stale files from a prior release build can linger in
+            // `target/debug/gstreamer-runtime/`. Those stale plugins have
+            // @rpath references to core libs that aren't co-located, and
+            // `gst-plugin-scanner` logs a scary dlopen failure for each. The
+            // system Homebrew install (/opt/homebrew, /usr/local) or the
+            // framework install at /Library/Frameworks handles dev fine.
+            #[cfg(all(
+                not(debug_assertions),
+                any(target_os = "macos", target_os = "windows"),
+            ))]
+            {
+                if let Ok(resource_dir) = app.path().resource_dir() {
+                    let runtime = resource_dir.join("gstreamer-runtime");
+                    let plugin_path = runtime.join("gstreamer-1.0");
+                    if plugin_path.exists() {
+                        // Safety: single-threaded setup phase — no other
+                        // threads observe env vars concurrently here.
+                        unsafe {
+                            std::env::set_var("GST_PLUGIN_PATH", &plugin_path);
+                        }
+                    }
+                    // Windows: `LoadLibrary` searches the exe dir, system dirs,
+                    // current dir, and PATH — but NOT `bundle.resources`
+                    // subdirectories. Core DLLs (gstreamer-1.0-0.dll, etc.)
+                    // land at `gstreamer-runtime/bin/`, so prepend that dir
+                    // to PATH before any gst::init() runs.
+                    // macOS core dylibs live at `gstreamer-runtime/lib/` and
+                    // are found via dyld's @rpath / fallback paths, so no
+                    // equivalent is needed there.
+                    #[cfg(target_os = "windows")]
+                    {
+                        let bin_dir = runtime.join("bin");
+                        if bin_dir.exists() {
+                            let current_path = std::env::var("PATH").unwrap_or_default();
+                            let new_path =
+                                format!("{};{}", bin_dir.display(), current_path);
+                            unsafe {
+                                std::env::set_var("PATH", new_path);
+                            }
+                        }
+                    }
+                }
+            }
 
             let app_data_dir = app
                 .path()
@@ -400,6 +471,22 @@ pub fn run() {
                 }
             }
 
+            // Build the video pipeline runtime singleton up front so it can
+            // be moved into AppState. Signaling channel forwards offers/ICE
+            // through the typed `VideoPipeline*` events to the frontend.
+            // The AppHandle is also passed to the runtime so its 10 Hz state
+            // broadcaster (Task 2.3) can emit `VideoPipelineState` events.
+            let video_signaling: std::sync::Arc<dyn crate::video_pipeline::SignalingChannel> =
+                std::sync::Arc::new(crate::video_pipeline::TauriSignalingChannel::new(
+                    app.handle().clone(),
+                ));
+            let video_pipeline_runtime = std::sync::Arc::new(
+                crate::video_pipeline::VideoPipelineRuntime::new(
+                    Some(app.handle().clone()),
+                    video_signaling,
+                ),
+            );
+
             app.manage(AppState {
                 db: pool.clone(),
                 bible_db: bible_pool,
@@ -431,6 +518,7 @@ pub fn run() {
                     part_index: 0,
                 }),
                 remote: crate::remote::state::RemoteServerState::default(),
+                video_pipeline: Some(video_pipeline_runtime),
             });
 
             // Manage a disabled AudioState immediately (non-blocking).
@@ -574,11 +662,21 @@ pub fn run() {
                         let state = window.state::<AppState>();
                         state.projector_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("projector-state-changed", false);
+                        // Tear down the WebRTC consumer so the Rust pipeline
+                        // doesn't retain a peer connection for a dead window
+                        // (audit finding #4 — WebView teardown skips React
+                        // useEffect cleanup on abrupt close).
+                        if let Some(vp) = &state.video_pipeline {
+                            let _ = vp.unsubscribe("projector");
+                        }
                     }
                     "return" => {
                         let state = window.state::<AppState>();
                         state.return_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("return-state-changed", false);
+                        if let Some(vp) = &state.video_pipeline {
+                            let _ = vp.unsubscribe("return");
+                        }
                     }
                     "main" => {
                         let state = window.state::<AppState>();

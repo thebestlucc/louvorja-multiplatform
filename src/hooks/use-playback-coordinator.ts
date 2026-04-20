@@ -208,6 +208,55 @@ async function playVideoItem(item: QueueItem) {
   usePresentationStore.getState().setSlides([slide]);
   usePresentationStore.getState().setActiveSlideIndex(0);
   useDisplayStore.getState().setCurrentProjectionType("presentation");
+
+  // When the Rust video pipeline flag is on, load the URI into the Rust runtime
+  // so Phase 2 controls (play/pause/seek/volume) actually drive a backed pipeline.
+  // Must run BEFORE setCurrentSlide so projector/return RustVideoConsumers find a
+  // loaded + playing pipeline the moment they subscribe on slide-changed.
+  const { useVideoPlayerStore } = await import("../stores/video-player-store");
+  if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+    const videoPipeline = await import("../lib/tauri/video-pipeline");
+    let mediaSource: import("../lib/bindings").MediaSource | null = null;
+    if (vm.videoSource === "local" && vm.videoUrl) {
+      // MediaSource::Local needs an absolute path. Managed-media paths
+      // (`media/videos/...`) are stored relative to the Tauri app data dir;
+      // resolve them on the fly so the Rust pipeline can open the file:// URI.
+      // Absolute paths (user-linked local files) pass through unchanged.
+      if (vm.videoUrl.startsWith("/")) {
+        mediaSource = { type: "local", absolutePath: vm.videoUrl };
+      } else if (vm.videoUrl.startsWith("media/")) {
+        const { appDataDir, join } = await import("@tauri-apps/api/path");
+        try {
+          const abs = await join(await appDataDir(), vm.videoUrl);
+          mediaSource = { type: "local", absolutePath: abs };
+        } catch (err) {
+          console.error("[video-pipeline] managed media path resolve failed", err);
+        }
+      }
+    } else if (vm.videoId) {
+      mediaSource = { type: "youtube", videoId: vm.videoId };
+    }
+
+    if (mediaSource) {
+      try {
+        // Rust-side worker thread auto-transitions to PLAYING after the URI
+        // is set (commands/video_pipeline.rs). Calling videoPipeline.play()
+        // here would race the worker — play() runs first against an empty
+        // pipeline (no-op), then the worker's set_state(PAUSED) inside load()
+        // overrides it, leaving the user staring at a paused video.
+        await videoPipeline.load(mediaSource);
+        // Optimistically reflect playing state so ControlBar enables
+        // immediately. The bridge hook keeps this in sync from
+        // videoPipelineState events (~10 Hz).
+        useMediaPlayerStore.getState().setStatus("playing");
+      } catch (err) {
+        console.error("[video-pipeline] load failed", err);
+      }
+    } else {
+      console.warn("[video-pipeline] no resolvable MediaSource for", vm);
+    }
+  }
+
   // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle
   await catcher(setCurrentSlide(slide));
 }
@@ -330,4 +379,39 @@ export function usePlaybackCoordinator() {
       setOnFinished(null);
     };
   }, [setOnFinished, next]);
+
+  // Effect: Auto-advance the queue when the Rust video pipeline reports EOS
+  // (Task 3.2). Mirrors the audio-store onFinished hook for video items.
+  //
+  // Guards:
+  // - Only fires when the `useRustVideoPipeline` flag is ON (safety net in
+  //   case a stale event arrives after a flag toggle).
+  // - Only fires when the current queue item is a video — an EOS from a
+  //   prior session must not misfire if the queue moved on to an audio item.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    (async () => {
+      const [{ events }, { useVideoPlayerStore }] = await Promise.all([
+        import("../lib/bindings"),
+        import("../stores/video-player-store"),
+      ]);
+      const unlistenFn = await events.videoPipelineEnded.listen(() => {
+        if (!useVideoPlayerStore.getState().useRustVideoPipeline) return;
+        const qs = useQueueStore.getState();
+        const cur = qs.items[qs.currentIndex];
+        if (cur?.kind !== "video") return;
+        next();
+      });
+      if (cancelled) {
+        unlistenFn();
+        return;
+      }
+      unlisten = unlistenFn;
+    })();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [next]);
 }

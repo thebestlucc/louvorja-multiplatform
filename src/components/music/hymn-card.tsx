@@ -88,7 +88,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
     e.stopPropagation();
     void (async () => {
       const full = await getFullHymn();
-      if (full) void handleStartSlidesOnly(full);
+      if (full) handleStartSlidesOnly(full);
     })();
   };
 
@@ -97,7 +97,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
     e.stopPropagation();
     void (async () => {
       const full = await getFullHymn();
-      if (full) void handleStartCantado(full);
+      if (full) handleStartCantado(full);
     })();
   };
 
@@ -106,7 +106,7 @@ export const HymnCard = memo(function HymnCard({ hymn, view = "grid", favoriteId
     e.stopPropagation();
     void (async () => {
       const full = await getFullHymn();
-      if (full) void handleStartPlayback(full);
+      if (full) handleStartPlayback(full);
     })();
   };
 

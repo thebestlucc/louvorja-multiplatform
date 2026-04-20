@@ -31,20 +31,20 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
       const video = projectorVideoRef.current;
       if (!video) return;
       const { action, value } = e.payload;
-      if (action === "play") void video.play().catch(() => {});
+      if (action === "play") video.play().catch(() => {});
       else if (action === "pause") video.pause();
       else if (action === "seek" && value !== undefined) video.currentTime = value;
       else if (action === "volume" && value !== undefined) video.volume = value;
     }).catch(() => () => {});
 
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, [renderMode]);
 
   const emitVideoState = () => {
     if (renderMode !== "projector") return;
     const video = projectorVideoRef.current;
     if (!video) return;
-    void emitTo("main", "video-state", {
+    emitTo("main", "video-state", {
       paused: video.paused,
       currentTime: video.currentTime,
       duration: isFinite(video.duration) ? video.duration : 0,

@@ -244,7 +244,7 @@ export function PrintPreviewDialog({
     );
 
     setIsPersistingOrder(true);
-    void onReorderDepartments(nextFullOrder)
+    onReorderDepartments(nextFullOrder)
       .then((result) => {
         if (result === false) {
           setOrderedDepartmentIds(orderedDepartmentIds);
@@ -357,7 +357,7 @@ export function PrintPreviewDialog({
                   </Button>
                 </div>
 
-                <Button type="button" className="w-full" onClick={() => void handlePrint()} disabled={pack.pages.length === 0}>
+                <Button type="button" className="w-full" onClick={() => handlePrint()} disabled={pack.pages.length === 0}>
                   <Printer className="mr-2 h-4 w-4" />
                   {t("utilities.schedules.print.dialogAction")}
                 </Button>

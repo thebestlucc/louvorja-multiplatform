@@ -6,14 +6,10 @@ vi.mock("@/components/system/qr-scanner", () => ({
   QrScanner: () => <div data-testid="qr-scanner" />,
 }));
 
-// Mock i18next so translations resolve to readable strings
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en" },
-  }),
-  initReactI18next: { type: "3rdParty", init: () => {} },
-}));
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("./mocks/i18n");
+  return i18nMockFactory();
+});
 
 // Mock i18n module to prevent real initialization (localStorage unavailable in jsdom)
 vi.mock("@/lib/i18n", () => ({
@@ -26,27 +22,18 @@ vi.mock("@/lib/i18n", () => ({
   default: { language: "en" },
 }));
 
-// Mock store and storage to avoid IndexedDB in jsdom
-vi.mock("@/stores/connection-store", () => ({
-  useConnectionStore: vi.fn(() => ({
-    isPaired: false,
-    wsState: "disconnected",
-    device: null,
-    ws: null,
-    latencyMs: null,
-    init: vi.fn().mockResolvedValue(undefined),
-    completePairing: vi.fn(),
-    forgetDevice: vi.fn(),
-    _setWsState: vi.fn(),
-    _setLatency: vi.fn(),
-  })),
-}));
+vi.mock("@/stores/connection-store", async () => {
+  const { connectionStoreMockFactory, applyConnectionStoreState } =
+    await import("./mocks/connection-store");
+  applyConnectionStoreState("unpaired");
+  return connectionStoreMockFactory();
+});
 
 import App from "../App";
 
 test("renders pair screen on cold load", async () => {
   render(<App />);
   await waitFor(() => {
-    expect(screen.getByText("remote.pair.headline")).toBeInTheDocument();
+    expect(screen.getByText("Pair this device")).toBeInTheDocument();
   });
 });

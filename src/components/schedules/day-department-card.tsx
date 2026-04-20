@@ -253,7 +253,7 @@ export function DayDepartmentCard({
         <Button
           type="button"
           variant="outline"
-          onClick={() => void onResetGenerated({ scheduleDayDepartmentId: dayDepartment.id, peoplePerDay })}
+          onClick={() => onResetGenerated({ scheduleDayDepartmentId: dayDepartment.id, peoplePerDay })}
           disabled={disabled}
         >
           <RotateCcw className="mr-2 h-4 w-4" />
@@ -261,7 +261,7 @@ export function DayDepartmentCard({
         </Button>
         <Button
           type="button"
-          onClick={() => void onSaveManual({ scheduleDayDepartmentId: dayDepartment.id, peoplePerDay, memberIds })}
+          onClick={() => onSaveManual({ scheduleDayDepartmentId: dayDepartment.id, peoplePerDay, memberIds })}
           disabled={disabled}
         >
           <Save className="mr-2 h-4 w-4" />

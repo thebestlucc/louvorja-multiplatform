@@ -70,7 +70,7 @@ function PackSyncSettingsInline() {
       <Button
         size="sm"
         variant="outline"
-        onClick={() => void handleCheckNow()}
+        onClick={() => handleCheckNow()}
         disabled={planQuery.isFetching || isRunning}
       >
         {planQuery.isFetching ? t("settings.packSync.checking") : t("settings.packSync.checkNow")}

@@ -256,6 +256,11 @@ pub struct AppState {
     pub global_shortcuts: RwLock<HashMap<String, String>>,
     pub bible_projection: Mutex<BibleProjectionState>,
     pub remote: crate::remote::state::RemoteServerState,
+    /// Singleton runtime for the Rust GStreamer video pipeline. Populated in
+    /// `lib.rs` `setup()` after this struct is constructed; commands access
+    /// via `state.video_pipeline.as_ref()` and surface a clear error when the
+    /// runtime failed to initialise (e.g. GStreamer not available).
+    pub video_pipeline: Option<Arc<crate::video_pipeline::runtime::VideoPipelineRuntime>>,
 }
 
 pub struct AudioState {

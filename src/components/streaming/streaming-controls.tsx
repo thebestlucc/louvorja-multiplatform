@@ -152,14 +152,14 @@ export function StreamingControls() {
               <QrCodeDisplay url={item.url} label={item.label} />
               <div className="flex gap-1">
                 <button
-                  onClick={() => void copyUrl(item.url)}
+                  onClick={() => copyUrl(item.url)}
                   className="rounded p-1 hover:bg-white/10"
                   title={t("streaming.copyUrl")}
                 >
                   <Copy className="h-3 w-3 text-muted-foreground" />
                 </button>
                 <button
-                  onClick={() => void openUrl(item.url)}
+                  onClick={() => openUrl(item.url)}
                   className="rounded p-1 hover:bg-white/10"
                   title={t("streaming.openInBrowser")}
                 >

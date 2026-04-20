@@ -50,7 +50,7 @@ export function DataSection() {
             <label className="text-sm font-medium">{t("settings.storage.dataFolder")}</label>
             <p className="text-xs text-muted-foreground">{t("settings.storage.dataFolderDesc")}</p>
           </div>
-          <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void handleOpenDataFolder()}>
+          <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => handleOpenDataFolder()}>
             <FolderOpen className="mr-2 h-4 w-4" />
             {t("settings.storage.openFolder")}
           </Button>
@@ -100,7 +100,7 @@ export function DataSection() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => void handleClearDatabase()}
+              onClick={() => handleClearDatabase()}
               disabled={clearDatabaseMutation.isPending}
             >
               {clearDatabaseMutation.isPending ? "..." : t("settings.dangerZone.clearDatabaseConfirmButton")}

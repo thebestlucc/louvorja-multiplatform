@@ -20,11 +20,13 @@ import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
 import { useMonitorsControl } from "../hooks/use-monitors";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
+import { useRustVideoPipelineStateBridge } from "../hooks/use-rust-video-pipeline-state";
 import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useDisplayStore } from "../stores/display-store";
+import { useVideoPlayerStore } from "../stores/video-player-store";
 import type { SlideContent, LiturgyWithItems } from "../lib/bindings";
 import type { BibleContext } from "../stores/display-store";
 import { useQueueStore } from "../stores/queue-store";
@@ -342,6 +344,7 @@ function RootLayout() {
 
   usePlaybackCoordinator();
   useDownloadEvents();
+  useRustVideoPipelineStateBridge();
   useKeyboard({ enabled: !isBareRoute });
   useRemoteBridge({ enabled: !isBareRoute });
   useSlidePasser({ enabled: !isBareRoute });
@@ -354,6 +357,11 @@ function RootLayout() {
   const setActiveLiturgyItemIndex = usePresentationStore((s) => s.setActiveLiturgyItemIndex);
   const queueItems = useQueueStore((s) => s.items);
   const queueCurrentIndex = useQueueStore((s) => s.currentIndex);
+  // Smoke-test gating: when the Rust video pipeline flag is on, the legacy
+  // PersistentVideoPlayer (hidden YouTube iframe + LocalVideoMaster) must NOT
+  // mount, otherwise it contends with the new pipeline (audio/iframe stutter,
+  // visible YT overlay). Cleanup of the legacy player is deferred to Phase 7.
+  const useRust = useVideoPlayerStore((s) => s.useRustVideoPipeline);
 
   const handleStopLiturgy = useCallback(() => {
     setPlayingLiturgy(false);
@@ -565,8 +573,11 @@ function RootLayout() {
         <Outlet />
         {/* PersistentVideoPlayer must stay mounted across ALL routes — including bare
             projection/return/spotlight windows — so that videos keep playing while
-            the user opens those windows or navigates away from Playing Now. */}
-        <PersistentVideoPlayer />
+            the user opens those windows or navigates away from Playing Now.
+            Flag-gated off when useRustVideoPipeline is on (Phase 2 smoke-test): the
+            new Rust pipeline owns playback end-to-end and must not coexist with the
+            legacy hidden YouTube iframe / LocalVideoMaster. */}
+        {!useRust && <PersistentVideoPlayer />}
       </>
     );
   }
@@ -665,7 +676,7 @@ function RootLayout() {
       <UpdateNotification />
       {showTour && <SpotlightTour onComplete={handleTourComplete} />}
       <AppToaster />
-      <PersistentVideoPlayer />
+      {!useRust && <PersistentVideoPlayer />}
     </div>
   );
 }

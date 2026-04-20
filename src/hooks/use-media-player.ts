@@ -8,10 +8,18 @@ import { useAudioStore } from "../stores/audio-store";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useQueueStore } from "../stores/queue-store";
 import { useDisplayStore } from "../stores/display-store";
+import { useVideoPlayerStore } from "../stores/video-player-store";
+import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
 import { useSlides } from "./use-slides";
 import { resolveSlideSeekTimestamp, resolvePlaybackVariantPaths } from "../lib/audio-sync";
 import { resetCoordinatorPlaybackState } from "./use-playback-coordinator";
+import * as videoPipeline from "../lib/tauri/video-pipeline";
 import type { OverlayState } from "../lib/bindings";
+
+/** Read the feature flag fresh each call (avoids stale closures across HMR). */
+function useRustPipeline(): boolean {
+  return useVideoPlayerStore.getState().useRustVideoPipeline;
+}
 
 /**
  * Bridges useMediaPlayerStore with Tauri events and side effects.
@@ -104,7 +112,11 @@ export function useMediaPlayer() {
       const audioState = useAudioStore.getState();
       audioState.resume();
     } else if (state.timelineSource === "video") {
-      emit("video-control", { action: "play" }).catch(() => {});
+      if (useRustPipeline()) {
+        videoPipeline.play().catch((err) => console.error("[video-pipeline] play", err));
+      } else {
+        emit("video-control", { action: "play" }).catch(() => {});
+      }
     }
     store.getState().setStatus("playing");
   }, []);
@@ -114,7 +126,11 @@ export function useMediaPlayer() {
     if (state.timelineSource === "audio") {
       useAudioStore.getState().pause();
     } else if (state.timelineSource === "video") {
-      emit("video-control", { action: "pause" }).catch(() => {});
+      if (useRustPipeline()) {
+        videoPipeline.pause().catch((err) => console.error("[video-pipeline] pause", err));
+      } else {
+        emit("video-control", { action: "pause" }).catch(() => {});
+      }
     }
     store.getState().setStatus("paused");
   }, []);
@@ -123,7 +139,11 @@ export function useMediaPlayer() {
     resetCoordinatorPlaybackState();
     // Seek video to beginning before clearing screens
     if (store.getState().timelineSource === "video") {
-      emit("video-control", { action: "seek", value: 0 }).catch(() => {});
+      if (useRustPipeline()) {
+        videoPipeline.seek(0).catch((err) => console.error("[video-pipeline] seek(0)", err));
+      } else {
+        emit("video-control", { action: "seek", value: 0 }).catch(() => {});
+      }
     }
     useAudioStore.getState().stop();
     clearCurrentSlide();
@@ -133,12 +153,20 @@ export function useMediaPlayer() {
     if (pStore.isPlayingLiturgy) {
       pStore.setPlayingLiturgy(false);
       store.getState().unload();
+      if (useRustPipeline()) {
+        videoPipeline.unload().catch((err) => console.error("[video-pipeline] unload", err));
+        useRustVideoPipelineStore.getState().reset();
+      }
       return;
     }
 
     store.getState().stop();
     useQueueStore.getState().clearQueue();
     store.getState().unload();
+    if (useRustPipeline()) {
+      videoPipeline.unload().catch((err) => console.error("[video-pipeline] unload", err));
+      useRustVideoPipelineStore.getState().reset();
+    }
     // Clear presentation-store slides so the playing-now effectiveSlides fallback
     // doesn't display a stale onlineVideo slide thumbnail after the queue is stopped.
     usePresentationStore.getState().setSlides([]);
@@ -149,7 +177,13 @@ export function useMediaPlayer() {
     if (state.timelineSource === "audio") {
       useAudioStore.getState().seek(timeMs);
     } else if (state.timelineSource === "video") {
-      emit("video-control", { action: "seek", value: timeMs / 1000 }).catch(() => {});
+      if (useRustPipeline()) {
+        videoPipeline
+          .seek(timeMs / 1000)
+          .catch((err) => console.error("[video-pipeline] seek", err));
+      } else {
+        emit("video-control", { action: "seek", value: timeMs / 1000 }).catch(() => {});
+      }
     }
   }, []);
 
@@ -292,9 +326,16 @@ export function useMediaPlayer() {
   const restart = useCallback(() => {
     const state = store.getState();
     if (state.timelineSource === "video") {
-      emit("video-control", { action: "pause" }).catch(() => {});
-      emit("video-control", { action: "seek", value: 0 }).catch(() => {});
-      emit("video-control", { action: "play" }).catch(() => {});
+      if (useRustPipeline()) {
+        // Task 3.1: collapsed pause → seek → play sequence into one Rust call.
+        videoPipeline
+          .restart()
+          .catch((err) => console.error("[video-pipeline] restart", err));
+      } else {
+        emit("video-control", { action: "pause" }).catch(() => {});
+        emit("video-control", { action: "seek", value: 0 }).catch(() => {});
+        emit("video-control", { action: "play" }).catch(() => {});
+      }
     } else {
       useAudioStore.getState().seek(0);
       useAudioStore.getState().resume();
@@ -306,7 +347,13 @@ export function useMediaPlayer() {
     if (store.getState().timelineSource === "video") {
       // Bypass rodio command (no audio player active in video mode)
       useAudioStore.setState({ volume });
-      emit("video-control", { action: "volume", value: volume }).catch(() => {});
+      if (useRustPipeline()) {
+        videoPipeline
+          .setVolume(volume)
+          .catch((err) => console.error("[video-pipeline] setVolume", err));
+      } else {
+        emit("video-control", { action: "volume", value: volume }).catch(() => {});
+      }
     } else {
       useAudioStore.getState().setVolume(volume);
     }

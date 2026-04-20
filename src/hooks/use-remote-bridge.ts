@@ -19,6 +19,8 @@ import { catcher } from "../lib/catcher";
 import { commands } from "../lib/bindings";
 import { defaultBackground } from "../types/presentation";
 import { buildQueueItemsFromRemote, type RemoteQueueAddPayload } from "./build-queue-items-from-remote";
+import { useVideoPlayerStore } from "../stores/video-player-store";
+import * as videoPipeline from "../lib/tauri/video-pipeline";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,21 +75,21 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
         // Guard with store snapshot so these are idempotent (open=no-op if already
         // open; close=no-op if already closed). Avoids accidental toggle semantics.
         listen("remote-projector-open", () => {
-          if (!useDisplayStore.getState().projectorWindowOpen) void toggleProjector();
+          if (!useDisplayStore.getState().projectorWindowOpen) toggleProjector();
         }),
         listen("remote-projector-close", () => {
-          void closeProjector();
+          closeProjector();
         }),
         listen<RemoteProjectorSetMonitorPayload>("remote-projector-set-monitor", (e) => {
-          void catcher(setMonitorConfig(e.payload.monitorId, "projector"));
+          catcher(setMonitorConfig(e.payload.monitorId, "projector"));
         }),
 
         // ── Return monitor open/close ──────────────────────────────────────
         listen("remote-return-open", () => {
-          if (!useDisplayStore.getState().returnWindowOpen) void toggleReturn();
+          if (!useDisplayStore.getState().returnWindowOpen) toggleReturn();
         }),
         listen("remote-return-close", () => {
-          void closeReturn();
+          closeReturn();
         }),
 
         // ── Service start ─────────────────────────────────────────────────
@@ -100,6 +102,17 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
 
         // ── Video control (bridge remote-video-cmd → video-control) ───────
         listen<RemoteVideoCmdPayload>("remote-video-cmd", (e) => {
+          if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+            const { action, value } = e.payload;
+            if (action === "play") {
+              videoPipeline.play().catch(() => {});
+            } else if (action === "pause") {
+              videoPipeline.pause().catch(() => {});
+            } else if (action === "seek" && typeof value === "number") {
+              videoPipeline.seek(value).catch(() => {});
+            }
+            return;
+          }
           emit("video-control", e.payload).catch(() => {});
         }),
 
@@ -159,7 +172,7 @@ export function useRemoteBridge({ enabled = true }: { enabled?: boolean } = {}) 
           usePresentationStore.getState().setActiveSlideIndex(0);
           // Light up the playing-now indicator — sidebar checks currentProjectionType.
           useDisplayStore.getState().setCurrentProjectionType("bible");
-          void catcher(setCurrentSlide(slide));
+          catcher(setCurrentSlide(slide));
         }),
 
         // ── Video select (from search.select type=video) ──────────────────

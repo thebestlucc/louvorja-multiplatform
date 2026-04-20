@@ -155,10 +155,26 @@ pub fn update_online_playlist_cover(
 #[tauri::command]
 #[specta::specta]
 pub fn get_youtube_playlists(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<OnlineVideoPlaylist>, AppError> {
     let conn = state.db.get().map_err(|e| AppError::Internal(e.to_string()))?;
-    crate::db::queries::online_videos::get_playlists(&conn)
+    let mut playlists = crate::db::queries::online_videos::get_playlists(&conn)?;
+    // Drop stale cover_path entries whose file no longer exists on disk.
+    // Happens when the user clears managed media, syncs a DB from another
+    // machine, or a download half-succeeded. Returning the stale path would
+    // surface as a 500 from the Tauri asset protocol on the frontend.
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        for p in playlists.iter_mut() {
+            if let Some(rel) = p.cover_path.as_deref() {
+                let abs = app_data_dir.join(rel);
+                if !abs.exists() {
+                    p.cover_path = None;
+                }
+            }
+        }
+    }
+    Ok(playlists)
 }
 
 #[tauri::command]
@@ -182,6 +198,7 @@ pub fn refresh_youtube_playlist(
 ) -> Result<(), AppError> {
     let pool = state.db.clone();
 
+    let app_for_thread = app.clone();
     std::thread::spawn(move || {
         let result = (|| -> Result<(), AppError> {
             let conn = pool.get().map_err(|e| AppError::Internal(e.to_string()))?;
@@ -206,6 +223,36 @@ pub fn refresh_youtube_playlist(
                 playlist.id,
                 &video_tuples,
             )?;
+
+            // Self-heal the cover: if the stored path is missing on disk (or
+            // was never set), fetch the current playlist thumbnail URL via
+            // the YouTube API and re-download. Non-fatal — a failure here
+            // just leaves the UI on the placeholder icon.
+            if let Ok(app_data_dir) = app_for_thread.path().app_data_dir() {
+                let needs_cover = match playlist.cover_path.as_deref() {
+                    None => true,
+                    Some(rel) => !app_data_dir.join(rel).exists(),
+                };
+                if needs_cover {
+                    if let Ok((info, _chan_id, _chan_title)) =
+                        api::fetch_playlist_info(&api_key, &playlist_id)
+                    {
+                        if !info.thumbnail_url.is_empty() {
+                            if let Ok(rel) = thumbnails::download_thumbnail(
+                                &app_data_dir,
+                                &info.thumbnail_url,
+                                &playlist_id,
+                            ) {
+                                let _ = crate::db::queries::online_videos::update_playlist_cover(
+                                    &conn,
+                                    &playlist_id,
+                                    Some(&rel),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
 
             Ok(())
         })();

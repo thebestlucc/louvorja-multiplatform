@@ -1169,6 +1169,7 @@
     "tabs": {
       "appearance": "Aparência",
       "data": "Dados",
+      "experimental": "Experimental",
       "general": "Geral",
       "migration": "Migração",
       "monitor": "Monitor",
@@ -1178,6 +1179,14 @@
       "sync": "Sincronização",
       "youtube": "YouTube",
       "remote": "Remoto"
+    },
+    "experimental": {
+      "title": "Recursos experimentais",
+      "warning": "Estes recursos são instáveis e podem mudar ou ser removidos.",
+      "rustVideoPipeline": {
+        "label": "Pipeline de vídeo em Rust",
+        "description": "Usa o novo pipeline de vídeo autoritativo em Rust para vídeos on-line. Requer reiniciar as janelas de projetor/retorno se já estiverem abertas."
+      }
     },
     "theme": "Tema",
     "themeDesc": "Escolha o estilo visual do aplicativo.",
@@ -1256,6 +1265,7 @@
       "toggleReturn": "Alternar janela de retorno",
       "stop": "Parar reprodução",
       "restart": "Reiniciar reprodução",
+      "loop": "Repetir",
       "volumeUp": "Aumentar volume",
       "volumeDown": "Diminuir volume",
       "prevSlide": "Slide anterior (reprodução)",

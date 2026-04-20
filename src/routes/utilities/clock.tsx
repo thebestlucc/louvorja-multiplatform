@@ -82,13 +82,13 @@ function UtilitiesClockPage() {
 
   useEffect(() => {
     return () => {
-      void stopUtilityProjection();
+      stopUtilityProjection();
     };
   }, []);
 
   useEffect(() => {
     if (!isProjecting) {
-      void stopUtilityProjection();
+      stopUtilityProjection();
     }
   }, [isProjecting]);
 
@@ -127,10 +127,10 @@ function UtilitiesClockPage() {
             variant={isProjecting ? "destructive" : "outline"}
             onClick={() => {
               if (isProjecting) {
-                void stopClockProjectionFlow();
+                stopClockProjectionFlow();
                 return;
               }
-              void startClockProjectionFlow();
+              startClockProjectionFlow();
             }}
           >
             {isProjecting ? t("utilities.projection.clear") : t("utilities.projection.project")}
