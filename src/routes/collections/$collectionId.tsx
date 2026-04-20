@@ -154,7 +154,7 @@ function CollectionDetail() {
       }
     };
 
-    void runSyncChecks();
+    runSyncChecks();
     return () => {
       cancelled = true;
     };
@@ -374,7 +374,7 @@ function CollectionDetail() {
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartSlidesOnly(hymn); }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartSlidesOnly(hymn); }}
                       title={t("hymn.actionSlidesOnly")}
                     >
                       <MonitorPlay className="h-4 w-4" />
@@ -383,7 +383,7 @@ function CollectionDetail() {
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleStartCantado(hymn); }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartCantado(hymn); }}
                       title={t("hymn.actionSung")}
                     >
                       <Play className="h-4 w-4" />
@@ -449,7 +449,7 @@ function CollectionDetail() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handlePlaySong(song); }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePlaySong(song); }}
                     disabled={!song.cachePresentationId}
                     aria-label={t("collections.playSong")}
                     title={t("collections.playSong")}
@@ -498,7 +498,7 @@ function CollectionDetail() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void moveSong(data.songs, index, -1); }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveSong(data.songs, index, -1); }}
                     disabled={index === 0}
                     aria-label={t("collections.moveUp")}
                     title={t("collections.moveUp")}
@@ -509,7 +509,7 @@ function CollectionDetail() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void moveSong(data.songs, index, 1); }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveSong(data.songs, index, 1); }}
                     disabled={index === data.songs.length - 1}
                     aria-label={t("collections.moveDown")}
                     title={t("collections.moveDown")}

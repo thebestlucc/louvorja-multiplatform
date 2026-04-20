@@ -60,7 +60,7 @@ export function ProjectorView() {
       setSlide(newSlide);
     });
 
-    void getCurrentSlide()
+    getCurrentSlide()
       .then((data) => {
         const s = data;
         prevSlideRef.current = s;
@@ -82,7 +82,7 @@ export function ProjectorView() {
       setAlert(event.payload.alert ?? null);
     });
 
-    void getOverlayState()
+    getOverlayState()
       .then((state) => {
         setBlackScreen(state.blackScreen);
         setLogoScreen(state.logoScreen);

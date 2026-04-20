@@ -62,7 +62,7 @@ export function UrlForm({ onAdd, items = [], initialUrl, initialTitle, submitLab
 
   // Load YouTube API key once — used for duration fetch
   useEffect(() => {
-    void getPreference<string>("youtube_api_key", "").then((k) => {
+    getPreference<string>("youtube_api_key", "").then((k) => {
       apiKeyRef.current = k ?? "";
     });
   }, []);
@@ -119,7 +119,7 @@ export function UrlForm({ onAdd, items = [], initialUrl, initialTitle, submitLab
       }) ?? null;
 
       // Fire-and-forget library check — doesn't block oEmbed display
-      void findOnlineVideoByYtId(videoId).then((found) => {
+      findOnlineVideoByYtId(videoId).then((found) => {
         if (controller.signal.aborted) return;
         setDuplicate({
           inService: serviceMatch,

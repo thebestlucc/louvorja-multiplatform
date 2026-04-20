@@ -121,7 +121,7 @@ function BibleIndex() {
         bible.selectSingleVerse(verse);
       }
       if (bible.isProjecting) {
-        void bible.updateBibleProjection(newVerses);
+        bible.updateBibleProjection(newVerses);
       }
     },
     [bible],
@@ -131,9 +131,9 @@ function BibleIndex() {
     (verseNum: number) => {
       bible.selectSingleVerse(verseNum);
       if (bible.isProjecting) {
-        void bible.updateBibleProjection([verseNum]);
+        bible.updateBibleProjection([verseNum]);
       } else {
-        void bible.startBibleProjection();
+        bible.startBibleProjection();
       }
     },
     [bible],
@@ -141,9 +141,9 @@ function BibleIndex() {
 
   const handleProjectFromVerseDisplay = useCallback(() => {
     if (bible.isProjecting) {
-      void bible.updateBibleProjection();
+      bible.updateBibleProjection();
     } else {
-      void bible.startBibleProjection();
+      bible.startBibleProjection();
     }
   }, [bible]);
 
@@ -367,7 +367,7 @@ function BibleIndex() {
         shiftAnchorRef.current = null;
         const clamped = Math.max(1, Math.min(verse, verseCount));
         bible.selectSingleVerse(clamped);
-        if (isProjecting) void bible.updateBibleProjection([clamped]);
+        if (isProjecting) bible.updateBibleProjection([clamped]);
       };
 
       const moveToVerseShift = (targetVerse: number) => {
@@ -380,7 +380,7 @@ function BibleIndex() {
           const max = Math.max(anchor, clamped);
           const range: number[] = [];
           for (let i = min; i <= max; i++) range.push(i);
-          void bible.updateBibleProjection(range);
+          bible.updateBibleProjection(range);
         }
       };
 
@@ -444,13 +444,13 @@ function BibleIndex() {
         case "Spacebar":
           e.preventDefault();
           bible.selectSingleVerse(activeVerse);
-          if (isProjecting) void bible.updateBibleProjection([activeVerse]);
-          else void bible.startBibleProjection();
+          if (isProjecting) bible.updateBibleProjection([activeVerse]);
+          else bible.startBibleProjection();
           break;
         case "Escape":
           if (isProjecting) {
             e.preventDefault();
-            void bible.stopBibleProjection();
+            bible.stopBibleProjection();
           }
           break;
       }

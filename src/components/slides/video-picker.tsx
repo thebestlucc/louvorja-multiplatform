@@ -89,7 +89,7 @@ export function VideoPicker({ value, onChange }: VideoPickerProps) {
           variant="outline"
           size="sm"
           disabled={loading}
-          onClick={() => void handleBrowse()}
+          onClick={() => handleBrowse()}
         >
           {loading ? t("presentations.videoLoading") : t("presentations.videoBrowse")}
         </Button>

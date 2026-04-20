@@ -197,7 +197,7 @@ export function DepartmentManagerDialog({
   };
 
   const handleConfirmDelete = () => {
-    void handleDelete().then((deleted) => {
+    handleDelete().then((deleted) => {
       if (deleted) {
         setIsDeleteDialogOpen(false);
       }
@@ -298,7 +298,7 @@ export function DepartmentManagerDialog({
                     type="button"
                     variant="outline"
                     disabled={isPending || !draft}
-                    onClick={() => void handleSave()}
+                    onClick={() => handleSave()}
                   >
                     <Save className="mr-2 h-4 w-4" />
                     {t("actions.save")}
@@ -306,7 +306,7 @@ export function DepartmentManagerDialog({
                   <Button
                     type="button"
                     disabled={isPending || !draft || !canGenerateSchedule}
-                    onClick={() => void handleSave({ generateAfterSave: true })}
+                    onClick={() => handleSave({ generateAfterSave: true })}
                   >
                     <Wand2 className="mr-2 h-4 w-4" />
                     {t("utilities.schedules.departmentManagement.saveAndGenerate")}

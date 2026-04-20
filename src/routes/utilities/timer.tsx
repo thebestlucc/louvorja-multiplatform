@@ -275,7 +275,7 @@ function UtilitiesTimerPage() {
 
     const nextVolume = normalizeAlertVolume(value[0] / 100);
     setAlertVolume(nextVolume);
-    void persistAlertVolume(nextVolume);
+    persistAlertVolume(nextVolume);
   };
 
   const displayMode = isRunning ? (timerState?.mode ?? mode) : mode;
@@ -355,13 +355,13 @@ function UtilitiesTimerPage() {
 
   useEffect(() => {
     return () => {
-      void stopUtilityProjection();
+      stopUtilityProjection();
     };
   }, []);
 
   useEffect(() => {
     if (!isProjecting) {
-      void stopUtilityProjection();
+      stopUtilityProjection();
     }
   }, [isProjecting]);
 
@@ -418,7 +418,7 @@ function UtilitiesTimerPage() {
                       key={value}
                       size="sm"
                       variant="outline"
-                      onClick={() => void handleAdjustCountdownMinutes(value)}
+                      onClick={() => handleAdjustCountdownMinutes(value)}
                       disabled={adjustCountdownTimer.isPending}
                     >
                       {value > 0 ? `+${value}` : String(value)}
@@ -488,10 +488,10 @@ function UtilitiesTimerPage() {
               variant={isProjecting ? "destructive" : "outline"}
               onClick={() => {
                 if (isProjecting) {
-                  void stopTimerProjectionFlow();
+                  stopTimerProjectionFlow();
                   return;
                 }
-                void startTimerProjectionFlow();
+                startTimerProjectionFlow();
               }}
             >
               {isProjecting ? t("utilities.projection.clear") : t("utilities.projection.project")}
@@ -566,7 +566,7 @@ function UtilitiesTimerPage() {
                   {!isMandatoryAlertMinute(rule.minuteMark) && (
                     <button
                       type="button"
-                      onClick={() => void handleRemoveAlertMinute(rule.minuteMark)}
+                      onClick={() => handleRemoveAlertMinute(rule.minuteMark)}
                       className="text-xs text-muted-foreground hover:text-foreground"
                     >
                       {t("utilities.timer.removeAlert")}
@@ -582,21 +582,21 @@ function UtilitiesTimerPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => void handleBrowseAlertAudio(rule.minuteMark)}
+                    onClick={() => handleBrowseAlertAudio(rule.minuteMark)}
                   >
                     {t("utilities.timer.browseAudio")}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => void handleTestAlert(rule)}
+                    onClick={() => handleTestAlert(rule)}
                   >
                     {t("utilities.timer.testAudio")}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => void handleClearAlertAudio(rule.minuteMark)}
+                    onClick={() => handleClearAlertAudio(rule.minuteMark)}
                     disabled={!rule.audioPath}
                   >
                     {t("utilities.timer.clearAudio")}
@@ -617,7 +617,7 @@ function UtilitiesTimerPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void handleAddAlertMinute()}
+                onClick={() => handleAddAlertMinute()}
               >
                 {t("utilities.timer.addAlert")}
               </Button>

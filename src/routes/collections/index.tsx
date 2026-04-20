@@ -77,12 +77,12 @@ function CollectionsIndex() {
   const renderView = useDeferredValue(view);
 
   useEffect(() => {
-    void getPreference<"list" | "grid">("collections.viewType", "grid").then(setView);
+    getPreference<"list" | "grid">("collections.viewType", "grid").then(setView);
   }, []);
 
   const handleSetView = (v: "list" | "grid") => {
     setView(v);
-    void setPreference("collections.viewType", v);
+    setPreference("collections.viewType", v);
   };
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
@@ -211,7 +211,7 @@ function CollectionsIndex() {
           }));
           addToQueue(queueItems, true);
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
-          void router.navigate({ to: "/playing-now" });
+          router.navigate({ to: "/playing-now" });
         }
       } else {
         const detail = await getCollection(collection.id);
@@ -236,7 +236,7 @@ function CollectionsIndex() {
           }));
           addToQueue(queueItems, true);
           notify.success(t("collections.playingHymn", { title: hymns[0].title }));
-          void router.navigate({ to: "/playing-now" });
+          router.navigate({ to: "/playing-now" });
         }
       }
     }, { notify: true, fallbackMessage: t("collections.playFailed") });
@@ -349,7 +349,7 @@ function CollectionsIndex() {
                 onKeyDown={(event) => {
                   if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                     event.preventDefault();
-                    void handleCreate();
+                    handleCreate();
                   }
                 }}
                 placeholder={t("collections.descriptionPlaceholder")}
@@ -435,7 +435,7 @@ function CollectionsIndex() {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => { void router.navigate({ to: "/collections", search: {} }); }}
+            onClick={() => { router.navigate({ to: "/collections", search: {} }); }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2",
               !isOnlineVideos && tab === "albums" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
@@ -445,7 +445,7 @@ function CollectionsIndex() {
           </button>
           <button
             type="button"
-            onClick={() => { void router.navigate({ to: "/collections", search: { tab: "custom" } }); }}
+            onClick={() => { router.navigate({ to: "/collections", search: { tab: "custom" } }); }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2",
               !isOnlineVideos && tab === "custom" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"

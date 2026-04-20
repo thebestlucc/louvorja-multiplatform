@@ -224,7 +224,7 @@ export function AppearanceSection() {
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => void handlePickProjectorLogoImage()}
+                onClick={() => handlePickProjectorLogoImage()}
                 disabled={copyImageMutation.isPending}
               >
                 <Upload className="mr-2 h-4 w-4" />

@@ -149,7 +149,7 @@ function PresentationDetail() {
       await projectSlideIndex(0);
       setActiveSlideIndex(0);
 
-      void router.navigate({ to: "/playing-now" });
+      router.navigate({ to: "/playing-now" });
     }, { notify: true });
   }, [id, slideContents, setActiveSlideIndex, t, setCurrentPresentation, router, presentation?.title]);
 

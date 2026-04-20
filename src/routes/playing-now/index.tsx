@@ -136,8 +136,8 @@ function PlayingNowScreen() {
             onStop={actions.stop}
             onRestart={actions.restart}
             onSeek={actions.seek}
-            onPrevSlide={isBibleProjection ? () => void navigateBible("prev") : actions.prevSlide}
-            onNextSlide={isBibleProjection ? () => void navigateBible("next") : actions.nextSlide}
+            onPrevSlide={isBibleProjection ? () => navigateBible("prev") : actions.prevSlide}
+            onNextSlide={isBibleProjection ? () => navigateBible("next") : actions.nextSlide}
             onVolumeChange={actions.setVolume}
             onMuteToggle={() => {
               const s = useAudioStore.getState();

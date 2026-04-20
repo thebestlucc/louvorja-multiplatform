@@ -204,7 +204,7 @@ export function PackSyncDialog() {
                               <span className="ml-auto font-normal normal-case">{items.length} {t("settings.packSync.packs")}</span>
                             </div>
                             {items.map((item) => (
-                              <PackRow key={item.packId} item={item} onDownload={() => void handleStart([item])} />
+                              <PackRow key={item.packId} item={item} onDownload={() => handleStart([item])} />
                             ))}
                           </div>
                         ))}
@@ -235,7 +235,7 @@ export function PackSyncDialog() {
                 {t("settings.packSync.later")}
               </Button>
               <Button
-                onClick={() => void handleStart(undefined)}
+                onClick={() => handleStart(undefined)}
                 disabled={
                   !plan ||
                   startMutation.isPending ||
@@ -405,7 +405,7 @@ export function PackSyncProgressDialog() {
         <DialogFooter className="mt-4 gap-2 sm:justify-between">
           <div className="flex gap-2">
             {!isDone && (
-              <Button variant="destructive" size="sm" onClick={() => void handleCancel()}>
+              <Button variant="destructive" size="sm" onClick={() => handleCancel()}>
                 {t("settings.packSync.cancel")}
               </Button>
             )}
@@ -413,7 +413,7 @@ export function PackSyncProgressDialog() {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => void handleRetryFailed()}
+                onClick={() => handleRetryFailed()}
                 disabled={startMutation.isPending}
               >
                 {t("settings.packSync.retryFailed", { count: failedCount })}

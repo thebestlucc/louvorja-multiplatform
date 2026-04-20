@@ -58,7 +58,7 @@ export function ImageFields({ path, caption, fit, onChange }: ImageFieldsProps) 
             variant="outline"
             size="sm"
             disabled={loading}
-            onClick={() => void handleBrowse()}
+            onClick={() => handleBrowse()}
           >
             {t("presentations.videoBrowse")}
           </Button>

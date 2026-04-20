@@ -59,7 +59,7 @@ export function SpotlightTour({ onComplete, onSkip: onSkipProp, steps: stepsProp
 
   const handleNext = useCallback(() => {
     if (currentIndex >= steps.length - 1) {
-      void handleComplete();
+      handleComplete();
     } else {
       setCurrentIndex((i) => i + 1);
     }
@@ -69,7 +69,7 @@ export function SpotlightTour({ onComplete, onSkip: onSkipProp, steps: stepsProp
     if (onSkipProp) {
       onSkipProp();
     } else {
-      void handleComplete();
+      handleComplete();
     }
   }, [handleComplete, onSkipProp]);
 

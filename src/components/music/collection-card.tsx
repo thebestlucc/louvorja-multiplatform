@@ -76,7 +76,7 @@ export const CollectionCard = React.memo(function CollectionCard({
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               title="Project All"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onProject(collection); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onProject(collection); }}
             >
               <MonitorPlay className="h-4 w-4" />
             </Button>
@@ -85,7 +85,7 @@ export const CollectionCard = React.memo(function CollectionCard({
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               title="Play All Songs"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onPlaySongs(collection); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlaySongs(collection); }}
             >
               <Play className="h-4 w-4" />
             </Button>
@@ -94,7 +94,7 @@ export const CollectionCard = React.memo(function CollectionCard({
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               title="Play All Playback"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onPlayPlayback(collection); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlayPlayback(collection); }}
             >
               <Music className="h-4 w-4" />
             </Button>
@@ -144,7 +144,7 @@ export const CollectionCard = React.memo(function CollectionCard({
               size="icon"
               variant="outline"
               className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onProject(collection); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onProject(collection); }}
               title="Project All"
             >
               <MonitorPlay className="h-4 w-4" />
@@ -153,7 +153,7 @@ export const CollectionCard = React.memo(function CollectionCard({
               size="icon"
               variant="outline"
               className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onPlaySongs(collection); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlaySongs(collection); }}
               title="Play All Songs"
             >
               <Play className="h-4 w-4" />
@@ -162,7 +162,7 @@ export const CollectionCard = React.memo(function CollectionCard({
               size="icon"
               variant="outline"
               className="h-8 w-8 rounded-full shadow-md bg-background/90 hover:bg-background"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onPlayPlayback(collection); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlayPlayback(collection); }}
               title="Play All Playback"
             >
               <Music className="h-4 w-4" />
@@ -177,15 +177,15 @@ export const CollectionCard = React.memo(function CollectionCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={() => void onProject(collection)}>
+              <DropdownMenuItem onClick={() => onProject(collection)}>
                 <MonitorPlay className="mr-2 h-4 w-4" />
                 Project All
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void onPlaySongs(collection)}>
+              <DropdownMenuItem onClick={() => onPlaySongs(collection)}>
                 <Play className="mr-2 h-4 w-4" />
                 Play All Songs
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void onPlayPlayback(collection)}>
+              <DropdownMenuItem onClick={() => onPlayPlayback(collection)}>
                 <Music className="mr-2 h-4 w-4" />
                 Play All Playback
               </DropdownMenuItem>

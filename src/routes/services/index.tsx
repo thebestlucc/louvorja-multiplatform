@@ -68,14 +68,14 @@ function useLiturgyFavorites() {
     setFavoritesState((prev) => {
       if (prev.includes(serviceId)) {
         const next = prev.filter((id) => id !== serviceId);
-        void catcher(setPreference("service_favorites", next));
+        catcher(setPreference("service_favorites", next));
         return next;
       }
       if (prev.length >= 7) {
         return prev; // caller checks isFull and shows toast
       }
       const next = [...prev, serviceId];
-      void catcher(setPreference("service_favorites", next));
+      catcher(setPreference("service_favorites", next));
       return next;
     });
   }, []);
@@ -103,7 +103,7 @@ function useViewPreference() {
 
   const setView = useCallback((v: "grid" | "list") => {
     setViewState(v);
-    void catcher(setPreference("service_view_pref", v));
+    catcher(setPreference("service_view_pref", v));
   }, []);
 
   return { view, setView };
