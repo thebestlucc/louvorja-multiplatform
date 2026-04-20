@@ -11,7 +11,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use serde::Serialize;
 use specta::Type;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
@@ -247,6 +247,7 @@ pub struct AppState {
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub timer_update_stop: Mutex<Option<Sender<()>>>,
     pub current_slide: RwLock<Option<SlideContent>>,
+    pub current_slide_version: AtomicU64,
     pub projector_open: AtomicBool,
     pub overlay: RwLock<OverlayRuntimeState>,
     pub return_open: AtomicBool,
