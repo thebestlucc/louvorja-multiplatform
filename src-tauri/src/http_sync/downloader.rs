@@ -237,6 +237,18 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
         if stripped.is_empty() {
             continue;
         }
+        // Reject any entry whose path contains a ".." component — regardless of
+        // position. An entry like "../evil.txt" or "a/../../evil.txt" must never
+        // be extracted.  We check before joining so we don't have to canonicalize
+        // the (not-yet-created) destination path.
+        let has_traversal = std::path::Path::new(stripped)
+            .components()
+            .any(|c| c == std::path::Component::ParentDir);
+        if has_traversal {
+            log::warn!("[extract_zip] Skipping path traversal attempt: {}", entry_name);
+            continue;
+        }
+
         // Normalize forward slashes to platform separator. On Windows,
         // canonicalize() produces \\?\ verbatim paths where '/' is NOT
         // a directory separator — joining "covers/img.jpg" would create a
@@ -245,10 +257,13 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
 
         let dest_path = canonical_dest.join(&stripped);
 
-        // Path traversal guard: dest_path must stay inside canonical_dest.
-        // Component-based check avoids per-file canonicalize syscall.
+        // Secondary path traversal guard: dest_path must stay inside
+        // canonical_dest.  The starts_with check is lexical on already-clean
+        // paths (no ".." components remain after the guard above), so it is
+        // sufficient here and avoids a per-file canonicalize syscall on a
+        // not-yet-existing path.
         if !dest_path.starts_with(&canonical_dest) {
-            log::warn!("[extract_zip] Skipping path traversal attempt: {}", entry_name);
+            log::warn!("[extract_zip] Skipping out-of-bounds path: {}", entry_name);
             continue;
         }
 
