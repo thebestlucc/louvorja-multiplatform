@@ -7,30 +7,18 @@ vi.mock("react-i18next", async () => {
   return i18nMockFactory();
 });
 
-// Shared mock state — the ws object is stable so getState().ws === hook ws
-const mockWs = {
-  send: vi.fn().mockResolvedValue(undefined),
-  on: vi.fn().mockReturnValue(() => {}),
-};
-const mockState = { wsState: "connected", ws: mockWs };
-
-// Inline connection-store mock: tests mutate closure state (e.g. _state/mockSendable) per
-// test-body BEFORE render(). Shared applyConnectionStoreState() only resets in beforeEach, so
-// it can't cover this pattern. See __tests__/mocks/connection-store.ts for the shared variant.
-vi.mock("@/stores/connection-store", () => {
-  const _ws = {
-    send: vi.fn().mockResolvedValue(undefined),
-    on: vi.fn().mockReturnValue(() => {}),
-  };
-  const _state = { wsState: "connected", ws: _ws };
-  const useConnectionStore = (selector: (s: unknown) => unknown) => selector(_state);
-  useConnectionStore.getState = () => _state;
-  return { useConnectionStore };
+vi.mock("@/stores/connection-store", async () => {
+  const { connectionStoreMockFactory, applyConnectionStoreState } =
+    await import("../../__tests__/mocks/connection-store");
+  applyConnectionStoreState("paired-live");
+  return connectionStoreMockFactory();
 });
 
-// After mock is set up, grab the ws from the mocked module so tests can spy on it
-import { useConnectionStore } from "@/stores/connection-store";
-const { ws: mockSendable } = (useConnectionStore as unknown as { getState: () => { ws: { send: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> } } }).getState();
+// Import the stable mockWs so tests can spy on send/on without reaching into getState().
+import { mockWs, applyConnectionStoreState } from "../../__tests__/mocks/connection-store";
+
+// mockSendable aliases mockWs for readability at call sites.
+const mockSendable = mockWs;
 
 describe("SearchRoute — G3 (debounce 120 ms)", () => {
   beforeEach(() => {
@@ -39,6 +27,8 @@ describe("SearchRoute — G3 (debounce 120 ms)", () => {
     // Re-add default .on behavior after clearAllMocks
     mockSendable.on.mockReturnValue(() => {});
     mockSendable.send.mockResolvedValue(undefined);
+    // Ensure paired-live state is in effect for every test
+    applyConnectionStoreState("paired-live");
   });
 
   afterEach(() => {
