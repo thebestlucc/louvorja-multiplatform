@@ -48,7 +48,11 @@ export function ProjectorView() {
 
   // Listen to slide changes
   useEffect(() => {
-    const unlisten = listen<SlideContent>("slide-changed", (event) => {
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    listen<SlideContent>("slide-changed", (event) => {
+      if (!isMounted) return;
       const newSlide = event.payload;
       const prev = prevSlideRef.current;
       // Only remount the renderer when the slide identity changes (type or background image).
@@ -58,10 +62,17 @@ export function ProjectorView() {
       }
       prevSlideRef.current = newSlide;
       setSlide(newSlide);
+    }).then((fn) => {
+      if (isMounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
 
     getCurrentSlide()
       .then((data) => {
+        if (!isMounted) return;
         const s = data;
         prevSlideRef.current = s;
         setSlide(s);
@@ -70,20 +81,32 @@ export function ProjectorView() {
       .catch(() => {});
 
     return () => {
-      unlisten.then((fn) => fn());
+      isMounted = false;
+      unlistenFn?.();
     };
   }, []);
 
   // Listen to overlay changes
   useEffect(() => {
-    const unlisten = listen<OverlayState>("overlay-changed", (event) => {
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    listen<OverlayState>("overlay-changed", (event) => {
+      if (!isMounted) return;
       setBlackScreen(event.payload.blackScreen);
       setLogoScreen(event.payload.logoScreen);
       setAlert(event.payload.alert ?? null);
+    }).then((fn) => {
+      if (isMounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
 
     getOverlayState()
       .then((state) => {
+        if (!isMounted) return;
         setBlackScreen(state.blackScreen);
         setLogoScreen(state.logoScreen);
         setAlert(state.alert ?? null);
@@ -91,35 +114,59 @@ export function ProjectorView() {
       .catch(() => {});
 
     return () => {
-      unlisten.then((fn) => fn());
+      isMounted = false;
+      unlistenFn?.();
     };
   }, []);
 
   // Listen to slide cleared — reset to logo
   useEffect(() => {
-    const unlisten = listen("slide-cleared", () => {
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    listen("slide-cleared", () => {
+      if (!isMounted) return;
       prevSlideRef.current = null;
       setSlide(null);
       setUtilityProjection(null);
       setSlideKey((prev) => prev + 1);
+    }).then((fn) => {
+      if (isMounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
+
     return () => {
-      unlisten.then((fn) => fn());
+      isMounted = false;
+      unlistenFn?.();
     };
   }, []);
 
   // Listen to utility live projection ticks
   useEffect(() => {
-    const unlisten = listen<UtilityProjectionEventPayload>("utility-projection", (event) => {
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    listen<UtilityProjectionEventPayload>("utility-projection", (event) => {
+      if (!isMounted) return;
       if (event.payload.phase === "stop") {
         setUtilityProjection(null);
         return;
       }
-
       setUtilityProjection(event.payload);
+    }).then((fn) => {
+      if (isMounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
+
     return () => {
-      unlisten.then((fn) => fn());
+      isMounted = false;
+      unlistenFn?.();
     };
   }, []);
 
