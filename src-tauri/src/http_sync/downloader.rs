@@ -200,13 +200,6 @@ pub async fn download_file_http(
     download_bytes_to_path(client, url, local_path, expected_size).await
 }
 
-/// Extract a ZIP file into `dest_dir`, preserving internal paths.
-/// Used by the pack_sync executor after SHA-256 verification.
-#[allow(dead_code)]
-pub fn extract_zip_to(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
-    extract_zip(zip_path, dest_dir)
-}
-
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     std::fs::create_dir_all(dest_dir).map_err(AppError::Io)?;
     let canonical_dest = dest_dir.canonicalize().map_err(AppError::Io)?;
@@ -812,7 +805,7 @@ mod tests {
         let dl = download_bytes_to_path(&client, &url, &zip_path, None).await.unwrap();
         assert!(matches!(dl, DownloadResult::Downloaded));
 
-        extract_zip_to(&zip_path, dir.path()).unwrap();
+        extract_zip(&zip_path, dir.path()).unwrap();
         assert!(dir.path().join("media/audio/test.mp3").exists());
     }
 }
