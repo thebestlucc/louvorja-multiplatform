@@ -136,8 +136,15 @@ describe("QueueRoute — G4", () => {
 
     render(<QueueRoute />);
 
+    // First tap selects the item (tap-to-select pattern)
     await act(async () => {
       fireEvent.click(screen.getByText("How Great Thou Art"));
+    });
+
+    // Action bar appears; click "Play now" to trigger queue.play
+    const playNowBtn = screen.getByRole("button", { name: "Play now" });
+    await act(async () => {
+      fireEvent.click(playNowBtn);
     });
 
     expect(mockSend).toHaveBeenCalledWith("queue.play", { id: "h2" });
@@ -156,124 +163,3 @@ describe("QueueRoute — G4", () => {
   });
 });
 
-describe("QueueRoute — audio controls", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockCurrentQueue = null;
-    mockCurrentAudioStatus = null;
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it("shows play/pause/skip buttons when audio is playing", () => {
-    mockCurrentQueue = {
-      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
-      upNext: [],
-      history: [],
-    };
-
-    render(<QueueRoute />);
-
-    expect(screen.getByRole("button", { name: /skip previous/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /skip next/i })).toBeInTheDocument();
-  });
-
-  it("clicking play/pause sends audio.toggle", async () => {
-    mockCurrentQueue = {
-      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
-      upNext: [],
-      history: [],
-    };
-    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
-
-    render(<QueueRoute />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /play/i }));
-    });
-
-    expect(mockSend).toHaveBeenCalledWith("audio.toggle", {});
-  });
-
-  it("clicking skip prev sends audio.skip_prev", async () => {
-    mockCurrentQueue = {
-      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
-      upNext: [],
-      history: [],
-    };
-    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
-
-    render(<QueueRoute />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /skip previous/i }));
-    });
-
-    expect(mockSend).toHaveBeenCalledWith("audio.skip_prev", {});
-  });
-
-  it("clicking skip next sends audio.skip_next", async () => {
-    mockCurrentQueue = {
-      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
-      upNext: [],
-      history: [],
-    };
-    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
-
-    render(<QueueRoute />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /skip next/i }));
-    });
-
-    expect(mockSend).toHaveBeenCalledWith("audio.skip_next", {});
-  });
-
-  it("seeking sends audio.seek with milliseconds", async () => {
-    mockCurrentQueue = {
-      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
-      upNext: [],
-      history: [],
-    };
-    mockCurrentAudioStatus = { position: 30, duration: 120, volume: 0.8, playing: false };
-
-    render(<QueueRoute />);
-
-    const slider = screen.getByRole("slider", { name: /seek/i });
-    await act(async () => {
-      fireEvent.change(slider, { target: { value: "60" } });
-      fireEvent.pointerUp(slider);
-    });
-
-    expect(mockSend).toHaveBeenCalledWith("audio.seek", { ms: 60000 });
-  });
-
-  it("volume change sends audio.volume (debounced)", async () => {
-    vi.useFakeTimers();
-
-    mockCurrentQueue = {
-      nowPlaying: { id: "h1", title: "Song", artist: "Artist" },
-      upNext: [],
-      history: [],
-    };
-    mockCurrentAudioStatus = { position: 0, duration: 120, volume: 0.8, playing: false };
-
-    render(<QueueRoute />);
-
-    const slider = screen.getByRole("slider", { name: /volume/i });
-    await act(async () => {
-      fireEvent.change(slider, { target: { value: "50" } });
-      fireEvent.pointerUp(slider);
-    });
-
-    // Debounce is 150ms
-    await act(async () => {
-      vi.advanceTimersByTime(150);
-    });
-
-    expect(mockSend).toHaveBeenCalledWith("audio.volume", { value: 0.5 });
-    vi.useRealTimers();
-  });
-});

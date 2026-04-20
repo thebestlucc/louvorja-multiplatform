@@ -78,6 +78,9 @@ export const i18nMockFactory = () => ({
         "remote.queue.video_targets": "Video targets",
         "remote.queue.target_projector": "Projector",
         "remote.queue.target_return": "Return",
+        "remote.queue.action_play_now": "Play now",
+        "remote.queue.action_remove": "Remove from queue",
+        "remote.queue.action_dismiss": "Dismiss",
         // service
         "remote.service.start": "Start service",
         "remote.service.stop": "Stop service",
