@@ -23,7 +23,7 @@ mod youtube;
 mod ytdlp;
 
 use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState, VideoServerState};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 use tauri::{Emitter, Manager};
 
@@ -504,6 +504,7 @@ pub fn run() {
                 utility_projection_stop: Mutex::new(None),
                 timer_update_stop: Mutex::new(None),
                 current_slide: RwLock::new(None),
+                current_slide_version: AtomicU64::new(0),
                 projector_open: AtomicBool::new(false),
                 overlay: RwLock::new(OverlayRuntimeState::default()),
                 return_open: AtomicBool::new(false),

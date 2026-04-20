@@ -7,6 +7,22 @@ use crate::commands::streaming::{
     empty_streaming_music_payload, is_empty_hymn_gap_slide, streaming_slide_payload,
     streaming_slide_title,
 };
+use std::sync::atomic::Ordering;
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideChangedPayload {
+    pub slide: SlideContent,
+    pub version: u64,
+}
+
+#[derive(Debug, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentSlideResponse {
+    pub slide: Option<SlideContent>,
+    #[specta(type = f64)]
+    pub version: u64,
+}
 
 pub fn update_current_slide(
     app: &AppHandle,
@@ -37,7 +53,8 @@ pub fn update_current_slide(
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
-    app.emit("slide-changed", &slide_data)
+    let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
+    app.emit("slide-changed", &SlideChangedPayload { slide: slide_data.clone(), version })
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     let current_title = streaming_slide_title(&slide_data);
