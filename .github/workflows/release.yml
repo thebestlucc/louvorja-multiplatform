@@ -31,9 +31,12 @@ jobs:
             pnpm-lock.yaml
             pnpm-workspace.yaml
             public
+            remote-pwa
             src
+            tests
             tsconfig.json
             tsconfig.node.json
+            tsconfig.unit-tests.json
             vite.config.ts
           sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-tauri-ci
@@ -43,6 +46,14 @@ jobs:
       - name: Build frontend
         shell: bash
         run: pnpm build
+      - name: Run root unit tests
+        shell: bash
+        continue-on-error: true # TODO: remove after fixing pre-existing tsc errors in tests/ (SlideContent.text, ScheduleDepartment.description)
+        run: pnpm test:unit
+      - name: Run remote-pwa tests
+        shell: bash
+        continue-on-error: true # TODO: remove after fixing 15 pre-existing routing/waitFor timeouts
+        run: pnpm --filter remote-pwa install --frozen-lockfile && pnpm --filter remote-pwa test -- --run
       - name: Upload frontend dist
         uses: actions/upload-artifact@v7.0.0
         with:
@@ -67,6 +78,10 @@ jobs:
       - name: Rust check
         shell: bash
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
+      - name: Rust tests
+        shell: bash
+        continue-on-error: true # TODO: remove after fixing pre-existing extract_zip_skips_directory_entries_and_path_traversal test
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
   tauri-release:
     needs:
