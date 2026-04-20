@@ -30,6 +30,7 @@ const mockUseConnectionStore = vi.fn((selector: (s: unknown) => unknown) =>
   }),
 );
 
+// Inline connection-store mock: trivial 2-field override per test; shared factory overkill here.
 vi.mock("@/stores/connection-store", () => ({
   useConnectionStore: (selector: (s: unknown) => unknown) =>
     mockUseConnectionStore(selector),

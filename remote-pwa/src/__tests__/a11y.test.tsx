@@ -6,7 +6,7 @@
  * which axe-core requires for contrast checks. All other WCAG 2.x rules run.
  */
 import { render, act, cleanup } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, afterAll } from "vitest";
 import { configureAxe } from "vitest-axe";
 import { toHaveNoViolations } from "vitest-axe/matchers";
 
@@ -95,6 +95,13 @@ vi.mock("@/stores/video-targets-store", () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+// Reset shared module-level state so subsequent test files in the same
+// Vitest worker start from the default "unpaired" baseline.
+afterAll(async () => {
+  const { applyConnectionStoreState } = await import("./mocks/connection-store");
+  applyConnectionStoreState("unpaired");
 });
 
 // ---------------------------------------------------------------------------

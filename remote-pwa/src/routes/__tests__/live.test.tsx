@@ -13,6 +13,9 @@ const mockOn = vi.fn().mockReturnValue(() => {});
 let mockWsState = "connected";
 let mockCurrentSlide: Record<string, unknown> | null = null;
 
+// Inline connection-store mock: tests mutate closure state (e.g. mockCurrentSlide/mockWsState)
+// per test-body BEFORE render(). Shared applyConnectionStoreState() only resets in beforeEach, so
+// it can't cover this pattern. See __tests__/mocks/connection-store.ts for the shared variant.
 vi.mock("@/stores/connection-store", () => ({
   useConnectionStore: (selector: (s: unknown) => unknown) =>
     selector({
