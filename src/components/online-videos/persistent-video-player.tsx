@@ -63,10 +63,13 @@ function LocalVideoMaster({
     localVideoMasterRef.current = el;
   }, []);
 
-  // High-frequency broadcast while playing — browser onTimeUpdate is ~4Hz, too coarse
-  // for tight follower sync. Emit every 100ms so followers can correct drift quickly.
-  useEffect(() => {
-    const interval = setInterval(() => {
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatRef.current) return;
+    // High-frequency broadcast while playing — browser onTimeUpdate is ~4Hz, too coarse
+    // for tight follower sync. Emit every 100ms so followers can correct drift quickly.
+    heartbeatRef.current = setInterval(() => {
       const v = videoRef.current;
       if (!v || v.paused) return;
       onBroadcastRef.current({
@@ -76,8 +79,17 @@ function LocalVideoMaster({
         volume: v.volume,
       });
     }, HEARTBEAT_INTERVAL_MS);
-    return () => clearInterval(interval);
   }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount.
+  useEffect(() => () => stopHeartbeat(), [stopHeartbeat]);
 
   // Listen to video-control events and apply to local video element
   useEffect(() => {
@@ -144,6 +156,7 @@ function LocalVideoMaster({
           duration: v.duration || 0,
           volume: v.volume,
         });
+        startHeartbeat();
       }}
       onPause={(e) => {
         const v = e.currentTarget;
@@ -153,6 +166,7 @@ function LocalVideoMaster({
           duration: v.duration || 0,
           volume: v.volume,
         });
+        stopHeartbeat();
       }}
       onEnded={(e) => {
         const v = e.currentTarget;
@@ -162,6 +176,7 @@ function LocalVideoMaster({
           duration: v.duration || 0,
           volume: v.volume,
         });
+        stopHeartbeat();
         handleVideoEnded();
       }}
     />
