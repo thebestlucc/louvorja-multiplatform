@@ -63,7 +63,7 @@ function nowSecs(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting" | "auth_failed";
 
 export class RemoteWS {
   private url = "";
@@ -132,7 +132,15 @@ export class RemoteWS {
       // surface it so silent rejections (bad HMAC, bad payload, unknown op)
       // never go unnoticed in the field.
       if (msg.type === "error") {
-        console.error("[RemoteWS] server error:", msg.op, msg.payload);
+        const reason = (msg.payload as { reason?: string } | undefined)?.reason;
+        if (reason === "hmac_mismatch") {
+          // HMAC failure: token mismatch, clock skew, or protocol bug.
+          // Surface as a distinct state so the UI can prompt re-pairing.
+          console.warn("[RemoteWS] HMAC mismatch — op:", msg.op, "— may need re-pair");
+          this.setState("auth_failed");
+        } else {
+          console.error("[RemoteWS] server error:", msg.op, msg.payload);
+        }
         return; // Don't dispatch error payloads to op handlers
       }
       if (msg.op) {
@@ -150,6 +158,12 @@ export class RemoteWS {
 
     this.ws.onclose = () => {
       this.ws = null;
+      if (this._state === "auth_failed") {
+        // Auth failure: server broke the connection after sending hmac_mismatch.
+        // Do NOT reconnect — it will keep failing. Stay in auth_failed so UI can
+        // prompt the user to re-pair.
+        return;
+      }
       if (!this.destroyed) {
         this.setState("reconnecting");
         this._scheduleReconnect(token);
