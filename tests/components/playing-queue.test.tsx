@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import { PlayingQueueView } from "../../src/components/playing-now/playing-queue";
 
 // Mock helper to find text in React tree
@@ -46,20 +46,6 @@ test("PlayingQueueView renders mixed-kind queue with 4 rows and correct titles",
   ];
   const element = PlayingQueueView({ items, currentIndex: 0 });
   assert.ok(isValidElement(element), "should render a React element");
-
-  // Count rows by collecting all button elements
-  function countByType(node: ReactNode, type: string): number {
-    if (!isValidElement(node)) return 0;
-    const el = node as ReactElement<any>;
-    let count = el.type === type ? 1 : 0;
-    const children = el.props.children;
-    if (Array.isArray(children)) {
-      count += children.reduce((acc: number, child: ReactNode) => acc + countByType(child, type), 0);
-    } else if (children) {
-      count += countByType(children, type);
-    }
-    return count;
-  }
 
   const text = getText(element);
   // All 4 titles present

@@ -8,7 +8,7 @@
  * logic by importing the store and manipulating state, asserting side effects.
  */
 
-import { test, describe, beforeEach, mock } from "node:test";
+import { test, describe, beforeEach } from "node:test";
 import * as assert from "node:assert";
 
 // ── Stub Tauri before any module is imported ──────────────────────────────────
@@ -81,7 +81,7 @@ describe("playItemByKind dispatch", () => {
 
     // For unit-test isolation: import and call playBibleItem directly via dynamic import
     // to verify setSlides is called with the right slides.
-    const { usePresentationStore: pres } = await import("../../src/stores/presentation-store");
+    await import("../../src/stores/presentation-store");
 
     // Verify queue has hymn item
     const state = useQueueStore.getState();
@@ -95,7 +95,6 @@ describe("playItemByKind dispatch", () => {
   test("bible item: setSlides called with chapter verses, setActiveSlideIndex at correct verse", async () => {
     // Mock setCurrentSlide IPC (already stubbed via window.__TAURI_INTERNALS__)
     const pres = usePresentationStore.getState();
-    const slides: import("../../src/lib/bindings").SlideContent[] = [];
     let capturedSlides: import("../../src/lib/bindings").SlideContent[] = [];
     let capturedStartIdx = -1;
 
