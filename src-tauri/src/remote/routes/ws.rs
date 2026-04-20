@@ -268,7 +268,37 @@ async fn handle_socket(
                     let payload_str = serde_json::to_string(&env.payload).unwrap_or_default();
                     let sig = env.sig.as_deref().unwrap_or("");
                     if !hmac_util::verify(&device_token, env.ts, &env.nonce, &env.op, &payload_str, sig) {
-                        log::warn!("WS HMAC verification failed: device={}", device_id);
+                        // Structured log with op so integrations bugs can be traced.
+                        log::warn!(
+                            "[remote] HMAC verification failed: device={} op={} sig_present={}",
+                            device_id,
+                            env.op,
+                            env.sig.is_some(),
+                        );
+                        // Send a signed error envelope so the client can distinguish
+                        // "bad HMAC" from "socket dead" / "server error".
+                        {
+                            let ts = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(0);
+                            let nonce = format!("hmac-err-{ts}");
+                            let err_payload = serde_json::json!({ "reason": "hmac_mismatch" });
+                            let err_payload_str = serde_json::to_string(&err_payload).unwrap_or_default();
+                            let err_sig = hmac_util::sign(&device_token, ts, &nonce, "error", &err_payload_str);
+                            let err_env = RemoteEnvelope {
+                                id: env.id.clone(),
+                                kind: "error".into(),
+                                op: env.op.clone(),
+                                ts,
+                                nonce,
+                                payload: err_payload,
+                                sig: Some(err_sig),
+                            };
+                            if let Ok(json) = serde_json::to_string(&err_env) {
+                                let _ = resp_tx.send(json);
+                            }
+                        }
                         // H7: track suspicious HMAC failures; emit event at threshold.
                         if suspicious_tracker.record_failure(&device_id) {
                             if let Some(ref app) = app_handle {
@@ -277,7 +307,7 @@ async fn handle_socket(
                                     "remote-device-suspicious",
                                     serde_json::json!({ "deviceId": device_id }),
                                 );
-                                log::warn!("H7: suspicious HMAC activity threshold reached for device={}", device_id);
+                                log::warn!("[remote] H7: suspicious HMAC threshold reached for device={}", device_id);
                             }
                         }
                         break;
