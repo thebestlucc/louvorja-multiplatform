@@ -418,7 +418,13 @@ export function buildSchedulePrintPack(
   }
 
   for (const section of sections) {
-    flushCurrentPage();
+    // Only start a new page if the section doesn't fit in the remaining space on the current page
+    const availableForSection = pageContentHeightPx - usedHeightPx;
+    const sectionFitsOnCurrentPage =
+      currentPageSections.length === 0 || section.estimatedHeightPx <= availableForSection;
+    if (!sectionFitsOnCurrentPage) {
+      flushCurrentPage();
+    }
 
     let remainingEntries = normalizeSectionEntriesForPagination(section, pageContentHeightPx);
 
@@ -454,16 +460,6 @@ export function buildSchedulePrintPack(
   }
 
   flushCurrentPage();
-
-  if (pages.length === 0) {
-    // Edge case: no sections at all
-    pages.push({
-      pageNumber: 1,
-      sections: [],
-      bottomDescription: null,
-      bottomDescriptionColor: null,
-    });
-  }
 
   return { sections, pages };
 }
