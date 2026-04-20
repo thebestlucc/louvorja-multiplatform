@@ -67,7 +67,8 @@ describe("hymn slide builder", () => {
     assert.equal(slides[5]?.slideType, "text", "order 5 gap should be a blank cover slide");
     assert.equal(slides[5]?.content, "");
     assert.equal(slides[5]?.background?.imagePath, "cover.jpg");
-    assert.equal(slides[6]?.text, "Santo, santo, santo!\r\nNós, os pecadores");
+    assert.equal(slides[6]?.slideType, "lyrics");
+    assert.equal((slides[6] as Extract<(typeof slides)[number], { slideType: "lyrics" }>).text, "Santo, santo, santo!\r\nNós, os pecadores");
   });
 
   test("keeps clickable visible lyrics aligned with real slide indexes", () => {
