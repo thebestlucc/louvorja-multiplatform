@@ -35,11 +35,25 @@ pub fn ensure_binary(app_data_dir: &Path) -> Result<PathBuf, AppError> {
 
 /// Downloads the latest yt-dlp binary from GitHub releases.
 /// MUST be called from a spawned thread.
+///
+/// Uses an atomic write pattern: bytes land in `<binary>.tmp` first, then
+/// renamed to the final path only after the SHA256 check passes.  This
+/// prevents a partial file from blocking the next run when a download is
+/// interrupted (cancelled pack sync, network drop, process kill).
 pub fn download_binary(app_data_dir: &Path) -> Result<PathBuf, AppError> {
     let bin_dir = app_data_dir.join("bin");
     fs::create_dir_all(&bin_dir)?;
 
     let name = binary_name();
+    let dest = binary_path(app_data_dir);
+    let tmp = dest.with_extension("tmp");
+
+    // Remove any stale .tmp left by a previous interrupted download so we
+    // never confuse a half-written file with a valid binary.
+    if tmp.exists() {
+        let _ = fs::remove_file(&tmp);
+    }
+
     let url = format!(
         "https://github.com/yt-dlp/yt-dlp/releases/latest/download/{}",
         name
@@ -78,8 +92,13 @@ pub fn download_binary(app_data_dir: &Path) -> Result<PathBuf, AppError> {
         // If hash not found in checksums file, proceed anyway (some releases may not have it)
     }
 
-    let dest = binary_path(app_data_dir);
-    fs::write(&dest, &binary_bytes)?;
+    // Write to .tmp first; only rename to final path after verification.
+    // If this process is killed between write and rename, the next call
+    // removes the stale .tmp at the top of this function.
+    fs::write(&tmp, &binary_bytes)?;
+
+    // Atomic rename — readers never observe a partial binary.
+    fs::rename(&tmp, &dest)?;
 
     // Make executable on Unix
     #[cfg(unix)]
