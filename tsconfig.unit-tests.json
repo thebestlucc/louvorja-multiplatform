@@ -59,7 +59,7 @@
     "src/stores/slide-passer-store.ts",
     "src/stores/display-store.ts",
     "src/stores/media-player-store.ts",
-    "src/components/operator/playing-queue.tsx",
+    "src/components/playing-now/playing-queue.tsx",
     "src/components/ui/button.tsx",
     "src/lib/utils.ts",
     "src/lib/asset-url.ts",
