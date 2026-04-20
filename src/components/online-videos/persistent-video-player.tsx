@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { useSlideVersion } from "../../hooks/use-slide-version";
-import { loadYouTubeAPI } from "../../lib/youtube-api";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
+import { YouTubeMaster } from "./youtube-master";
 import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useVideoSource } from "../../hooks/use-video-source";
@@ -327,108 +327,35 @@ export function PersistentVideoPlayer() {
   const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source !== "local" ? activeSlide.video_id : undefined;
   const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
 
-  useEffect(() => {
-    const videoId = activeVideoId ?? null;
-    if (!videoId || !playerHostRef.current) return;
-
-    let destroyed = false;
-
-    // Clean up any previous YouTube player
-    clearInterval(pollTimerRef.current ?? undefined);
-    pollTimerRef.current = null;
-    if (ytPlayerRef.current) {
-      try { ytPlayerRef.current.destroy(); } catch (_) { /* ignore */ }
-      ytPlayerRef.current = null;
-    }
-
-    // Create container div imperatively (React must not manage this node)
-    const container = document.createElement("div");
-    container.style.cssText = "width:100%;height:100%;overflow:hidden;";
-    playerHostRef.current.appendChild(container);
-    const uid = `yt-master-${Math.random().toString(36).slice(2)}`;
-    container.id = uid;
-
-    loadYouTubeAPI().then(() => {
-      if (destroyed || !container.isConnected) return;
-
-      const player = new window.YT.Player(uid, {
-        videoId,
-        width: "100%",
-        height: "100%",
-        playerVars: {
-          autoplay: 1, controls: 0, rel: 0,
-          modestbranding: 1, showinfo: 0,
-          disablekb: 1, iv_load_policy: 3, cc_load_policy: 0,
-          mute: 0,
-          playsinline: 1,
-          origin: window.location.origin,
-        },
-        events: {
-          onReady: ({ target }) => {
-            if (destroyed) return;
-            ytPlayerRef.current = target;
-            const iframe = target.getIframe();
-            iframe.style.cssText =
-              "width:100%;height:100%;pointer-events:none;border:none;" +
-              "transform:scale(1.06);transform-origin:center;display:block;";
-
-            pollTimerRef.current = setInterval(() => {
-              if (target.getPlayerState() !== 1) return; // only heartbeat while playing
-              const snap: VideoStateEvent = {
-                paused: false,
-                currentTime: target.getCurrentTime(),
-                duration: target.getDuration(),
-                volume: target.getVolume() / 100,
-              };
-              broadcastState(snap, { videoId, videoSrc: null, videoSource: "youtube" });
-            }, HEARTBEAT_INTERVAL_MS);
-          },
-          onStateChange: ({ data, target }) => {
-            if (destroyed) return;
-            seekingRef.current = false;
-            const snap: VideoStateEvent = {
-              paused: data !== 1,
-              currentTime: target.getCurrentTime(),
-              duration: target.getDuration(),
-              volume: target.getVolume() / 100,
-            };
-            broadcastState(snap, { videoId, videoSrc: null, videoSource: "youtube" }, true);
-            // data === 0 means ENDED
-            if (data === 0) {
-              handleVideoEnded();
-            }
-          },
-        },
-      });
-      ytPlayerRef.current = player;
-    });
-
-    return () => {
-      destroyed = true;
-      clearInterval(pollTimerRef.current ?? undefined);
-      pollTimerRef.current = null;
-      try { ytPlayerRef.current?.destroy(); } catch (_) { /* ignore */ }
-      ytPlayerRef.current = null;
-      container.remove();
-    };
-  }, [activeVideoId, activeVideoSource, broadcastState, playSessionId]);
-
   const isLocalVideo = activeSlide?.slideType === "onlineVideo" && activeSlide.source === "local" && !!activeSlide.url;
   const localVideoUrl = activeSlide?.slideType === "onlineVideo" ? activeSlide.url : null;
 
   return (
-    <div
-      ref={playerHostRef}
-      aria-hidden
-      style={RESTING_STYLE}
-    >
-      {isLocalVideo && localVideoUrl && (
-        <LocalVideoMaster
-          videoPath={localVideoUrl}
-          onBroadcast={broadcastLocalState}
-        />
-      )}
-    </div>
+    <>
+      <YouTubeMaster
+        playerHostRef={playerHostRef}
+        ytPlayerRef={ytPlayerRef}
+        pollTimerRef={pollTimerRef}
+        seekingRef={seekingRef}
+        playSessionId={playSessionId}
+        activeVideoId={activeVideoId}
+        activeVideoSource={activeVideoSource}
+        onBroadcast={broadcastState}
+        onVideoEnded={handleVideoEnded}
+      />
+      <div
+        ref={playerHostRef}
+        aria-hidden
+        style={RESTING_STYLE}
+      >
+        {isLocalVideo && localVideoUrl && (
+          <LocalVideoMaster
+            videoPath={localVideoUrl}
+            onBroadcast={broadcastLocalState}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
