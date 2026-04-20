@@ -2,40 +2,10 @@ import { render, screen, fireEvent, act, cleanup } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import SettingsRoute from "../settings";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        "remote.settings.connection_section": "Connection",
-        "remote.settings.appearance": "Appearance",
-        "remote.settings.behavior_section": "Behavior",
-        "remote.settings.forget_device": "Forget device (hold)",
-        "remote.settings.forget_device_hint": "Hold for 1 second to confirm",
-        "remote.settings.about_section": "About",
-        "remote.settings.version": "Version",
-        "remote.settings.device_name": "Device",
-        "remote.settings.server_name": "Server",
-        "remote.settings.host": "Host",
-        "remote.settings.status": "Status",
-        "remote.settings.theme": "Theme",
-        "remote.settings.theme_light": "Light",
-        "remote.settings.theme_dark": "Dark",
-        "remote.settings.theme_auto": "System",
-        "remote.settings.wake_lock": "Keep screen on",
-        "remote.settings.wake_lock_hint": "Prevents sleep while connected",
-        "remote.settings.haptics": "Haptic feedback",
-        "remote.settings.haptics_hint": "Vibrate on button press",
-        "remote.settings.app_name": "LouvorJA Remote",
-        "remote.settings.desktop_link": "Get the desktop app",
-        "remote.settings.language_section": "Language",
-        "remote.settings.language": "Language",
-        "remote.title": "LouvorJA Remote",
-      };
-      return map[key] ?? key;
-    },
-    i18n: { language: "en" },
-  }),
-}));
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
+});
 
 // Mock i18n module to prevent real initialization (localStorage unavailable in jsdom)
 vi.mock("@/lib/i18n", () => ({

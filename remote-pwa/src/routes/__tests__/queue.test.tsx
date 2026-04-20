@@ -2,30 +2,10 @@ import { render, screen, fireEvent, act, cleanup } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import QueueRoute from "../queue";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        "remote.queue.now_playing": "Now playing",
-        "remote.queue.up_next": "Up next",
-        "remote.queue.history": "History",
-        "remote.queue.empty": "Queue is empty",
-        "remote.queue.play_next": "Play next",
-        "remote.queue.remove": "Remove",
-        "remote.queue.play": "Play",
-        "remote.queue.pause": "Pause",
-        "remote.queue.skip_prev": "Skip previous",
-        "remote.queue.skip_next": "Skip next",
-        "remote.queue.seek": "Seek",
-        "remote.queue.volume": "Volume",
-        "remote.queue.video_targets": "Video targets",
-        "remote.queue.target_projector": "Projector",
-        "remote.queue.target_return": "Return",
-      };
-      return map[key] ?? key;
-    },
-  }),
-}));
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
+});
 
 const mockSend = vi.fn().mockResolvedValue(undefined);
 

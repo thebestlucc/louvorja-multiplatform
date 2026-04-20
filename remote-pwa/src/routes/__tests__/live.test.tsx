@@ -2,28 +2,10 @@ import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import LiveRoute from "../live";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        "remote.live.prev": "Prev",
-        "remote.live.next": "Next",
-        "remote.live.black": "Black screen",
-        "remote.live.logo": "Logo screen",
-        "remote.live.clear": "Clear overlay",
-        "remote.live.all_slides": "All slides",
-        "remote.live.no_slide": "Waiting for content",
-        "remote.live.connected": "Connected",
-        "remote.live.disconnected": "Disconnected",
-        "remote.live.reconnecting": "Reconnecting",
-        "remote.live.swipe_up_hint": "Swipe up for all slides",
-        "remote.live.close_grid": "Close grid",
-        "remote.live.slide_counter": "Slide {{n}} of {{total}}",
-      };
-      return map[key] ?? key;
-    },
-  }),
-}));
+vi.mock("react-i18next", async () => {
+  const { i18nMockFactory } = await import("../../__tests__/mocks/i18n");
+  return i18nMockFactory();
+});
 
 const mockSend = vi.fn().mockResolvedValue(undefined);
 const mockOn = vi.fn().mockReturnValue(() => {});
