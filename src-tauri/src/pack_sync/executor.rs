@@ -550,9 +550,19 @@ pub fn execute_pack_sync(
         // Caps are removed alongside the pool so no concurrent reader encounters
         // (pool gone, stale caps still present).
         {
-            // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
-            let mut content_dbs = state.content_dbs.write().unwrap();
-            content_dbs.remove(lang);
+            match state.content_dbs.write() {
+                Ok(mut content_dbs) => {
+                    content_dbs.remove(lang);
+                }
+                Err(e) => {
+                    log::error!(
+                        "[pack-sync] content_dbs lock poisoned on remove for {}: {}",
+                        lang,
+                        e
+                    );
+                    continue;
+                }
+            }
         }
         if let Ok(mut cap_map) = state.content_db_capabilities.write() {
             cap_map.remove(lang);
@@ -600,9 +610,23 @@ pub fn execute_pack_sync(
                 }
                 // Step 4b: Insert new pool into content_dbs (caps are already up-to-date).
                 {
-                    // TODO(review): Replace .unwrap() with match+log::error! to avoid panic on lock poison. - nil-safety-reviewer, 2026-04-06, Severity: Low
-                    let mut content_dbs = state.content_dbs.write().unwrap();
-                    content_dbs.insert(lang.clone(), new_pool.clone());
+                    match state.content_dbs.write() {
+                        Ok(mut content_dbs) => {
+                            content_dbs.insert(lang.clone(), new_pool.clone());
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "[pack-sync] content_dbs lock poisoned on insert for {}: {}",
+                                lang,
+                                e
+                            );
+                            // New pool exists but never registered — mark pack as failed.
+                            if let Ok(mut statuses) = pack_statuses.lock() {
+                                statuses.insert(item.pack_id.clone(), "failed".to_string());
+                            }
+                            continue;
+                        }
+                    }
                 }
                 // Record the DB version so the planner knows it's current
                 let _ = settings::set_setting(
