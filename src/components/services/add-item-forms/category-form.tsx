@@ -39,14 +39,14 @@ export function CategoryForm({ onAdd, initialTitle, submitLabel, existingCategor
   const isEditMode = !!initialTitle || !!submitLabel;
 
   useEffect(() => {
-    void getPreference<string[]>(STORE_KEY, []).then((stored) => {
+    getPreference<string[]>(STORE_KEY, []).then((stored) => {
       // Merge existing liturgy sections into the library so previously-created
       // sections (before the library feature existed) are not lost.
       const extra = (existingCategories ?? [])
         .map((c) => c.title)
         .filter((title) => !stored.some((s) => s.toLowerCase() === title.toLowerCase()));
       const merged = [...stored, ...extra];
-      if (extra.length > 0) void setPreference(STORE_KEY, merged);
+      if (extra.length > 0) setPreference(STORE_KEY, merged);
       setLibrary(merged);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +60,7 @@ export function CategoryForm({ onAdd, initialTitle, submitLabel, existingCategor
 
   const persistLibrary = (next: string[]) => {
     setLibrary(next);
-    void setPreference(STORE_KEY, next);
+    setPreference(STORE_KEY, next);
   };
 
   const handleAddFromLibrary = (name: string) => {
@@ -139,7 +139,7 @@ export function CategoryForm({ onAdd, initialTitle, submitLabel, existingCategor
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        void handleRemoveFromLibrary(name);
+                        handleRemoveFromLibrary(name);
                       }}
                       className="ml-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                     >
@@ -216,7 +216,7 @@ export function CategoryForm({ onAdd, initialTitle, submitLabel, existingCategor
                 if (confirmDelete) {
                   await catcher(deleteCategoriesByTitle(confirmDelete.name, true), { notify: true });
                   doRemoveFromLibrary(confirmDelete.name);
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+                  queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
                 }
                 setConfirmDelete(null);
               }}
@@ -233,7 +233,7 @@ export function CategoryForm({ onAdd, initialTitle, submitLabel, existingCategor
                 if (confirmDelete) {
                   await catcher(deleteCategoriesByTitle(confirmDelete.name, false), { notify: true });
                   doRemoveFromLibrary(confirmDelete.name);
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
+                  queryClient.invalidateQueries({ queryKey: queryKeys.services.all });
                 }
                 setConfirmDelete(null);
               }}

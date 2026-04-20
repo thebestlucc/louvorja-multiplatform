@@ -135,7 +135,7 @@ export function SlidePasserIndicator() {
               type="button"
               onClick={() => {
                 setPopoverOpen(false);
-                void navigate({ to: "/settings", search: { tab: "slide-passer" } });
+                navigate({ to: "/settings", search: { tab: "slide-passer" } });
               }}
               className="flex items-center gap-1.5 text-xs text-primary hover:underline"
             >

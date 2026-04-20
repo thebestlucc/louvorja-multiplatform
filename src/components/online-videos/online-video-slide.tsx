@@ -74,7 +74,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       if (paused && state === 1) p.pauseVideo();
       else if (!paused && state !== 1) p.playVideo();
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()); };
   }, [isFollower]);
 
   // Direct command listener for immediate follower response (play/pause/seek).
@@ -96,11 +96,11 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       else if (action === "pause") p.pauseVideo();
       else if (action === "seek" && value !== undefined) p.seekTo(value, true);
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()); };
   }, [isFollower]);
 
   const emitState = useCallback((player: YTPlayer) => {
-    void emitTo("main", "video-state", {
+    emitTo("main", "video-state", {
       paused: player.getPlayerState() !== 1, // 1 = PLAYING
       currentTime: player.getCurrentTime(),
       duration: player.getDuration(),
@@ -113,7 +113,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
     // Each mount gets a stable unique id for YT.Player
     const uid = `yt-${videoId}-${Math.random().toString(36).slice(2)}`;
 
-    void loadYouTubeAPI().then(() => {
+    loadYouTubeAPI().then(() => {
       if (destroyed || !containerRef.current) return;
       containerRef.current.id = uid;
 
@@ -191,7 +191,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       clearInterval(pollRef.current);
       try { playerRef.current?.destroy(); } catch (_) {}
       playerRef.current = undefined;
-      void unsub.then((fn) => fn());
+      unsub.then((fn) => fn());
     };
   }, [videoId, muted, isFollower, emitState]);
 

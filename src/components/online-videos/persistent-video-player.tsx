@@ -29,7 +29,7 @@ function hasNextQueueItem(): boolean {
 /** Clears projection screens when a video ends with no next queue item. */
 function handleVideoEnded() {
   if (!hasNextQueueItem()) {
-    void clearCurrentSlide();
+    clearCurrentSlide();
     useVideoPlayerStore.getState().resetVideoState();
   }
 }
@@ -86,26 +86,26 @@ function LocalVideoMaster({
       if (!video) return;
       const { action, value } = e.payload;
       if (action === "play") {
-        void video.play().catch(() => {});
+        video.play().catch(() => {});
         // Broadcast to all windows
         for (const target of ["main", "projector", "return"] as const) {
-          void emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
+          emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
         }
       } else if (action === "pause") {
         video.pause();
         for (const target of ["main", "projector", "return"] as const) {
-          void emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
+          emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
         }
       } else if (action === "seek" && value !== undefined) {
         video.currentTime = value;
         for (const target of ["main", "projector", "return"] as const) {
-          void emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
+          emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
         }
       } else if (action === "volume" && value !== undefined) {
         video.volume = value;
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()); };
   }, []);
 
   if (!videoUrl) return null;
@@ -198,7 +198,7 @@ export function PersistentVideoPlayer() {
     useVideoPlayerStore.getState().setVideoState({ ...snap, ...meta });
     const enriched = { ...snap, seeking: seekingRef.current, emitTs: performance.now() };
     for (const target of ["main", "projector", "return"]) {
-      void emitTo(target, "video-state", enriched).catch(() => {});
+      emitTo(target, "video-state", enriched).catch(() => {});
     }
   }, []);
 
@@ -260,11 +260,11 @@ export function PersistentVideoPlayer() {
         activeSlideRef.current = null;
         const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
         for (const target of ["main", "projector", "return"]) {
-          void emitTo(target, "video-state", resetSnap).catch(() => {});
+          emitTo(target, "video-state", resetSnap).catch(() => {});
         }
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()); };
   }, []);
 
   // Listen to slide-cleared: fully reset ONLY if we were actually playing a video.
@@ -286,10 +286,10 @@ export function PersistentVideoPlayer() {
       activeSlideRef.current = null;
       const resetSnap: VideoStateEvent = { paused: true, currentTime: 0, duration: 0, volume: 1 };
       for (const target of ["main", "projector", "return"]) {
-        void emitTo(target, "video-state", resetSnap).catch(() => {});
+        emitTo(target, "video-state", resetSnap).catch(() => {});
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()); };
   }, []);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
@@ -307,24 +307,24 @@ export function PersistentVideoPlayer() {
         if (action === "play") {
           p.playVideo();
           for (const target of ["projector", "return"] as const) {
-            void emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
+            emitTo(target, "video-control-cmd", { action: "play" }).catch(() => {});
           }
         } else if (action === "pause") {
           p.pauseVideo();
           for (const target of ["projector", "return"] as const) {
-            void emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
+            emitTo(target, "video-control-cmd", { action: "pause" }).catch(() => {});
           }
         } else if (action === "seek" && value !== undefined) {
           p.seekTo(value, true);
           for (const target of ["projector", "return"] as const) {
-            void emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
+            emitTo(target, "video-control-cmd", { action: "seek", value }).catch(() => {});
           }
         } else if (action === "volume" && value !== undefined) {
           p.setVolume(Math.round(value * 100));
         }
       }
     }).catch(() => () => {});
-    return () => { void unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()); };
   }, []);
 
   // ── YouTube player lifecycle ──────────────────────────────────────────────
@@ -353,7 +353,7 @@ export function PersistentVideoPlayer() {
     const uid = `yt-master-${Math.random().toString(36).slice(2)}`;
     container.id = uid;
 
-    void loadYouTubeAPI().then(() => {
+    loadYouTubeAPI().then(() => {
       if (destroyed || !container.isConnected) return;
 
       const player = new window.YT.Player(uid, {

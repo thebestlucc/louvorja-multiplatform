@@ -85,7 +85,7 @@ function UtilitiesLotteryPage() {
       return;
     }
     lastProjectionSyncAtRef.current = now;
-    void projectLotteryValue(projectionValue, projectionSubtitle);
+    projectLotteryValue(projectionValue, projectionSubtitle);
   }, [isProjecting, projectLotteryValue, projectionSubtitle, projectionValue]);
 
   useEffect(() => {
@@ -190,7 +190,7 @@ function UtilitiesLotteryPage() {
     setDrawingDisplayValue(null);
     setIsDrawing(false);
     if (isProjecting) {
-      void stopProjection();
+      stopProjection();
     }
   };
 
@@ -204,7 +204,7 @@ function UtilitiesLotteryPage() {
     setHistory([]);
     setIsDrawing(false);
     if (isProjecting) {
-      void stopProjection();
+      stopProjection();
     }
   };
 
@@ -274,10 +274,10 @@ function UtilitiesLotteryPage() {
               variant={isProjecting ? "destructive" : "outline"}
               onClick={() => {
                 if (isProjecting) {
-                  void stopProjection();
+                  stopProjection();
                   return;
                 }
-                void projectLotteryValue(projectionValue, projectionSubtitle);
+                projectLotteryValue(projectionValue, projectionSubtitle);
               }}
             >
               {isProjecting ? t("utilities.projection.clear") : t("utilities.projection.project")}

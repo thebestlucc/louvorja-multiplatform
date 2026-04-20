@@ -144,7 +144,7 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
     qs.setCurrentIndex(0);
 
     usePresentationStore.getState().setCurrentVideoProjectionId(video.videoId);
-    void navigate({ to: "/playing-now" });
+    navigate({ to: "/playing-now" });
   };
 
   const thumbnailUrl = parseThumbnail(video.images);
@@ -242,7 +242,7 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
           <Button
             variant="default"
             size="sm"
-            onClick={() => void handleProject("all")}
+            onClick={() => handleProject("all")}
             title={t("onlineVideos.detail.projectAll")}
             className="h-7 px-2 text-xs"
           >
@@ -252,7 +252,7 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleProject("projector")}
+            onClick={() => handleProject("projector")}
             title={t("onlineVideos.detail.projectProjector")}
             className="h-7 px-2 text-xs"
           >
@@ -262,7 +262,7 @@ export function VideoCard({ video, playlistId, onDeleted }: VideoCardProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleProject("return")}
+            onClick={() => handleProject("return")}
             title={t("onlineVideos.detail.projectReturn")}
             className="h-7 px-2 text-xs"
           >

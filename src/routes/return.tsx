@@ -79,7 +79,7 @@ function ReturnPage() {
       setCurrentSlide(event.payload);
     });
 
-    void getCurrentSlide()
+    getCurrentSlide()
       .then((data) => {
         setCurrentSlide(data);
       })
@@ -98,7 +98,7 @@ function ReturnPage() {
       setSlideTitle(ctx.title);
     });
 
-    void getSlideContext()
+    getSlideContext()
       .then((ctx) => {
         if (ctx) {
           setNextSlide(ctx.next);
@@ -125,7 +125,7 @@ function ReturnPage() {
       setAlert(event.payload.alert ?? null);
     });
 
-    void getOverlayState()
+    getOverlayState()
       .then((state) => {
         setBlackScreen(state.blackScreen);
         setLogoScreen(state.logoScreen);

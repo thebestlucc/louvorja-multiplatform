@@ -41,14 +41,14 @@ export function useCategoryStore() {
       } else {
         delete next[serviceId];
       }
-      void catcher(setPreference(STORE_KEY, next));
+      catcher(setPreference(STORE_KEY, next));
       return next;
     });
     if (category) {
       setRecentNames((prev) => {
         const filtered = prev.filter((n) => n !== category);
         const next = [...filtered, category].slice(-20);
-        void catcher(setPreference(RECENT_KEY, next));
+        catcher(setPreference(RECENT_KEY, next));
         return next;
       });
     }
@@ -57,7 +57,7 @@ export function useCategoryStore() {
   const removeRecentCategory = useCallback((name: string) => {
     setRecentNames((prev) => {
       const next = prev.filter((n) => n !== name);
-      void catcher(setPreference(RECENT_KEY, next));
+      catcher(setPreference(RECENT_KEY, next));
       return next;
     });
   }, []);
@@ -95,7 +95,7 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
 
   const handleSelect = useCallback(
     (category: string) => {
-      void setCategory(serviceId, category);
+      setCategory(serviceId, category);
       setInputValue("");
       setOpen(false);
     },
@@ -103,7 +103,7 @@ export function CategoryPicker({ serviceId, className }: CategoryPickerProps) {
   );
 
   const handleClear = useCallback(() => {
-    void setCategory(serviceId, null);
+    setCategory(serviceId, null);
     setInputValue("");
   }, [serviceId, setCategory]);
 

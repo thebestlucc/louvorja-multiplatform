@@ -25,7 +25,7 @@ export function MacPermissionBanner() {
         // Platform check failed — silently ignore
       }
     };
-    void checkPlatform();
+    checkPlatform();
   }, []);
 
   if (!isMac || hasPermission !== false) return null;

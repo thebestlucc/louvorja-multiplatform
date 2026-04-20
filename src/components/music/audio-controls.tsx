@@ -170,7 +170,7 @@ export function AudioControls({ filePath, playbackPath, onBeforePlay }: AudioCon
           max={displayDuration || 1}
           step={100}
           onValueChange={(value) => {
-            void handleSeek(value);
+            handleSeek(value);
           }}
           disabled={!isThisHymnActive}
           className="flex-1"

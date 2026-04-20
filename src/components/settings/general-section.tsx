@@ -122,7 +122,7 @@ export function GeneralSection() {
           <Button
             variant={launchAtStartup ? "default" : "outline"}
             size="sm"
-            onClick={() => void handleLaunchAtStartupToggle()}
+            onClick={() => handleLaunchAtStartupToggle()}
           >
             {launchAtStartup ? t("settings.autoStartOn") : t("settings.autoStartOff")}
           </Button>

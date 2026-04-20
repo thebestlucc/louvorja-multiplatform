@@ -58,7 +58,7 @@ export function YouTubeSection() {
         }),
       );
     };
-    void setup();
+    setup();
     return () => { unlisteners.forEach((u) => u()); };
   }, [t]);
 
@@ -104,10 +104,10 @@ export function YouTubeSection() {
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => void handleSaveApiKey()} disabled={!apiKeyLoaded}>
+          <Button size="sm" onClick={() => handleSaveApiKey()} disabled={!apiKeyLoaded}>
             {t("actions.save")}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => void handleValidate()} disabled={validating || !apiKey.trim()}>
+          <Button size="sm" variant="outline" onClick={() => handleValidate()} disabled={validating || !apiKey.trim()}>
             {validating ? t("settings.youtube.validating") : t("settings.youtube.validate")}
           </Button>
         </div>
@@ -117,7 +117,7 @@ export function YouTubeSection() {
       <div className="space-y-3 rounded-lg border border-border p-4">
         <h3 className="text-sm font-medium">{t("settings.youtube.qualityTitle")}</h3>
         <p className="text-xs text-muted-foreground">{t("settings.youtube.qualityDescription")}</p>
-        <Select value={quality} onValueChange={(v) => void handleQualityChange(v)}>
+        <Select value={quality} onValueChange={(v) => handleQualityChange(v)}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
@@ -133,7 +133,7 @@ export function YouTubeSection() {
       <div className="space-y-3 rounded-lg border border-border p-4">
         <h3 className="text-sm font-medium">{t("settings.youtube.ytdlpTitle")}</h3>
         <p className="text-xs text-muted-foreground">{t("settings.youtube.ytdlpDescription")}</p>
-        <Button size="sm" variant="outline" onClick={() => void handleUpdateYtdlp()} disabled={updatingYtdlp}>
+        <Button size="sm" variant="outline" onClick={() => handleUpdateYtdlp()} disabled={updatingYtdlp}>
           <RefreshCw className={cn("h-4 w-4 mr-1", updatingYtdlp && "animate-spin")} />
           {updatingYtdlp ? t("settings.youtube.ytdlpUpdating") : t("settings.youtube.ytdlpUpdate")}
         </Button>

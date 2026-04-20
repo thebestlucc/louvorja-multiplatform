@@ -141,10 +141,10 @@ export function MonitorSection() {
     const [_, error] = await catcher(async () => {
       if (role === "projector") {
         await openProjectorWindow(monitorId);
-        window.setTimeout(() => { void closeProjectorWindow(); }, 2500);
+        window.setTimeout(() => { closeProjectorWindow(); }, 2500);
       } else {
         await openReturnWindow(monitorId);
-        window.setTimeout(() => { void closeReturnWindow(); }, 2500);
+        window.setTimeout(() => { closeReturnWindow(); }, 2500);
       }
       window.setTimeout(() => {
         setTestingMonitorRole((currentRole) => currentRole === role ? null : currentRole);
@@ -260,7 +260,7 @@ export function MonitorSection() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => void handleIdentifyMonitors()}
+                    onClick={() => handleIdentifyMonitors()}
                     disabled={identifyMonitorsMutation.isPending}
                   >
                     <Monitor className="mr-2 h-4 w-4" />
@@ -269,7 +269,7 @@ export function MonitorSection() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => void openMonitorWindowTemporarily("projector")}
+                    onClick={() => openMonitorWindowTemporarily("projector")}
                     disabled={projectorResolvedMonitorId == null || testingMonitorRole !== null}
                   >
                     {testingMonitorRole === "projector"
@@ -279,7 +279,7 @@ export function MonitorSection() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => void openMonitorWindowTemporarily("return")}
+                    onClick={() => openMonitorWindowTemporarily("return")}
                     disabled={returnResolvedMonitorId == null || hasMonitorSelectionConflict || testingMonitorRole !== null}
                   >
                     {testingMonitorRole === "return"
@@ -288,7 +288,7 @@ export function MonitorSection() {
                   </Button>
                   <Button
                     type="button"
-                    onClick={() => void handleSaveMonitorAssignments()}
+                    onClick={() => handleSaveMonitorAssignments()}
                     disabled={!canSaveMonitorAssignments}
                   >
                     {saveMonitorConfigMutation.isPending
