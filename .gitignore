@@ -56,3 +56,9 @@ docs/*
 !docs/architecture.md
 
 TODO.md
+# Session lock files (stale lock from expired Claude Code sessions)
+.claude/scheduled_tasks.lock
+
+# Qwen AI integration artifacts (personal/local only, not project source)
+.qwen/
+QWEN.md
