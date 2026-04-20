@@ -68,7 +68,7 @@ vi.mock("@/components/system/PinInput", () => ({
           disabled={disabled}
           aria-label="PIN input"
         />
-        <button data-testid="pin-submit" onClick={() => internalValue.length === 6 && onSubmit?.(internalValue)}>
+        <button type="button" data-testid="pin-submit" onClick={() => internalValue.length === 6 && onSubmit?.(internalValue)}>
           submit pin
         </button>
       </div>
@@ -124,10 +124,10 @@ describe("PairRoute", () => {
     await act(async () => {
       fireEvent.click(screen.getByText("simulate scan"));
     });
+    // Flush any remaining microtasks/timers so state updates settle
+    await act(async () => {});
     // Success screen should show
-    await waitFor(() => {
-      expect(screen.getByText("Paired!")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Paired!")).toBeInTheDocument();
   });
 
   it("shows success screen then redirects after timeout", async () => {
@@ -140,10 +140,10 @@ describe("PairRoute", () => {
     await act(async () => {
       fireEvent.click(screen.getByText("simulate scan"));
     });
+    // Flush remaining state updates
+    await act(async () => {});
 
-    await waitFor(() => {
-      expect(screen.getByText("Paired!")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Paired!")).toBeInTheDocument();
     expect(screen.getByText("Redirecting to live screen...")).toBeInTheDocument();
 
     // Advance timer to trigger the setTimeout in finalizePairing
@@ -248,15 +248,15 @@ describe("PairRoute", () => {
   });
 
   it("re-enables PIN input after lockout expires", async () => {
-    mockFetch.mockReset();
-    mockFetch.mockImplementation((url: string) => {
-      // First 3 calls are the failed attempts, then success
-      const callCount = mockFetch.mock.calls.length;
-      if (callCount <= 3) return errorResponse();
-      return successResponse({ deviceId: "d1", deviceToken: "tok", serverName: "LouvorJA" });
-    });
     const { completePairing } = (useConnectionStore as unknown as { getState: () => { completePairing: ReturnType<typeof vi.fn> } }).getState();
     completePairing.mockResolvedValue(undefined);
+
+    // 3 error responses, then 1 success
+    mockFetch
+      .mockReturnValueOnce(errorResponse())
+      .mockReturnValueOnce(errorResponse())
+      .mockReturnValueOnce(errorResponse())
+      .mockReturnValueOnce(successResponse({ deviceId: "d1", deviceToken: "tok", serverName: "LouvorJA" }));
 
     render(<PairRoute />);
     const pinLink = screen.getAllByRole("button", { name: "Enter code manually" })[0];
@@ -286,9 +286,11 @@ describe("PairRoute", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("pin-submit"));
     });
+    // Flush remaining state updates
+    await act(async () => {});
 
     // Should show success screen
-    expect(await screen.findByText("Paired!")).toBeInTheDocument();
+    expect(screen.getByText("Paired!")).toBeInTheDocument();
   });
 
   it("treats invalid QR payload as PIN fallback", { timeout: 10000 }, async () => {
@@ -320,8 +322,8 @@ describe("PairRoute", () => {
       }),
     );
 
-    await waitFor(() => {
-      expect(screen.getByText("Paired!")).toBeInTheDocument();
-    });
+    // Flush remaining state updates
+    await act(async () => {});
+    expect(screen.getByText("Paired!")).toBeInTheDocument();
   });
 });
