@@ -74,7 +74,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       if (paused && state === 1) p.pauseVideo();
       else if (!paused && state !== 1) p.playVideo();
     }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, [isFollower]);
 
   // Direct command listener for immediate follower response (play/pause/seek).
@@ -96,7 +96,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       else if (action === "pause") p.pauseVideo();
       else if (action === "seek" && value !== undefined) p.seekTo(value, true);
     }).catch(() => () => {});
-    return () => { unsub.then((fn) => fn()); };
+    return () => { unsub.then((fn) => fn()).catch(() => {}); };
   }, [isFollower]);
 
   const emitState = useCallback((player: YTPlayer) => {
@@ -191,7 +191,7 @@ export function YouTubePlayer({ videoId, title, className, muted = false, isFoll
       clearInterval(pollRef.current);
       try { playerRef.current?.destroy(); } catch (_) {}
       playerRef.current = undefined;
-      unsub.then((fn) => fn());
+      unsub.then((fn) => fn()).catch(() => {});
     };
   }, [videoId, muted, isFollower, emitState]);
 
