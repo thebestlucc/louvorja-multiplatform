@@ -73,6 +73,9 @@ jobs:
         with:
           setup-node: "false"
           install-frontend-deps: "false"
+      - name: Verify commands.toml matches collect_commands!
+        shell: bash
+        run: node .github/scripts/check-commands-toml.mjs
       - name: Rust check
         shell: bash
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml

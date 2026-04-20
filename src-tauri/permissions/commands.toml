@@ -31,6 +31,7 @@ description = "Allows all collection management commands"
 allow = [
     "get_collections",
     "search_collections",
+    "search_collections_content",
     "get_collection",
     "create_collection",
     "update_collection",
@@ -74,6 +75,7 @@ allow = [
     "update_presentation",
     "delete_presentation",
     "get_slides",
+    "get_slides_batch",
     "create_slide",
     "update_slide",
     "delete_slide",
@@ -195,6 +197,7 @@ allow = [
     "stop_streaming_server",
     "get_streaming_status",
     "set_streaming_broadcast",
+    "broadcast_video_state_to_streaming",
     "start_migration",
     "get_migration_progress",
     "cancel_migration",
@@ -358,4 +361,13 @@ allow = [
     "video_pipeline_answer",
     "video_pipeline_ice",
     "video_pipeline_unload"
+]
+
+[[permission]]
+identifier = "allow-updater-commands"
+description = "Allows app update check and install commands"
+[permission.commands]
+allow = [
+    "check_for_updates",
+    "install_update"
 ]
