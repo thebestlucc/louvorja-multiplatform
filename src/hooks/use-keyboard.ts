@@ -152,6 +152,7 @@ export function useKeyboard({ enabled = true }: { enabled?: boolean } = {}) {
         }
 
         case "slides-clear":
+          if (isPlayingNowRoute) break; // handled by use-playing-now-keyboard (calls stop())
           clearPresentation();
           break;
 
