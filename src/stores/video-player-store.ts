@@ -49,6 +49,8 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
     setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v);
     if (prev && !v) {
       videoPipeline.unload().catch(() => {});
+      // Direct reset is acceptable here: same domain, no circular dep, 1 line.
+      // If more reset logic is needed in future, extract to useVideoCoordinator.
       useRustVideoPipelineStore.getState().reset();
     }
   },
