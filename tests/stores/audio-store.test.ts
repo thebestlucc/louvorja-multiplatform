@@ -6,7 +6,6 @@ import { usePresentationStore } from "../../src/stores/presentation-store";
 describe("Audio Store", () => {
   beforeEach(() => {
     useAudioStore.getState().reset();
-    usePresentationStore.getState().setSlides([]);
     usePresentationStore.getState().setActiveSlideIndex(0);
   });
 
