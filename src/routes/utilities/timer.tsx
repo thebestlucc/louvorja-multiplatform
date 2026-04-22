@@ -4,7 +4,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { notify } from "../../lib/notifications";
 import { catcher } from "../../lib/catcher";
-import { Pause, Play, RotateCcw, TimerReset } from "lucide-react";
 import {
   useAddLap,
   useAdjustCountdownTimer,
@@ -39,12 +38,7 @@ import {
   TIMER_ALERT_VOLUME_SETTING_KEY,
   TIMER_ALERTS_SETTING_KEY,
 } from "../../lib/timer-alerts";
-import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { TimerDisplay } from "../../components/utilities/timer-display";
-import { cn } from "../../lib/utils";
-import { TimerConfigPanel } from "./_timer-config-panel";
-import { TimerAlertPanel } from "./_timer-alert-panel";
+import { TimerLayout, parseNonNegativeInteger, normalizeProjectedTimerValue } from "./_timer-layout";
 
 export const Route = createFileRoute("/utilities/timer")({
   component: UtilitiesTimerPage,
@@ -108,20 +102,13 @@ function UtilitiesTimerPage() {
     setCountdownValueMs(stoppedCountdownRuntimeMs);
   }, [stoppedCountdownRuntimeMs]);
 
-  const persistAlertRules = async (nextRules: TimerAlertRule[]) => {
-    await catcher(
-      setSettingMutation.mutateAsync({
-        key: TIMER_ALERTS_SETTING_KEY,
-        value: JSON.stringify(nextRules),
-      }),
-      { notify: true },
-    );
-  };
-
   const updateAlertRules = async (updater: (rules: TimerAlertRule[]) => TimerAlertRule[]) => {
     const nextRules = normalizeAlertRules(updater(alertRules));
     setAlertRules(nextRules);
-    await persistAlertRules(nextRules);
+    await catcher(
+      setSettingMutation.mutateAsync({ key: TIMER_ALERTS_SETTING_KEY, value: JSON.stringify(nextRules) }),
+      { notify: true },
+    );
   };
 
   const persistAlertVolume = async (nextVolume: number) => {
@@ -367,195 +354,45 @@ function UtilitiesTimerPage() {
   const isCountdownRuntime = timerState?.mode === "countdown" && timerState.durationMs != null;
 
   return (
-    <section className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
-      <Card>
-        <CardHeader className="space-y-4">
-          <div className="space-y-1">
-            <CardTitle>{t("utilities.timer.title")}</CardTitle>
-            <p className="text-sm text-muted-foreground">{t("utilities.timer.description")}</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <ModeButton
-              active={mode === "countdown"}
-              onClick={() => setMode("countdown")}
-              label={t("utilities.timer.countdown")}
-            />
-            <ModeButton
-              active={mode === "stopwatch"}
-              onClick={() => setMode("stopwatch")}
-              label={t("utilities.timer.stopwatch")}
-            />
-          </div>
-
-          {mode === "countdown" && (
-            <TimerConfigPanel
-              countdownMinutesValue={countdownMinutesValue}
-              countdownSecondsValue={countdownSecondsValue}
-              isRunning={isRunning}
-              isCountdownRuntime={isCountdownRuntime}
-              isPending={adjustCountdownTimer.isPending}
-              onMinutesChange={handleMinutesInputChange}
-              onSecondsChange={handleSecondsInputChange}
-              onAdjustMinutes={handleAdjustCountdownMinutes}
-            />
-          )}
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-border bg-background px-4 py-6 text-center">
-            <TimerDisplay timeMs={displayTimeMs} mode={displayMode} size="large" />
-            <p className="mt-2 text-xs uppercase tracking-wide text-muted-foreground">
-              {displayMode === "countdown" ? t("utilities.timer.countdown") : t("utilities.timer.stopwatch")}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              onClick={handleStart}
-              disabled={startTimer.isPending}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              {t("utilities.timer.start")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handlePause}
-              disabled={!isRunning || pauseTimer.isPending}
-            >
-              <Pause className="mr-2 h-4 w-4" />
-              {t("utilities.timer.pause")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleResume}
-              disabled={isRunning || !hasProgress || resumeTimer.isPending}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              {t("utilities.timer.resume")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleReset}
-              disabled={resetTimer.isPending}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              {t("utilities.timer.reset")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleLap}
-              disabled={!isRunning || displayMode !== "stopwatch" || addLap.isPending}
-            >
-              <TimerReset className="mr-2 h-4 w-4" />
-              {t("utilities.timer.lap")}
-            </Button>
-            <Button
-              size="sm"
-              variant={isProjecting ? "destructive" : "outline"}
-              onClick={() => {
-                if (isProjecting) {
-                  stopTimerProjectionFlow();
-                  return;
-                }
-                startTimerProjectionFlow();
-              }}
-            >
-              {isProjecting ? t("utilities.projection.clear") : t("utilities.projection.project")}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("utilities.timer.laps")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {laps.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("utilities.timer.noLaps")}</p>
-            ) : (
-              <ol className="space-y-2">
-                {[...laps].reverse().map((lap, index) => {
-                  const lapNumber = laps.length - index;
-                  return (
-                    <li
-                      key={`${lap}-${lapNumber}`}
-                      className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    >
-                      <span className="text-muted-foreground">#{lapNumber}</span>
-                      <span className="font-medium tabular-nums">
-                        {formatUtilityTimer(lap, "stopwatch")}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </CardContent>
-        </Card>
-
-        <TimerAlertPanel
-          alertRules={alertRules}
-          alertVolume={alertVolume}
-          newAlertMinute={newAlertMinute}
-          onAlertVolumeChange={handleAlertVolumeChange}
-          onAlertVolumeCommit={handleAlertVolumeCommit}
-          onBrowseAlertAudio={handleBrowseAlertAudio}
-          onClearAlertAudio={handleClearAlertAudio}
-          onTestAlert={handleTestAlert}
-          onAddAlertMinute={handleAddAlertMinute}
-          onRemoveAlertMinute={handleRemoveAlertMinute}
-          onNewAlertMinuteChange={setNewAlertMinute}
-        />
-      </div>
-    </section>
+    <TimerLayout
+      mode={mode}
+      onModeChange={setMode}
+      displayMode={displayMode}
+      displayTimeMs={displayTimeMs}
+      countdownMinutesValue={countdownMinutesValue}
+      countdownSecondsValue={countdownSecondsValue}
+      isCountdownRuntime={isCountdownRuntime}
+      isAdjustPending={adjustCountdownTimer.isPending}
+      onMinutesChange={handleMinutesInputChange}
+      onSecondsChange={handleSecondsInputChange}
+      onAdjustMinutes={handleAdjustCountdownMinutes}
+      isRunning={isRunning}
+      hasProgress={hasProgress}
+      laps={laps}
+      isStartPending={startTimer.isPending}
+      isPausePending={pauseTimer.isPending}
+      isResumePending={resumeTimer.isPending}
+      isResetPending={resetTimer.isPending}
+      isLapPending={addLap.isPending}
+      onStart={handleStart}
+      onPause={handlePause}
+      onResume={handleResume}
+      onReset={handleReset}
+      onLap={handleLap}
+      isProjecting={isProjecting}
+      onStartProjection={startTimerProjectionFlow}
+      onStopProjection={stopTimerProjectionFlow}
+      alertRules={alertRules}
+      alertVolume={alertVolume}
+      newAlertMinute={newAlertMinute}
+      onAlertVolumeChange={handleAlertVolumeChange}
+      onAlertVolumeCommit={handleAlertVolumeCommit}
+      onBrowseAlertAudio={handleBrowseAlertAudio}
+      onClearAlertAudio={handleClearAlertAudio}
+      onTestAlert={handleTestAlert}
+      onAddAlertMinute={handleAddAlertMinute}
+      onRemoveAlertMinute={handleRemoveAlertMinute}
+      onNewAlertMinuteChange={setNewAlertMinute}
+    />
   );
-}
-
-function ModeButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-md border px-3 py-1.5 text-sm transition-colors",
-        active
-          ? "border-primary bg-primary/10 text-foreground"
-          : "border-border bg-surface text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function parseNonNegativeInteger(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.max(0, parsed);
-}
-
-function normalizeProjectedTimerValue(mode: TimerMode, valueMs: number): number {
-  const safeValueMs = Math.max(0, Math.floor(valueMs));
-  if (mode === "countdown") {
-    return Math.floor(safeValueMs / 1000) * 1000;
-  }
-  return safeValueMs;
 }
