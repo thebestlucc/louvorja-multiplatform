@@ -16,6 +16,7 @@ import { useSlidePasser } from "../hooks/use-slide-passer";
 import { useSlidePasserStore } from "../stores/slide-passer-store";
 import { useLiturgyPlayback } from "../hooks/use-liturgy-playback";
 import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
+import { useAudioCoordinator } from "../hooks/use-audio-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { useRustVideoPipelineStateBridge } from "../hooks/use-rust-video-pipeline-state";
@@ -204,6 +205,7 @@ function RootLayout() {
   }, [slidePasserLoaded]);
 
   usePlaybackCoordinator();
+  useAudioCoordinator();
   useDownloadEvents();
   useRustVideoPipelineStateBridge();
   useKeyboard({ enabled: !isBareRoute });
