@@ -36,7 +36,8 @@ export interface AppEventMap extends Record<string, unknown> {
   "audio:query-projection-type": void;
   /** Fired synchronously with the projection type in response to the query above. */
   "audio:projection-type-response": { projectionType: string | null };
-  /** Fired by useVideoPlayerStore when the Rust pipeline flag is disabled. */
+  /** Reserved for Option B: emit when Rust pipeline flag is disabled.
+   *  Currently unused — video-player-store uses a direct reset call (Option A). */
   "video:pipeline-disabled": void;
 }
 
