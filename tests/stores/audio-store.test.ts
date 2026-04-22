@@ -2,6 +2,7 @@ import { beforeEach, describe, test } from "node:test";
 import { strict as assert } from "node:assert";
 import { useAudioStore } from "../../src/stores/audio-store";
 import { usePresentationStore } from "../../src/stores/presentation-store";
+import { appEventBus } from "../../src/lib/event-bus";
 
 describe("Audio Store", () => {
   beforeEach(() => {
@@ -26,8 +27,14 @@ describe("Audio Store", () => {
     ]);
     store.setPlaybackMode("karaoke");
 
-    store.syncToPosition(6_000);
+    const syncedSlides: number[] = [];
+    const unsub = appEventBus.on("audio:slide-sync", ({ slideIndex }) => {
+      syncedSlides.push(slideIndex);
+    });
 
-    assert.equal(usePresentationStore.getState().activeSlideIndex, 1);
+    store.syncToPosition(6_000);
+    unsub();
+
+    assert.ok(syncedSlides.includes(1), `expected slideIndex 1, got [${syncedSlides.join(", ")}]`);
   });
 });
