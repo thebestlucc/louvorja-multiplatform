@@ -87,14 +87,14 @@ export const useAudioStore = create<AudioStoreState>((set, get) => {
     }
 
     projectedSlideInFlight = true;
-    void (async () => {
+    (async () => {
       while (queuedProjectionSlide != null) {
         const nextSlide = queuedProjectionSlide;
         queuedProjectionSlide = null;
         await catcher(projectSlideIndex(nextSlide), { notify: false });
       }
       projectedSlideInFlight = false;
-    })();
+    })().catch(() => {});
   };
 
   const syncPlaybackSlide = (slideIndex: number) => {
