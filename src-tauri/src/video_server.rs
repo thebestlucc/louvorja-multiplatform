@@ -109,7 +109,6 @@ impl VideoServer {
     }
 
     /// Stop the video server. Called on app shutdown or when no longer needed.
-    #[allow(dead_code)]
     pub fn stop(&mut self) {
         self.stop_flag.store(true, Ordering::SeqCst);
         self.is_running.store(false, Ordering::SeqCst);
