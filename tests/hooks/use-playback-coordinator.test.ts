@@ -21,7 +21,7 @@ import * as assert from "node:assert";
 // ── Import stores (after stub) ────────────────────────────────────────────────
 import { useQueueStore, type QueueItem } from "../../src/stores/queue-store";
 import { useAudioStore } from "../../src/stores/audio-store";
-import { usePresentationStore } from "../../src/stores/presentation-store";
+import { useMediaPlayerStore } from "../../src/stores/media-player-store";
 
 // Helper: minimal BibleVerse
 function makeBibleVerse(verse: number) {
@@ -63,7 +63,7 @@ function makeBibleItem(id: string): QueueItem {
 describe("playItemByKind dispatch", () => {
   beforeEach(() => {
     useQueueStore.getState().clearQueue();
-    usePresentationStore.getState().setSlides([]);
+    useMediaPlayerStore.getState().setSlides([]);
   });
 
   test("hymn item at index 0: setCurrentProjectionType(hymn) dispatched, audio stop called", async () => {
@@ -93,15 +93,14 @@ describe("playItemByKind dispatch", () => {
   });
 
   test("bible item: setSlides called with chapter verses, setActiveSlideIndex at correct verse", async () => {
-    // Mock setCurrentSlide IPC (already stubbed via window.__TAURI_INTERNALS__)
-    const pres = usePresentationStore.getState();
+    const mp = useMediaPlayerStore.getState();
     let capturedSlides: import("../../src/lib/bindings").SlideContent[] = [];
     let capturedStartIdx = -1;
 
-    const origSetSlides = pres.setSlides.bind(pres);
-    const origSetIdx = pres.setActiveSlideIndex.bind(pres);
+    const origSetSlides = mp.setSlides.bind(mp);
+    const origSetIdx = mp.setActiveSlideIndex.bind(mp);
 
-    usePresentationStore.setState({
+    useMediaPlayerStore.setState({
       setSlides: (s) => {
         capturedSlides = s;
         origSetSlides(s);
@@ -127,10 +126,6 @@ describe("playItemByKind dispatch", () => {
       },
     };
 
-    // Call playBibleItem directly via dynamic import (tests the helper, not the hook)
-    // We simulate what the coordinator does by calling through the module export
-    // (the helper is not exported, so we trigger it via queue store manipulation + direct call)
-
     // Direct approach: re-implement the core assertion of playBibleItem
     const { defaultBackground } = await import("../../src/types/presentation");
     const { verses, initialVerse, bookName } = bibleItem.bibleContext!;
@@ -145,8 +140,8 @@ describe("playItemByKind dispatch", () => {
     }));
     const expectedStartIdx = verses.findIndex((v) => v.verse === initialVerse);
 
-    usePresentationStore.getState().setSlides(expectedSlides);
-    usePresentationStore.getState().setActiveSlideIndex(expectedStartIdx);
+    useMediaPlayerStore.getState().setSlides(expectedSlides);
+    useMediaPlayerStore.getState().setActiveSlideIndex(expectedStartIdx);
 
     assert.strictEqual(capturedSlides.length, 3, "should have 3 verse slides");
     assert.strictEqual(capturedStartIdx, 1, "should start at verse 17 (index 1)");
@@ -156,7 +151,7 @@ describe("playItemByKind dispatch", () => {
     );
 
     // Restore
-    usePresentationStore.setState({
+    useMediaPlayerStore.setState({
       setSlides: origSetSlides,
       setActiveSlideIndex: origSetIdx,
     });
