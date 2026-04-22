@@ -1,8 +1,8 @@
 import { createRootRoute, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
+
 import { LiturgyPlaybackBanner } from "../components/layout/liturgy-playback-banner";
-import { listen, emit } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "../components/layout/sidebar";
 import { Header } from "../components/layout/header";
 import { StatusBar } from "../components/layout/status-bar";
@@ -17,24 +17,24 @@ import { useSlidePasserStore } from "../stores/slide-passer-store";
 import { useLiturgyPlayback } from "../hooks/use-liturgy-playback";
 import { usePlaybackCoordinator } from "../hooks/use-playback-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
-import { useMonitorsControl } from "../hooks/use-monitors";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { useRustVideoPipelineStateBridge } from "../hooks/use-rust-video-pipeline-state";
-import { openKeyboardShortcutsPanel } from "../components/utilities/keyboard-shortcuts-panel";
+import { useEventCacheInvalidation } from "../hooks/use-event-cache-invalidation";
+import { useAutoMonitorAssignment } from "../hooks/use-auto-monitor-assignment";
+import { usePackSyncListener } from "../hooks/use-pack-sync-listener";
+import { useRemoteStateBroadcast } from "../hooks/use-remote-state-broadcast";
+import { useSpotlightListener } from "../hooks/use-spotlight-listener";
 import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { usePresentationStore } from "../stores/presentation-store";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useDisplayStore } from "../stores/display-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
-import type { SlideContent, LiturgyWithItems } from "../lib/bindings";
+import type { SlideContent } from "../lib/bindings";
 import type { BibleContext } from "../stores/display-store";
 import { useQueueStore } from "../stores/queue-store";
 import { deletePreference } from "../lib/store";
 import { ContentSyncModal } from "../components/content-sync/content-sync-modal";
 import { PackSyncDialog, PackSyncProgressDialog } from "../components/content-sync/pack-sync-dialog";
-import { queryKeys, useMonitorConfigs, useMonitors, usePlanPackSync } from "../lib/queries";
-import { setMonitorConfig } from "../lib/tauri";
-import { resolveAutomaticProjectionAssignments } from "../lib/monitor-resolution";
 import { useThemeStore } from "../stores/theme-store";
 import { useContentSyncStore } from "../stores/content-sync-store";
 import { catcher } from "../lib/catcher";
@@ -42,7 +42,7 @@ import { LANGUAGES, type Language } from "../lib/constants";
 import { isOnboardingRequired } from "../lib/onboarding";
 import { SpotlightTour } from "../components/tour/spotlight-tour";
 import { completeRouteTour } from "../lib/tour";
-import type { ContentSyncProgress, ContentSyncReport, PackSyncProgress } from "../types/content-sync";
+import type { ContentSyncProgress, ContentSyncReport } from "../types/content-sync";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -74,7 +74,6 @@ function safeListen(
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isBareRoute = usesBareLayout(pathname);
-  const queryClient = useQueryClient();
 
   // Projection windows: disable pointer events on body so YouTube iframes never
   // show their native controls/HUD on hover or focus. Only for actual projection windows, not onboarding.
@@ -102,12 +101,10 @@ function RootLayout() {
   }, []);
 
   const setLanguage = useThemeStore((state) => state.setLanguage);
-  const { data: monitors = [], isSuccess: monitorsLoaded } = useMonitors();
-  const { data: monitorConfigs = [], isSuccess: monitorConfigsLoaded } = useMonitorConfigs();
-  const previousMonitorIdsRef = useRef<string[] | null>(null);
-  const previousPrimaryMonitorIdRef = useRef<string | null>(null);
-  const syncingMonitorAssignmentsRef = useRef(false);
   useTimerAlerts(!isBareRoute);
+  useEventCacheInvalidation();
+  useAutoMonitorAssignment(!isBareRoute);
+  usePackSyncListener(!isBareRoute);
 
   useEffect(() => {
     const applyLanguage = (candidate: string | null | undefined) => {
@@ -145,61 +142,11 @@ function RootLayout() {
     };
   }, [setLanguage]);
 
-  useEffect(() => {
-    const unlistenPromise = safeListen(
-      listen("monitors-changed", () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.monitors.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
-      }),
-      "monitors-changed",
-    );
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [queryClient]);
-
-  useEffect(() => {
-    const unlistenPromise = safeListen(
-      listen("data-changed", () => {
-        // Invalidate content caches after pack sync (favorites unaffected by sync)
-        queryClient.invalidateQueries({ queryKey: ["hymns"], exact: false });
-        queryClient.invalidateQueries({ queryKey: ["music"], exact: false });
-        queryClient.invalidateQueries({ queryKey: ["collections"], exact: false });
-        queryClient.invalidateQueries({ queryKey: ["albums"], exact: false });
-      }),
-      "data-changed",
-    );
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [queryClient]);
-
-  useEffect(() => {
-    const unlistenPromise = safeListen(
-      listen("streaming-status-changed", () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.streaming.status });
-      }),
-      "streaming-status-changed",
-    );
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [queryClient]);
-
   const contentSyncPromptSummary = useContentSyncStore((s) => s.promptSummary);
   const contentSyncPromptOpen = useContentSyncStore((s) => s.isPromptOpen);
   const closeContentSyncPrompt = useContentSyncStore((s) => s.closePrompt);
   const setContentSyncProgress = useContentSyncStore((s) => s.setProgress);
   const setContentSyncReport = useContentSyncStore((s) => s.setReport);
-  const packSyncPlanQuery = usePlanPackSync({ enabled: !isBareRoute });
-  const packSyncPlanShownRef = useRef(false);
-  const openPackSyncPlan = useContentSyncStore((s) => s.openPackSyncPlan);
-  const setPackSyncProgress = useContentSyncStore((s) => s.setPackSyncProgress);
-  const setPackSyncPendingCount = useContentSyncStore((s) => s.setPackSyncPendingCount);
-  const setPackSyncPlan = useContentSyncStore((s) => s.setPackSyncPlan);
 
   useEffect(() => {
     const unlistenProgress = safeListen(
@@ -226,91 +173,7 @@ function RootLayout() {
       unlistenProgress.then((unlisten) => unlisten());
       unlistenReport.then((unlisten) => unlisten());
     };
-  }, [queryClient, setContentSyncProgress, setContentSyncReport]);
-
-  useEffect(() => {
-    if (isBareRoute) {
-      return;
-    }
-    if (!monitorsLoaded || !monitorConfigsLoaded) {
-      return;
-    }
-
-    const currentMonitorIds = monitors.map((monitor) => monitor.id);
-    const currentPrimaryMonitorId = monitors.find((monitor) => monitor.isPrimary)?.id ?? null;
-    const previousMonitorIds = previousMonitorIdsRef.current;
-    const previousPrimaryMonitorId = previousPrimaryMonitorIdRef.current;
-
-    previousMonitorIdsRef.current = currentMonitorIds;
-    previousPrimaryMonitorIdRef.current = currentPrimaryMonitorId;
-
-    if (!previousMonitorIds || syncingMonitorAssignmentsRef.current) {
-      return;
-    }
-
-    const assignments = resolveAutomaticProjectionAssignments(
-      monitors,
-      monitorConfigs,
-      previousMonitorIds,
-      previousPrimaryMonitorId,
-    );
-    if (!assignments) {
-      return;
-    }
-
-    syncingMonitorAssignmentsRef.current = true;
-    void (async () => {
-      await catcher(async () => {
-        await setMonitorConfig(assignments.projectorMonitorId, "projector");
-        await setMonitorConfig(assignments.returnMonitorId, "return");
-        await queryClient.invalidateQueries({ queryKey: queryKeys.monitors.configs });
-      });
-      syncingMonitorAssignmentsRef.current = false;
-    })();
-  }, [isBareRoute, monitorConfigs, monitorConfigsLoaded, monitors, monitorsLoaded, queryClient]);
-
-
-  // Track pending pack count + plan for bell notification
-  useEffect(() => {
-    const plan = packSyncPlanQuery.data ?? null;
-    // Only count visible (non-db) items for the bell badge
-    const visibleItems = plan?.items.filter((i) => !i.packId.startsWith("content-db-")) ?? [];
-    const count = visibleItems.length;
-    setPackSyncPendingCount(count);
-    setPackSyncPlan(count > 0 ? plan : null);
-  }, [packSyncPlanQuery.data, setPackSyncPendingCount, setPackSyncPlan]);
-
-  // Show pack sync dialog on startup if there are new manifest items (not first-run lang setup — onboarding handles that)
-  useEffect(() => {
-    if (isBareRoute || packSyncPlanShownRef.current) return;
-    const plan = packSyncPlanQuery.data;
-    const hasVisible = plan?.items.some((i) => !i.packId.startsWith("content-db-"));
-    if (plan && hasVisible) {
-      packSyncPlanShownRef.current = true;
-      openPackSyncPlan();
-    }
-  }, [packSyncPlanQuery.data, isBareRoute, openPackSyncPlan]);
-
-  // Listen for pack-sync-progress events
-  useEffect(() => {
-    if (isBareRoute) return;
-    const unlisten = safeListen(
-      listen<PackSyncProgress>("pack-sync-progress", (event) => {
-        setPackSyncProgress(event.payload);
-        const status = event.payload.status;
-        if (status === "completed" || status === "completed_with_errors" || status === "failed" || status === "cancelled") {
-          queryClient.invalidateQueries({ queryKey: queryKeys.packSyncPlan });
-          // Content DB was hot-swapped — refetch hymn/collection/album data
-          queryClient.invalidateQueries({ queryKey: ["hymns", "search"], exact: false });
-          queryClient.invalidateQueries({ queryKey: ["hymns", "album"], exact: false });
-          queryClient.invalidateQueries({ queryKey: queryKeys.albums.all });
-          queryClient.invalidateQueries({ queryKey: queryKeys.collections.all() });
-        }
-      }),
-      "pack-sync-progress",
-    );
-    return () => { unlisten.then((fn) => fn()); };
-  }, [isBareRoute, setPackSyncProgress, queryClient]);
+  }, [setContentSyncProgress, setContentSyncReport]);
 
   // Global Bible context + slides sync — keeps Playing Now preview + sidebar updated
   // even when the /bible route is unmounted (e.g. user navigated to Playing Now)
@@ -382,187 +245,10 @@ function RootLayout() {
     }
   }, [activeLiturgyItemIndex, liturgyItems.length, setActiveLiturgyItemIndex, setPlayingLiturgy]);
 
-  // Broadcast service state to PWA clients when service or item index changes.
-  useEffect(() => {
-    if (!activeLiturgyId) return;
-    const data = queryClient.getQueryData<LiturgyWithItems>(
-      queryKeys.services.detail(activeLiturgyId)
-    );
-    if (!data) return;
-    const payload = {
-      title: data.service.title,
-      activeIndex: activeLiturgyItemIndex,
-      items: data.items.map((item) => ({
-        id: String(item.id),
-        title: item.title,
-        type: item.itemType,
-      })),
-    };
-    emit("service-state", payload);
-  }, [activeLiturgyId, activeLiturgyItemIndex, queryClient]);
-
-  // Broadcast queue state to PWA clients when playing queue changes.
-  useEffect(() => {
-    const nowPlaying =
-      queueCurrentIndex >= 0 && queueCurrentIndex < queueItems.length
-        ? {
-            id: queueItems[queueCurrentIndex].id,
-            title:
-              queueItems[queueCurrentIndex].hymn?.title ??
-              queueItems[queueCurrentIndex].title ??
-              "",
-            artist: queueItems[queueCurrentIndex].hymn?.author ?? undefined,
-          }
-        : null;
-    const history = queueItems
-      .slice(0, Math.max(0, queueCurrentIndex))
-      .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
-    const upNext = queueItems
-      .slice(queueCurrentIndex + 1)
-      .map((i) => ({ id: i.id, title: i.hymn?.title ?? i.title ?? "" }));
-    emit("queue-state", { nowPlaying, upNext, history });
-  }, [queueItems, queueCurrentIndex]);
-
-  // Re-emit current service + queue state whenever a new remote device connects.
-  // Uses getState() for fresh reads to avoid stale closures.
-  useEffect(() => {
-    if (isBareRoute) return;
-    const unlistenPromise = listen("remote-devices-changed", () => {
-      // Re-broadcast service state
-      const { activeLiturgyId: lid, activeLiturgyItemIndex: idx } = usePresentationStore.getState();
-      if (lid) {
-        const data = queryClient.getQueryData<LiturgyWithItems>(
-          queryKeys.services.detail(lid)
-        );
-        if (data) {
-          emit("service-state", {
-            title: data.service.title,
-            activeIndex: idx,
-            items: data.items.map((item) => ({
-              id: String(item.id),
-              title: item.title,
-              type: item.itemType,
-            })),
-          });
-        }
-      } else {
-        // No active service — signal cleared state to remote
-        emit("service-state", null);
-      }
-
-      // Re-broadcast queue state with enriched metadata per kind
-      const { items, currentIndex } = useQueueStore.getState();
-      const mapItem = (i: import("../stores/queue-store").QueueItem) => {
-        const base = {
-          id: i.id,
-          kind: i.kind,
-          title: i.hymn?.title ?? i.title ?? "",
-          artist: i.hymn?.author ?? undefined,
-        };
-        if (i.kind === "video" && i.videoMedia) {
-          return {
-            ...base,
-            title: i.videoMedia.videoTitle ?? i.title ?? "Video",
-            duration: i.videoMedia.duration,
-            videoId: i.videoMedia.videoId,
-            thumbnail: i.videoMedia.videoId
-              ? `https://img.youtube.com/vi/${i.videoMedia.videoId}/mqdefault.jpg`
-              : undefined,
-          };
-        }
-        if (i.kind === "bible" && i.bibleContext) {
-          return { ...base, title: i.title ?? `${i.bibleContext.bookName} ${i.bibleContext.chapter}` };
-        }
-        return base;
-      };
-      const nowPlaying =
-        currentIndex >= 0 && currentIndex < items.length
-          ? mapItem(items[currentIndex])
-          : null;
-      const history = items.slice(0, Math.max(0, currentIndex)).map(mapItem);
-      const upNext = items.slice(currentIndex + 1).map(mapItem);
-      emit("queue-state", { nowPlaying, upNext, history });
-    });
-    return () => { unlistenPromise.then((fn) => fn()); };
-  }, [isBareRoute, queryClient]);
+  useRemoteStateBroadcast(activeLiturgyId, activeLiturgyItemIndex, queueItems, queueCurrentIndex, !isBareRoute);
+  useSpotlightListener();
 
   const router = useRouter();
-  const {
-    toggleProjector,
-    toggleReturn,
-    toggleBlackScreen,
-    toggleLogoScreen,
-  } = useMonitorsControl();
-
-  // Stable refs so the effect closure always calls the latest version
-  const toggleProjectorRef = useRef(toggleProjector);
-  const toggleReturnRef = useRef(toggleReturn);
-  const toggleBlackScreenRef = useRef(toggleBlackScreen);
-  const toggleLogoScreenRef = useRef(toggleLogoScreen);
-  useEffect(() => { toggleProjectorRef.current = toggleProjector; }, [toggleProjector]);
-  useEffect(() => { toggleReturnRef.current = toggleReturn; }, [toggleReturn]);
-  useEffect(() => { toggleBlackScreenRef.current = toggleBlackScreen; }, [toggleBlackScreen]);
-  useEffect(() => { toggleLogoScreenRef.current = toggleLogoScreen; }, [toggleLogoScreen]);
-
-  // Spotlight: navigate to a route selected in the detached spotlight window
-  useEffect(() => {
-    const unlistenPromise = safeListen(
-      listen<string>("spotlight-navigated", (event) => {
-        router.navigate({ to: event.payload as never });
-      }),
-      "spotlight-navigated",
-    );
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [router]);
-
-  // Spotlight: execute an action selected in the detached spotlight window
-  useEffect(() => {
-    const unlistenPromise = safeListen(
-      listen<string>("spotlight-action", (event) => {
-        switch (event.payload) {
-          case "toggle-projector":
-            toggleProjectorRef.current();
-            break;
-          case "toggle-return":
-            toggleReturnRef.current();
-            break;
-          case "toggle-black":
-            toggleBlackScreenRef.current();
-            break;
-          case "toggle-logo":
-            toggleLogoScreenRef.current();
-            break;
-          case "clear-projection":
-            stopProjectionAndSongAudio();
-            break;
-          case "open-shortcuts":
-            openKeyboardShortcutsPanel();
-            break;
-          case "start-remote":
-            import("../lib/bindings").then(({ commands }) =>
-              commands.startRemoteServer(null)
-            );
-            break;
-          case "stop-remote":
-            import("../lib/bindings").then(({ commands }) =>
-              commands.stopRemoteServer()
-            );
-            break;
-          case "remote-settings":
-            router.navigate({ to: "/settings", search: { tab: "remote" } as never });
-            break;
-        }
-      }),
-      "spotlight-action",
-    );
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []); // stable refs — no deps needed
 
   if (isBareRoute) {
     return (
