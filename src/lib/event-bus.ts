@@ -12,7 +12,7 @@ class TypedEventBus<EventMap extends Record<string, unknown>> {
       this.listeners.set(event, new Set());
     }
     const set = this.listeners.get(event)!;
-    set.add(listener as Listener<unknown>);
+    set.add(listener as Listener<unknown>); // type safety enforced at call sites via K generic
     return () => set.delete(listener as Listener<unknown>);
   }
 
@@ -33,11 +33,11 @@ export interface AppEventMap extends Record<string, unknown> {
   /** Fired by useAudioStore when sync determines the active slide index changed. */
   "audio:slide-sync": { slideIndex: number };
   /** Fired by useAudioStore when it needs to know the current projection type. */
-  "audio:query-projection-type": unknown;
+  "audio:query-projection-type": void;
   /** Fired synchronously with the projection type in response to the query above. */
   "audio:projection-type-response": { projectionType: string | null };
   /** Fired by useVideoPlayerStore when the Rust pipeline flag is disabled. */
-  "video:pipeline-disabled": unknown;
+  "video:pipeline-disabled": void;
 }
 
 export const appEventBus = new TypedEventBus<AppEventMap>();
