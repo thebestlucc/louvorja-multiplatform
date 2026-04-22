@@ -8,10 +8,8 @@ import {
   resolvePlaybackModeSwitchPosition,
   resolvePlaybackSeekLockAction,
 } from "../lib/audio-sync";
-import { usePresentationStore } from "./presentation-store";
-import { useDisplayStore } from "./display-store";
-import { useMediaPlayerStore } from "./media-player-store";
 import { projectSlideIndex } from "../lib/projection-playback";
+import { appEventBus } from "../lib/event-bus";
 import {
   audioPlay,
   audioPlayVariants,
@@ -106,11 +104,19 @@ export const useAudioStore = create<AudioStoreState>((set, get) => {
     }
 
     set({ lastSyncSlide: slideIndex });
-    usePresentationStore.getState().setActiveSlideIndex(slideIndex);
-    useMediaPlayerStore.getState().setActiveSlideIndex(slideIndex);
 
-    const displayState = useDisplayStore.getState();
-    if (displayState.currentProjectionType === "hymn") {
+    // Emit event so the coordinator hook can update presentation/media-player stores
+    appEventBus.emit("audio:slide-sync", { slideIndex });
+
+    // Query current projection type via synchronous round-trip event
+    let projectionType: string | null = null;
+    const unsub = appEventBus.on("audio:projection-type-response", (r) => {
+      projectionType = r.projectionType;
+    });
+    appEventBus.emit("audio:query-projection-type", undefined);
+    unsub();
+
+    if (projectionType === "hymn") {
       queueProjectedSlide(slideIndex);
     }
   };
