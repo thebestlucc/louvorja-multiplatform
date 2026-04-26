@@ -502,9 +502,9 @@ impl VideoPipelineRuntime {
     ///
     /// When no source URI has been loaded (snapshot.uri is None), this skips
     /// the GStreamer state transition silently — `set_state(Playing)` on a
-    /// sourceless pipeline (NULL or post-prewarm READY) returns
-    /// `StateChangeError` because uridecodebin has no URI to plug. The
-    /// snapshot is still updated so any UI bound to `paused` reflects intent.
+    /// sourceless pipeline returns `StateChangeError` because uridecodebin has
+    /// no URI to plug. The snapshot is still updated so any UI bound to
+    /// `paused` reflects intent.
     pub fn play(&self) -> Result<(), AppError> {
         let has_uri = self.state.snapshot()?.uri.is_some();
         let guard = self.pipeline.lock()?;
