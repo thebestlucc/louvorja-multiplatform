@@ -11,6 +11,17 @@ interface RustVideoPipelineState {
   volume: number;
   /** True after a `videoPipelineEnded` event; cleared on the next state tick. */
   ended: boolean;
+  /**
+   * True once the Rust pipeline's audio sink has received its first buffer
+   * for the current load — i.e. the GStreamer surface is actually rendering
+   * content. Reset to false on every new `load()` (Rust emits
+   * `video-pipeline-frame-ready { ready: false }` at the start of the load
+   * worker, then `{ ready: true }` from a one-shot pad probe on the audio
+   * sink's first buffer). Projection windows hold back `onlineVideo` slides
+   * until this flips true so the operator never sees the black gap between
+   * "click project" and "first frame".
+   */
+  isFrameReady: boolean;
   setState: (
     s: Partial<Omit<RustVideoPipelineState, "setState" | "reset">>,
   ) => void;
@@ -23,6 +34,7 @@ const initial = {
   paused: true,
   volume: 1,
   ended: false,
+  isFrameReady: false,
 };
 
 export const useRustVideoPipelineStore = create<RustVideoPipelineState>(
