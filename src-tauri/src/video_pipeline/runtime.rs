@@ -300,9 +300,43 @@ impl VideoPipelineRuntime {
         // arrives later — producing an audible "video without audio" gap on
         // every load. The NULL wait above uses the same pattern.
         let (change_result, _current, _pending) = pipeline.state(gst::ClockTime::NONE);
-        change_result.map_err(|e| {
-            AppError::Internal(format!("video_pipeline.load PAUSED state wait: {e}"))
-        })?;
+        if let Err(e) = change_result {
+            // Drain bus error messages so the actual root cause (file not
+            // found, codec missing, expired yt-dlp URL, decoder fault, etc.)
+            // surfaces in the AppError instead of the opaque
+            // "Element failed to change its state". Without this, the
+            // frontend toast is uninterpretable for the operator.
+            let mut detail = String::new();
+            if let Some(bus) = pipeline.bus() {
+                while let Some(msg) = bus.pop() {
+                    if let gst::MessageView::Error(err) = msg.view() {
+                        if !detail.is_empty() {
+                            detail.push_str("; ");
+                        }
+                        let src = err
+                            .src()
+                            .map(|s| s.path_string().to_string())
+                            .unwrap_or_else(|| "<unknown>".into());
+                        detail.push_str(&format!("{src}: {}", err.error()));
+                        if let Some(d) = err.debug() {
+                            detail.push_str(&format!(" ({d})"));
+                        }
+                    }
+                }
+            }
+            // Drop the pipeline back to NULL so the next load() starts clean.
+            // Failures during PAUSED transition leave uridecodebin in a half-
+            // built state where retrying without NULL first fails repeatedly.
+            let _ = pipeline.set_state(gst::State::Null);
+            let suffix = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" — {detail}")
+            };
+            return Err(AppError::Internal(format!(
+                "video_pipeline.load PAUSED state wait: {e}{suffix}"
+            )));
+        }
 
         // P3.8 fix S2: belt-and-suspenders pad-discovery wait. AsyncDone is
         // posted when every CURRENTLY-LINKED sink has prerolled. If
@@ -579,179 +613,134 @@ impl VideoPipelineRuntime {
     /// (pending state ≠ VoidPending) or not yet in PAUSED/PLAYING, the
     /// GStreamer seek is skipped silently and only the snapshot is updated.
     ///
-    /// **Phase A regression follow-up:** post-EOS recovery applies to BOTH
-    /// is_seekable=true and is_seekable=false sources. Originally the
-    /// canonical SEGMENT loop was supposed to keep seekable pipelines from
-    /// ever reaching EOS, but the initial-segment arm was deferred to
-    /// `set_loop(One)` (the FLUSH-on-PAUSED regression), which means
-    /// LoopMode::None playback DOES reach natural EOS even on seekable
-    /// sources. After that EOS, gst rejects `seek_simple` on the now-
-    /// terminal pipeline; the user-visible symptom is "Failed to seek"
-    /// when they scrub back or the queue advances. Fall through to the
-    /// reload+seek recovery using the cached URI.
+    /// **Phase A regression follow-up:** when seek_simple fails (typically
+    /// because the pipeline reached natural EOS and gst rejects new seeks
+    /// on the terminal source), fall back to reload+seek using the cached
+    /// URI from the state snapshot. This handles both seekable and
+    /// unseekable sources uniformly without requiring an upfront EOS
+    /// heuristic — try the fast path first, only pay the reload cost if
+    /// gst tells us the pipeline can't handle it.
     pub fn seek(&self, secs: f64) -> Result<(), AppError> {
         let secs = secs.max(0.0);
 
-        // EOS detection — done OUTSIDE the pipeline lock so the recovery
-        // path (which calls `load()` → takes the pipeline lock) doesn't
-        // deadlock. Heuristic: position within `EOS_PROXIMITY_US` of
-        // duration AND pipeline in Playing/Paused.
-        let post_eos = {
-            let guard = self.pipeline.lock()?;
-            if let Some(pipeline) = guard.as_ref() {
-                let pos = pipeline
-                    .query_position::<gst::ClockTime>()
-                    .map(|t| t.useconds())
-                    .unwrap_or(0);
-                let dur = pipeline
-                    .query_duration::<gst::ClockTime>()
-                    .map(|t| t.useconds())
-                    .unwrap_or(0);
-                let (_, current, _) = pipeline.state(gst::ClockTime::ZERO);
-                let in_runnable_state = matches!(
-                    current,
-                    gst::State::Playing | gst::State::Paused
-                );
-                in_runnable_state && dur > 0 && pos >= dur.saturating_sub(EOS_PROXIMITY_US)
-            } else {
-                false
-            }
-        };
-
-        if post_eos {
-            // CD-4: gate the synchronous reload through the same CAS as
-            // `on_eos`'s spawned reload thread. Without this, a user scrub
-            // landing exactly at EOS could race against on_eos's reload
-            // spawn — both would call self.load(uri) and contend on the
-            // pipeline mutex while observing a half-disposed pipeline.
-            // On failed CAS, drop with a clear log; whichever path won
-            // will rebuild to the same URI.
-            if self
-                .loop_op
-                .compare_exchange(
-                    LOOP_OP_IDLE,
-                    LOOP_OP_RELOADING,
-                    Ordering::SeqCst,
-                    Ordering::SeqCst,
-                )
-                .is_err()
-            {
-                log::info!(
-                    "video_pipeline.seek({secs:.3}s): post-EOS reload already in flight, dropping"
-                );
-                return Ok(());
-            }
-            let _release = LoopOpGuard::new(&self.loop_op);
-            log::info!(
-                "video_pipeline.seek({secs:.3}s): unseekable fallback at EOS, \
-                 doing full reload + seek"
-            );
-            let uri = self
-                .state
-                .snapshot()?
-                .uri
-                .clone()
-                .ok_or_else(|| {
-                    AppError::Internal("video_pipeline.seek: post-EOS but no URI in snapshot".into())
-                })?;
-            // Full reload re-creates the segment so seek_simple can land
-            // somewhere meaningful. load() leaves the pipeline in PAUSED.
-            self.load(&uri)?;
-            {
-                let guard = self.pipeline.lock()?;
-                if let Some(pipeline) = guard.as_ref() {
-                    let (_, current, _) = pipeline.state(gst::ClockTime::ZERO);
-                    let useconds = (secs * 1_000_000.0) as u64;
-                    let position = gst::ClockTime::from_useconds(useconds);
-                    pipeline
-                        .seek_simple(
-                            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                            position,
-                        )
-                        .map_err(|e| {
-                            AppError::Internal(format!(
-                                "video_pipeline.seek({secs:.3}s) post-EOS from {current:?}: {e}"
-                            ))
-                        })?;
-                }
-            }
+        let try_seek_result = self.try_seek_simple(secs)?;
+        if try_seek_result.is_ok() {
             self.state.seek(secs)?;
-            self.play()?;
             return Ok(());
         }
+        let seek_err = try_seek_result.err().expect("checked above");
+        log::warn!(
+            "video_pipeline.seek({secs:.3}s) — fast path failed ({seek_err}); \
+             attempting reload+seek using cached URI"
+        );
 
+        // Reload recovery: gst rejected the seek on the live pipeline (most
+        // likely terminal post-EOS state). Reload the same URI from the
+        // state snapshot — this rebuilds the source element and lets the
+        // subsequent seek land cleanly.
+        if self
+            .loop_op
+            .compare_exchange(
+                LOOP_OP_IDLE,
+                LOOP_OP_RELOADING,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_err()
+        {
+            log::info!(
+                "video_pipeline.seek({secs:.3}s): reload already in flight, dropping retry"
+            );
+            return Ok(());
+        }
+        let _release = LoopOpGuard::new(&self.loop_op);
+        let uri = self
+            .state
+            .snapshot()?
+            .uri
+            .clone()
+            .ok_or_else(|| {
+                AppError::Internal(format!(
+                    "video_pipeline.seek({secs:.3}s) reload: snapshot has no URI ({seek_err})"
+                ))
+            })?;
+        self.load(&uri)?;
+        {
+            let guard = self.pipeline.lock()?;
+            if let Some(pipeline) = guard.as_ref() {
+                let useconds = (secs * 1_000_000.0) as u64;
+                let position = gst::ClockTime::from_useconds(useconds);
+                pipeline
+                    .seek_simple(
+                        gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                        position,
+                    )
+                    .map_err(|e| {
+                        AppError::Internal(format!(
+                            "video_pipeline.seek({secs:.3}s) post-reload seek: {e}"
+                        ))
+                    })?;
+            }
+        }
+        self.state.seek(secs)?;
+        self.play()?;
+        Ok(())
+    }
+
+    /// Attempt the fast-path seek (no reload). Returns:
+    /// - `Ok(Ok(()))` — seek issued successfully (or pipeline absent / mid-
+    ///   transition, which is silently fine; snapshot still updates).
+    /// - `Ok(Err(msg))` — gst rejected the seek; caller should fall back
+    ///   to reload+seek recovery.
+    /// - `Err(_)` — lock poisoned or other infrastructure failure.
+    fn try_seek_simple(&self, secs: f64) -> Result<Result<(), String>, AppError> {
         let guard = self.pipeline.lock()?;
         if let Some(pipeline) = guard.as_ref() {
             // Non-blocking state query (timeout = 0).
             let (_, current, pending) = pipeline.state(gst::ClockTime::ZERO);
             let stable_and_seekable = pending == gst::State::VoidPending
                 && (current == gst::State::Paused || current == gst::State::Playing);
-            if stable_and_seekable {
-                let useconds = (secs * 1_000_000.0) as u64;
-                let position = gst::ClockTime::from_useconds(useconds);
-                // C1: when the canonical SEGMENT loop is active (is_seekable=true
-                // AND loop=One), a `seek_simple(FLUSH | KEY_UNIT)` would flush
-                // away the armed segment — pipeline plays to natural EOS,
-                // SEGMENT_DONE never fires, on_eos LoopMode::One ignores
-                // (is_seekable=true guard), video freezes. Issue a fresh
-                // SEGMENT seek with the cached duration as `stop` to keep the
-                // loop alive across user scrubs.
-                let seekable_loop = self.is_seekable.load(Ordering::SeqCst)
-                    && self.state.snapshot()?.loop_mode == LoopMode::One;
-                if seekable_loop {
-                    let stop = self.cached_duration_or_zero();
-                    if !stop.is_zero() {
-                        self.arm_segment_seek(pipeline, position, stop, true)?;
-                    } else {
-                        // I3-rev: cached_duration unset while is_seekable=true
-                        // is the rare lifecycle race where the load() probe
-                        // populated `is_seekable` but `cached_duration` was
-                        // cleared by a concurrent unload(), or the probe
-                        // succeeded with a zero duration. A plain seek_simple
-                        // here would flush the armed SEGMENT, kill the loop
-                        // (SEGMENT_DONE never fires), and `on_eos`'s LoopMode::
-                        // One reload path early-returns due to is_seekable=true
-                        // — loop dies silently. Clear `is_seekable` BEFORE the
-                        // fallback so any subsequent natural EOS reaches the
-                        // legacy on_eos LoopMode::One reload path. Surface in
-                        // production logs via `warn!` since this path is rare.
-                        log::warn!(
-                            "video_pipeline.seek({secs:.3}s): seekable_loop but \
-                             cached_duration unset — clearing is_seekable, \
-                             falling back to seek_simple (legacy reload on next EOS)"
-                        );
-                        self.is_seekable.store(false, Ordering::SeqCst);
-                        pipeline
-                            .seek_simple(
-                                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                                position,
-                            )
-                            .map_err(|e| {
-                                AppError::Internal(format!(
-                                    "video_pipeline.seek({secs:.3}s) from {current:?}: {e}"
-                                ))
-                            })?;
-                    }
-                } else {
-                    pipeline
-                        .seek_simple(
-                            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                            position,
-                        )
-                        .map_err(|e| {
-                            AppError::Internal(format!(
-                                "video_pipeline.seek({secs:.3}s) from {current:?}: {e}"
-                            ))
-                        })?;
-                }
+            if !stable_and_seekable {
+                // Mid-transition or NULL/READY — silently treat as success;
+                // snapshot still updates. Same contract as the legacy code.
+                return Ok(Ok(()));
             }
-            // If mid-transition or not in a seekable state, skip the GStreamer
-            // seek. stop()/restart() callers already .catch() errors; silently
-            // succeeding here avoids spurious INTERNAL_ERROR toasts.
+            let useconds = (secs * 1_000_000.0) as u64;
+            let position = gst::ClockTime::from_useconds(useconds);
+            // C1: when the canonical SEGMENT loop is active (is_seekable=true
+            // AND loop=One), a `seek_simple(FLUSH | KEY_UNIT)` would flush
+            // away the armed segment — pipeline plays to natural EOS,
+            // SEGMENT_DONE never fires, on_eos LoopMode::One ignores
+            // (is_seekable=true guard), video freezes. Issue a fresh
+            // SEGMENT seek with the cached duration as `stop` to keep the
+            // loop alive across user scrubs.
+            let seekable_loop = self.is_seekable.load(Ordering::SeqCst)
+                && self.state.snapshot()?.loop_mode == LoopMode::One;
+            if seekable_loop {
+                let stop = self.cached_duration_or_zero();
+                if !stop.is_zero() {
+                    if let Err(e) = self.arm_segment_seek(pipeline, position, stop, true) {
+                        return Ok(Err(format!("arm_segment_seek from {current:?}: {e}")));
+                    }
+                    return Ok(Ok(()));
+                }
+                // cached_duration unset while is_seekable=true: clear the
+                // flag so the next natural EOS reaches the legacy reload
+                // path, then fall through to plain seek_simple.
+                log::warn!(
+                    "video_pipeline.seek({secs:.3}s): seekable_loop but \
+                     cached_duration unset — clearing is_seekable"
+                );
+                self.is_seekable.store(false, Ordering::SeqCst);
+            }
+            if let Err(e) = pipeline.seek_simple(
+                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                position,
+            ) {
+                return Ok(Err(format!("seek_simple from {current:?}: {e}")));
+            }
         }
-        drop(guard);
-        self.state.seek(secs)?;
-        Ok(())
+        Ok(Ok(()))
     }
 
     /// Update playback volume on the live audio chain AND mirror to the
