@@ -440,21 +440,36 @@ impl VideoPipelineRuntime {
             }
         }
         if seekable && !duration_for_seek.is_zero() {
-            log::info!(
-                "video_pipeline.load: seekable=true, dur={}ms — arming SEGMENT seek",
-                duration_for_seek.mseconds()
-            );
-            match self.arm_segment_seek(&pipeline, gst::ClockTime::ZERO, duration_for_seek, true) {
-                Ok(()) => {
-                    self.is_seekable.store(true, Ordering::SeqCst);
-                    // I5: cache duration so `on_segment_done` and user-scrub
-                    // `seek()` can re-arm the SEGMENT contract without
-                    // re-querying GStreamer.
-                    if let Ok(mut cached) = self.cached_duration.lock() {
-                        *cached = Some(duration_for_seek);
-                    }
-                }
-                Err(e) => {
+            // Phase A regression fix: only ARM the SEGMENT seek when the
+            // user actually wants to loop. Issuing `seek(FLUSH | SEGMENT)`
+            // on a freshly-PAUSED pipeline flushes the prerolled buffers
+            // that the audio frame-ready probe is waiting for; the
+            // projection windows then never see ready=true and the slide
+            // buffer holds the previous content forever (visible symptom:
+            // "video doesn't show up").
+            //
+            // Mark the source as seekable + cache duration so future
+            // `set_loop(One)` toggles or user scrubs in loop mode can use
+            // the canonical SEGMENT primitive — but defer the actual seek
+            // until set_loop(One) recovery handles it. For non-loop
+            // playback (the common case), the pipeline runs to natural
+            // EOS and on_eos's LoopMode::None path fires queue advance.
+            self.is_seekable.store(true, Ordering::SeqCst);
+            if let Ok(mut cached) = self.cached_duration.lock() {
+                *cached = Some(duration_for_seek);
+            }
+            let initial_loop_mode = self.state.snapshot().map(|s| s.loop_mode).ok();
+            if initial_loop_mode == Some(LoopMode::One) {
+                log::info!(
+                    "video_pipeline.load: seekable=true, dur={}ms, loop=One — arming SEGMENT seek",
+                    duration_for_seek.mseconds()
+                );
+                if let Err(e) = self.arm_segment_seek(
+                    &pipeline,
+                    gst::ClockTime::ZERO,
+                    duration_for_seek,
+                    true,
+                ) {
                     log::warn!(
                         "video_pipeline.load: initial SEGMENT seek failed ({e}); \
                          falling back to legacy EOS-based loop path"
@@ -464,6 +479,12 @@ impl VideoPipelineRuntime {
                         *cached = None;
                     }
                 }
+            } else {
+                log::info!(
+                    "video_pipeline.load: seekable=true, dur={}ms, loop={:?} — segment deferred",
+                    duration_for_seek.mseconds(),
+                    initial_loop_mode
+                );
             }
         } else {
             log::info!(
@@ -837,48 +858,60 @@ impl VideoPipelineRuntime {
                 let near_eos = dur_us > 0
                     && pos_us >= dur_us.saturating_sub(EOS_PROXIMITY_US);
                 let pos_secs = pos_us as f64 / 1_000_000.0;
-                if near_eos && !stop.is_zero() {
+                // Phase A regression fix companion: load() no longer arms
+                // the initial SEGMENT seek for default-None loads, so any
+                // path that flips loop to One (mid-playback OR at EOS) must
+                // arm here. Two cases:
+                //  - near EOS / post-EOS: seek from 0 with FLUSH, then play
+                //    (matches the original C2 recovery scenario).
+                //  - mid-playback: seek from current_pos with FLUSH so the
+                //    upcoming end emits SEGMENT_DONE instead of EOS. The
+                //    FLUSH causes a brief audio glitch (~1 frame) which is
+                //    the price of toggling loop mid-track; subsequent
+                //    iterations re-arm without FLUSH via on_segment_done.
+                if !stop.is_zero() {
+                    let (start, label) = if near_eos {
+                        (gst::ClockTime::ZERO, "at/near EOS — re-arming from 0")
+                    } else {
+                        (
+                            gst::ClockTime::from_useconds(pos_us),
+                            "mid-playback — arming from current position",
+                        )
+                    };
                     log::info!(
-                        "video_pipeline: set_loop(One) at/near EOS \
-                         (live_pos={pos_secs:.3}s dur={dur_secs:.3}s) — \
-                         re-arming SEGMENT seek from 0"
+                        "video_pipeline: set_loop(One) {label} \
+                         (live_pos={pos_secs:.3}s dur={dur_secs:.3}s)"
                     );
                     let arm_result = {
                         let guard = self.pipeline.lock()?;
                         guard.as_ref().map(|pipeline| {
-                            self.arm_segment_seek(
-                                pipeline,
-                                gst::ClockTime::ZERO,
-                                stop,
-                                true,
-                            )
+                            self.arm_segment_seek(pipeline, start, stop, true)
                         })
                     };
                     match arm_result {
                         Some(Err(e)) => {
                             log::warn!(
-                                "video_pipeline: set_loop(One) recovery seek failed: {e}"
+                                "video_pipeline: set_loop(One) arm seek failed: {e}"
                             );
                         }
                         Some(Ok(())) => {
-                            // I2-rev: a FLUSH seek on a pipeline that already
-                            // surfaced EOS leaves the state at PAUSED — user
-                            // expectation when toggling "loop on at end" is
-                            // "video plays again", so kick PLAYING. `play()`
-                            // is idempotent; if FLUSH SEGMENT keeps the state
-                            // at PLAYING (rare for already-PLAYING pipelines)
-                            // it's a cheap no-op.
-                            if let Err(e) = self.play() {
-                                log::warn!(
-                                    "video_pipeline: set_loop(One) recovery \
-                                     play() after re-arm failed: {e}"
-                                );
+                            if near_eos {
+                                // FLUSH-from-EOS leaves state at PAUSED; user
+                                // expects playback to resume when toggling
+                                // loop on at end. `play()` is idempotent for
+                                // an already-PLAYING pipeline (mid-playback
+                                // case).
+                                if let Err(e) = self.play() {
+                                    log::warn!(
+                                        "video_pipeline: set_loop(One) play() \
+                                         after re-arm failed: {e}"
+                                    );
+                                }
                             }
                         }
                         None => {
-                            // Pipeline lock held a `None` — pipeline was
-                            // dropped between the live-position query and
-                            // here (concurrent `unload`). Nothing to recover.
+                            // Pipeline dropped between live-position query
+                            // and here (concurrent unload). Nothing to do.
                         }
                     }
                 }
