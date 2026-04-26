@@ -211,8 +211,9 @@ async function playVideoItem(item: QueueItem) {
 
   // When the Rust video pipeline flag is on, load the URI into the Rust runtime
   // so Phase 2 controls (play/pause/seek/volume) actually drive a backed pipeline.
-  // Must run BEFORE setCurrentSlide so projector/return RustVideoConsumers find a
-  // loaded + playing pipeline the moment they subscribe on slide-changed.
+  // Must run BEFORE setCurrentSlide so the projector/return native sinks
+  // (Phase 3 plan) find a loaded + playing pipeline the moment they attach
+  // on slide-changed.
   const { useVideoPlayerStore } = await import("../stores/video-player-store");
   if (useVideoPlayerStore.getState().useRustVideoPipeline) {
     const videoPipeline = await import("../lib/tauri/video-pipeline");

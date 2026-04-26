@@ -9,6 +9,7 @@ import { useDisplayStore } from "../../stores/display-store";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { useRustVideoPipelineStore } from "../../stores/rust-video-pipeline-store";
 import { navigateBible } from "../../lib/tauri/bible";
+import * as videoPipeline from "../../lib/tauri/video-pipeline";
 import { usePresentationStore } from "../../stores/presentation-store";
 import { SlidePanel } from "../../components/playing-now/slide-panel";
 import { QueuePanel } from "../../components/playing-now/queue-panel";
@@ -138,7 +139,19 @@ function PlayingNowScreen() {
             onVolumeChange={actions.setVolume}
             onMuteToggle={() => {
               const s = useAudioStore.getState();
-              s.setOutputMuted(!s.outputMuted);
+              const willBeMuted = !s.outputMuted;
+              s.setOutputMuted(willBeMuted).catch(() => {});
+              // Under rust pipeline, audio bypasses the rodio audio-store path
+              // and goes straight from GStreamer's autoaudiosink to the OS.
+              // Mute/unmute by toggling the pipeline volume to 0 / saved volume
+              // — without touching the audio-store volume field, so the slider
+              // position is preserved as the "volume to restore on unmute".
+              if (usePipelineState) {
+                const target = willBeMuted ? 0 : s.volume;
+                videoPipeline
+                  .setVolume(target)
+                  .catch((err) => console.error("[video-pipeline] mute setVolume failed", err));
+              }
             }}
             onPrevItem={actions.prevItem}
             onNextItem={actions.nextItem}

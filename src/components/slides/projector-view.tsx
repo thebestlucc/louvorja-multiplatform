@@ -19,6 +19,9 @@ import { cn } from "../../lib/utils";
 import { stopProjectionAndSongAudio } from "../../lib/projection-control";
 import { useMediaSource } from "../../hooks/use-media-source";
 import { AlertOverlay } from "../display/alert-overlay";
+import { useVideoPlayerStore, refreshVideoPlayerPreferencesFromDisk } from "../../stores/video-player-store";
+import { useRustVideoPipelineStore } from "../../stores/rust-video-pipeline-store";
+import { attachWindow as attachVideoPipelineWindow, detachWindow as detachVideoPipelineWindow } from "../../lib/tauri/video-pipeline";
 
 function getSlideBackgroundImage(slide: SlideContent): string {
   if (slide.slideType === "lyrics" || slide.slideType === "cover" || slide.slideType === "text" || slide.slideType === "bible") {
@@ -33,11 +36,74 @@ function getSlideBackgroundImage(slide: SlideContent): string {
 export function ProjectorView() {
   const { t, i18n } = useTranslation();
   const [slide, setSlide] = useState<SlideContent | null>(null);
+  // Buffered slide pattern (rust pipeline only): when an `onlineVideo` slide
+  // arrives while the pipeline isn't producing samples yet (`!isFrameReady`),
+  // we hold the new slide here instead of swapping `slide`. The previous
+  // content (lyric, prior video, logo) keeps rendering — far better UX than
+  // a black gap during pipeline init / cold-start / network buffering.
+  // Promoted to `slide` by the `isFrameReady` effect below when ready flips
+  // true, or cleared by `slide-cleared` / a non-video slide arrival.
+  const [pendingSlide, setPendingSlide] = useState<SlideContent | null>(null);
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+  const isFrameReady = useRustVideoPipelineStore((s) => s.isFrameReady);
+
+  // P3.12 — Re-read the flag from disk on mount. Defensive belt-and-braces
+  // for the case where the projector window was opened AFTER the user
+  // toggled the flag in main settings, but before the cross-webview event
+  // listener was registered (or while bootstrap's `initStorePreferences()`
+  // hit a permission error and left the cache empty). `getPreference()`
+  // bypasses the sync cache and goes straight to disk via the
+  // `store:allow-get` capability that the projector window has. Triggers
+  // a re-render via `setState()` once the fresh value is loaded.
+  useEffect(() => {
+    refreshVideoPlayerPreferencesFromDisk().catch((err) =>
+      console.error("[projector] refresh prefs from disk failed", err),
+    );
+  }, []);
+
+  // Phase 3 — attach the native GStreamer sink to this window when the Rust
+  // pipeline flag is on. Webview is transparent (see display/window.rs); the
+  // native sink renders BELOW it. When the flag is off, the legacy WebRTC
+  // path stays in charge via `RustVideoConsumer` / YouTube iframe.
+  useEffect(() => {
+    console.log(`[projector] useRustVideoPipeline=${useRustVideoPipeline} (effect re-run)`);
+    if (!useRustVideoPipeline) return;
+    console.log("[projector] attaching native GStreamer sink");
+    attachVideoPipelineWindow("projector")
+      .then(() => console.log("[projector] attach_window succeeded"))
+      .catch((e) => {
+        console.error("[projector] attach_window failed", e);
+      });
+    return () => {
+      console.log("[projector] detaching native GStreamer sink");
+      detachVideoPipelineWindow("projector").catch((e) => {
+        console.error("[projector] detach_window failed", e);
+      });
+    };
+  }, [useRustVideoPipeline]);
+
+  // Phase 3 — when the Rust pipeline owns rendering, html + body must be
+  // transparent so the native GStreamer sink underneath the WKWebView is
+  // visible. Component-scoped tweak (no global CSS) so the legacy path's
+  // body background stays unchanged when the flag is off.
+  useEffect(() => {
+    if (!useRustVideoPipeline) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlBg = html.style.background;
+    const prevBodyBg = body.style.background;
+    html.style.background = "transparent";
+    body.style.background = "transparent";
+    return () => {
+      html.style.background = prevHtmlBg;
+      body.style.background = prevBodyBg;
+    };
+  }, [useRustVideoPipeline]);
   // slideKey only changes when the slide's visual identity (type + background) changes.
   // This prevents remounting the background image on every stanza change (which causes blinking).
   const [slideKey, setSlideKey] = useState(0);
@@ -47,18 +113,62 @@ export function ProjectorView() {
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
   const logoImageSrc = useMediaSource(screenDefaults.logoImagePath);
 
-  const handleSlide = useCallback((slide: SlideContent) => {
+  const commitSlide = useCallback((newSlide: SlideContent) => {
     const prev = prevSlideRef.current;
     // Only remount the renderer when the slide identity changes (type or background image).
     // Same-background stanza changes (e.g. next hymn lyric) only animate the text layer.
-    if (!prev || prev.slideType !== slide.slideType || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(slide)) {
+    if (!prev || prev.slideType !== newSlide.slideType || getSlideBackgroundImage(prev) !== getSlideBackgroundImage(newSlide)) {
       setSlideKey((k) => k + 1);
     }
-    prevSlideRef.current = slide;
-    setSlide(slide);
+    prevSlideRef.current = newSlide;
+    setSlide(newSlide);
   }, []);
 
+  const handleSlide = useCallback((newSlide: SlideContent) => {
+    // Buffered slide pattern: hold back onlineVideo slides under the rust
+    // pipeline until the audio sink starts producing buffers. For every
+    // other slide type — and for non-rust playback — render immediately.
+    // Reading `isFrameReady` from `getState()` instead of the captured closure
+    // value so a fresh value at fire time is honored (avoids stale closure
+    // when the slide event arrives milliseconds before/after the ready flip).
+    const ready = useRustVideoPipelineStore.getState().isFrameReady;
+    const shouldBuffer =
+      useRustVideoPipeline && newSlide.slideType === "onlineVideo" && !ready;
+
+    if (shouldBuffer) {
+      setPendingSlide(newSlide);
+      return;
+    }
+
+    // Non-buffered path: clear any leftover pending slide (e.g. user switched
+    // from a still-loading video to a text slide; throw the video away rather
+    // than letting it pop in once frame-ready fires later) and render now.
+    setPendingSlide(null);
+    commitSlide(newSlide);
+  }, [commitSlide, useRustVideoPipeline]);
+
   useSlideVersion({ onSlide: handleSlide });
+
+  // Promote pending slide to live once the pipeline starts producing samples.
+  // This is the swap moment — the buffered onlineVideo slide replaces the
+  // prior content with no black gap, because by definition the GStreamer
+  // surface beneath has just rendered its first frame.
+  useEffect(() => {
+    if (isFrameReady && pendingSlide) {
+      commitSlide(pendingSlide);
+      setPendingSlide(null);
+    }
+  }, [isFrameReady, pendingSlide, commitSlide]);
+
+  // If the rust pipeline flag flips off while a slide is buffered, promote
+  // it immediately — the legacy YouTube/HTML5 path doesn't honor the
+  // frame-ready gate so holding back would strand the slide forever.
+  useEffect(() => {
+    if (!useRustVideoPipeline && pendingSlide) {
+      commitSlide(pendingSlide);
+      setPendingSlide(null);
+    }
+  }, [useRustVideoPipeline, pendingSlide, commitSlide]);
 
   // Listen to overlay changes
   useEffect(() => {
@@ -102,6 +212,10 @@ export function ProjectorView() {
       if (!isMounted) return;
       prevSlideRef.current = null;
       setSlide(null);
+      // Drop any buffered onlineVideo slide too — clearing means "no content
+      // anywhere", we don't want a stale held slide to pop in if frame-ready
+      // arrives moments later.
+      setPendingSlide(null);
       setUtilityProjection(null);
       setSlideKey((prev) => prev + 1);
     }).then((fn) => {
@@ -213,8 +327,14 @@ export function ProjectorView() {
 
   const showLogo = logoScreen || (!renderedSlide && screenDefaults.contentType === "logo");
 
+  // Phase 3 — when rendering an online video under the Rust pipeline, keep
+  // the wrapper transparent so the native GStreamer sink is visible BELOW the
+  // webview. For every other slide type (lyrics/text/bible/etc) we still
+  // want the opaque black backdrop so the OS desktop never bleeds through.
+  const renderingNativeVideo = useRustVideoPipeline && renderedSlide?.slideType === "onlineVideo";
+
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-black">
+    <div className={cn("relative h-screen w-screen overflow-hidden", renderingNativeVideo ? "bg-transparent" : "bg-black")}>
       <SlideRenderer
         key={slideKey}
         slide={renderedSlide}

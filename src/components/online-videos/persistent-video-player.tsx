@@ -5,11 +5,9 @@ import { useSlideVersion } from "../../hooks/use-slide-version";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { YouTubeMaster } from "./youtube-master";
-import { useMediaPlayerStore } from "../../stores/media-player-store";
 import { useQueueStore } from "../../stores/queue-store";
 import { useVideoSource } from "../../hooks/use-video-source";
 import { clearCurrentSlide } from "../../lib/tauri/display";
-import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/media";
 import type { SlideContent } from "../../lib/bindings";
 import type { VideoControlEvent, VideoStateEvent } from "./online-video-slide";
 
@@ -245,40 +243,24 @@ export function PersistentVideoPlayer() {
   }, []);
 
   const handleSlide = useCallback((slide: SlideContent) => {
+    // When the rust pipeline owns playback, this component renders null
+    // (see early return below) and `useOnlineVideoBridge` owns the
+    // mpStore.load() + videoPipeline.load() bridge. Skip all legacy
+    // bookkeeping so we don't double-load or leak refs.
+    if (useVideoPlayerStore.getState().useRustVideoPipeline) {
+      // Reset legacy refs in case the flag was just toggled mid-session.
+      activeSlideRef.current = null;
+      return;
+    }
+
     if (slide.slideType === "onlineVideo") {
-      // Increment session so YouTube player lifecycle effect re-runs even for same videoId
+      // Increment session so YouTube player lifecycle effect re-runs even for
+      // same videoId. Tracks legacy YT iframe + LocalVideoMaster lifecycle —
+      // populating useMediaPlayerStore is the bridge's responsibility now.
       playSessionIdRef.current += 1;
       setPlaySessionId(playSessionIdRef.current);
       setActiveSlide(slide);
       activeSlideRef.current = slide;
-
-      // Bridge to media-player-store so Playing Now shows video preview.
-      // Guard: if the queue was cleared before this async event arrived (e.g.
-      // the user pressed Stop), do NOT re-load the item — that would leave a
-      // stale currentItem in the store after unload() already cleared it.
-      const qState = useQueueStore.getState();
-      const queueActive = qState.items.length > 0 && qState.currentIndex >= 0;
-      if (queueActive) {
-        const mpState = useMediaPlayerStore.getState();
-        if (slide.source === "local" && slide.url) {
-          const item: OfflineVideoMediaItem = {
-            type: "offline_video",
-            videoPath: slide.url,
-            title: slide.title ?? "Video",
-            isManaged: slide.url.startsWith("media/"),
-          };
-          // Always load to reset timelineSource to "video" (stop() sets it to "none")
-          mpState.load(item);
-        } else if (slide.video_id) {
-          const item: OnlineVideoMediaItem = {
-            type: "online_video",
-            videoId: slide.video_id,
-            videoSource: "youtube",
-            title: slide.title ?? "Video",
-          };
-          mpState.load(item);
-        }
-      }
     } else if (activeSlideRef.current) {
       // Non-video slide replaced the video: fully stop and clean up
       handleClear();
@@ -324,11 +306,21 @@ export function PersistentVideoPlayer() {
 
   // ── YouTube player lifecycle ──────────────────────────────────────────────
 
+  const useRustPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+
   const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source !== "local" ? activeSlide.video_id : undefined;
   const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
 
   const isLocalVideo = activeSlide?.slideType === "onlineVideo" && activeSlide.source === "local" && !!activeSlide.url;
   const localVideoUrl = activeSlide?.slideType === "onlineVideo" ? activeSlide.url : null;
+
+  // When the Rust GStreamer pipeline is active it owns audio output (autoaudiosink).
+  // Rendering YouTubeMaster or LocalVideoMaster alongside it would produce double
+  // audio and conflict with the Rust-path controls. Suppress HTML5 players entirely;
+  // useSlideVersion / handleSlide still run so media-player-store stays populated.
+  if (useRustPipeline) {
+    return null;
+  }
 
   return (
     <>
