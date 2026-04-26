@@ -19,11 +19,10 @@ use gstreamer::prelude::*;
 // into scope for `attach_native_sink`. Phase 1 of the frame-perfect multi-
 // monitor video plan (docs/plans/2026-04-25-frame-perfect-multi-monitor-video.md).
 use gstreamer_video::prelude::*;
-use std::sync::{Arc, Condvar, Mutex, Once};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::Duration;
 
-static GST_INIT: Once = Once::new();
-static mut GST_INIT_RESULT: Result<(), String> = Ok(());
+static GST_INIT_RESULT: OnceLock<Result<(), String>> = OnceLock::new();
 
 /// Tracks pad-added / no-more-pads progress on `uridecodebin` so callers can
 /// block until both audio and video pads are linked into the static chains.
@@ -188,27 +187,17 @@ fn is_ready(inner: &PadReadinessInner) -> bool {
 
 /// Initialize GStreamer exactly once per process.
 ///
-/// `gst::init()` is idempotent itself, but wrapping it in `Once` keeps the
-/// cost trivial for callers that touch this module from multiple threads.
+/// `gst::init()` is idempotent itself, but the result must be cached so every
+/// caller observes the same outcome without re-invoking the C library.
 pub fn ensure_initialized() -> Result<(), AppError> {
-    GST_INIT.call_once(|| {
-        if let Err(e) = gst::init() {
-            // SAFETY: `Once::call_once` guarantees single-threaded execution
-            // of this closure; the static is only read after `call_once`
-            // returns, so no concurrent access is possible.
-            unsafe {
-                GST_INIT_RESULT = Err(format!("gst::init failed: {e}"));
-            }
-        }
+    let result = GST_INIT_RESULT.get_or_init(|| match gst::init() {
+        Ok(()) => Ok(()),
+        Err(e) => Err(format!("gst::init failed: {e}")),
     });
-    // SAFETY: see above — read happens-after the `call_once` write.
-    let result = unsafe {
-        match &*std::ptr::addr_of!(GST_INIT_RESULT) {
-            Ok(()) => Ok(()),
-            Err(msg) => Err(msg.clone()),
-        }
-    };
-    result.map_err(AppError::Internal)
+    match result {
+        Ok(()) => Ok(()),
+        Err(msg) => Err(AppError::Internal(msg.clone())),
+    }
 }
 
 /// Bundle returned by `build_base_pipeline`: the live pipeline plus the
