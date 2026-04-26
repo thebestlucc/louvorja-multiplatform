@@ -62,42 +62,34 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   resetVideoState: () => set(initialState),
   setUseRustVideoPipeline: (v) => {
     const prev = useVideoPlayerStore.getState().useRustVideoPipeline;
-    set({ useRustVideoPipeline: v });
-    if (prev && !v) {
-      videoPipeline.unload().catch(() => {});
-      // Direct reset is acceptable here: same domain, no circular dep, 1 line.
-      // If more reset logic is needed in future, extract to useVideoCoordinator.
-      useRustVideoPipelineStore.getState().reset();
-    }
-    // Broadcast to all OTHER webviews so projector + return keep their
-    // local Zustand store in sync. Without this, opening the projector
-    // before the toggle leaves it stuck on the legacy follower path
-    // even though main is on the rust pipeline — projector renders
-    // a YouTube iframe / `<video>` element on top of the (also-attached)
-    // native sink and the user perceives the projector "playing
-    // independently". See P3.11 in the frame-perfect plan.
-    //
-    // P3.12: persist FIRST, then broadcast — this guarantees that any
-    // follower webview which re-reads disk in response to the broadcast
-    // (or which mounts later and pulls fresh from disk during bootstrap)
-    // sees the new value rather than the previous one. The prior code
-    // fired both calls without awaiting, so a fast listener handler that
-    // immediately called `refreshVideoPlayerPreferencesFromDisk()` could
-    // race the disk write and read the stale value.
-    //
-    // We funnel the broadcast through a Rust command rather than the
-    // frontend `emit()` because the Rust command lets us await the
-    // round-trip in one place (single source of truth for ordering) and
-    // adds a server-side log line for diagnostics. Tauri 2's frontend
-    // `emit()` does broadcast across webviews, so this is a clarity /
-    // observability choice rather than a correctness one.
+    if (prev === v) return;
+    // FB-1: persist → broadcast → unload → set local. The previous order
+    // (`set local` first, then async persist + broadcast) created a window
+    // where main's React tree had already re-rendered with the new flag
+    // and could fire `attach_window` against the rust pipeline before the
+    // unload + broadcast finished — projector attached to a stale/empty
+    // pipeline depending on which followed which. Persisting first means
+    // any follower webview that re-reads disk during the broadcast handler
+    // (or mounts later) sees the new value; broadcasting before the local
+    // set means projector + return webviews flip their stores BEFORE main
+    // does, so by the time main's React tree re-renders the followers are
+    // already in the target mode. When toggling OFF, unload runs after
+    // broadcast so projection windows have already detached their native
+    // sinks before the rust pipeline is torn down.
     setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v)
       .catch((err) => console.error("[video-player-store] flag persist failed", err))
       .then(() =>
         invoke("set_video_pipeline_flag", { value: v }).catch((err) =>
           console.error("[video-player-store] flag broadcast failed", err),
         ),
-      );
+      )
+      .then(() => {
+        if (prev && !v) {
+          videoPipeline.unload().catch(() => {});
+          useRustVideoPipelineStore.getState().reset();
+        }
+        set({ useRustVideoPipeline: v });
+      });
   },
   setLoopMode: (mode) => {
     set({ loopMode: mode });
