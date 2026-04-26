@@ -1912,5 +1912,11 @@
     "audioOnly": "Audio only",
     "modeLocal": "Local",
     "modeLive": "Live"
+  },
+  "videoPipeline": {
+    "errorNotFoundTitle": "Video file not found",
+    "errorNotFoundDescription": "The video could not be loaded because the file is missing or unreadable. Check that it has not been moved or deleted.",
+    "errorInternalTitle": "Video pipeline error",
+    "errorInternalDescription": "The video player encountered an unexpected problem. Try projecting the video again."
   }
 }
