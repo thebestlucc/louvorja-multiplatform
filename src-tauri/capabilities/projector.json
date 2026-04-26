@@ -17,6 +17,7 @@
     "core:path:default",
     "store:allow-load",
     "store:allow-get",
+    "store:allow-entries",
     "allow-projection-view-only",
     "allow-video-pipeline-commands"
   ]

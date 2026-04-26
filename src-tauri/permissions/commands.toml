@@ -360,7 +360,10 @@ allow = [
     "video_pipeline_unsubscribe",
     "video_pipeline_answer",
     "video_pipeline_ice",
-    "video_pipeline_unload"
+    "video_pipeline_unload",
+    "video_pipeline_attach_window",
+    "video_pipeline_detach_window",
+    "set_video_pipeline_flag"
 ]
 
 [[permission]]
