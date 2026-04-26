@@ -686,12 +686,20 @@ pub fn run() {
                         let state = window.state::<AppState>();
                         state.projector_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("projector-state-changed", false);
-                        // Tear down the WebRTC consumer so the Rust pipeline
-                        // doesn't retain a peer connection for a dead window
-                        // (audit finding #4 — WebView teardown skips React
-                        // useEffect cleanup on abrupt close).
+                        // CD-1: a closed projector window leaves both the
+                        // legacy WebRTC consumer (peer connection) AND the
+                        // native sink branch (tee request pad + queue + conv +
+                        // glimagesink/d3d11videosink) attached to the shared
+                        // pipeline. WebView teardown skips the React
+                        // useEffect cleanup on abrupt close, so without this
+                        // both ends leak — the WebRTC peer holds a dead
+                        // window's NSView and the tee branch keeps copying
+                        // frames into nothing, eventually backpressuring the
+                        // tee. Detach BOTH so neither path is left dangling
+                        // regardless of which one was active for this window.
                         if let Some(vp) = &state.video_pipeline {
                             let _ = vp.unsubscribe("projector");
+                            let _ = vp.detach_window("projector");
                         }
                     }
                     "return" => {
@@ -700,6 +708,7 @@ pub fn run() {
                         let _ = window.emit("return-state-changed", false);
                         if let Some(vp) = &state.video_pipeline {
                             let _ = vp.unsubscribe("return");
+                            let _ = vp.detach_window("return");
                         }
                     }
                     "main" => {

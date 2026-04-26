@@ -603,6 +603,29 @@ pub fn attach_native_sink(
     let queue_name = format!("{label}_queue");
     let conv_name = format!("{label}_conv");
 
+    // CD-1 fail-loud: refuse to re-attach over a half-disposed previous
+    // attach. `runtime::attach_window` calls `detach_native_sink` first
+    // (now error-propagating per CD-5), so reaching this function with
+    // any of the three named elements still in the pipeline indicates a
+    // genuine state-machine bug — surface it as a typed error instead of
+    // letting `make_element` panic the GStreamer registry with a "name
+    // already exists" assertion mid-attach. Each name is checked
+    // independently so the error message points at exactly which leg of
+    // the previous chain leaked.
+    for (kind, name) in [
+        ("queue", queue_name.as_str()),
+        ("videoconvert", conv_name.as_str()),
+        ("sink", label),
+    ] {
+        if pipeline.by_name(name).is_some() {
+            return Err(AppError::Internal(format!(
+                "attach_native_sink('{label}'): pipeline already contains a {kind} \
+                 element named '{name}' — previous detach left state inconsistent. \
+                 Bug: {kind} leg of the prior attach was not torn down."
+            )));
+        }
+    }
+
     let queue = make_element("queue", &queue_name)?;
     // P3.8 fix S4: replace the previous `max-size-buffers=2` cap with a
     // time-bounded buffer (200 ms) and unlimited buffer count. The 2-buffer
