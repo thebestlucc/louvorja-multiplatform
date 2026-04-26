@@ -17,11 +17,42 @@ use crate::video_pipeline::{
     state::{LoopMode, PlaybackState, PlaybackStateSnapshot},
 };
 use gstreamer::{self as gst, prelude::*};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::Emitter;
 use tauri_specta::Event;
+
+/// CD-4 — single-flight gate for loop-driven pipeline mutations.
+///
+/// After Phase A's SEGMENT-loop refactor, the only path that still recycles
+/// the pipeline through NULL on EOS is the unseekable fallback in
+/// `on_eos::LoopMode::One` (live HTTP streams, demuxers that fail the
+/// seekability probe). That fallback spawns a fresh thread for each EOS so
+/// the bus watcher isn't blocked on the NULL transition wait. Without a
+/// gate, two near-simultaneous EOS messages — or an EOS racing a
+/// `set_loop(One)`-triggered reload — would each spawn their own reload
+/// thread. Both call `runtime.load(uri)` which takes the pipeline lock
+/// serially, but the second thread sees a half-initialised pipeline state
+/// (NULL transition in progress) and either deadlocks the state-wait or
+/// observes a stale URI in the snapshot.
+///
+/// Encoded as `AtomicU8` rather than `Mutex<LoopOperation>` so the
+/// CAS-transition is lock-free and the gate composition with the existing
+/// `pipeline` mutex is straightforward (no "held cross-mutex" patterns to
+/// audit). State machine:
+///
+/// ```text
+///   Idle ──acquire──▶ Reloading ──release──▶ Idle
+///       \─acquire──▶ Seeking   ──release──▶ Idle
+/// ```
+///
+/// The `Seeking` state is reserved for a future direct-seek loop primitive
+/// (e.g. if we expose `seek(SEGMENT)` re-arms outside the bus watcher) —
+/// today only `Reloading` is taken on the unseekable EOS reload path.
+const LOOP_OP_IDLE: u8 = 0;
+const LOOP_OP_SEEKING: u8 = 1;
+const LOOP_OP_RELOADING: u8 = 2;
 
 /// Tauri event name for "first audio buffer flowed through the pipeline" /
 /// "new load just started — drop pending state". Emitted from `load()` with
@@ -127,6 +158,12 @@ pub struct VideoPipelineRuntime {
     /// mid-stream. Holding this mutex for the full attach/detach prevents
     /// the race without taking the long-held `pipeline` lock.
     attach_mutex: Mutex<()>,
+    /// CD-4 — single-flight gate for loop-driven reload threads. CAS from
+    /// `LOOP_OP_IDLE` to `LOOP_OP_RELOADING` at the entry of the unseekable
+    /// EOS reload thread; restored to `LOOP_OP_IDLE` when that thread
+    /// exits. Failed CAS ⇒ another reload is already in flight, drop this
+    /// one. See module-level constants for state values.
+    loop_op: AtomicU8,
 }
 
 impl VideoPipelineRuntime {
@@ -151,6 +188,7 @@ impl VideoPipelineRuntime {
             is_seekable: AtomicBool::new(false),
             cached_duration: Mutex::new(None),
             attach_mutex: Mutex::new(()),
+            loop_op: AtomicU8::new(LOOP_OP_IDLE),
         }
     }
 
@@ -960,6 +998,27 @@ impl VideoPipelineRuntime {
                         return;
                     }
                 };
+                // CD-4: CAS-acquire the loop op gate BEFORE spawning so two
+                // EOS messages can never race to spawn two reload threads
+                // (which would both contend on the pipeline lock and observe
+                // a half-disposed pipeline). On failed CAS, log + drop —
+                // whichever thread already won will reload to the same URI.
+                if self
+                    .loop_op
+                    .compare_exchange(
+                        LOOP_OP_IDLE,
+                        LOOP_OP_RELOADING,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    )
+                    .is_err()
+                {
+                    log::info!(
+                        "video_pipeline: on_eos LoopMode::One — reload already in flight, \
+                         dropping duplicate EOS"
+                    );
+                    return;
+                }
                 std::thread::spawn(move || {
                     let runtime = match runtime_from_app(&app) {
                         Some(r) => r,
@@ -967,9 +1026,18 @@ impl VideoPipelineRuntime {
                             log::warn!(
                                 "video_pipeline: on_eos reload thread — runtime missing"
                             );
+                            // CD-4: app went away (shutdown raced spawn).
+                            // No runtime ⇒ nothing to release the gate on,
+                            // and the process is exiting anyway. Returning
+                            // without release is safe here.
                             return;
                         }
                     };
+                    // RAII guard so every early-return path below releases
+                    // the loop_op gate. Without this any `return` after this
+                    // point would leak `LOOP_OP_RELOADING` and permanently
+                    // block all future reload attempts.
+                    let _release = LoopOpGuard::new(&runtime.loop_op);
                     let uri = match runtime.state.snapshot() {
                         Ok(s) => s.uri.clone(),
                         Err(e) => {
@@ -1279,11 +1347,27 @@ impl VideoPipelineRuntime {
             pipeline.current_state()
         );
 
-        // Best-effort detach previous (idempotent re-attach). Errors are
-        // intentionally swallowed: when there's nothing to detach this is a
-        // no-op, and any structural problem will resurface as the subsequent
-        // attach fails loudly.
-        let _ = pipeline::detach_native_sink(&pipeline, window_label);
+        // CD-5: propagate the detach error instead of swallowing it. Pre-fix
+        // a `let _ = ...` here masked any structural issue (NULL transition
+        // failure, unowned tee request pad, queue stuck on async preroll)
+        // and the subsequent attach would then fail loud with a confusing
+        // "name already exists" error from `make_element` — burying the
+        // real root cause. With error propagation, the dogfood log clearly
+        // points at the half-disposed previous attach.
+        //
+        // Idempotency invariant preserved: when there's nothing to detach
+        // (no `{label}_queue` / `{label}_conv` / `{label}` elements found
+        // in the pipeline), `detach_native_sink` is a clean no-op — every
+        // step is gated on `pipeline.by_name(...)` returning `Some`.
+        pipeline::detach_native_sink(&pipeline, window_label).map_err(|e| {
+            log::warn!(
+                "attach_window: previous detach for '{window_label}' failed: {e} \
+                 (refusing to re-attach over half-disposed state)"
+            );
+            AppError::Internal(format!(
+                "attach_window('{window_label}'): previous detach failed: {e}"
+            ))
+        })?;
 
         // Hot-attach: pipeline keeps running. The BLOCK_DOWNSTREAM probe
         // inside `attach_native_sink` ensures the new branch transitions
@@ -1549,6 +1633,30 @@ fn runtime_from_app(app: &tauri::AppHandle) -> Option<Arc<VideoPipelineRuntime>>
     state.video_pipeline.as_ref().cloned()
 }
 
+/// CD-4 — RAII guard that releases the `loop_op` CAS gate on drop.
+///
+/// Acquisition happens at the EOS handler (synchronously, before spawn);
+/// the spawned reload thread instantiates this guard so any early-return
+/// path — `state.snapshot()` failure, missing URI, `load()` error, `play()`
+/// error — still restores `LOOP_OP_IDLE`. Without RAII a panic OR an early
+/// `return` after the lock-acquiring CAS would permanently leak the gate
+/// and silently break every subsequent loop wrap-around.
+struct LoopOpGuard<'a> {
+    flag: &'a AtomicU8,
+}
+
+impl<'a> LoopOpGuard<'a> {
+    fn new(flag: &'a AtomicU8) -> Self {
+        Self { flag }
+    }
+}
+
+impl Drop for LoopOpGuard<'_> {
+    fn drop(&mut self) {
+        self.flag.store(LOOP_OP_IDLE, Ordering::SeqCst);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1738,6 +1846,41 @@ mod tests {
         let rt = runtime();
         rt.play().expect("play on sourceless runtime");
         rt.pause().expect("pause on sourceless runtime");
+    }
+
+    /// CD-4 — the `loop_op` gate must default to IDLE, accept exactly one
+    /// CAS-acquire, refuse the second concurrent acquire, and return to IDLE
+    /// when the RAII guard drops. Encodes the single-flight contract that
+    /// keeps two near-simultaneous EOS reload threads from racing the
+    /// pipeline lock.
+    #[test]
+    fn loop_op_gate_is_single_flight() {
+        let rt = runtime();
+        assert_eq!(rt.loop_op.load(Ordering::SeqCst), LOOP_OP_IDLE);
+        let first = rt.loop_op.compare_exchange(
+            LOOP_OP_IDLE,
+            LOOP_OP_RELOADING,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
+        assert!(first.is_ok(), "first CAS must succeed");
+        let second = rt.loop_op.compare_exchange(
+            LOOP_OP_IDLE,
+            LOOP_OP_RELOADING,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
+        assert!(second.is_err(), "second CAS must fail (single-flight)");
+        // RAII release.
+        {
+            let _g = LoopOpGuard::new(&rt.loop_op);
+            assert_eq!(rt.loop_op.load(Ordering::SeqCst), LOOP_OP_RELOADING);
+        }
+        assert_eq!(
+            rt.loop_op.load(Ordering::SeqCst),
+            LOOP_OP_IDLE,
+            "guard drop must restore IDLE so a future EOS can re-acquire"
+        );
     }
 
     /// P3.11 regression guard — `attach_window` is now pure hot-attach with
