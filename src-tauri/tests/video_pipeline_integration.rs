@@ -163,7 +163,8 @@ fn make(factory: &str, name: &str) -> Result<gst::Element, String> {
 #[test]
 fn video_pipeline_reaches_playing_within_2s() {
     let fixture = ensure_fixture().expect("fixture generation");
-    let pipeline = build_base_pipeline().expect("build base pipeline");
+    let built = build_base_pipeline().expect("build base pipeline");
+    let pipeline = built.pipeline;
     let uri = format!("file://{}", fixture.display());
     set_source_uri(&pipeline, &uri).expect("set uri");
 
@@ -209,7 +210,8 @@ fn video_pipeline_reaches_playing_within_2s() {
 
 #[test]
 fn video_pipeline_attach_and_detach_webrtc_consumer_round_trip() {
-    let pipeline = build_base_pipeline().expect("build base pipeline");
+    let built = build_base_pipeline().expect("build base pipeline");
+    let pipeline = built.pipeline;
 
     let webrtc = attach_webrtc_consumer(&pipeline, "rtc_test").expect("attach");
     assert_eq!(webrtc.factory().map(|f| f.name().to_string()).as_deref(), Some("webrtcbin"));

@@ -505,7 +505,8 @@ mod tests {
             }
         };
 
-        let pipeline = build_base_pipeline().expect("build base pipeline");
+        let built = build_base_pipeline().expect("build base pipeline");
+        let pipeline = built.pipeline;
         let uri = format!("file://{}", fixture.display());
         set_source_uri(&pipeline, &uri).expect("set uri");
 
@@ -557,7 +558,8 @@ mod tests {
     #[test]
     fn accept_answer_rejects_empty_sdp() {
         ensure_initialized().expect("gst init");
-        let pipeline = build_base_pipeline().expect("build base pipeline");
+        let built = build_base_pipeline().expect("build base pipeline");
+        let pipeline = built.pipeline;
         let signaling: Arc<dyn SignalingChannel> = Arc::new(crate::video_pipeline::signaling::NoopSignalingChannel);
         let registry = ConsumerRegistry::new();
         registry
@@ -579,7 +581,8 @@ mod tests {
     #[test]
     fn dispatch_to_unknown_window_returns_not_found() {
         ensure_initialized().expect("gst init");
-        let pipeline = build_base_pipeline().expect("build base pipeline");
+        let built = build_base_pipeline().expect("build base pipeline");
+        let pipeline = built.pipeline;
         let registry = ConsumerRegistry::new();
 
         let err = registry
@@ -605,7 +608,8 @@ mod tests {
     #[test]
     fn subscribe_replaces_previous_consumer_for_same_window() {
         ensure_initialized().expect("gst init");
-        let pipeline = build_base_pipeline().expect("build base pipeline");
+        let built = build_base_pipeline().expect("build base pipeline");
+        let pipeline = built.pipeline;
         let signaling: Arc<dyn SignalingChannel> =
             Arc::new(crate::video_pipeline::signaling::NoopSignalingChannel);
         let registry = ConsumerRegistry::new();

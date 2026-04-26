@@ -306,6 +306,9 @@ pub fn run() {
             commands::video_pipeline::video_pipeline_answer,
             commands::video_pipeline::video_pipeline_ice,
             commands::video_pipeline::video_pipeline_unload,
+            commands::video_pipeline::video_pipeline_attach_window,
+            commands::video_pipeline::video_pipeline_detach_window,
+            commands::video_pipeline::set_video_pipeline_flag,
         ])
         .events(tauri_specta::collect_events![
             crate::video_pipeline::events::VideoPipelineOffer,
@@ -487,6 +490,25 @@ pub fn run() {
                     video_signaling,
                 ),
             );
+
+            // P3.10 fix S2: pre-warm the OS audio device on a background
+            // thread so the first user-initiated `play()` doesn't pay
+            // CoreAudio (or WASAPI / PulseAudio) cold-start latency.
+            // ~600-700 ms of work; runs concurrently with the rest of
+            // app startup so it never blocks UI paint.
+            //
+            // See `crate::video_pipeline::pipeline::prewarm_audio_device`
+            // for the rationale (the prior B4 NULL → READY pre-warm in
+            // `build_base_pipeline` was a no-op for CoreAudio because the
+            // expensive AudioUnit init happens at PAUSED → PLAYING with
+            // sample flow, not READY).
+            std::thread::spawn(move || {
+                if let Err(e) = crate::video_pipeline::pipeline::prewarm_audio_device() {
+                    log::warn!(
+                        "video_pipeline: audio device pre-warm failed (will pay cold-start on first play): {e}"
+                    );
+                }
+            });
 
             app.manage(AppState {
                 db: pool.clone(),

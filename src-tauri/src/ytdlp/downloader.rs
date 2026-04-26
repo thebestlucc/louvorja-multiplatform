@@ -239,7 +239,13 @@ pub fn resolve_streaming_url(binary_path: &Path, video_id: &str) -> Result<Strin
         )));
     }
 
-    let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // Take only the first line: if the format falls back to a split
+    // video+audio format, yt-dlp prints two URLs separated by a newline.
+    // Passing both to GStreamer produces an invalid URI with an embedded
+    // newline. v1 is single-URL only; v2 split-format support is tracked
+    // in source.rs TODO(v2) and the plan doc.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let resolved = stdout.lines().next().unwrap_or("").trim().to_string();
     if resolved.is_empty() {
         return Err(AppError::Internal(
             "yt-dlp returned empty URL".to_string(),
