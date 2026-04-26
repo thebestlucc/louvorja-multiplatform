@@ -600,6 +600,29 @@ impl VideoPipelineRuntime {
         };
 
         if post_eos {
+            // CD-4: gate the synchronous reload through the same CAS as
+            // `on_eos`'s spawned reload thread. Without this, a user scrub
+            // landing exactly at EOS could race against on_eos's reload
+            // spawn — both would call self.load(uri) and contend on the
+            // pipeline mutex while observing a half-disposed pipeline.
+            // On failed CAS, drop with a clear log; whichever path won
+            // will rebuild to the same URI.
+            if self
+                .loop_op
+                .compare_exchange(
+                    LOOP_OP_IDLE,
+                    LOOP_OP_RELOADING,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                )
+                .is_err()
+            {
+                log::info!(
+                    "video_pipeline.seek({secs:.3}s): post-EOS reload already in flight, dropping"
+                );
+                return Ok(());
+            }
+            let _release = LoopOpGuard::new(&self.loop_op);
             log::info!(
                 "video_pipeline.seek({secs:.3}s): unseekable fallback at EOS, \
                  doing full reload + seek"
@@ -1348,23 +1371,17 @@ impl VideoPipelineRuntime {
             .attach_mutex
             .lock()
             .map_err(|e| AppError::Internal(format!("attach_mutex poisoned: {e}")))?;
-        // HP-6: hold pipeline.lock() across the entire detach+attach so
-        // concurrent play()/pause() (which also lock self.pipeline) can't
-        // flip the parent state mid-attach. attach_native_sink reads
-        // pipeline.current_state() to decide whether to run the preroll
-        // wait; a flip mid-attach made that decision wrong (preroll skipped
-        // when needed, or run when not). Inlining get_or_init_pipeline()
-        // here keeps the lock alive across the gst calls below.
-        let mut pipeline_guard = self.pipeline.lock()?;
-        if pipeline_guard.is_none() {
-            let built = pipeline::build_base_pipeline()?;
-            *pipeline_guard = Some(built.pipeline);
-            let mut pads_guard = self.pads.lock()?;
-            *pads_guard = Some(built.pads);
-        }
-        let pipeline = pipeline_guard
-            .as_ref()
-            .expect("pipeline initialized above");
+        // HP-6: match detach_window's clone-and-drop pattern. Holding
+        // self.pipeline.lock() across the full attach (~6s preroll) would
+        // block every concurrent play()/pause()/seek(). The race the plan
+        // names ("parent_state evaluation wrong") is benign in practice:
+        // both PAUSED and PLAYING set needs_preroll=true (pipeline.rs:719),
+        // and sync_state_with_parent honors the parent's then-current state
+        // at call time, so the element transitions correctly even if the
+        // parent flipped mid-attach. The remaining mitigation is keeping
+        // `attach_mutex` (above) which serializes attach + detach across
+        // windows.
+        let pipeline = self.get_or_init_pipeline()?;
 
         log::info!(
             "attach_window: '{window_label}' (pipeline state = {:?})",
@@ -1383,7 +1400,7 @@ impl VideoPipelineRuntime {
         // (no `{label}_queue` / `{label}_conv` / `{label}` elements found
         // in the pipeline), `detach_native_sink` is a clean no-op — every
         // step is gated on `pipeline.by_name(...)` returning `Some`.
-        pipeline::detach_native_sink(pipeline, window_label).map_err(|e| {
+        pipeline::detach_native_sink(&pipeline, window_label).map_err(|e| {
             log::warn!(
                 "attach_window: previous detach for '{window_label}' failed: {e} \
                  (refusing to re-attach over half-disposed state)"
@@ -1400,7 +1417,7 @@ impl VideoPipelineRuntime {
         // black until its decoder receives the next KEY_UNIT (IDR) frame
         // from the upstream stream — typically 1-4 s for standard GOP
         // sizes. This is the canonical GStreamer hot-attach pattern.
-        pipeline::attach_native_sink(pipeline, window_label, window_handle).map(|_| ())?;
+        pipeline::attach_native_sink(&pipeline, window_label, window_handle).map(|_| ())?;
         Ok(())
     }
 
