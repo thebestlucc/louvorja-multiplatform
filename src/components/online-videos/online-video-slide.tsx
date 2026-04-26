@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { listen, emitTo } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { MonitorPlay } from "lucide-react";
 import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
@@ -10,7 +9,6 @@ import type { YTPlayer } from "../../lib/youtube-api";
 import { VideoFollowerElement } from "./video-follower-element";
 import { useVideoSource } from "../../hooks/use-video-source";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
-import { RustVideoConsumer } from "./rust-video-consumer";
 
 // ─── Shared event types ───────────────────────────────────────────────────
 
@@ -243,16 +241,19 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   const renderLiveVideo = () => {
     const isLocalFile = slide.source === "local" && !!slide.url;
     if (useRustVideoPipeline) {
-      return (
-        <div className={cn("h-full w-full bg-black", className)}>
-          <RustVideoConsumer
-            windowLabel={getCurrentWindow().label}
-            muted
-            className="h-full w-full"
-          />
-        </div>
-      );
+      // Phase 3 of the frame-perfect multi-monitor video plan: the native
+      // GStreamer sink renders the video BELOW this transparent webview.
+      // We must NOT cover the hole with anything opaque (no `bg-black`),
+      // otherwise the operator sees a black square instead of the video.
+      return <div className={cn("h-full w-full bg-transparent", className)} />;
     }
+    // P3.11 observability: if we ever reach here on projector/return when
+    // the user expects the rust pipeline to own playback, the legacy follower
+    // is what they see "playing independently". Log so dogfood can confirm
+    // (`renderMode` + the flag value pinpoints which webview reads stale).
+    console.warn(
+      `[online-video-slide] renderMode=${renderMode} mounting LEGACY follower (useRustVideoPipeline=false)`,
+    );
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile ? (

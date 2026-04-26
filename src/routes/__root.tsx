@@ -20,6 +20,7 @@ import { useAudioCoordinator } from "../hooks/use-audio-coordinator";
 import { useDownloadEvents } from "../hooks/use-download-events";
 import { useTimerAlerts } from "../hooks/use-timer-alerts";
 import { useRustVideoPipelineStateBridge } from "../hooks/use-rust-video-pipeline-state";
+import { useOnlineVideoBridge } from "../hooks/use-online-video-bridge";
 import { useEventCacheInvalidation } from "../hooks/use-event-cache-invalidation";
 import { useAutoMonitorAssignment } from "../hooks/use-auto-monitor-assignment";
 import { usePackSyncListener } from "../hooks/use-pack-sync-listener";
@@ -208,6 +209,11 @@ function RootLayout() {
   useAudioCoordinator();
   useDownloadEvents();
   useRustVideoPipelineStateBridge();
+  // Always-on slide → media-player-store bridge so play/pause/seek/volume
+  // work even when PersistentVideoPlayer is gated off (rust pipeline flag).
+  // Bare routes don't need this — they don't render the playing-now control
+  // bar — so we skip it there to avoid duplicate listeners on slide events.
+  useOnlineVideoBridge();
   useKeyboard({ enabled: !isBareRoute });
   useRemoteBridge({ enabled: !isBareRoute });
   useSlidePasser({ enabled: !isBareRoute });

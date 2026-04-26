@@ -27,10 +27,18 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
     ? `${slide.text_size}px`
     : undefined;
 
+  // Phase 3 of frame-perfect multi-monitor video: when the slide is an online
+  // video, drop the renderer's opaque `bg-black` so the inner OnlineVideoSlide
+  // can pick its own background. Under the Rust pipeline, that inner element
+  // is transparent (native GStreamer sink renders BELOW the webview); under
+  // the legacy path it stays black, so visual behaviour is unchanged.
+  const isOnlineVideo = slide && slide.slideType === "onlineVideo";
+
   return (
     <div
       className={cn(
-        "slide-renderer relative flex items-center justify-center overflow-hidden bg-black text-white p-4",
+        "slide-renderer relative flex items-center justify-center overflow-hidden text-white p-4",
+        isOnlineVideo ? "bg-transparent" : "bg-black",
         className,
       )}
       data-mode={renderMode}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
@@ -21,6 +21,9 @@ import {
 } from "../types/utilities";
 import { cn } from "../lib/utils";
 import { useMediaSource } from "../hooks/use-media-source";
+import { useVideoPlayerStore, refreshVideoPlayerPreferencesFromDisk } from "../stores/video-player-store";
+import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
+import { attachWindow as attachVideoPipelineWindow, detachWindow as detachVideoPipelineWindow } from "../lib/tauri/video-pipeline";
 
 export const Route = createFileRoute("/return")({
   component: ReturnPage,
@@ -32,6 +35,11 @@ function ReturnPage() {
   const { t, i18n } = useTranslation();
 
   const [currentSlide, setCurrentSlide] = useState<SlideContent | null>(null);
+  // Buffered slide pattern (mirror of projector-view): hold back onlineVideo
+  // slides under the rust pipeline until audio_sink first buffer fires.
+  // Keeps the prior slide visible during pipeline init / cold-start instead
+  // of a black gap. See projector-view.tsx for the full rationale.
+  const [pendingSlide, setPendingSlide] = useState<SlideContent | null>(null);
   const [nextSlide, setNextSlide] = useState<SlideContent | null>(null);
   const [slideTitle, setSlideTitle] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
@@ -47,6 +55,52 @@ function ReturnPage() {
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
   const logoImageSrc = useMediaSource(screenDefaults.logoImagePath);
   const clockLocale = localeFromLanguage(i18n.language);
+  const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+  const isFrameReady = useRustVideoPipelineStore((s) => s.isFrameReady);
+
+  // P3.12 — Re-read the flag from disk on mount. See `projector-view.tsx`
+  // for the full rationale; mirrored here so the return monitor never starts
+  // with a stale flag value either.
+  useEffect(() => {
+    refreshVideoPlayerPreferencesFromDisk().catch((err) =>
+      console.error("[return] refresh prefs from disk failed", err),
+    );
+  }, []);
+
+  // Phase 3 — attach the native GStreamer sink to the "return" window. Mirror
+  // of the `ProjectorView` lifecycle (see projector-view.tsx for rationale).
+  useEffect(() => {
+    console.log(`[return] useRustVideoPipeline=${useRustVideoPipeline} (effect re-run)`);
+    if (!useRustVideoPipeline) return;
+    console.log("[return] attaching native GStreamer sink");
+    attachVideoPipelineWindow("return")
+      .then(() => console.log("[return] attach_window succeeded"))
+      .catch((e) => {
+        console.error("[return] attach_window failed", e);
+      });
+    return () => {
+      console.log("[return] detaching native GStreamer sink");
+      detachVideoPipelineWindow("return").catch((e) => {
+        console.error("[return] detach_window failed", e);
+      });
+    };
+  }, [useRustVideoPipeline]);
+
+  // Phase 3 — html + body transparent so the native GStreamer sink rendered
+  // BELOW the webview is visible (see projector-view.tsx for rationale).
+  useEffect(() => {
+    if (!useRustVideoPipeline) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlBg = html.style.background;
+    const prevBodyBg = body.style.background;
+    html.style.background = "transparent";
+    body.style.background = "transparent";
+    return () => {
+      html.style.background = prevHtmlBg;
+      body.style.background = prevBodyBg;
+    };
+  }, [useRustVideoPipeline]);
 
   // Live clock
   useEffect(() => {
@@ -74,10 +128,28 @@ function ReturnPage() {
     });
   }, [clockNow, i18n.language, screenDefaults, t, timerState]);
 
+  const handleSlide = useCallback(
+    (slide: SlideContent) => {
+      // See projector-view.tsx for full rationale. Read `isFrameReady` via
+      // getState() to honor fresh value at fire time and avoid stale closures.
+      const ready = useRustVideoPipelineStore.getState().isFrameReady;
+      const shouldBuffer =
+        useRustVideoPipeline && slide.slideType === "onlineVideo" && !ready;
+      if (shouldBuffer) {
+        setPendingSlide(slide);
+        return;
+      }
+      setPendingSlide(null);
+      setCurrentSlide(slide);
+    },
+    [useRustVideoPipeline],
+  );
+
   useSlideVersion({
-    onSlide: (slide) => setCurrentSlide(slide),
+    onSlide: handleSlide,
     onClear: () => {
       setCurrentSlide(null);
+      setPendingSlide(null);
       setNextSlide(null);
       setUtilityProjection(null);
       setSlideTitle("");
@@ -85,6 +157,23 @@ function ReturnPage() {
       setSlideTotal(0);
     },
   });
+
+  // Promote pending slide to live when pipeline produces first buffer.
+  useEffect(() => {
+    if (isFrameReady && pendingSlide) {
+      setCurrentSlide(pendingSlide);
+      setPendingSlide(null);
+    }
+  }, [isFrameReady, pendingSlide]);
+
+  // If the rust pipeline flag flips off while a slide is buffered, promote it
+  // immediately — see projector-view.tsx for rationale.
+  useEffect(() => {
+    if (!useRustVideoPipeline && pendingSlide) {
+      setCurrentSlide(pendingSlide);
+      setPendingSlide(null);
+    }
+  }, [useRustVideoPipeline, pendingSlide]);
 
   // Listen to slide context
   useEffect(() => {
@@ -211,6 +300,14 @@ function ReturnPage() {
   const hasOverlay = blackScreen || logoScreen;
   const noContent = screenDefaults.contentType === "logo" && !currentSlideToRender && !hasOverlay;
 
+  // Phase 3 — when rendering an online video under the Rust pipeline, the
+  // outer wrapper must be transparent so the native GStreamer sink (rendering
+  // BELOW the WKWebView/WebView2/WebKitGTK) is visible inside the top 70%.
+  // Other slide types keep the opaque `bg-neutral-950` so the desktop never
+  // bleeds through the operator's reference monitor.
+  const renderingNativeVideo = useRustVideoPipeline && currentSlideToRender?.slideType === "onlineVideo";
+  const outerBg = renderingNativeVideo ? "bg-transparent" : "bg-neutral-950";
+
   if (noContent) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-neutral-950 text-white">
@@ -229,7 +326,7 @@ function ReturnPage() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-neutral-950 p-3 text-white">
+    <div className={cn("flex h-screen w-screen flex-col p-3 text-white", outerBg)}>
       {/* Current slide — top 70% */}
       <div className="relative flex-[7] overflow-hidden rounded-lg border border-white/10">
         <SlideRenderer

@@ -26,6 +26,7 @@ export function PreviewCanvas({
   const { t } = useTranslation();
   const ytCurrentTime = useVideoPlayerStore((s) => s.currentTime);
   const ytDuration = useVideoPlayerStore((s) => s.duration);
+  const useRustPipelineFlag = useVideoPlayerStore((s) => s.useRustVideoPipeline);
 
   // Overlay takes priority
   if (overlay === "black") {
@@ -50,6 +51,36 @@ export function PreviewCanvas({
 
   // Video preview — live video for both local (canvas) and YouTube (muted follower)
   if (currentItem && mediaHasVideo(currentItem)) {
+    // Phase 3 of frame-perfect multi-monitor video plan: when the Rust
+    // pipeline owns playback, do NOT decode video on the main window. Show a
+    // static thumbnail instead (the projector + return native sinks handle
+    // live rendering). This keeps the main window's CPU/GPU budget low.
+    if (useRustPipelineFlag) {
+      const ytId =
+        currentItem.type === "online_video"
+          ? (currentItem as OnlineVideoMediaItem).videoId
+          : null;
+      const title =
+        currentItem.type === "online_video"
+          ? (currentItem as OnlineVideoMediaItem).title
+          : (currentItem as OfflineVideoMediaItem).title ?? "";
+      const thumbUrl = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : null;
+      return (
+        <div className="relative h-full w-full overflow-hidden bg-black pointer-events-none">
+          {thumbUrl ? (
+            <img src={thumbUrl} alt="" className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <MonitorPlay className="h-16 w-16 opacity-25" />
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+            <p className="text-xs text-white/80 truncate">{title}</p>
+          </div>
+        </div>
+      );
+    }
+
     if (currentItem.type === "offline_video") {
       return <LocalVideoPreview videoPath={(currentItem as OfflineVideoMediaItem).videoPath} />;
     }
