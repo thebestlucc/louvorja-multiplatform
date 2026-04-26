@@ -1912,5 +1912,11 @@
     "audioOnly": "Solo audio",
     "modeLocal": "Local",
     "modeLive": "En vivo"
+  },
+  "videoPipeline": {
+    "errorNotFoundTitle": "Archivo de vídeo no encontrado",
+    "errorNotFoundDescription": "El vídeo no pudo cargarse porque el archivo no existe o no se puede leer. Verifica que no haya sido movido o eliminado.",
+    "errorInternalTitle": "Error del reproductor de vídeo",
+    "errorInternalDescription": "El reproductor de vídeo encontró un problema inesperado. Intenta proyectar el vídeo de nuevo."
   }
 }

@@ -1912,5 +1912,11 @@
     "audioOnly": "Somente áudio",
     "modeLocal": "Local",
     "modeLive": "Ao vivo"
+  },
+  "videoPipeline": {
+    "errorNotFoundTitle": "Arquivo de vídeo não encontrado",
+    "errorNotFoundDescription": "O vídeo não pôde ser carregado porque o arquivo está ausente ou ilegível. Verifique se ele não foi movido ou excluído.",
+    "errorInternalTitle": "Erro no reprodutor de vídeo",
+    "errorInternalDescription": "O reprodutor de vídeo encontrou um problema inesperado. Tente projetar o vídeo novamente."
   }
 }
