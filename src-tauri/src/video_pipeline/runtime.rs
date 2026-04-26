@@ -1348,7 +1348,23 @@ impl VideoPipelineRuntime {
             .attach_mutex
             .lock()
             .map_err(|e| AppError::Internal(format!("attach_mutex poisoned: {e}")))?;
-        let pipeline = self.get_or_init_pipeline()?;
+        // HP-6: hold pipeline.lock() across the entire detach+attach so
+        // concurrent play()/pause() (which also lock self.pipeline) can't
+        // flip the parent state mid-attach. attach_native_sink reads
+        // pipeline.current_state() to decide whether to run the preroll
+        // wait; a flip mid-attach made that decision wrong (preroll skipped
+        // when needed, or run when not). Inlining get_or_init_pipeline()
+        // here keeps the lock alive across the gst calls below.
+        let mut pipeline_guard = self.pipeline.lock()?;
+        if pipeline_guard.is_none() {
+            let built = pipeline::build_base_pipeline()?;
+            *pipeline_guard = Some(built.pipeline);
+            let mut pads_guard = self.pads.lock()?;
+            *pads_guard = Some(built.pads);
+        }
+        let pipeline = pipeline_guard
+            .as_ref()
+            .expect("pipeline initialized above");
 
         log::info!(
             "attach_window: '{window_label}' (pipeline state = {:?})",
@@ -1367,7 +1383,7 @@ impl VideoPipelineRuntime {
         // (no `{label}_queue` / `{label}_conv` / `{label}` elements found
         // in the pipeline), `detach_native_sink` is a clean no-op — every
         // step is gated on `pipeline.by_name(...)` returning `Some`.
-        pipeline::detach_native_sink(&pipeline, window_label).map_err(|e| {
+        pipeline::detach_native_sink(pipeline, window_label).map_err(|e| {
             log::warn!(
                 "attach_window: previous detach for '{window_label}' failed: {e} \
                  (refusing to re-attach over half-disposed state)"
@@ -1384,7 +1400,7 @@ impl VideoPipelineRuntime {
         // black until its decoder receives the next KEY_UNIT (IDR) frame
         // from the upstream stream — typically 1-4 s for standard GOP
         // sizes. This is the canonical GStreamer hot-attach pattern.
-        pipeline::attach_native_sink(&pipeline, window_label, window_handle).map(|_| ())?;
+        pipeline::attach_native_sink(pipeline, window_label, window_handle).map(|_| ())?;
         Ok(())
     }
 
@@ -1452,6 +1468,10 @@ impl VideoPipelineRuntime {
         let app_for_thread = app.clone();
 
         std::thread::spawn(move || {
+            // RT-1: same RAII pattern as the bus watcher — panic-safe release
+            // of `broadcaster_running` so the next play() can spawn a fresh
+            // broadcaster instead of being CAS-blocked forever.
+            let _running_guard = RunningFlagGuard::new(running_flag);
             loop {
                 if stop_flag.load(Ordering::SeqCst) {
                     break;
@@ -1518,7 +1538,7 @@ impl VideoPipelineRuntime {
 
                 std::thread::sleep(BROADCAST_INTERVAL);
             }
-            running_flag.store(false, Ordering::SeqCst);
+            // _running_guard drops here, releasing broadcaster_running.
         });
     }
 
@@ -1562,6 +1582,10 @@ impl VideoPipelineRuntime {
             .clone();
 
         std::thread::spawn(move || {
+            // RT-1: RAII-release the running flag so a panic anywhere in the
+            // loop body still un-sticks `bus_watcher_running` for the next
+            // spawn attempt.
+            let _running_guard = RunningFlagGuard::new(running_flag);
             loop {
                 if stop_flag.load(Ordering::SeqCst) {
                     break;
@@ -1627,7 +1651,7 @@ impl VideoPipelineRuntime {
                 }
             }
             log::info!("video_pipeline: bus watcher thread exiting");
-            running_flag.store(false, Ordering::SeqCst);
+            // _running_guard drops here, releasing bus_watcher_running.
         });
     }
 }
@@ -1665,6 +1689,28 @@ impl<'a> LoopOpGuard<'a> {
 impl Drop for LoopOpGuard<'_> {
     fn drop(&mut self) {
         self.flag.store(LOOP_OP_IDLE, Ordering::SeqCst);
+    }
+}
+
+/// RT-1 — RAII guard that releases the `bus_watcher_running` CAS gate on
+/// drop, including panic unwinds inside the watcher thread. Without this,
+/// any panic between the CAS-acquire and the explicit `store(false)` at
+/// the bottom of the watcher loop would leave the flag stuck `true` and
+/// permanently block `spawn_bus_watcher` from starting a new thread —
+/// silently breaking every subsequent EOS/SegmentDone notification.
+struct RunningFlagGuard {
+    flag: Arc<AtomicBool>,
+}
+
+impl RunningFlagGuard {
+    fn new(flag: Arc<AtomicBool>) -> Self {
+        Self { flag }
+    }
+}
+
+impl Drop for RunningFlagGuard {
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::SeqCst);
     }
 }
 
