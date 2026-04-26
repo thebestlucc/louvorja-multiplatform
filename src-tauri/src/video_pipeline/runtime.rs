@@ -17,7 +17,6 @@ use crate::video_pipeline::{
     state::{LoopMode, PlaybackState, PlaybackStateSnapshot},
 };
 use gstreamer::{self as gst, prelude::*};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -89,8 +88,8 @@ pub struct VideoPipelineRuntime {
     /// `seek(FLUSH | SEGMENT)` and the bus watcher's `SegmentDone` handler
     /// re-arms (loop=One) or converts to EOS (loop=None) — pipeline never
     /// reaches EOS state during loop iteration so native sinks never see
-    /// flush. When `false` (rare — non-seekable source), the legacy P3.18-P3.21
-    /// reload paths in `on_eos` / broadcaster preemptive seek act as fallback.
+    /// flush. When `false` (rare — non-seekable source), the legacy
+    /// EOS-based reload path in `on_eos::LoopMode::One` acts as fallback.
     is_seekable: AtomicBool,
     /// B3 fix: serialize `attach_window` / `detach_window` across windows.
     /// Without this, two near-simultaneous attaches (e.g. user opens
@@ -102,14 +101,6 @@ pub struct VideoPipelineRuntime {
     /// mid-stream. Holding this mutex for the full attach/detach prevents
     /// the race without taking the long-held `pipeline` lock.
     attach_mutex: Mutex<()>,
-    /// P3.19 — attached-window registry for re-attach after a full reload
-    /// (loop-one EOS path) or seek-after-EOS recovery. Map of window_label
-    /// → native window handle, populated by `attach_window` and cleared by
-    /// `detach_window`. After a `pipeline.set_state(NULL)` cycle inside
-    /// `load()`, the existing native sink elements may have lost their tee
-    /// request-pad blocking probes / sticky events, so we tear them down
-    /// (`detach_native_sink`) and re-attach with the cached handles.
-    attached_windows: Mutex<HashMap<String, usize>>,
 }
 
 impl VideoPipelineRuntime {
@@ -133,7 +124,6 @@ impl VideoPipelineRuntime {
             bus_watcher_running: Arc::new(AtomicBool::new(false)),
             is_seekable: AtomicBool::new(false),
             attach_mutex: Mutex::new(()),
-            attached_windows: Mutex::new(HashMap::new()),
         }
     }
 
@@ -470,30 +460,27 @@ impl VideoPipelineRuntime {
     /// (pending state ≠ VoidPending) or not yet in PAUSED/PLAYING, the
     /// GStreamer seek is skipped silently and only the snapshot is updated.
     ///
-    /// **P3.19 — EOS recovery.** When the user scrubs the timeline AFTER the
-    /// video has reached end-of-stream (e.g. loop OFF, or first iteration
-    /// with loop ON before the auto-reload completes), the pipeline is
-    /// nominally PLAYING/PAUSED but every downstream pad has acknowledged
-    /// EOS. `seek_simple` returns `Err` because there's no segment to seek
-    /// within — the previous one was finalized by EOS. Pre-P3.19 this
-    /// surfaced as a generic INTERNAL_ERROR toast on the frontend. We detect
-    /// this case via a position-vs-duration heuristic and route through the
-    /// same full-reload path the loop-one EOS handler uses, then seek to the
-    /// requested position on the fresh pipeline. Cost: ~200-500 ms hitch on
-    /// scrub-after-finish; acceptable because the alternative is a hard
-    /// error toast.
+    /// **Phase A — post-EOS recovery is now restricted to the unseekable
+    /// fallback path.** In the canonical SEGMENT seek flow (`is_seekable=true`)
+    /// the pipeline never reaches EOS during normal playback, so post-EOS
+    /// scrubbing cannot occur. For the unseekable fallback (live HTTP
+    /// streams, certain demuxers), looping is unsupported; the user can still
+    /// reach an EOS state with loop=None — we keep the heuristic-driven full
+    /// reload + seek path active there.
     pub fn seek(&self, secs: f64) -> Result<(), AppError> {
         let secs = secs.max(0.0);
 
-        // EOS detection — done OUTSIDE the pipeline lock so the recovery
-        // path (which calls `load()` → takes the pipeline lock) doesn't
-        // deadlock. Heuristic: snapshot position + duration; if position is
-        // within `EOS_PROXIMITY_US` of duration AND the pipeline is in
-        // Playing/Paused, treat as post-EOS and recover. Falsely triggering
-        // during normal end-of-track scrubs is harmless — the recovery just
-        // does a load+seek, which is what the user wants.
-        const EOS_PROXIMITY_US: u64 = 100_000; // 100 ms
-        let post_eos = {
+        // Phase A — only run the post-EOS heuristic on the unseekable
+        // fallback. With `is_seekable=true` the canonical SEGMENT loop owns
+        // wrap-around and post-EOS scrubs cannot occur in normal playback.
+        let post_eos = if self.is_seekable.load(Ordering::SeqCst) {
+            false
+        } else {
+            // EOS detection — done OUTSIDE the pipeline lock so the recovery
+            // path (which calls `load()` → takes the pipeline lock) doesn't
+            // deadlock. Heuristic: position within `EOS_PROXIMITY_US` of
+            // duration AND pipeline in Playing/Paused.
+            const EOS_PROXIMITY_US: u64 = 100_000; // 100 ms
             let guard = self.pipeline.lock()?;
             if let Some(pipeline) = guard.as_ref() {
                 let pos = pipeline
@@ -517,7 +504,7 @@ impl VideoPipelineRuntime {
 
         if post_eos {
             log::info!(
-                "video_pipeline.seek({secs:.3}s): pipeline at end-of-stream, \
+                "video_pipeline.seek({secs:.3}s): unseekable fallback at EOS, \
                  doing full reload + seek"
             );
             let uri = self
@@ -529,25 +516,8 @@ impl VideoPipelineRuntime {
                     AppError::Internal("video_pipeline.seek: post-EOS but no URI in snapshot".into())
                 })?;
             // Full reload re-creates the segment so seek_simple can land
-            // somewhere meaningful. load() leaves the pipeline in PAUSED
-            // (and synchronously waits for that state to be reached, so
-            // pending == VoidPending after this call).
+            // somewhere meaningful. load() leaves the pipeline in PAUSED.
             self.load(&uri)?;
-            // Native sink branches may need re-attaching after the NULL
-            // cycle (same reason as the loop-one path).
-            if let Err(e) = self.reattach_all_windows() {
-                log::warn!("video_pipeline.seek: post-EOS reattach failed: {e}");
-            }
-            // Issue the actual seek WHILE THE PIPELINE IS PAUSED, before the
-            // play() call below. PAUSED is a valid seek-target state per the
-            // GStreamer state-change matrix; doing it here keeps the call
-            // atomic with the reload (the user sees: scrub bar moves →
-            // brief loading flash → playback resumes from new position).
-            // If we delayed the seek past play(), `pipeline.state(0)` would
-            // briefly report `pending: PLAYING` and the post-reload seek
-            // path below would skip the seek_simple call (the
-            // `stable_and_seekable` guard rejects pending != VoidPending),
-            // landing the user back at position 0.
             {
                 let guard = self.pipeline.lock()?;
                 if let Some(pipeline) = guard.as_ref() {
@@ -567,10 +537,6 @@ impl VideoPipelineRuntime {
                 }
             }
             self.state.seek(secs)?;
-            // Resume PLAYING so the user sees motion at the seeked position
-            // instead of a paused first frame. The user is scrubbing, which
-            // implies they want playback resumed; play() also writes
-            // paused=false to the snapshot, matching the GStreamer state.
             self.play()?;
             return Ok(());
         }
@@ -724,10 +690,12 @@ impl VideoPipelineRuntime {
                     );
                     return;
                 }
-                // SUPERSEDED BY PHASE A — to be deleted in commit 2.
-                // Legacy P3.18-P3.21 reload path; retained as the unseekable
-                // fallback (e.g. live HTTP streams that don't support range
-                // requests).
+                // Phase A unseekable fallback — legacy P3.18 reload path.
+                // Retained for sources that don't support range seeks (live
+                // HTTP streams, certain demuxers). The canonical SEGMENT
+                // loop short-circuits this arm via the `is_seekable` guard
+                // above; only sources that failed the seekability probe
+                // ever reach this code.
                 log::info!(
                     "video_pipeline: on_eos LoopMode::One — spawning reload thread \
                      (bus watcher must stay free to keep observing the bus)"
@@ -757,10 +725,7 @@ impl VideoPipelineRuntime {
                 // The fix is structural: spawn a dedicated thread for the
                 // reload. The bus watcher returns immediately and keeps
                 // pumping the bus, which lets the new pipeline's
-                // PAUSED/PLAYING transitions complete cleanly. After load()
-                // we re-attach all tracked windows (the NULL transition can
-                // leave native sink branches in a state where they don't
-                // render after the next PLAYING — see `reattach_all_windows`).
+                // PAUSED/PLAYING transitions complete cleanly.
                 //
                 // CLAUDE.md error #8 (spawned threads must exit on app
                 // shutdown): this is a one-shot worker that runs ~500 ms and
@@ -812,14 +777,6 @@ impl VideoPipelineRuntime {
                             "video_pipeline: on_eos reload thread load() failed: {e}"
                         );
                         return;
-                    }
-                    // load() can leave native sink branches without their
-                    // tee blocking + sticky events after a NULL cycle — re-
-                    // attach so projector/return don't go black on loop.
-                    if let Err(e) = runtime.reattach_all_windows() {
-                        log::warn!(
-                            "video_pipeline: on_eos reload thread reattach failed: {e}"
-                        );
                     }
                     if let Err(e) = runtime.play() {
                         log::warn!(
@@ -1048,16 +1005,6 @@ impl VideoPipelineRuntime {
         // from the upstream stream — typically 1-4 s for standard GOP
         // sizes. This is the canonical GStreamer hot-attach pattern.
         pipeline::attach_native_sink(&pipeline, window_label, window_handle).map(|_| ())?;
-
-        // P3.19: track the (label, handle) pair so a subsequent full pipeline
-        // reload (loop-one EOS or seek-after-EOS recovery) can re-attach
-        // without the frontend's `useEffect` having to fire. The frontend
-        // attaches once per window mount; if Rust internally cycles NULL the
-        // existing native sinks lose their tee request-pad blocking + sticky
-        // events and stop rendering — re-attach restores them.
-        if let Ok(mut tracked) = self.attached_windows.lock() {
-            tracked.insert(window_label.to_string(), window_handle);
-        }
         Ok(())
     }
 
@@ -1078,58 +1025,6 @@ impl VideoPipelineRuntime {
             let pipeline = pipeline.clone();
             drop(guard);
             pipeline::detach_native_sink(&pipeline, window_label)?;
-        }
-        // P3.19: keep the registry in sync so a future reload doesn't try to
-        // re-attach a window the frontend has already torn down.
-        if let Ok(mut tracked) = self.attached_windows.lock() {
-            tracked.remove(window_label);
-        }
-        Ok(())
-    }
-
-    /// SUPERSEDED BY PHASE A — to be deleted in commit 2.
-    ///
-    /// P3.19 — re-attach every tracked window to the live pipeline.
-    ///
-    /// Called from the loop-one EOS reload path and the seek-after-EOS
-    /// recovery path AFTER `load()` has cycled the pipeline NULL → PAUSED.
-    /// During NULL the existing native sink branches' tee request-pad
-    /// blocking probes and sticky events are not guaranteed to be reinstated
-    /// when the pipeline next reaches PLAYING — empirically the symptom is a
-    /// black projector/return after a loop iteration. Tearing them down +
-    /// re-running the canonical hot-attach sequence (BLOCK_DOWNSTREAM probe
-    /// → link → sync_state_with_parent → preroll wait → release probe)
-    /// restores frame delivery without disturbing audio.
-    ///
-    /// Snapshot the registry (then drop the lock) before touching the
-    /// pipeline so we can't deadlock with `attach_window` /
-    /// `detach_window` if they race in (unlikely — caller holds the bus
-    /// watcher / restart path, but the snapshot pattern is cheap insurance).
-    fn reattach_all_windows(&self) -> Result<(), AppError> {
-        let snapshot: Vec<(String, usize)> = match self.attached_windows.lock() {
-            Ok(g) => g.iter().map(|(k, v)| (k.clone(), *v)).collect(),
-            Err(e) => {
-                log::warn!("reattach_all_windows: registry lock poisoned: {e}");
-                return Ok(());
-            }
-        };
-        if snapshot.is_empty() {
-            return Ok(());
-        }
-        log::info!(
-            "reattach_all_windows: re-attaching {} window(s) after pipeline reload",
-            snapshot.len()
-        );
-        let _attach_guard = self
-            .attach_mutex
-            .lock()
-            .map_err(|e| AppError::Internal(format!("attach_mutex poisoned: {e}")))?;
-        let pipeline = self.get_or_init_pipeline()?;
-        for (label, handle) in snapshot {
-            let _ = pipeline::detach_native_sink(&pipeline, &label);
-            if let Err(e) = pipeline::attach_native_sink(&pipeline, &label, handle) {
-                log::warn!("reattach_all_windows: '{label}' re-attach failed: {e}");
-            }
         }
         Ok(())
     }
@@ -1177,14 +1072,6 @@ impl VideoPipelineRuntime {
         let app_for_thread = app.clone();
 
         std::thread::spawn(move || {
-            // P3.20 — preemptive loop seek state. Tracks whether we've already
-            // issued a wrap-around seek for the current iteration so we don't
-            // spam GStreamer with one seek per 100ms broadcaster tick while
-            // position lingers in the [duration-200ms, duration] window. The
-            // flag is cleared once position drops below half-duration on the
-            // next iteration (i.e. the seek successfully reset the playhead).
-            let mut looped_this_cycle: bool = false;
-
             loop {
                 if stop_flag.load(Ordering::SeqCst) {
                     break;
@@ -1196,15 +1083,6 @@ impl VideoPipelineRuntime {
                     None => break,
                 };
 
-                // P3.20 — preemptive loop seek. Read raw ClockTime values
-                // alongside the secs-converted ones so we can run the
-                // wrap-around check in nanosecond precision while still
-                // emitting seconds to the frontend.
-                //
-                // Run the seek INSIDE the same pipeline-lock guard so we
-                // can't race a concurrent unload() that drops the pipeline
-                // between the position-query and the seek_simple call. The
-                // guard is released before sleep().
                 let (position_secs, duration_secs, pipeline_present) = {
                     let guard = match runtime.pipeline.lock() {
                         Ok(g) => g,
@@ -1217,160 +1095,6 @@ impl VideoPipelineRuntime {
                         let duration = pipeline
                             .query_duration::<gst::ClockTime>()
                             .unwrap_or(gst::ClockTime::ZERO);
-
-                        // SUPERSEDED BY PHASE A — to be deleted in commit 2.
-                        // Preemptive loop: if we're approaching EOS and
-                        // loop=One, seek to start BEFORE EOS fires. The
-                        // pipeline never reaches EOS state — no recovery
-                        // hell, no NULL cycle, no native sink loss.
-                        //
-                        // Threshold of 200ms gives 2 broadcaster ticks of
-                        // margin so we never miss the window. on_eos's
-                        // LoopMode::One arm remains as a safety-net
-                        // fallback for the unlikely case the broadcaster
-                        // misses (e.g. thread starvation, sub-200ms video).
-                        //
-                        // Phase A — gated on is_seekable=false. When
-                        // is_seekable=true the canonical SEGMENT_DONE
-                        // handler owns loop wrap-around, so this preemptive
-                        // path is dormant.
-                        let loop_mode = runtime
-                            .state
-                            .loop_mode()
-                            .unwrap_or(LoopMode::None);
-                        let phase_a_owns_loop = runtime
-                            .is_seekable
-                            .load(Ordering::SeqCst);
-                        if !phase_a_owns_loop && duration > gst::ClockTime::ZERO {
-                            let near_end = position
-                                + gst::ClockTime::from_mseconds(200)
-                                >= duration;
-                            // Reset the spam-prevention flag once we've
-                            // actually wrapped around. Half-duration is a
-                            // generous threshold — any normal playback past
-                            // the midpoint would have non-zero position.
-                            //
-                            // P3.21 — also gate the reset on the pipeline
-                            // being in PLAYING state. During a fallback
-                            // reload (see below), the pipeline cycles
-                            // through NULL → READY → PAUSED and position
-                            // queries can briefly return 0 — without this
-                            // gate, `looped_this_cycle` would clear
-                            // mid-reload and the next tick could fire a
-                            // second seek on a half-loaded pipeline.
-                            let near_start = position < duration / 2;
-                            let pipeline_state = pipeline.current_state();
-                            if near_start && pipeline_state == gst::State::Playing {
-                                looped_this_cycle = false;
-                            }
-                            if loop_mode == LoopMode::One
-                                && near_end
-                                && !looped_this_cycle
-                            {
-                                log::info!(
-                                    "preemptive loop seek: pos={pos}ms dur={dur}ms",
-                                    pos = position.mseconds(),
-                                    dur = duration.mseconds()
-                                );
-                                match pipeline.seek_simple(
-                                    gst::SeekFlags::FLUSH
-                                        | gst::SeekFlags::KEY_UNIT,
-                                    gst::ClockTime::ZERO,
-                                ) {
-                                    Ok(()) => {
-                                        looped_this_cycle = true;
-                                    }
-                                    Err(e) => {
-                                        // P3.21 — When loop is toggled ON
-                                        // AFTER the video has already
-                                        // reached EOS, `seek_simple` returns
-                                        // Err because the pipeline is past
-                                        // its end. Without this fallback,
-                                        // the broadcaster spams seek every
-                                        // 100ms forever (position stays at
-                                        // ~duration, so `looped_this_cycle`
-                                        // never gets set). Symptom: app
-                                        // becomes unresponsive, user kills
-                                        // it as a "crash".
-                                        //
-                                        // Fix: set the flag immediately so
-                                        // we stop trying, then spawn the
-                                        // same full-reload thread used by
-                                        // `on_eos LoopMode::One` (P3.19).
-                                        // After reload, position resets to
-                                        // 0, the gated `near_start` check
-                                        // re-clears the flag once the
-                                        // pipeline is back in PLAYING, and
-                                        // normal preemptive seeks resume.
-                                        log::warn!(
-                                            "preemptive loop seek failed: {e}; \
-                                             falling back to full reload"
-                                        );
-                                        looped_this_cycle = true;
-                                        let app = app_for_thread.clone();
-                                        std::thread::spawn(move || {
-                                            let runtime = match runtime_from_app(&app) {
-                                                Some(r) => r,
-                                                None => {
-                                                    log::warn!(
-                                                        "preemptive seek fallback: \
-                                                         runtime missing"
-                                                    );
-                                                    return;
-                                                }
-                                            };
-                                            let uri = match runtime.state.snapshot() {
-                                                Ok(s) => s.uri.clone(),
-                                                Err(e) => {
-                                                    log::warn!(
-                                                        "preemptive seek fallback \
-                                                         snapshot read failed: {e}"
-                                                    );
-                                                    return;
-                                                }
-                                            };
-                                            let uri = match uri {
-                                                Some(u) => u,
-                                                None => {
-                                                    log::warn!(
-                                                        "preemptive seek fallback: \
-                                                         no URI in snapshot"
-                                                    );
-                                                    return;
-                                                }
-                                            };
-                                            log::info!(
-                                                "preemptive seek fallback: spawning reload"
-                                            );
-                                            if let Err(e) = runtime.load(&uri) {
-                                                log::warn!(
-                                                    "preemptive seek fallback \
-                                                     load failed: {e}"
-                                                );
-                                                return;
-                                            }
-                                            if let Err(e) = runtime.reattach_all_windows() {
-                                                log::warn!(
-                                                    "preemptive seek fallback \
-                                                     reattach failed: {e}"
-                                                );
-                                            }
-                                            if let Err(e) = runtime.play() {
-                                                log::warn!(
-                                                    "preemptive seek fallback \
-                                                     play failed: {e}"
-                                                );
-                                                return;
-                                            }
-                                            log::info!(
-                                                "preemptive seek fallback: reload complete"
-                                            );
-                                        });
-                                    }
-                                }
-                            }
-                        }
-
                         let pos_secs = position.useconds() as f64 / 1_000_000.0;
                         let dur_secs = duration.useconds() as f64 / 1_000_000.0;
                         (pos_secs, dur_secs, true)
@@ -1682,32 +1406,6 @@ mod tests {
         let rt = runtime();
         rt.play().expect("play on sourceless runtime");
         rt.pause().expect("pause on sourceless runtime");
-    }
-
-    /// P3.19 regression guard — `attached_windows` registry must start
-    /// empty and `reattach_all_windows` must be a no-op when the registry
-    /// is empty. The full attach/reattach round trip is exercised by
-    /// pipeline-level tests with a real `videotestsrc`; here we only check
-    /// the registry plumbing.
-    #[test]
-    fn attached_windows_registry_starts_empty() {
-        let rt = runtime();
-        assert!(
-            rt.attached_windows
-                .lock()
-                .expect("registry lock")
-                .is_empty()
-        );
-    }
-
-    /// `reattach_all_windows` with an empty registry must succeed silently.
-    /// This is the path exercised by `seek` recovery + `on_eos` reload when
-    /// no projector / return monitor has been attached yet (e.g. user
-    /// triggered a loop video before opening any output window).
-    #[test]
-    fn reattach_all_windows_with_empty_registry_is_noop() {
-        let rt = runtime();
-        rt.reattach_all_windows().expect("reattach with empty registry");
     }
 
     /// P3.11 regression guard — `attach_window` is now pure hot-attach with
