@@ -59,6 +59,21 @@ impl MediaSource {
                         absolute_path.display()
                     )));
                 }
+                // P3.8 fix S3: surface a clear `NotFound` when a managed
+                // download has been deleted from disk (or never finished).
+                // GStreamer's `uridecodebin` will otherwise post an opaque
+                // bus ERROR like "Resource not found" deep in the watcher
+                // thread, with no actionable hint for the user. Catching
+                // missing files here lets the IPC reply carry a structured
+                // error the frontend can translate into a "video file
+                // missing — re-download?" toast.
+                if !absolute_path.exists() {
+                    return Err(AppError::NotFound(format!(
+                        "Local media file not found on disk: {} \
+                         (the download may have been deleted; re-download from the Online Videos panel)",
+                        absolute_path.display()
+                    )));
+                }
                 // Normalize backslashes (Windows) so the URI is well-formed.
                 let path_str = absolute_path.display().to_string().replace('\\', "/");
                 Ok(format!("file://{}", path_str))
@@ -81,11 +96,17 @@ mod tests {
 
     #[test]
     fn local_resolves_to_file_uri() {
+        // Need a file that actually exists for the existence guard added in
+        // P3.8 fix S3. /tmp is portable across CI runners.
+        let path = std::env::temp_dir().join("__louvorja_resolves_to_file_uri__.mp4");
+        std::fs::write(&path, b"").expect("write temp");
         let source = MediaSource::Local {
-            absolute_path: PathBuf::from("/tmp/foo.mp4"),
+            absolute_path: path.clone(),
         };
         let uri = source.resolve_uri(dummy_binary()).expect("resolve");
-        assert_eq!(uri, "file:///tmp/foo.mp4");
+        let expected = format!("file://{}", path.display());
+        assert_eq!(uri, expected);
+        let _ = std::fs::remove_file(&path);
     }
 
     /// On Windows, `C:\videos\foo.mp4` is absolute and must be normalized to
@@ -131,6 +152,43 @@ mod tests {
             }
             other => panic!("expected AppError::Internal, got: {other:?}"),
         }
+    }
+
+    /// P3.8 fix S3: a managed download path that points at a missing file
+    /// must surface as `AppError::NotFound`, not a generic Internal that
+    /// gets folded into GStreamer "Resource not found" later in the run.
+    #[test]
+    fn local_missing_file_returns_not_found() {
+        let source = MediaSource::Local {
+            absolute_path: PathBuf::from("/tmp/__louvorja_definitely_does_not_exist__.mp4"),
+        };
+        let err = source.resolve_uri(dummy_binary()).expect_err("should reject");
+        match err {
+            AppError::NotFound(msg) => {
+                assert!(
+                    msg.contains("not found on disk"),
+                    "expected 'not found on disk' in error, got: {msg}"
+                );
+            }
+            other => panic!("expected AppError::NotFound, got: {other:?}"),
+        }
+    }
+
+    /// Existing files under the absolute-path contract must resolve
+    /// successfully (regression guard for the new exists() check).
+    #[test]
+    fn local_existing_file_resolves_to_file_uri() {
+        // /tmp is guaranteed writable on every platform we ship to.
+        let path = std::env::temp_dir().join("__louvorja_resolve_uri_test__.mp4");
+        // Touch the file so `exists()` returns true. Don't actually decode
+        // it — the test only exercises the URI build path.
+        std::fs::write(&path, b"").expect("write temp");
+        let source = MediaSource::Local {
+            absolute_path: path.clone(),
+        };
+        let uri = source.resolve_uri(dummy_binary()).expect("resolve");
+        assert!(uri.starts_with("file://"), "expected file:// URI, got: {uri}");
+        let _ = std::fs::remove_file(&path);
     }
 
     /// Manual / network test. Run with:

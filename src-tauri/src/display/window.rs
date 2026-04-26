@@ -75,6 +75,12 @@ pub fn open_fullscreen_window(
         .fullscreen(false)
         .decorations(false)
         .resizable(false)
+        // Phase 3 of frame-perfect multi-monitor video plan
+        // (docs/plans/2026-04-25-frame-perfect-multi-monitor-video.md):
+        // both projector and return windows must be transparent so the native
+        // GStreamer sink can render BELOW the WKWebView/WebView2/WebKitGTK.
+        // The webview keeps drawing slide overlays (text/logos) on top.
+        .transparent(true)
         .always_on_top(true)
         .skip_taskbar(false)
         .position(logical_x, logical_y)
