@@ -23,13 +23,35 @@ async function getStore() {
  * Load the plugin-store file and populate the synchronous cache with every
  * entry. Must be awaited before `ReactDOM.createRoot().render()` so UI hooks
  * can read preferences synchronously on first render.
+ *
+ * Resilience note: `store.entries()` requires the `store:allow-entries`
+ * capability. If that grant is missing on a given window (projector / return /
+ * spotlight have minimal capability sets), this used to throw and silently
+ * leave `syncCache` empty — which made every `getPreferenceSync()` return its
+ * fallback value, including the experimental `useRustVideoPipeline` flag (the
+ * P3.11 dogfood regression where projector + return mounted legacy followers
+ * even when the flag was persisted as `true` on disk). We now catch the error
+ * and mark the cache as initialized so individual `getPreference()` calls
+ * (which only require `store:allow-get`) can still populate it on demand.
  */
 export async function initStorePreferences(): Promise<void> {
   if (initialized) return;
   const store = await getStore();
-  const entries = await store.entries();
-  for (const [key, value] of entries) {
-    syncCache.set(key, value);
+  try {
+    const entries = await store.entries();
+    for (const [key, value] of entries) {
+      syncCache.set(key, value);
+    }
+  } catch (err) {
+    // Projector / return / spotlight windows lack `store:allow-entries`.
+    // That's expected — fall through with an empty cache; per-key reads via
+    // `getPreference()` (covered by `store:allow-get`) will still work.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const label = (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label ?? "?";
+    console.warn(
+      `[store] initStorePreferences: entries() failed on '${label}' (likely missing capability). ` +
+        `Falling back to per-key reads. Error: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   initialized = true;
 }

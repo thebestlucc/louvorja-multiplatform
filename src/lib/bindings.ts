@@ -1818,6 +1818,79 @@ async videoPipelineUnload() : Promise<Result<null, AppErrorResponse>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Attach a native GStreamer sink to the window with `label` so the shared
+ * pipeline renders directly into its OS surface (Phase 2 of
+ * `docs/plans/2026-04-25-frame-perfect-multi-monitor-video.md`).
+ * 
+ * Coexists with [`video_pipeline_subscribe`]; the frontend gates which path
+ * is active during the migration window. `attach_window` is idempotent —
+ * re-attaching the same label detaches the previous chain first.
+ * 
+ * Window-handle resolution must run on the main thread because AppKit
+ * (`NSView*`) and X11/Wayland surface accessors aren't safe to read off it.
+ * We hop onto the main thread via [`tauri::AppHandle::run_on_main_thread`]
+ * and ferry only a plain `usize` back across an `mpsc::channel` so nothing
+ * `!Send` (e.g. `NonNull<c_void>` inside `AppKitWindowHandle`) crosses the
+ * thread boundary.
+ */
+async videoPipelineAttachWindow(label: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_attach_window", { label }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Detach the native sink for `label`. Companion to
+ * [`video_pipeline_attach_window`].
+ * 
+ * Returns `Ok(())` when the pipeline runtime hasn't been initialised yet —
+ * matches `unsubscribe`'s shutdown contract so frontend cleanup paths can
+ * fire blindly without races.
+ */
+async videoPipelineDetachWindow(label: string) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_detach_window", { label }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Broadcast the `useRustVideoPipeline` flag value to every webview from
+ * Rust core via `app.emit(...)`.
+ * 
+ * Why this command exists (P3.12): the frontend `emit()` from
+ * `@tauri-apps/api/event` IS broadcast across webviews in Tauri 2 (it
+ * calls `plugin:event|emit` which delegates to `app.emit`), so in theory
+ * the same effect could be achieved purely from JS. We funnel through Rust
+ * anyway because:
+ * 
+ * 1. **Ordering**: a single Rust command lets the frontend `await` the
+ * completion of disk-persist + broadcast in one round-trip — eliminating
+ * the prior race where a follower window could re-read disk before the
+ * main window's async `setPreference()` finished writing.
+ * 2. **Single source of truth**: the same Rust function can be called by
+ * other backend code paths (e.g. settings sync, remote-pwa toggles) so
+ * the broadcast contract isn't duplicated.
+ * 3. **Diagnostics**: a `log::debug!` line here gives us a definitive
+ * server-side trace of "the broadcast did fire", separating the disk
+ * write step from the listener delivery step when debugging.
+ * 
+ * Event name and payload shape match the listener in
+ * `src/stores/video-player-store.ts::startVideoPlayerCrossWindowSync` —
+ * CHANGE BOTH OR NEITHER.
+ */
+async setVideoPipelineFlag(value: boolean) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_video_pipeline_flag", { value }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
