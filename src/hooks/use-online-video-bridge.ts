@@ -23,7 +23,7 @@
 //
 // PersistentVideoPlayer still owns the legacy YouTube iframe / `<video>`
 // element lifecycle when the rust pipeline is OFF.
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { useSlideVersion } from "./use-slide-version";
 import { useMediaPlayerStore } from "../stores/media-player-store";
@@ -78,7 +78,20 @@ async function resolveSlideMediaSource(
  * + return native sinks attach to an empty pipeline (black screen, dead
  * controls).
  */
+/**
+ * Builds a stable key from a `MediaSource` so identical loads can be
+ * deduped. HP-4: previously every `slide-changed` event triggered a fresh
+ * `videoPipeline.load()` cycle (NULL → PAUSED), causing visible re-buffer
+ * + audio glitch when the same slide re-fired (e.g. queue advance landing
+ * on the already-projected slide).
+ */
+function mediaSourceKey(s: MediaSource): string {
+  return s.type === "local" ? `local:${s.absolutePath}` : `youtube:${s.videoId}`;
+}
+
 export function useOnlineVideoBridge() {
+  const lastLoadedKeyRef = useRef<string | null>(null);
+
   const handleSlide = useCallback((slide: SlideContent) => {
     if (slide.slideType !== "onlineVideo") return;
 
@@ -124,6 +137,12 @@ export function useOnlineVideoBridge() {
           );
           return;
         }
+        const key = mediaSourceKey(mediaSource);
+        if (lastLoadedKeyRef.current === key) {
+          // HP-4 dedup: identical slide already loaded into rust pipeline.
+          return;
+        }
+        lastLoadedKeyRef.current = key;
         videoPipeline
           .load(mediaSource)
           .then(() => {
@@ -133,6 +152,8 @@ export function useOnlineVideoBridge() {
             useMediaPlayerStore.getState().setStatus("playing");
           })
           .catch((err) => {
+            // Load failed — clear dedup so a retry can land.
+            lastLoadedKeyRef.current = null;
             // Backend errors surface via the `video-pipeline-error` event
             // listener (use-rust-video-pipeline-state). Just log here.
             console.error("[online-video-bridge] videoPipeline.load failed", err);
@@ -143,7 +164,11 @@ export function useOnlineVideoBridge() {
       });
   }, []);
 
-  // No onClear: stop/clear is already handled by other layers
-  // (`useMediaPlayer.stop()`, `slide-cleared` listener inside `useMediaPlayer`).
-  useSlideVersion({ onSlide: handleSlide });
+  // Reset dedup on slide-cleared so re-projecting the same video after a
+  // clear triggers a fresh load.
+  const handleClear = useCallback(() => {
+    lastLoadedKeyRef.current = null;
+  }, []);
+
+  useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
 }
