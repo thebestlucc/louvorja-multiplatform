@@ -90,7 +90,21 @@ pub struct VideoPipelineRuntime {
     /// reaches EOS state during loop iteration so native sinks never see
     /// flush. When `false` (rare — non-seekable source), the legacy
     /// EOS-based reload path in `on_eos::LoopMode::One` acts as fallback.
+    ///
+    /// I6: bare `AtomicBool` rather than `Arc<AtomicBool>` (siblings above)
+    /// because `is_seekable` is only ever read/written through `&self` —
+    /// no spawned thread captures it directly (the bus watcher re-fetches
+    /// the runtime via `runtime_from_app` each tick and accesses through
+    /// that `Arc<VideoPipelineRuntime>`).
     is_seekable: AtomicBool,
+    /// Phase A / I5 — duration cached from the seekability probe in `load()`
+    /// so `on_segment_done` (segment re-arm) and `seek()` (user scrub
+    /// preserving SEGMENT contract) don't have to re-query GStreamer each
+    /// time. `None` until the first successful seekable load; cleared by
+    /// `unload()`. Stored as plain `Mutex<Option<...>>` (not atomic) because
+    /// `gst::ClockTime` is 64 bits and `AtomicU64` would still need a sentinel
+    /// for the absent state.
+    cached_duration: Mutex<Option<gst::ClockTime>>,
     /// B3 fix: serialize `attach_window` / `detach_window` across windows.
     /// Without this, two near-simultaneous attaches (e.g. user opens
     /// projector + return monitor at once) race the tee request pad
@@ -123,6 +137,7 @@ impl VideoPipelineRuntime {
             bus_watcher_stop: Arc::new(AtomicBool::new(false)),
             bus_watcher_running: Arc::new(AtomicBool::new(false)),
             is_seekable: AtomicBool::new(false),
+            cached_duration: Mutex::new(None),
             attach_mutex: Mutex::new(()),
         }
     }
@@ -333,12 +348,31 @@ impl VideoPipelineRuntime {
         let mut seekable = false;
         let mut duration_for_seek = gst::ClockTime::ZERO;
         let mut q = gst::query::Seeking::new(gst::Format::Time);
-        if pipeline.query(&mut q) {
+        // I2: log the pipeline state at probe time so production logs can
+        // distinguish "probe ran too early (Async transition)" from "source is
+        // genuinely non-seekable". `pipeline.state(NONE)` above blocked until
+        // PAUSED was reached, so this should always be PAUSED — but if a
+        // future refactor races, we'll see it here.
+        log::debug!(
+            "video_pipeline.load: seekability probe at state={:?}",
+            pipeline.current_state()
+        );
+        let queried = pipeline.query(&mut q);
+        if queried {
+            // I3: `_start` is intentionally discarded. Some demuxers report
+            // (seekable=true, start=NONE, end=NONE); we trust `seekable`
+            // alone and resolve duration via `query_duration` fallback below.
             let (s, _start, end) = q.result();
             seekable = s;
             if let gst::GenericFormattedValue::Time(Some(t)) = end {
                 duration_for_seek = t;
             }
+        } else {
+            log::warn!(
+                "video_pipeline.load: Seeking query returned false at state={:?} — \
+                 probe-too-early or source genuinely refuses query",
+                pipeline.current_state()
+            );
         }
         // Fallback: query duration directly when Seeking.end is unset
         // (some demuxers report seekable=true but leave end=NONE).
@@ -352,16 +386,15 @@ impl VideoPipelineRuntime {
                 "video_pipeline.load: seekable=true, dur={}ms — arming SEGMENT seek",
                 duration_for_seek.mseconds()
             );
-            match pipeline.seek(
-                1.0,
-                gst::SeekFlags::FLUSH | gst::SeekFlags::SEGMENT,
-                gst::SeekType::Set,
-                gst::ClockTime::ZERO,
-                gst::SeekType::Set,
-                duration_for_seek,
-            ) {
+            match self.arm_segment_seek(&pipeline, gst::ClockTime::ZERO, duration_for_seek, true) {
                 Ok(()) => {
                     self.is_seekable.store(true, Ordering::SeqCst);
+                    // I5: cache duration so `on_segment_done` and user-scrub
+                    // `seek()` can re-arm the SEGMENT contract without
+                    // re-querying GStreamer.
+                    if let Ok(mut cached) = self.cached_duration.lock() {
+                        *cached = Some(duration_for_seek);
+                    }
                 }
                 Err(e) => {
                     log::warn!(
@@ -369,15 +402,22 @@ impl VideoPipelineRuntime {
                          falling back to legacy EOS-based loop path"
                     );
                     self.is_seekable.store(false, Ordering::SeqCst);
+                    if let Ok(mut cached) = self.cached_duration.lock() {
+                        *cached = None;
+                    }
                 }
             }
         } else {
             log::info!(
-                "video_pipeline.load: seekable={seekable} dur={}ms — using legacy \
-                 EOS-based loop fallback",
+                "video_pipeline.load: seekable={seekable} dur={}ms (queried={queried}) — using \
+                 legacy EOS-based loop fallback",
                 duration_for_seek.mseconds()
             );
             self.is_seekable.store(false, Ordering::SeqCst);
+            // I5: clear stale cached duration from a prior seekable load.
+            if let Ok(mut cached) = self.cached_duration.lock() {
+                *cached = None;
+            }
         }
 
         self.state.load(uri.to_string())?;
@@ -550,16 +590,55 @@ impl VideoPipelineRuntime {
             if stable_and_seekable {
                 let useconds = (secs * 1_000_000.0) as u64;
                 let position = gst::ClockTime::from_useconds(useconds);
-                pipeline
-                    .seek_simple(
-                        gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                        position,
-                    )
-                    .map_err(|e| {
-                        AppError::Internal(format!(
-                            "video_pipeline.seek({secs:.3}s) from {current:?}: {e}"
-                        ))
-                    })?;
+                // C1: when the canonical SEGMENT loop is active (is_seekable=true
+                // AND loop=One), a `seek_simple(FLUSH | KEY_UNIT)` would flush
+                // away the armed segment — pipeline plays to natural EOS,
+                // SEGMENT_DONE never fires, on_eos LoopMode::One ignores
+                // (is_seekable=true guard), video freezes. Issue a fresh
+                // SEGMENT seek with the cached duration as `stop` to keep the
+                // loop alive across user scrubs.
+                let seekable_loop = self.is_seekable.load(Ordering::SeqCst)
+                    && self.state.snapshot()?.loop_mode == LoopMode::One;
+                if seekable_loop {
+                    let stop = self
+                        .cached_duration
+                        .lock()
+                        .ok()
+                        .and_then(|g| *g)
+                        .unwrap_or(gst::ClockTime::ZERO);
+                    if !stop.is_zero() {
+                        self.arm_segment_seek(pipeline, position, stop, true)?;
+                    } else {
+                        // Cached duration unset (rare — load() probe failed
+                        // post-arm or unload race); fall through to plain
+                        // FLUSH seek so the user-visible scrub still lands.
+                        log::warn!(
+                            "video_pipeline.seek({secs:.3}s): seekable_loop but \
+                             cached_duration unset — falling back to seek_simple"
+                        );
+                        pipeline
+                            .seek_simple(
+                                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                                position,
+                            )
+                            .map_err(|e| {
+                                AppError::Internal(format!(
+                                    "video_pipeline.seek({secs:.3}s) from {current:?}: {e}"
+                                ))
+                            })?;
+                    }
+                } else {
+                    pipeline
+                        .seek_simple(
+                            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                            position,
+                        )
+                        .map_err(|e| {
+                            AppError::Internal(format!(
+                                "video_pipeline.seek({secs:.3}s) from {current:?}: {e}"
+                            ))
+                        })?;
+                }
             }
             // If mid-transition or not in a seekable state, skip the GStreamer
             // seek. stop()/restart() callers already .catch() errors; silently
@@ -610,6 +689,49 @@ impl VideoPipelineRuntime {
                  ensuring watcher is alive"
             );
             self.spawn_bus_watcher();
+
+            // C2: if the user toggles loop ON after natural EOS (or near-EOS)
+            // on a seekable source, the original load()-time SEGMENT seek
+            // already fired SEGMENT_DONE → was converted to EOS (loop=None
+            // path) → the bus watcher exited. Just respawning the watcher
+            // doesn't re-arm the SEGMENT contract — there's no SegmentDone
+            // pending. Detect "at/near EOS" and re-arm a fresh SEGMENT seek
+            // from position 0 so the canonical loop resumes.
+            if self.is_seekable.load(Ordering::SeqCst) {
+                let snap = self.state.snapshot()?;
+                let stop = self
+                    .cached_duration
+                    .lock()
+                    .ok()
+                    .and_then(|g| *g)
+                    .unwrap_or(gst::ClockTime::ZERO);
+                let dur_secs = stop.useconds() as f64 / 1_000_000.0;
+                // Heuristic: position within 100 ms of duration → user toggled
+                // loop on at/after natural end. Pre-fix this would freeze the
+                // pipeline forever.
+                let near_eos = dur_secs > 0.0 && snap.position_secs >= dur_secs - 0.1;
+                if near_eos && !stop.is_zero() {
+                    log::info!(
+                        "video_pipeline: set_loop(One) at/near EOS \
+                         (pos={:.3}s dur={:.3}s) — re-arming SEGMENT seek from 0",
+                        snap.position_secs,
+                        dur_secs
+                    );
+                    let guard = self.pipeline.lock()?;
+                    if let Some(pipeline) = guard.as_ref() {
+                        if let Err(e) = self.arm_segment_seek(
+                            pipeline,
+                            gst::ClockTime::ZERO,
+                            stop,
+                            true,
+                        ) {
+                            log::warn!(
+                                "video_pipeline: set_loop(One) recovery seek failed: {e}"
+                            );
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -637,9 +759,22 @@ impl VideoPipelineRuntime {
 
     /// Bus-watcher callback for end-of-stream (Task 3.1).
     ///
-    /// Loop one → full pipeline reload (NULL → PAUSED → PLAYING) of the same
-    /// URI. Loop none → emit the typed [`VideoPipelineEnded`] event so the
-    /// frontend can advance the queue.
+    /// **Phase A note — this path is the unseekable-source fallback only.**
+    /// The canonical loop is now `on_segment_done`. EOS reaches this handler
+    /// from two distinct origins, both converge on `LoopMode::None`:
+    ///   1. **Natural EOS** — only the unseekable fallback reaches this
+    ///      naturally; the seekable SEGMENT loop never reaches EOS state
+    ///      during normal playback.
+    ///   2. **Synthetic EOS** — `on_segment_done::LoopMode::None` posts
+    ///      `Eos::new()` on the pipeline so this handler still drives the
+    ///      "advance the queue" UX. The synthetic event traverses the
+    ///      pipeline before reaching the bus, so by the time we set
+    ///      `bus_watcher_stop=true` the EOS message has already been popped
+    ///      — same shutdown contract works for both.
+    ///
+    /// Loop one (unseekable only) → full pipeline reload. Loop none → emit
+    /// the typed [`VideoPipelineEnded`] event so the frontend can advance
+    /// the queue.
     ///
     /// **P3.18 — full reload (nuclear option) for LoopMode::One.** Earlier
     /// rounds tried in-place loop strategies that all ultimately failed in
@@ -807,6 +942,44 @@ impl VideoPipelineRuntime {
         }
     }
 
+    /// Phase A / I5 — issue a SEGMENT seek on `pipeline` from `start` to
+    /// `stop`. Used by:
+    ///   - `load()` for the initial arm (with FLUSH so the pipeline starts
+    ///     iterating the new segment),
+    ///   - `on_segment_done` to re-arm the next loop iteration (no FLUSH —
+    ///     sinks see contiguous stream),
+    ///   - `seek()` when the user scrubs while loop=One is active (FLUSH —
+    ///     drop pending data, preserve SEGMENT contract for the loop),
+    ///   - `set_loop(One)` recovery when the user toggled loop on after EOS.
+    ///
+    /// `with_flush=true` ⇒ `FLUSH | SEGMENT`; `false` ⇒ `SEGMENT` only.
+    fn arm_segment_seek(
+        &self,
+        pipeline: &gst::Pipeline,
+        start: gst::ClockTime,
+        stop: gst::ClockTime,
+        with_flush: bool,
+    ) -> Result<(), AppError> {
+        let mut flags = gst::SeekFlags::SEGMENT;
+        if with_flush {
+            flags |= gst::SeekFlags::FLUSH;
+        }
+        pipeline
+            .seek(
+                1.0,
+                flags,
+                gst::SeekType::Set,
+                start,
+                gst::SeekType::Set,
+                stop,
+            )
+            .map_err(|e| {
+                AppError::Internal(format!(
+                    "arm_segment_seek({start:?} -> {stop:?}, flush={with_flush}): {e}"
+                ))
+            })
+    }
+
     /// Phase A — bus-watcher callback for `SEGMENT_DONE`.
     ///
     /// Fires when the segment armed by `load()`'s initial
@@ -819,10 +992,10 @@ impl VideoPipelineRuntime {
     ///   `pipeline.send_event(Eos::new())` so the existing `on_eos` path
     ///   (queue-advance) fires.
     ///
-    /// When `is_seekable=false`, this method is unreachable in practice — the
-    /// initial SEGMENT seek was never armed, so SEGMENT_DONE never fires; the
-    /// legacy P3.18-P3.21 EOS-based reload path handles loop. Fall through
-    /// silently as a defensive guard.
+    /// When `is_seekable=false`, this branch is unreachable in practice (no
+    /// SEGMENT seek was ever armed, so SEGMENT_DONE never fires); the legacy
+    /// P3.18-P3.21 EOS-based reload path handles loop in that case. Fall
+    /// through silently as a defensive guard.
     fn on_segment_done(&self) {
         if !self.is_seekable.load(Ordering::SeqCst) {
             log::warn!(
@@ -837,36 +1010,48 @@ impl VideoPipelineRuntime {
                 return;
             }
         };
-        let pipeline = match self.pipeline.lock() {
-            Ok(g) => g.as_ref().cloned(),
+        // I4: hold the pipeline lock across the seek (matches `seek()`
+        // pattern). Pre-fix the lock was dropped before issuing the seek,
+        // which left a window where `unload()` could transition the cloned
+        // pipeline to NULL → benign seek failure but inconsistent with the
+        // rest of the runtime which serializes lifecycle vs. seek through
+        // this lock.
+        let guard = match self.pipeline.lock() {
+            Ok(g) => g,
             Err(e) => {
                 log::warn!("video_pipeline: on_segment_done pipeline lock poisoned: {e}");
                 return;
             }
         };
-        let Some(pipeline) = pipeline else {
+        let Some(pipeline) = guard.as_ref() else {
             return;
         };
-        let duration = pipeline
-            .query_duration::<gst::ClockTime>()
-            .unwrap_or(gst::ClockTime::ZERO);
+        // I5: use the duration cached at load() time. A fresh
+        // `query_duration` on every segment re-arm is redundant (duration is
+        // a property of the source, not the playback state) and adds load on
+        // the bus watcher thread.
+        let duration = self
+            .cached_duration
+            .lock()
+            .ok()
+            .and_then(|g| *g)
+            .unwrap_or_else(|| {
+                pipeline
+                    .query_duration::<gst::ClockTime>()
+                    .unwrap_or(gst::ClockTime::ZERO)
+            });
         match mode {
             LoopMode::One => {
                 if duration.is_zero() {
                     log::warn!(
-                        "video_pipeline: on_segment_done LoopMode::One — duration query \
-                         returned 0; cannot re-arm SEGMENT seek"
+                        "video_pipeline: on_segment_done LoopMode::One — duration is 0; \
+                         cannot re-arm SEGMENT seek"
                     );
                     return;
                 }
-                if let Err(e) = pipeline.seek(
-                    1.0,
-                    gst::SeekFlags::SEGMENT,
-                    gst::SeekType::Set,
-                    gst::ClockTime::ZERO,
-                    gst::SeekType::Set,
-                    duration,
-                ) {
+                if let Err(e) =
+                    self.arm_segment_seek(pipeline, gst::ClockTime::ZERO, duration, false)
+                {
                     log::warn!(
                         "video_pipeline: on_segment_done re-arm SEGMENT seek failed: {e}"
                     );
@@ -894,6 +1079,10 @@ impl VideoPipelineRuntime {
         self.bus_watcher_stop.store(true, Ordering::SeqCst);
         // Phase A — clear seekability so a subsequent `load()` re-probes.
         self.is_seekable.store(false, Ordering::SeqCst);
+        // I5: drop the cached duration alongside seekability — same lifecycle.
+        if let Ok(mut cached) = self.cached_duration.lock() {
+            *cached = None;
+        }
         let mut guard = self.pipeline.lock()?;
         if let Some(pipeline) = guard.take() {
             pipeline
@@ -1342,6 +1531,53 @@ mod tests {
             !rt.is_seekable.load(Ordering::SeqCst),
             "unload must clear is_seekable so a re-load re-probes"
         );
+    }
+
+    /// I5 — `cached_duration` must default to `None` and `unload()` must
+    /// clear it so a subsequent `load()` re-populates from the new source.
+    /// Pre-fix `seek()` and `on_segment_done` re-queried the pipeline; the
+    /// cache eliminates that and must not leak across loads.
+    #[test]
+    fn cached_duration_defaults_none_and_unload_clears() {
+        let rt = runtime();
+        assert!(rt.cached_duration.lock().expect("lock").is_none());
+        // Simulate a successful seekable load.
+        *rt.cached_duration.lock().expect("lock") =
+            Some(gst::ClockTime::from_seconds(42));
+        rt.is_seekable.store(true, Ordering::SeqCst);
+        rt.unload().expect("unload");
+        assert!(
+            rt.cached_duration.lock().expect("lock").is_none(),
+            "unload must clear cached_duration"
+        );
+    }
+
+    /// C1 — when the canonical SEGMENT loop is active (is_seekable=true +
+    /// loop=One), user scrub `seek()` must NOT issue a plain
+    /// `seek_simple(FLUSH | KEY_UNIT)` — that would flush the armed segment
+    /// and the loop would die at next natural EOS. We can't easily assert the
+    /// GStreamer flag selection without a real pipeline, so this guard
+    /// instead asserts the input contract that drives that decision: the
+    /// state-snapshot composition `is_seekable && loop_mode == One` is what
+    /// the seek path uses to branch. Pure smoke test that the runtime exposes
+    /// the right primitives.
+    ///
+    /// TODO (M1): a deeper integration test under
+    /// `tests/video_pipeline_integration.rs` should drive a real
+    /// `videotestsrc`-fed pipeline through load → seek → wait_segment_done →
+    /// assert position wraps. Deferred — the existing fixture machinery
+    /// (`ensure_fixture`) only generates a 1-second MP4 which is too short
+    /// to reliably observe a SEGMENT_DONE round-trip on slow CI runners.
+    #[test]
+    fn seek_path_branches_on_is_seekable_and_loop_mode() {
+        let rt = runtime();
+        rt.set_loop(LoopMode::One).expect("set_loop");
+        rt.is_seekable.store(true, Ordering::SeqCst);
+        // No pipeline built — seek() should still no-op cleanly (the GStreamer
+        // branch is gated on `guard.as_ref()`).
+        rt.seek(1.5).expect("seek with no pipeline is a no-op");
+        // Snapshot still updates so the UI position reflects intent.
+        assert_eq!(rt.snapshot().expect("snapshot").position_secs, 1.5);
     }
 
     /// Phase A — `on_segment_done` is a defensive no-op when
