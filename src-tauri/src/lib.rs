@@ -698,8 +698,16 @@ pub fn run() {
                         // tee. Detach BOTH so neither path is left dangling
                         // regardless of which one was active for this window.
                         if let Some(vp) = &state.video_pipeline {
-                            let _ = vp.unsubscribe("projector");
-                            let _ = vp.detach_window("projector");
+                            if let Err(e) = vp.unsubscribe("projector") {
+                                log::warn!(
+                                    "close handler: unsubscribe('projector') failed: {e}"
+                                );
+                            }
+                            if let Err(e) = vp.detach_window("projector") {
+                                log::warn!(
+                                    "close handler: detach_window('projector') failed: {e}"
+                                );
+                            }
                         }
                     }
                     "return" => {
@@ -707,8 +715,16 @@ pub fn run() {
                         state.return_open.store(false, Ordering::Relaxed);
                         let _ = window.emit("return-state-changed", false);
                         if let Some(vp) = &state.video_pipeline {
-                            let _ = vp.unsubscribe("return");
-                            let _ = vp.detach_window("return");
+                            if let Err(e) = vp.unsubscribe("return") {
+                                log::warn!(
+                                    "close handler: unsubscribe('return') failed: {e}"
+                                );
+                            }
+                            if let Err(e) = vp.detach_window("return") {
+                                log::warn!(
+                                    "close handler: detach_window('return') failed: {e}"
+                                );
+                            }
                         }
                     }
                     "main" => {
