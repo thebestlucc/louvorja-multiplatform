@@ -579,26 +579,24 @@ impl VideoPipelineRuntime {
     /// (pending state ≠ VoidPending) or not yet in PAUSED/PLAYING, the
     /// GStreamer seek is skipped silently and only the snapshot is updated.
     ///
-    /// **Phase A — post-EOS recovery is now restricted to the unseekable
-    /// fallback path.** In the canonical SEGMENT seek flow (`is_seekable=true`)
-    /// the pipeline never reaches EOS during normal playback, so post-EOS
-    /// scrubbing cannot occur. For the unseekable fallback (live HTTP
-    /// streams, certain demuxers), looping is unsupported; the user can still
-    /// reach an EOS state with loop=None — we keep the heuristic-driven full
-    /// reload + seek path active there.
+    /// **Phase A regression follow-up:** post-EOS recovery applies to BOTH
+    /// is_seekable=true and is_seekable=false sources. Originally the
+    /// canonical SEGMENT loop was supposed to keep seekable pipelines from
+    /// ever reaching EOS, but the initial-segment arm was deferred to
+    /// `set_loop(One)` (the FLUSH-on-PAUSED regression), which means
+    /// LoopMode::None playback DOES reach natural EOS even on seekable
+    /// sources. After that EOS, gst rejects `seek_simple` on the now-
+    /// terminal pipeline; the user-visible symptom is "Failed to seek"
+    /// when they scrub back or the queue advances. Fall through to the
+    /// reload+seek recovery using the cached URI.
     pub fn seek(&self, secs: f64) -> Result<(), AppError> {
         let secs = secs.max(0.0);
 
-        // Phase A — only run the post-EOS heuristic on the unseekable
-        // fallback. With `is_seekable=true` the canonical SEGMENT loop owns
-        // wrap-around and post-EOS scrubs cannot occur in normal playback.
-        let post_eos = if self.is_seekable.load(Ordering::SeqCst) {
-            false
-        } else {
-            // EOS detection — done OUTSIDE the pipeline lock so the recovery
-            // path (which calls `load()` → takes the pipeline lock) doesn't
-            // deadlock. Heuristic: position within `EOS_PROXIMITY_US` of
-            // duration AND pipeline in Playing/Paused.
+        // EOS detection — done OUTSIDE the pipeline lock so the recovery
+        // path (which calls `load()` → takes the pipeline lock) doesn't
+        // deadlock. Heuristic: position within `EOS_PROXIMITY_US` of
+        // duration AND pipeline in Playing/Paused.
+        let post_eos = {
             let guard = self.pipeline.lock()?;
             if let Some(pipeline) = guard.as_ref() {
                 let pos = pipeline
