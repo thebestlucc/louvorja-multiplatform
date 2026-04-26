@@ -270,6 +270,12 @@ src-tauri/src/                # Backend (Rust)
 
 8. **Spawned threads/processes must exit on app shutdown:** Every `std::thread::spawn`, `std::process::Command`, or background worker started by the app **must terminate when the main process exits**. Patterns: (a) **Channel-based worker**: `mpsc::channel` + `OnceLock<Sender>` — when the process drops the static sender, `rx.recv()` returns `Err` and the worker loop exits (see `commands/slide_passer.rs`). (b) **Cancel flag**: `Arc<AtomicBool>` checked between work items (see `pack_sync/executor.rs`). (c) **One-shot thread**: for short-lived operations (<1s), bare `std::thread::spawn` is acceptable since the OS kills all threads on process exit. Never spawn long-lived loops without a shutdown mechanism.
 
+9. **GStreamer hot-attach to live tee branches** (`pipeline.rs::attach_native_sink`): never call `sync_state_with_parent()` while the parent pipeline is in `PLAYING` state without first installing a `BLOCK_DOWNSTREAM` pad probe on the tee request pad. Bare `sync_state_with_parent` skips the PAUSED preroll → the new sink misses initial caps/segment events → either renders a black screen or stalls the entire upstream tee (because the new branch's queue can't drain). Pattern: (1) request tee pad, (2) `pad.add_probe(BLOCK_DOWNSTREAM, ...)`, (3) link + sync state, (4) remove probe so buffers flow. Per-branch queue must be **time-bounded** (`max-size-time=200ms, max-size-buffers=0, leaky=no`); a tight buffer count cap (e.g. `max-size-buffers=2`) backpressures the tee on any transient sink stall and stalls every other branch.
+
+10. **`uridecodebin` audio-pad race:** even after `pipeline.state(NONE)` reports PAUSED reached, the bus's `AsyncDone` may have fired BEFORE the audio pad finished discovery — the audio sink is still pending data while the video sink already prerolled. Solution: track `pad-added` + `no-more-pads` signals in an `Arc<PadReadiness>` (Mutex+Condvar) and wait for `no_more_pads` before transitioning to PLAYING. `expose-all-streams=true` on uridecodebin and `min-threshold-time=0` on the audio queue should be set explicitly even when they match defaults — defaults can change across GStreamer releases and silently regress audio sync. See `video_pipeline/pipeline.rs::PadReadiness`.
+
+11. **`MediaSource::Local` missing-file:** the rust video pipeline must check `path.exists()` BEFORE building the `file://` URI for `uridecodebin`. Without the early check, GStreamer posts an opaque "Resource not found" bus error deep in the watcher thread that the user sees as "video doesn't play, no toast, no log". Surface as `AppError::NotFound(...)` with a re-download hint. See `video_pipeline/source.rs::MediaSource::resolve_uri`.
+
 ### TypeScript / React
 
 1. **React 19 useRef:** Requires explicit initial value. Use `useRef<T>(undefined)` not `useRef<T>()`.
@@ -293,6 +299,8 @@ src-tauri/src/                # Backend (Rust)
 10. **Unit tests for Tauri-dependent stores:** Stub Tauri IPC *before* importing the store: `(globalThis as any).window = { __TAURI_INTERNALS__: { invoke: () => Promise.resolve(null) } };` — required because plugin-store calls `invoke` at module load. See `tests/stores/slide-passer-store.test.ts`.
 
 9. **Conditional hooks in root layout:** Never call hooks after an early `return`. For bare routes (`/projector`, `/return`), pass `{ enabled: false }` to hooks instead of calling them conditionally — `useKeyboard({ enabled: !isBareRoute })` always called, conditionally active.
+
+11. **Slide → media-player-store bridge must run unconditionally:** when a feature flag (e.g. `useRustVideoPipeline`) gates `PersistentVideoPlayer` to `return null`, hooks INSIDE that component (like `useSlideVersion({ onSlide: handleSlide })`) silently stop running. If those hooks are responsible for calling `mpStore.load()` for online-video slides, downstream controls that key off `state.timelineSource === "video"` (play/pause/seek/volume in `useMediaPlayer`) silently no-op. Fix: extract the bridge into its own always-mounted hook in `__root.tsx` (see `hooks/use-online-video-bridge.ts`) so the gating only hides RENDER output, not state-bridging side effects.
 
 ### General
 
@@ -380,3 +388,142 @@ After completing any task (feature, bugfix, refactor), Claude MUST:
 6. **Keep CLAUDE.md concise** — don't duplicate information, remove outdated notes, prefer terse bullet points over verbose explanations.
 
 The goal: every session should leave the project in a better-documented state than it started, so future sessions (even with a fresh context) can onboard instantly.
+
+<!-- rtk-instructions v2 -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+## Golden Rule
+
+**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
+
+**Important**: Even in command chains with `&&`, use `rtk`:
+```bash
+# ❌ Wrong
+git add . && git commit -m "msg" && git push
+
+# ✅ Correct
+rtk git add . && rtk git commit -m "msg" && rtk git push
+```
+
+## RTK Commands by Workflow
+
+### Build & Compile (80-90% savings)
+```bash
+rtk cargo build         # Cargo build output
+rtk cargo check         # Cargo check output
+rtk cargo clippy        # Clippy warnings grouped by file (80%)
+rtk tsc                 # TypeScript errors grouped by file/code (83%)
+rtk lint                # ESLint/Biome violations grouped (84%)
+rtk prettier --check    # Files needing format only (70%)
+rtk next build          # Next.js build with route metrics (87%)
+```
+
+### Test (60-99% savings)
+```bash
+rtk cargo test          # Cargo test failures only (90%)
+rtk go test             # Go test failures only (90%)
+rtk jest                # Jest failures only (99.5%)
+rtk vitest              # Vitest failures only (99.5%)
+rtk playwright test     # Playwright failures only (94%)
+rtk pytest              # Python test failures only (90%)
+rtk rake test           # Ruby test failures only (90%)
+rtk rspec               # RSpec test failures only (60%)
+rtk test <cmd>          # Generic test wrapper - failures only
+```
+
+### Git (59-80% savings)
+```bash
+rtk git status          # Compact status
+rtk git log             # Compact log (works with all git flags)
+rtk git diff            # Compact diff (80%)
+rtk git show            # Compact show (80%)
+rtk git add             # Ultra-compact confirmations (59%)
+rtk git commit          # Ultra-compact confirmations (59%)
+rtk git push            # Ultra-compact confirmations
+rtk git pull            # Ultra-compact confirmations
+rtk git branch          # Compact branch list
+rtk git fetch           # Compact fetch
+rtk git stash           # Compact stash
+rtk git worktree        # Compact worktree
+```
+
+Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+
+### GitHub (26-87% savings)
+```bash
+rtk gh pr view <num>    # Compact PR view (87%)
+rtk gh pr checks        # Compact PR checks (79%)
+rtk gh run list         # Compact workflow runs (82%)
+rtk gh issue list       # Compact issue list (80%)
+rtk gh api              # Compact API responses (26%)
+```
+
+### JavaScript/TypeScript Tooling (70-90% savings)
+```bash
+rtk pnpm list           # Compact dependency tree (70%)
+rtk pnpm outdated       # Compact outdated packages (80%)
+rtk pnpm install        # Compact install output (90%)
+rtk npm run <script>    # Compact npm script output
+rtk npx <cmd>           # Compact npx command output
+rtk prisma              # Prisma without ASCII art (88%)
+```
+
+### Files & Search (60-75% savings)
+```bash
+rtk ls <path>           # Tree format, compact (65%)
+rtk read <file>         # Code reading with filtering (60%)
+rtk grep <pattern>      # Search grouped by file (75%)
+rtk find <pattern>      # Find grouped by directory (70%)
+```
+
+### Analysis & Debug (70-90% savings)
+```bash
+rtk err <cmd>           # Filter errors only from any command
+rtk log <file>          # Deduplicated logs with counts
+rtk json <file>         # JSON structure without values
+rtk deps                # Dependency overview
+rtk env                 # Environment variables compact
+rtk summary <cmd>       # Smart summary of command output
+rtk diff                # Ultra-compact diffs
+```
+
+### Infrastructure (85% savings)
+```bash
+rtk docker ps           # Compact container list
+rtk docker images       # Compact image list
+rtk docker logs <c>     # Deduplicated logs
+rtk kubectl get         # Compact resource list
+rtk kubectl logs        # Deduplicated pod logs
+```
+
+### Network (65-70% savings)
+```bash
+rtk curl <url>          # Compact HTTP responses (70%)
+rtk wget <url>          # Compact download output (65%)
+```
+
+### Meta Commands
+```bash
+rtk gain                # View token savings statistics
+rtk gain --history      # View command history with savings
+rtk discover            # Analyze Claude Code sessions for missed RTK usage
+rtk proxy <cmd>         # Run command without filtering (for debugging)
+rtk init                # Add RTK instructions to CLAUDE.md
+rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
+```
+
+## Token Savings Overview
+
+| Category | Commands | Typical Savings |
+|----------|----------|-----------------|
+| Tests | vitest, playwright, cargo test | 90-99% |
+| Build | next, tsc, lint, prettier | 70-87% |
+| Git | status, log, diff, add, commit | 59-80% |
+| GitHub | gh pr, gh run, gh issue | 26-87% |
+| Package Managers | pnpm, npm, npx | 70-90% |
+| Files | ls, read, grep, find | 60-75% |
+| Infrastructure | docker, kubectl | 85% |
+| Network | curl, wget | 65-70% |
+
+Overall average: **60-90% token reduction** on common development operations.
+<!-- /rtk-instructions -->
