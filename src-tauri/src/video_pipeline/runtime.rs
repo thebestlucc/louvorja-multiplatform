@@ -49,6 +49,18 @@ const BROADCAST_INTERVAL: Duration = Duration::from_millis(100);
 /// promptly on shutdown.
 const BUS_POLL_TIMEOUT: Duration = Duration::from_millis(500);
 
+/// M3-rev — shared "user is at/near end-of-stream" tolerance, in microseconds.
+///
+/// 100 ms covers (a) `seek()` post-EOS heuristic on the unseekable fallback
+/// (`pos >= dur - 100ms` ⇒ user scrubbed onto the last frame, so reload then
+/// seek instead of plain seek_simple) and (b) `set_loop(One)` recovery
+/// (user toggled loop on while the playhead is parked at natural end —
+/// re-arm the SEGMENT seek so the loop resumes). One frame at 30 fps is
+/// ~33 ms; 100 ms is ~3 frames of slack — wide enough that a position
+/// query racing AsyncDone doesn't false-negative, tight enough that legit
+/// scrubs near (but not at) the end don't trigger recovery.
+const EOS_PROXIMITY_US: u64 = 100_000;
+
 /// Process-wide handle for the Rust video pipeline.
 ///
 /// Cheap to clone (an `Arc` of this is what `AppState` actually stores).
@@ -520,7 +532,6 @@ impl VideoPipelineRuntime {
             // path (which calls `load()` → takes the pipeline lock) doesn't
             // deadlock. Heuristic: position within `EOS_PROXIMITY_US` of
             // duration AND pipeline in Playing/Paused.
-            const EOS_PROXIMITY_US: u64 = 100_000; // 100 ms
             let guard = self.pipeline.lock()?;
             if let Some(pipeline) = guard.as_ref() {
                 let pos = pipeline
@@ -600,22 +611,28 @@ impl VideoPipelineRuntime {
                 let seekable_loop = self.is_seekable.load(Ordering::SeqCst)
                     && self.state.snapshot()?.loop_mode == LoopMode::One;
                 if seekable_loop {
-                    let stop = self
-                        .cached_duration
-                        .lock()
-                        .ok()
-                        .and_then(|g| *g)
-                        .unwrap_or(gst::ClockTime::ZERO);
+                    let stop = self.cached_duration_or_zero();
                     if !stop.is_zero() {
                         self.arm_segment_seek(pipeline, position, stop, true)?;
                     } else {
-                        // Cached duration unset (rare — load() probe failed
-                        // post-arm or unload race); fall through to plain
-                        // FLUSH seek so the user-visible scrub still lands.
+                        // I3-rev: cached_duration unset while is_seekable=true
+                        // is the rare lifecycle race where the load() probe
+                        // populated `is_seekable` but `cached_duration` was
+                        // cleared by a concurrent unload(), or the probe
+                        // succeeded with a zero duration. A plain seek_simple
+                        // here would flush the armed SEGMENT, kill the loop
+                        // (SEGMENT_DONE never fires), and `on_eos`'s LoopMode::
+                        // One reload path early-returns due to is_seekable=true
+                        // — loop dies silently. Clear `is_seekable` BEFORE the
+                        // fallback so any subsequent natural EOS reaches the
+                        // legacy on_eos LoopMode::One reload path. Surface in
+                        // production logs via `warn!` since this path is rare.
                         log::warn!(
                             "video_pipeline.seek({secs:.3}s): seekable_loop but \
-                             cached_duration unset — falling back to seek_simple"
+                             cached_duration unset — clearing is_seekable, \
+                             falling back to seek_simple (legacy reload on next EOS)"
                         );
+                        self.is_seekable.store(false, Ordering::SeqCst);
                         pipeline
                             .seek_simple(
                                 gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
@@ -690,44 +707,109 @@ impl VideoPipelineRuntime {
             );
             self.spawn_bus_watcher();
 
-            // C2: if the user toggles loop ON after natural EOS (or near-EOS)
-            // on a seekable source, the original load()-time SEGMENT seek
-            // already fired SEGMENT_DONE → was converted to EOS (loop=None
-            // path) → the bus watcher exited. Just respawning the watcher
-            // doesn't re-arm the SEGMENT contract — there's no SegmentDone
-            // pending. Detect "at/near EOS" and re-arm a fresh SEGMENT seek
-            // from position 0 so the canonical loop resumes.
+            // C2 (round-2 rebuild): if the user toggles loop ON after natural
+            // EOS (or near-EOS) on a seekable source, the original load()-time
+            // SEGMENT seek already fired SEGMENT_DONE → was converted to EOS
+            // (loop=None path) → the bus watcher exited. Just respawning the
+            // watcher doesn't re-arm the SEGMENT contract — there's no
+            // SegmentDone pending. Detect "at/near EOS" and re-arm a fresh
+            // SEGMENT seek from position 0 so the canonical loop resumes.
+            //
+            // **Round-2 fix:** the prior implementation read
+            // `snap.position_secs` from the state-snapshot mirror. That mirror
+            // is only written by `load()` (sets to 0.0) and `seek()` (user
+            // input) — the broadcaster reads `query_position()` from the live
+            // pipeline but does NOT write back. During normal playback
+            // `snap.position_secs` stayed at 0.0, the heuristic was always
+            // false, and this entire branch was dead code. Query the live
+            // pipeline directly (mirrors the broadcaster pattern) for the
+            // truthful current position.
+            //
+            // **Lock-ordering note (I1-rev):** we acquire `cached_duration`
+            // FIRST (this scope), let it drop at scope end, THEN take the
+            // pipeline lock for the live position query and seek. Inverting
+            // the order (pipeline → cached_duration) would conflict with
+            // `seek()` and `on_segment_done` which hold the pipeline lock
+            // across `cached_duration_or_zero()`. Keep cached_duration access
+            // outside / before any pipeline-lock scope here.
             if self.is_seekable.load(Ordering::SeqCst) {
-                let snap = self.state.snapshot()?;
-                let stop = self
-                    .cached_duration
-                    .lock()
-                    .ok()
-                    .and_then(|g| *g)
-                    .unwrap_or(gst::ClockTime::ZERO);
+                let stop = self.cached_duration_or_zero();
                 let dur_secs = stop.useconds() as f64 / 1_000_000.0;
-                // Heuristic: position within 100 ms of duration → user toggled
-                // loop on at/after natural end. Pre-fix this would freeze the
-                // pipeline forever.
-                let near_eos = dur_secs > 0.0 && snap.position_secs >= dur_secs - 0.1;
+
+                // Query live position. None ⇒ pipeline gone or query failed
+                // (mid-NULL→PAUSED transition); skip recovery, the next
+                // explicit play()/seek() from the user resolves it.
+                let live_pos = {
+                    let guard = self.pipeline.lock()?;
+                    guard
+                        .as_ref()
+                        .and_then(|p| p.query_position::<gst::ClockTime>())
+                };
+                let pos_us = match live_pos {
+                    Some(t) => t.useconds(),
+                    None => {
+                        log::info!(
+                            "video_pipeline: set_loop(One) recovery — live position \
+                             unavailable; skipping (no pipeline or query failed)"
+                        );
+                        return Ok(());
+                    }
+                };
+                let dur_us = stop.useconds();
+                // M3-rev: shared `EOS_PROXIMITY_US` tolerance. After natural
+                // EOS the live position can equal duration exactly, sit a few
+                // ms short, or jump back to 0 (decoder reset). We treat
+                // `pos >= dur - 100ms` as "at/near end" — this matches the
+                // tolerance used by `seek()`'s post-EOS heuristic on the
+                // unseekable fallback. `pos == 0 && dur > 0` (post-EOS jump
+                // back) is NOT covered here intentionally: in that case the
+                // pipeline is already at the start of the segment, plain
+                // `play()` from the watcher respawn is enough.
+                let near_eos = dur_us > 0
+                    && pos_us >= dur_us.saturating_sub(EOS_PROXIMITY_US);
+                let pos_secs = pos_us as f64 / 1_000_000.0;
                 if near_eos && !stop.is_zero() {
                     log::info!(
                         "video_pipeline: set_loop(One) at/near EOS \
-                         (pos={:.3}s dur={:.3}s) — re-arming SEGMENT seek from 0",
-                        snap.position_secs,
-                        dur_secs
+                         (live_pos={pos_secs:.3}s dur={dur_secs:.3}s) — \
+                         re-arming SEGMENT seek from 0"
                     );
-                    let guard = self.pipeline.lock()?;
-                    if let Some(pipeline) = guard.as_ref() {
-                        if let Err(e) = self.arm_segment_seek(
-                            pipeline,
-                            gst::ClockTime::ZERO,
-                            stop,
-                            true,
-                        ) {
+                    let arm_result = {
+                        let guard = self.pipeline.lock()?;
+                        guard.as_ref().map(|pipeline| {
+                            self.arm_segment_seek(
+                                pipeline,
+                                gst::ClockTime::ZERO,
+                                stop,
+                                true,
+                            )
+                        })
+                    };
+                    match arm_result {
+                        Some(Err(e)) => {
                             log::warn!(
                                 "video_pipeline: set_loop(One) recovery seek failed: {e}"
                             );
+                        }
+                        Some(Ok(())) => {
+                            // I2-rev: a FLUSH seek on a pipeline that already
+                            // surfaced EOS leaves the state at PAUSED — user
+                            // expectation when toggling "loop on at end" is
+                            // "video plays again", so kick PLAYING. `play()`
+                            // is idempotent; if FLUSH SEGMENT keeps the state
+                            // at PLAYING (rare for already-PLAYING pipelines)
+                            // it's a cheap no-op.
+                            if let Err(e) = self.play() {
+                                log::warn!(
+                                    "video_pipeline: set_loop(One) recovery \
+                                     play() after re-arm failed: {e}"
+                                );
+                            }
+                        }
+                        None => {
+                            // Pipeline lock held a `None` — pipeline was
+                            // dropped between the live-position query and
+                            // here (concurrent `unload`). Nothing to recover.
                         }
                     }
                 }
@@ -940,6 +1022,23 @@ impl VideoPipelineRuntime {
                 self.bus_watcher_stop.store(true, Ordering::SeqCst);
             }
         }
+    }
+
+    /// M2-rev — centralized accessor for `cached_duration`.
+    ///
+    /// Returns `gst::ClockTime::ZERO` when the cache hasn't been populated
+    /// (load probe didn't run yet, was cleared by `unload()`, or the mutex
+    /// is poisoned). Callers that branch on "is the duration known?" should
+    /// check `result.is_zero()` to detect the absent case — the original
+    /// `Mutex<Option<gst::ClockTime>>` shape is preserved so future callers
+    /// that need three-way logic (None / zero-duration / positive) can still
+    /// access the field directly.
+    fn cached_duration_or_zero(&self) -> gst::ClockTime {
+        self.cached_duration
+            .lock()
+            .ok()
+            .and_then(|g| *g)
+            .unwrap_or(gst::ClockTime::ZERO)
     }
 
     /// Phase A / I5 — issue a SEGMENT seek on `pipeline` from `start` to
@@ -1552,24 +1651,21 @@ mod tests {
         );
     }
 
-    /// C1 — when the canonical SEGMENT loop is active (is_seekable=true +
-    /// loop=One), user scrub `seek()` must NOT issue a plain
-    /// `seek_simple(FLUSH | KEY_UNIT)` — that would flush the armed segment
-    /// and the loop would die at next natural EOS. We can't easily assert the
-    /// GStreamer flag selection without a real pipeline, so this guard
-    /// instead asserts the input contract that drives that decision: the
-    /// state-snapshot composition `is_seekable && loop_mode == One` is what
-    /// the seek path uses to branch. Pure smoke test that the runtime exposes
-    /// the right primitives.
+    /// M1-rev — without a real GStreamer pipeline this test cannot actually
+    /// observe the C1 branching (seek_simple vs arm_segment_seek). It only
+    /// verifies that `seek()` is well-behaved without a pipeline: the state
+    /// snapshot is updated so the UI mirror stays in sync, and the GStreamer
+    /// path is silently skipped (the `guard.as_ref()` arm short-circuits).
     ///
-    /// TODO (M1): a deeper integration test under
+    /// TODO (deferred integration test): a deeper test under
     /// `tests/video_pipeline_integration.rs` should drive a real
     /// `videotestsrc`-fed pipeline through load → seek → wait_segment_done →
-    /// assert position wraps. Deferred — the existing fixture machinery
-    /// (`ensure_fixture`) only generates a 1-second MP4 which is too short
-    /// to reliably observe a SEGMENT_DONE round-trip on slow CI runners.
+    /// assert position wraps. The existing fixture machinery (`ensure_fixture`)
+    /// only generates a 1-second MP4 which is too short to reliably observe a
+    /// SEGMENT_DONE round-trip on slow CI runners — needs a longer fixture or
+    /// an artificial `videotestsrc num-buffers=N` source first.
     #[test]
-    fn seek_path_branches_on_is_seekable_and_loop_mode() {
+    fn seek_without_pipeline_updates_snapshot_only() {
         let rt = runtime();
         rt.set_loop(LoopMode::One).expect("set_loop");
         rt.is_seekable.store(true, Ordering::SeqCst);
