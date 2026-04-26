@@ -51,6 +51,14 @@ use tauri_specta::Event;
 /// (e.g. if we expose `seek(SEGMENT)` re-arms outside the bus watcher) —
 /// today only `Reloading` is taken on the unseekable EOS reload path.
 const LOOP_OP_IDLE: u8 = 0;
+/// Reserved for a future direct-seek loop primitive (e.g. exposing
+/// `seek(SEGMENT)` re-arms outside the bus watcher). Currently unused —
+/// keep the discriminant stable so the `AtomicU8` state machine doesn't
+/// renumber when the seeking path is wired in.
+///
+/// Planned for the SEGMENT-seek follow-up tracked in
+/// `docs/plans/2026-04-25-video-pipeline-consolidation.md` (Phase B).
+#[allow(dead_code)]
 const LOOP_OP_SEEKING: u8 = 1;
 const LOOP_OP_RELOADING: u8 = 2;
 
@@ -1641,6 +1649,9 @@ fn runtime_from_app(app: &tauri::AppHandle) -> Option<Arc<VideoPipelineRuntime>>
 /// error — still restores `LOOP_OP_IDLE`. Without RAII a panic OR an early
 /// `return` after the lock-acquiring CAS would permanently leak the gate
 /// and silently break every subsequent loop wrap-around.
+///
+/// Leaking via `mem::forget` would permanently block reload — guard must
+/// be dropped to release.
 struct LoopOpGuard<'a> {
     flag: &'a AtomicU8,
 }
