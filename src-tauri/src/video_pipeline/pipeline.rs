@@ -328,32 +328,8 @@ pub fn build_base_pipeline() -> Result<BuiltPipeline, AppError> {
         pads_for_no_more.mark_no_more_pads();
     });
 
-    // P3.10 fix S2: the previous B4 NULL → READY pre-warm here was a no-op
-    // for CoreAudio/WASAPI cold-start latency and has been removed.
-    //
-    // Why the READY transition didn't help:
-    //   - `osxaudiosink::open()` (NULL → READY) only enumerates audio devices
-    //     and locks onto the default. It does NOT initialize the AudioUnit
-    //     and does NOT start the CoreAudio render thread.
-    //   - The expensive cold-start work (`AudioUnitInitialize`, render-block
-    //     scheduling, ringbuffer ACQUIRE → START) all happens on PAUSED →
-    //     PLAYING, not READY. Going only to READY left the AudioUnit cold.
-    //   - Symptom: when user hit play(), AudioUnit took 100-300 ms to
-    //     initialize while the pipeline clock ticked forward → video sink
-    //     rendered first frames before audio sink produced any samples →
-    //     visible "video starts without audio" gap (the S2 bug report).
-    //
-    // The real fix is `prewarm_audio_device()` (defined later in this file)
-    // which runs a fully-PLAYING silent audio pipeline at app startup. That
-    // forces CoreAudio to fully spin up; the OS keeps the device warm for
-    // several seconds afterwards so the main pipeline's first PAUSED →
-    // PLAYING transition reuses the warm path.
-    //
-    // We deliberately leave THIS pipeline in NULL — the real warm-up runs
-    // in a separate ephemeral pipeline at app startup (called from
-    // `lib.rs::setup`), independent of `build_base_pipeline`. This keeps
-    // pipeline construction synchronous and side-effect-free; the audio
-    // device is warmed once at startup, not on every pipeline rebuild.
+    // Pipeline stays in NULL: construction is side-effect-free. State
+    // transitions are driven by `runtime.rs::load` after the URI is set.
 
     Ok(BuiltPipeline { pipeline, pads })
 }
@@ -996,9 +972,9 @@ fn try_audio_sink(factory: &str) -> Result<Option<gst::Element>, AppError> {
 /// - Windows: `wasapisink`
 /// - Linux/BSD: `pulsesink` → `alsasink`
 ///
-/// `autoaudiosink` is the absolute fallback. It still works (and is what we
-/// used before B4) but can't be pre-warmed because its inner sink doesn't
-/// exist until first PAUSED.
+/// `autoaudiosink` is the absolute fallback. Platform-explicit sinks let us
+/// configure properties (e.g. `sync=true`, `provide-clock`) up front; the
+/// `autoaudiosink` wrapper bin's inner sink doesn't exist until first PAUSED.
 fn build_platform_audio_sink() -> Result<gst::Element, AppError> {
     let preferred: &[&str] = if cfg!(target_os = "macos") {
         &["osxaudiosink"]
@@ -1022,159 +998,6 @@ fn build_platform_audio_sink() -> Result<gst::Element, AppError> {
         .map_err(|e| AppError::Internal(format!("gstreamer factory 'autoaudiosink': {e}")))?;
     sink.set_property("sync", true);
     Ok(sink)
-}
-
-/// Returns the preferred platform audio sink factory name (matches
-/// `build_platform_audio_sink` selection order). Used by `prewarm_audio_device`
-/// so it can build a one-shot pipeline using the same factory the main
-/// pipeline will use, ensuring CoreAudio/WASAPI/PulseAudio open the SAME
-/// device hardware path that real playback will need.
-fn preferred_audio_sink_factory() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "osxaudiosink"
-    } else if cfg!(target_os = "windows") {
-        "wasapisink"
-    } else if gst::ElementFactory::find("pulsesink").is_some() {
-        "pulsesink"
-    } else if gst::ElementFactory::find("alsasink").is_some() {
-        "alsasink"
-    } else {
-        "autoaudiosink"
-    }
-}
-
-/// P3.10 fix S2: pre-warm the OS audio device by running a fully-PLAYING
-/// silent audio pipeline for ~500 ms, then tearing it down.
-///
-/// **Why** the previous READY pre-warm in `build_base_pipeline` was a no-op:
-/// - On macOS, `osxaudiosink::open()` (NULL → READY) only opens the audio
-///   device list / queries default device — it does NOT initialize the
-///   `AudioUnit` and does NOT start the CoreAudio render thread.
-/// - The expensive operations (AudioUnit instantiation, `kAudioUnitInitialize`,
-///   first render-block scheduling) all happen on PAUSED → PLAYING via
-///   `audiobasesink`'s ringbuffer ACQUIRE + START. This is what produces the
-///   100-300 ms "first audio sample" cold-start latency that S2 manifests as.
-/// - Going only to READY (or even PAUSED without buffers) doesn't trigger
-///   the CoreAudio init path. We need actual sample flow at PLAYING.
-///
-/// **What** this function does:
-/// - Builds a throwaway `audiotestsrc wave=silence volume=0 ! audioconvert ! <sink>`
-///   pipeline using the SAME platform sink factory as the main pipeline.
-/// - Drives it through NULL → PLAYING and lets it run for ~500 ms (long
-///   enough for CoreAudio to fully spin up, fill its first ring-buffer write,
-///   and start the render thread).
-/// - Tears down to NULL and drops. The OS audio device stays "warm" (CoreAudio
-///   keeps the IO node hot for several seconds after the last AudioUnit close)
-///   so the subsequent main-pipeline NULL → PAUSED → PLAYING transitions
-///   reuse the warm device path with no cold-start.
-///
-/// **When** to call it:
-/// - Once at app startup (e.g. immediately after `ensure_initialized()` or in
-///   Tauri `setup()`). The cost is ~600-700 ms of background work; it runs
-///   on a spawned thread so it never blocks the UI.
-/// - Calling it again later is harmless (each invocation simply re-warms),
-///   so callers don't need to track state.
-///
-/// **Safety / fallback:** every step is best-effort. If `audiotestsrc` is
-/// missing (highly unlikely — it's in `gst-plugins-base`) or any state change
-/// fails, we log and return — the main pipeline will then pay the cold-start
-/// latency on first play, which is exactly the behaviour we had before this
-/// fix landed. We never panic.
-///
-/// **Coexistence with WebRTC consumer path:** this function does not touch
-/// the main `video_pipeline` or any of its elements. It allocates a fresh
-/// short-lived pipeline whose only job is to wake CoreAudio/WASAPI/PulseAudio
-/// up. The main pipeline's audio chain still uses its own `audio_sink` element
-/// (a separate AudioUnit instance on macOS) — but that AudioUnit benefits from
-/// the now-warm device. WebRTC consumers don't use audio at all, so they're
-/// unaffected either way.
-pub fn prewarm_audio_device() -> Result<(), AppError> {
-    ensure_initialized()?;
-
-    // Use a unique pipeline name so we don't clash if the caller spawns this
-    // alongside another GStreamer pipeline.
-    let pipeline = gst::Pipeline::with_name("video_pipeline_prewarm");
-
-    let src = gst::ElementFactory::make("audiotestsrc")
-        .name("prewarm_src")
-        // `wave=silence` produces samples whose value is 0 (no PCM) — combined
-        // with `volume=0.0` we get a triple-zero output: bit-zero buffers,
-        // gain-zero processing, and silence wave. CoreAudio still fires its
-        // render block (which is what we want — that's the cold-start work)
-        // but the user doesn't hear anything.
-        .property_from_str("wave", "silence")
-        .property("volume", 0.0_f64)
-        // `is-live=false` lets the pipeline use its own clock; we don't need
-        // this to be a "live" source since we're not capturing.
-        .property("is-live", false)
-        // 50 ms / buffer (default 200 ms blocksize) — speeds up time-to-first-
-        // sample; pipeline tears down faster too.
-        .property("samplesperbuffer", 1024_i32)
-        .build()
-        .map_err(|e| {
-            AppError::Internal(format!(
-                "video_pipeline.prewarm: audiotestsrc factory: {e}"
-            ))
-        })?;
-
-    let convert = gst::ElementFactory::make("audioconvert")
-        .name("prewarm_convert")
-        .build()
-        .map_err(|e| {
-            AppError::Internal(format!(
-                "video_pipeline.prewarm: audioconvert factory: {e}"
-            ))
-        })?;
-
-    let factory = preferred_audio_sink_factory();
-    let sink = gst::ElementFactory::make(factory)
-        .name("prewarm_sink")
-        .build()
-        .map_err(|e| {
-            AppError::Internal(format!("video_pipeline.prewarm: {factory} factory: {e}"))
-        })?;
-    // `sync=true` keeps the pipeline rate-locked to the audio device clock
-    // so we know we've actually pumped real samples through CoreAudio when
-    // the warm-up window expires (rather than racing the test source).
-    sink.set_property("sync", true);
-
-    pipeline
-        .add_many([&src, &convert, &sink])
-        .map_err(|e| AppError::Internal(format!("video_pipeline.prewarm: add_many: {e}")))?;
-    gst::Element::link_many([&src, &convert, &sink])
-        .map_err(|e| AppError::Internal(format!("video_pipeline.prewarm: link: {e}")))?;
-
-    // Drive to PLAYING. The state-change is async on most audio sinks; wait
-    // for it to fully settle so we KNOW CoreAudio is initialized before the
-    // warm window starts.
-    pipeline
-        .set_state(gst::State::Playing)
-        .map_err(|e| AppError::Internal(format!("video_pipeline.prewarm: set Playing: {e}")))?;
-    // Bounded wait: 2 s is generous for CoreAudio init (typically <100 ms);
-    // it's tight enough that a stuck audio device doesn't hang app startup.
-    let (change, _, _) = pipeline.state(gst::ClockTime::from_seconds(2));
-    if let Err(e) = change {
-        log::warn!(
-            "video_pipeline.prewarm: PLAYING state-wait failed ({e}); will pay cold-start on first play"
-        );
-        let _ = pipeline.set_state(gst::State::Null);
-        return Ok(());
-    }
-
-    // Hold PLAYING for 500 ms so CoreAudio fully primes its render thread
-    // and ring buffer. Empirically <300 ms is usually enough; 500 ms gives
-    // headroom and is invisible to the user (runs at app startup).
-    std::thread::sleep(Duration::from_millis(500));
-
-    // Tear down. NULL transition is fast (CoreAudio device stays warm in the
-    // OS for several seconds) so the subsequent real-pipeline play reuses
-    // the warm path.
-    if let Err(e) = pipeline.set_state(gst::State::Null) {
-        log::warn!("video_pipeline.prewarm: NULL state change failed: {e}");
-    }
-    let (_change, _, _) = pipeline.state(gst::ClockTime::from_seconds(1));
-
-    Ok(())
 }
 
 /// Routes a uridecodebin runtime pad to the audio or video chain head.
@@ -1808,12 +1631,9 @@ mod tests {
         let _ = pipeline.set_state(gst::State::Null);
     }
 
-    /// P3.10 (replaces former B4 guard): build_base_pipeline must select a
-    /// platform audio sink whose `audio_sink` instance name resolves and
-    /// whose `sync=true`. The pipeline now stays in NULL (audio device pre-
-    /// warm has moved to the dedicated `prewarm_audio_device()` helper that
-    /// runs once at app startup — see that function's docs for why the prior
-    /// NULL → READY transition was a no-op for CoreAudio cold-start latency).
+    /// build_base_pipeline must select a platform audio sink whose
+    /// `audio_sink` instance name resolves and whose `sync=true`. The
+    /// pipeline stays in NULL — construction is side-effect-free.
     #[test]
     fn build_base_pipeline_audio_sink_configured_and_pipeline_in_null() {
         ensure_initialized().expect("gst init");
@@ -1824,38 +1644,15 @@ mod tests {
         // Sample its property to make sure our config stuck.
         let sync_prop: bool = sink.property("sync");
         assert!(sync_prop, "audio sink must have sync=true");
-        // The pipeline must be in NULL — `build_base_pipeline` no longer
-        // transitions the pipeline to any non-NULL state. The audio device
-        // pre-warm runs in a separate ephemeral pipeline (see
-        // `prewarm_audio_device`).
+        // The pipeline must be in NULL — `build_base_pipeline` does not
+        // transition the pipeline to any non-NULL state.
         let current = built.pipeline.current_state();
         assert_eq!(
             current,
             gst::State::Null,
-            "expected pipeline in NULL after build_base_pipeline (got {current:?}); \
-             audio pre-warm now lives in prewarm_audio_device"
+            "expected pipeline in NULL after build_base_pipeline (got {current:?})"
         );
         let _ = built.pipeline.set_state(gst::State::Null);
     }
 
-    /// P3.10 fix S2: `prewarm_audio_device` must run end-to-end without
-    /// errors. Best-effort: when the host has no audio output (CI), we still
-    /// expect the call to return Ok (logged warning, no panic). Real audio
-    /// output is not required for the test to pass — what we verify is that
-    /// the function constructs the pipeline, transitions to PLAYING, runs for
-    /// the warm window, and tears down without leaking GStreamer resources.
-    #[test]
-    fn prewarm_audio_device_returns_ok() {
-        // `prewarm_audio_device` calls `ensure_initialized` itself; calling
-        // it here defensively makes the test robust against test ordering.
-        ensure_initialized().expect("gst init");
-        // Skip when the audiotestsrc factory is missing (very rare — would
-        // mean gst-plugins-base is missing entirely). The call would still
-        // return Err in that case, but we'd be testing an environment defect
-        // not the pre-warm logic.
-        if gst::ElementFactory::find("audiotestsrc").is_none() {
-            return;
-        }
-        prewarm_audio_device().expect("prewarm should succeed (or fail gracefully)");
-    }
 }
