@@ -23,11 +23,12 @@
 //
 // PersistentVideoPlayer still owns the legacy YouTube iframe / `<video>`
 // element lifecycle when the rust pipeline is OFF.
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { useSlideVersion } from "./use-slide-version";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
+import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
 import * as videoPipeline from "../lib/tauri/video-pipeline";
 import type { MediaSource, SlideContent } from "../lib/bindings";
 import type { OfflineVideoMediaItem, OnlineVideoMediaItem } from "../types/media";
@@ -171,4 +172,24 @@ export function useOnlineVideoBridge() {
   }, []);
 
   useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
+
+  // E-2 (plan): also reset on rust pipeline unload. `useMediaPlayer.stop()`
+  // and `setUseRustVideoPipeline(false)` both call `videoPipeline.unload()`
+  // followed by `useRustVideoPipelineStore.getState().reset()`. Subscribe
+  // to that store and clear the dedup ref whenever it transitions back to
+  // the post-reset shape (positionSecs=0 + durationSecs=0 + paused=true) —
+  // otherwise re-projecting the same video after stop would silently skip
+  // the load (key matches stale ref → empty pipeline → black screen).
+  useEffect(() => {
+    return useRustVideoPipelineStore.subscribe((state, prev) => {
+      const justReset =
+        state.positionSecs === 0 &&
+        state.durationSecs === 0 &&
+        state.paused &&
+        (prev.positionSecs !== 0 || prev.durationSecs !== 0 || !prev.paused);
+      if (justReset) {
+        lastLoadedKeyRef.current = null;
+      }
+    });
+  }, []);
 }
