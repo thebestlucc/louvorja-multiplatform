@@ -37,6 +37,7 @@ export function resolveRenderFontSize(
   }
 
   const raw = baseSize * scale;
+
   if (variant === "cover-title") {
     if (renderMode === "projector") return Math.max(62, Math.min(1400, Math.round(raw)));
     if (renderMode === "return-current") return Math.max(40, Math.min(700, Math.round(raw)));

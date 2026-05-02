@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ListChecks, Loader2, Timer, Wifi, Smartphone } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
@@ -10,6 +10,7 @@ import { SlidePasserIndicator } from "../slide-passer/slide-passer-indicator";
 import { StatusBarUpdateIndicator } from "./status-bar-update-indicator";
 import { StreamingControls } from "../streaming/streaming-controls";
 import { RemoteControlPanel } from "../remote/remote-control-panel";
+import { PairingToast } from "../remote/pairing-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useLiturgy, useStreamingStatus, useTimerState, useRemoteStatus } from "../../lib/queries";
@@ -27,6 +28,8 @@ export function StatusBar() {
   const routerState = useRouterState();
   const [streamingOpen, setStreamingOpen] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(false);
+  const [pairingToastOpen, setPairingToastOpen] = useState(false);
+  const prevRemoteRunning = useRef(false);
   const [version, setVersion] = useState("");
   const queryClient = useQueryClient();
 
@@ -44,6 +47,18 @@ export function StatusBar() {
     });
     return () => { unlisten.then((fn) => fn()); };
   }, [queryClient]);
+
+  // Open pairing toast when remote server transitions from off → on.
+  useEffect(() => {
+    const running = remoteStatus?.running ?? false;
+    if (running && !prevRemoteRunning.current) {
+      setPairingToastOpen(true);
+    }
+    if (!running) {
+      setPairingToastOpen(false);
+    }
+    prevRemoteRunning.current = running;
+  }, [remoteStatus?.running]);
   const contentSyncProgress = useContentSyncStore((s) => s.progress);
   const packSyncProgress = useContentSyncStore((s) => s.packSyncProgress);
   const openPackSyncProgress = useContentSyncStore((s) => s.openPackSyncProgress);
@@ -273,6 +288,17 @@ export function StatusBar() {
           <StreamingControls />
         </DialogContent>
       </Dialog>
+
+      <PairingToast
+        open={pairingToastOpen}
+        pairingCode={""}
+        hostUrl={
+          remoteStatus?.running && remoteStatus.ip
+            ? `${remoteStatus.ip}:${remoteStatus.port}`
+            : ""
+        }
+        onDismiss={() => setPairingToastOpen(false)}
+      />
     </footer>
   );
 }

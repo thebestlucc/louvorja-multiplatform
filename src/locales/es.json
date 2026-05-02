@@ -580,7 +580,18 @@
     "goToBible": "Ir a la Biblia",
     "loopToggle": "Bucle",
     "loopToggleActive": "Bucle activo",
-    "loopToggleInactive": "Bucle desactivado"
+    "loopToggleInactive": "Bucle desactivado",
+    "header": {
+      "subtitle": "{{album}} · Verso {{current}} de {{total}}"
+    },
+    "actions": {
+      "black": "Pantalla negra",
+      "freeze": "Congelar"
+    },
+    "filmstrip": {
+      "blank": "Negro",
+      "verseLabel": "Verso {{n}}"
+    }
   },
   "presentations": {
     "aspectRatio": "Relación de aspecto",
@@ -1318,7 +1329,14 @@
     "lastSeen": "Última vez {{time}}",
     "neverSeen": "Nunca visto",
     "deviceCount_one": "{{count}} dispositivo",
-    "deviceCount_other": "{{count}} dispositivos"
+    "deviceCount_other": "{{count}} dispositivos",
+    "toast": {
+      "title": "Control remoto activado",
+      "step1_prefix": "1. Abre",
+      "step1_suffix": "en tu teléfono",
+      "step2": "2. Introduce el código:",
+      "footer": "Gestionar dispositivos en Ajustes → Remoto."
+    }
   },
   "streaming": {
     "bible": "Biblia",

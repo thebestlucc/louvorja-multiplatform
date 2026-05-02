@@ -6,7 +6,7 @@ import { stopProjectionAndSongAudio } from "../lib/projection-control";
 import { useAudioStore } from "../stores/audio-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
 import { catcher } from "../lib/catcher";
-import { resolveSlideSeekTimestamp as resolveSlideSeekTimestampForMode } from "../lib/audio-sync";
+import { resolveSlideSeekTimestamp as resolveSlideSeekTimestampForMode, findSlideAtPosition } from "../lib/audio-sync";
 import { buildProjectionSlideContext } from "../lib/projection-playback";
 
 import type { SlideContent, SyncPoint } from "../lib/bindings";
@@ -68,6 +68,15 @@ export function useSlides() {
       audioState.playbackMode,
     );
     if (timestampMs == null) {
+      return;
+    }
+
+    // Guard: only seek if the timestamp resolves back to the target slide.
+    // If it doesn't (e.g. empty slide with no sync point falls back to a
+    // predecessor's timestamp), seeking would trigger audio:slide-sync with
+    // the wrong index and override the user's explicit navigation.
+    const resolvedIndex = findSlideAtPosition(audioState.syncPoints, timestampMs, audioState.playbackMode);
+    if (resolvedIndex !== index) {
       return;
     }
 

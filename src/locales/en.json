@@ -580,7 +580,18 @@
     "goToBible": "Go to Bible",
     "loopToggle": "Loop",
     "loopToggleActive": "Loop on",
-    "loopToggleInactive": "Loop off"
+    "loopToggleInactive": "Loop off",
+    "header": {
+      "subtitle": "{{album}} · Verse {{current}} of {{total}}"
+    },
+    "actions": {
+      "black": "Black",
+      "freeze": "Freeze"
+    },
+    "filmstrip": {
+      "blank": "Black",
+      "verseLabel": "Verse {{n}}"
+    }
   },
   "presentations": {
     "aspectRatio": "Aspect ratio",
@@ -1318,7 +1329,14 @@
     "lastSeen": "Last seen {{time}}",
     "neverSeen": "Never seen",
     "deviceCount_one": "{{count}} device",
-    "deviceCount_other": "{{count}} devices"
+    "deviceCount_other": "{{count}} devices",
+    "toast": {
+      "title": "Remote control enabled",
+      "step1_prefix": "1. Open",
+      "step1_suffix": "on your phone",
+      "step2": "2. Enter the code:",
+      "footer": "Manage trusted devices in Settings → Remote."
+    }
   },
   "streaming": {
     "bible": "Bible",

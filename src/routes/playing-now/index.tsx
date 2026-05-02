@@ -11,10 +11,12 @@ import { useRustVideoPipelineStore } from "../../stores/rust-video-pipeline-stor
 import { navigateBible } from "../../lib/tauri/bible";
 import * as videoPipeline from "../../lib/tauri/video-pipeline";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { SlidePanel } from "../../components/playing-now/slide-panel";
+import { useSlides } from "../../hooks/use-slides";
 import { QueuePanel } from "../../components/playing-now/queue-panel";
 import { PreviewCanvas } from "../../components/playing-now/preview-canvas";
 import { ControlBar } from "../../components/playing-now/control-bar";
+import { NowPlayingHeader } from "../../components/playing-now/now-playing-header";
+import { SlideFilmstrip } from "../../components/playing-now/slide-filmstrip";
 import { mediaHasSlides, mediaHasVideo } from "../../types/media";
 import { useRouteTour } from "../../hooks/use-route-tour";
 import { SpotlightTour } from "../../components/tour/spotlight-tour";
@@ -89,28 +91,61 @@ function PlayingNowScreen() {
 
   const presentationActiveIndex = usePresentationStore((s) => s.activeSlideIndex);
   const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);
+  const isFrozen = useDisplayStore((s) => s.isFrozen);
+  const { projectSlideWithContext } = useSlides();
   const effectiveSlides = slides;
   const effectiveActiveIndex = slides.length > 0 ? activeSlideIndex : presentationActiveIndex;
 
   const currentSlide = effectiveSlides[effectiveActiveIndex] ?? null;
-  const showSlides = currentItem ? mediaHasSlides(currentItem) : effectiveSlides.length > 0 || isPlayingLiturgy;
+  const showFilmstrip = currentItem ? mediaHasSlides(currentItem) : effectiveSlides.length > 0 || isPlayingLiturgy;
   const currentMode = currentItem?.type === "hymn" ? currentItem.mode : undefined;
   const { showTour, steps, handleComplete, handleSkip } = useRouteTour("/playing-now");
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* Main content area */}
-      <div className="flex min-h-0 flex-1">
-        {/* Left: Slide Panel */}
-        <SlidePanel
-          slides={effectiveSlides}
-          activeSlideIndex={effectiveActiveIndex}
-          onSlideClick={actions.goToSlide}
-          visible={showSlides}
-        />
+  // Derive header title/subtitle from currentItem
+  const headerTitle = (() => {
+    if (!currentItem) return "Nothing Playing";
+    switch (currentItem.type) {
+      case "hymn": return currentItem.hymn.title;
+      case "online_video":
+      case "offline_video":
+      case "image":
+      case "annotation": return currentItem.title;
+      case "bible": return currentItem.reference;
+      case "presentation": return "Presentation";
+    }
+  })();
 
-        {/* Center: Preview + Controls */}
-        <div className="flex min-w-0 flex-1 flex-col">
+  const headerSubtitle = (() => {
+    if (effectiveSlides.length > 0) {
+      return `${effectiveActiveIndex + 1} / ${effectiveSlides.length} slides`;
+    }
+    if (currentItem?.type === "hymn" && currentItem.hymn.album) {
+      return currentItem.hymn.album;
+    }
+    return undefined;
+  })();
+
+  return (
+    <div className="flex h-full flex-col gap-3 p-4">
+      {/* Header */}
+      <NowPlayingHeader
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        frozen={isFrozen}
+        onFreezeToggle={() => {
+          const next = !useDisplayStore.getState().isFrozen;
+          useDisplayStore.getState().setFrozen(next);
+          if (!next && currentSlide) {
+            const nextSlide = effectiveSlides[effectiveActiveIndex + 1] ?? null;
+            projectSlideWithContext(currentSlide, nextSlide, effectiveActiveIndex, effectiveSlides.length, headerTitle).catch(() => {});
+          }
+        }}
+      />
+
+      {/* Main area: stage + queue */}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-3">
+        {/* Left: preview canvas + filmstrip */}
+        <section className="flex h-full min-w-0 min-h-0 flex-col gap-2 overflow-hidden">
           <div className="min-h-0 flex-1">
             <PreviewCanvas
               currentItem={currentItem}
@@ -119,60 +154,69 @@ function PlayingNowScreen() {
               isProjectorOpen={isProjectorOpen}
             />
           </div>
-          <div data-tour="playback-controls">
-          <ControlBar
-            currentItem={currentItem}
-            status={status}
-            currentTime={effectiveCurrentTime}
-            duration={effectiveDuration}
-            activeSlideIndex={effectiveActiveIndex}
-            totalSlides={effectiveSlides.length}
-            volume={effectiveVolume}
-            muted={outputMuted}
-            onPlay={actions.play}
-            onPause={actions.pause}
-            onStop={actions.stop}
-            onRestart={actions.restart}
-            onSeek={actions.seek}
-            onPrevSlide={isBibleProjection ? () => navigateBible("prev") : actions.prevSlide}
-            onNextSlide={isBibleProjection ? () => navigateBible("next") : actions.nextSlide}
-            onVolumeChange={actions.setVolume}
-            onMuteToggle={() => {
-              const s = useAudioStore.getState();
-              const willBeMuted = !s.outputMuted;
-              s.setOutputMuted(willBeMuted).catch(() => {});
-              // Under rust pipeline, audio bypasses the rodio audio-store path
-              // and goes straight from GStreamer's autoaudiosink to the OS.
-              // Mute/unmute by toggling the pipeline volume to 0 / saved volume
-              // — without touching the audio-store volume field, so the slider
-              // position is preserved as the "volume to restore on unmute".
-              if (usePipelineState) {
-                const target = willBeMuted ? 0 : s.volume;
-                videoPipeline
-                  .setVolume(target)
-                  .catch((err) => console.error("[video-pipeline] mute setVolume failed", err));
-              }
-            }}
-            onPrevItem={actions.prevItem}
-            onNextItem={actions.nextItem}
-            currentMode={currentMode}
-            onModeChange={actions.switchMode}
-            isBibleProjection={isBibleProjection}
-            onGoToBible={handleGoToBible}
-            isLooping={loopMode === "one"}
-            onLoopToggle={
-              usePipelineState
-                ? () => setLoopMode(loopMode === "one" ? "none" : "one")
-                : undefined
-            }
-          />
-          </div>
-        </div>
+          {showFilmstrip && (
+            <SlideFilmstrip
+              slides={effectiveSlides}
+              activeIndex={effectiveActiveIndex}
+              onSlideClick={actions.goToSlide}
+            />
+          )}
+        </section>
 
-        {/* Right: Queue Panel */}
-        <div data-tour="playing-queue">
+        {/* Right: queue — lets QueuePanel manage its own width (40/280px) */}
+        <div data-tour="playing-queue" className="h-full">
           <QueuePanel />
         </div>
+      </div>
+
+      {/* Bottom: transport controls */}
+      <div data-tour="playback-controls">
+        <ControlBar
+          currentItem={currentItem}
+          status={status}
+          currentTime={effectiveCurrentTime}
+          duration={effectiveDuration}
+          activeSlideIndex={effectiveActiveIndex}
+          totalSlides={effectiveSlides.length}
+          volume={effectiveVolume}
+          muted={outputMuted}
+          onPlay={actions.play}
+          onPause={actions.pause}
+          onStop={actions.stop}
+          onRestart={actions.restart}
+          onSeek={actions.seek}
+          onPrevSlide={isBibleProjection ? () => navigateBible("prev") : actions.prevSlide}
+          onNextSlide={isBibleProjection ? () => navigateBible("next") : actions.nextSlide}
+          onVolumeChange={actions.setVolume}
+          onMuteToggle={() => {
+            const s = useAudioStore.getState();
+            const willBeMuted = !s.outputMuted;
+            s.setOutputMuted(willBeMuted).catch(() => {});
+            // Under rust pipeline, audio bypasses the rodio audio-store path
+            // and goes straight from GStreamer's autoaudiosink to the OS.
+            // Mute/unmute by toggling the pipeline volume to 0 / saved volume
+            // — without touching the audio-store volume field, so the slider
+            // position is preserved as the "volume to restore on unmute".
+            if (usePipelineState) {
+              const target = willBeMuted ? 0 : s.volume;
+              videoPipeline
+                .setVolume(target)
+                .catch((err) => console.error("[video-pipeline] mute setVolume failed", err));
+            }
+          }}
+          onPrevItem={actions.prevItem}
+          onNextItem={actions.nextItem}
+          currentMode={currentMode}
+          onModeChange={actions.switchMode}
+          isBibleProjection={isBibleProjection}
+          onGoToBible={handleGoToBible}
+          isLooping={loopMode === "one"}
+          onLoopToggle={
+            usePipelineState
+              ? () => setLoopMode(loopMode === "one" ? "none" : "one")
+              : undefined
+          }
+        />
       </div>
 
       {showTour && steps.length > 0 && (

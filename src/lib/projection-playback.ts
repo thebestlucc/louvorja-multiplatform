@@ -217,6 +217,7 @@ export async function projectSlideWithType(
   // This ensures the new content appears immediately without interruption
   const wasActive = isProjectionActive();
   
+  if (useDisplayStore.getState().isFrozen) return;
   await setCurrentSlide(slideData);
   useDisplayStore.getState().setCurrentProjectionType(projectionType);
   

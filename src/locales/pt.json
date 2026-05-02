@@ -580,7 +580,18 @@
     "goToBible": "Ir para Bíblia",
     "loopToggle": "Repetir",
     "loopToggleActive": "Repetição ativa",
-    "loopToggleInactive": "Repetição desativada"
+    "loopToggleInactive": "Repetição desativada",
+    "header": {
+      "subtitle": "{{album}} · Verso {{current}} de {{total}}"
+    },
+    "actions": {
+      "black": "Tela preta",
+      "freeze": "Congelar"
+    },
+    "filmstrip": {
+      "blank": "Preto",
+      "verseLabel": "Verso {{n}}"
+    }
   },
   "presentations": {
     "aspectRatio": "Proporção",
@@ -1318,7 +1329,14 @@
     "lastSeen": "Visto por último {{time}}",
     "neverSeen": "Nunca visto",
     "deviceCount_one": "{{count}} dispositivo",
-    "deviceCount_other": "{{count}} dispositivos"
+    "deviceCount_other": "{{count}} dispositivos",
+    "toast": {
+      "title": "Controle remoto ativado",
+      "step1_prefix": "1. Abra",
+      "step1_suffix": "no celular",
+      "step2": "2. Digite o código:",
+      "footer": "Gerenciar dispositivos em Configurações → Remoto."
+    }
   },
   "streaming": {
     "bible": "Bíblia",

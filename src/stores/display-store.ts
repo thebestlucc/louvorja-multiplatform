@@ -22,8 +22,10 @@ interface DisplayState {
   setMonitorAssignment: (monitorId: string, role: string) => void;
   setProjectorWindowOpen: (open: boolean) => void;
   setReturnWindowOpen: (open: boolean) => void;
+  isFrozen: boolean;
   setBlackScreen: (v: boolean) => void;
   setLogoScreen: (v: boolean) => void;
+  setFrozen: (v: boolean) => void;
   setCurrentProjectionType: (type: "bible" | "hymn" | "presentation" | "utility" | "service" | null) => void;
   bibleContext: BibleContext | null;
   setBibleContext: (ctx: BibleContext | null) => void;
@@ -36,6 +38,7 @@ export const useDisplayStore = create<DisplayState>((set) => ({
   returnWindowOpen: false,
   isBlackScreen: false,
   isLogoScreen: false,
+  isFrozen: false,
   currentProjectionType: null,
   setMonitors: (monitors) => set({ monitors }),
   setMonitorAssignment: (monitorId, role) =>
@@ -46,6 +49,7 @@ export const useDisplayStore = create<DisplayState>((set) => ({
   setReturnWindowOpen: (open) => set({ returnWindowOpen: open }),
   setBlackScreen: (v) => set({ isBlackScreen: v }),
   setLogoScreen: (v) => set({ isLogoScreen: v }),
+  setFrozen: (v) => set({ isFrozen: v }),
   setCurrentProjectionType: (type) => set({ currentProjectionType: type }),
   bibleContext: null,
   setBibleContext: (ctx) => set({ bibleContext: ctx }),
