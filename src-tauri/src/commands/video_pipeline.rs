@@ -76,6 +76,14 @@ pub fn video_pipeline_load(
                 .app_data_dir()
                 .map_err(|e| AppError::Internal(format!("Could not resolve app data dir: {e}")))?;
 
+            // Compute the stable identity key BEFORE the (potentially slow)
+            // yt-dlp resolution. The runtime's same-source dispatch matrix
+            // compares this key — NOT the resolved URI — so it can detect
+            // a repeat load of the same YouTube video even though
+            // `resolve_uri()` returns a fresh signed URL each call. See
+            // `docs/plans/2026-04-26-phase5-hotfix-source-identity-dedup.md`.
+            let source_key = source.identity_key();
+
             let uri = match &source {
                 MediaSource::Local { .. } => {
                     // No yt-dlp needed; use a dummy path (resolve_uri ignores
@@ -88,7 +96,7 @@ pub fn video_pipeline_load(
                 }
             };
 
-            runtime.load(&uri)?;
+            runtime.load(&uri, &source_key)?;
             runtime.play()
         })();
 
@@ -174,10 +182,22 @@ pub fn video_pipeline_set_loop(
 }
 
 /// Seek to 0 and resume PLAYING (Task 3.1).
+///
+/// Spawned onto a worker thread (like `video_pipeline_load`) because
+/// `restart_unguarded` issues two blocking `pipeline.state()` waits. Running
+/// them on the IPC bridge thread would stall every subsequent Tauri command
+/// for the duration of the state transition (or indefinitely if the pipeline
+/// enters an error/terminal state).
 #[tauri::command]
 #[specta::specta]
 pub fn video_pipeline_restart(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
-    runtime(&state)?.restart()
+    let runtime = runtime(&state)?;
+    std::thread::spawn(move || {
+        if let Err(e) = runtime.restart() {
+            log::warn!("video_pipeline_restart worker failed: {e}");
+        }
+    });
+    Ok(())
 }
 
 /// Attach a WebRTC consumer for `window_label`. Triggers an SDP offer to
@@ -321,6 +341,33 @@ pub async fn video_pipeline_attach_window(
         .map_err(|e| AppError::Internal(format!("main-thread channel closed: {e}")))??;
 
     runtime.attach_window(&label, handle_usize)
+}
+
+/// Phase 5 / Track 1 / Task 4 — surgical recovery from a per-sink GL/D3D11
+/// failure (e.g. `GstGLColorConvertElement: Failed to convert video buffer`).
+///
+/// Snapshots the currently-attached windows, detaches each native sink,
+/// and re-attaches with a `fakesink` fallback per window so a single
+/// window's GL recovery failure cannot poison the entire pipeline.
+/// Returns the number of windows that successfully re-attached on the
+/// **native** path. Windows that fell back to `fakesink` are reported
+/// via the `videoPipelineSinkDegraded` event so the frontend classifier
+/// (Batch 3) can drive a pastoral UX recovery prompt.
+///
+/// This command is wired but NOT called from anywhere in this batch —
+/// the Batch 3 error classifier will trigger it from the
+/// `gl_color_convert` bucket.
+#[tauri::command]
+#[specta::specta]
+pub fn video_pipeline_refresh_sinks(
+    state: tauri::State<'_, AppState>,
+) -> Result<u32, AppError> {
+    let runtime = runtime(&state)?;
+    let count = runtime.refresh_sinks()?;
+    // u32 over the wire keeps the binding ergonomic on the JS side; usize
+    // is platform-dependent and tauri-specta's type emit prefers fixed
+    // widths.
+    Ok(count as u32)
 }
 
 /// Detach the native sink for `label`. Companion to
