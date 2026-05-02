@@ -1753,6 +1753,12 @@ async videoPipelineSetLoop(loopMode: string) : Promise<Result<null, AppErrorResp
 },
 /**
  * Seek to 0 and resume PLAYING (Task 3.1).
+ * 
+ * Spawned onto a worker thread (like `video_pipeline_load`) because
+ * `restart_unguarded` issues two blocking `pipeline.state()` waits. Running
+ * them on the IPC bridge thread would stall every subsequent Tauri command
+ * for the duration of the state transition (or indefinitely if the pipeline
+ * enters an error/terminal state).
  */
 async videoPipelineRestart() : Promise<Result<null, AppErrorResponse>> {
     try {

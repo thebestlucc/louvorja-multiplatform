@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { SlideRenderer } from "../slides/slide-renderer";
 import { useTranslation } from "react-i18next";
 import { MonitorPlay } from "lucide-react";
@@ -9,6 +9,10 @@ import type { OnlineVideoMediaItem, OfflineVideoMediaItem } from "../../types/me
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { localVideoMasterRef } from "../online-videos/persistent-video-player";
 import { YouTubePlayer } from "../online-videos/online-video-slide";
+import { cn } from "../../lib/utils";
+
+const SLIDE_W = 1920;
+const SLIDE_H = 1080;
 
 interface PreviewCanvasProps {
   currentItem: MediaItem | null;
@@ -117,13 +121,7 @@ export function PreviewCanvas({
   if (currentSlide) {
     return (
       <div className="flex h-full items-center justify-center bg-black/90 p-4">
-        <div className="relative aspect-video h-full max-w-full overflow-hidden rounded-lg shadow-lg">
-          <SlideRenderer
-            slide={currentSlide}
-            renderMode="playing-now-preview"
-            className="h-full w-full"
-          />
-        </div>
+        <ScaledSlidePreview slide={currentSlide} />
       </div>
     );
   }
@@ -139,6 +137,52 @@ export function PreviewCanvas({
         <div className="flex items-center gap-1.5 text-xs text-green-500">
           <div className="h-2 w-2 rounded-full bg-green-500" />
           {t("playingNow.projectorConnected")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ScaledSlidePreview ───────────────────────────────────────────────────
+
+function ScaledSlidePreview({ slide, className }: { slide: SlideContent; className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      const scaleByW = width / SLIDE_W;
+      const scaleByH = height / SLIDE_H;
+      setScale(Math.min(scaleByW, scaleByH));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn("relative w-full max-h-full overflow-hidden rounded-lg shadow-lg", className)}
+      style={{ aspectRatio: `${SLIDE_W} / ${SLIDE_H}` }}
+    >
+      {scale !== null && (
+        <div
+          style={{
+            width: SLIDE_W,
+            height: SLIDE_H,
+            transform: `scale(${scale})`,
+            transformOrigin: "center center",
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            marginTop: -(SLIDE_H / 2),
+            marginLeft: -(SLIDE_W / 2),
+          }}
+        >
+          <SlideRenderer slide={slide} renderMode="projector" className="h-full w-full" />
         </div>
       )}
     </div>

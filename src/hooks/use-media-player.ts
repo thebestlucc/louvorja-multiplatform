@@ -11,7 +11,7 @@ import { useDisplayStore } from "../stores/display-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
 import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
 import { useSlides } from "./use-slides";
-import { resolveSlideSeekTimestamp, resolvePlaybackVariantPaths } from "../lib/audio-sync";
+import { resolveSlideSeekTimestamp, findSlideAtPosition, resolvePlaybackVariantPaths } from "../lib/audio-sync";
 import { resetCoordinatorPlaybackState } from "./use-playback-coordinator";
 import * as videoPipeline from "../lib/tauri/video-pipeline";
 import type { OverlayState } from "../lib/bindings";
@@ -213,7 +213,13 @@ export function useMediaPlayer() {
           const mode = state.currentItem.mode;
           const timestamp = resolveSlideSeekTimestamp(state.syncPoints, index, mode);
           if (timestamp !== null) {
-            audioState.seek(timestamp);
+            // Guard: skip seek if the timestamp would resolve to a different slide
+            // (e.g. empty slide with no sync point falls back to a predecessor's
+            // timestamp, which audio:slide-sync would then use to override navigation).
+            const resolvedIndex = findSlideAtPosition(state.syncPoints, timestamp, mode);
+            if (resolvedIndex === index) {
+              audioState.seek(timestamp);
+            }
           }
         }
       }
