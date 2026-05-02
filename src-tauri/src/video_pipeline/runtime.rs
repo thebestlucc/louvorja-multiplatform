@@ -11,12 +11,13 @@
 use crate::error::AppError;
 use crate::video_pipeline::{
     consumer::ConsumerRegistry,
-    events::{VideoPipelineEnded, VideoPipelineState},
-    pipeline::{self, PadReadiness},
+    events::{VideoPipelineEnded, VideoPipelineSinkDegraded, VideoPipelineState},
+    pipeline::{self, AttachResult, PadReadiness},
     signaling::{AnswerPayload, IcePayload, SignalingChannel},
     state::{LoopMode, PlaybackState, PlaybackStateSnapshot},
 };
 use gstreamer::{self as gst, prelude::*};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -165,6 +166,20 @@ pub struct VideoPipelineRuntime {
     /// and unblocked buffer flow. Result: second-attached window starts
     /// mid-stream. Holding this mutex for the full attach/detach prevents
     /// the race without taking the long-held `pipeline` lock.
+    ///
+    /// **Lock-ordering invariant.** All call sites that take this lock,
+    /// in the order they were introduced:
+    ///   1. [`Self::attach_window`] — IPC handler.
+    ///   2. [`Self::detach_window`] — IPC handler.
+    ///   3. [`Self::refresh_sinks`] — per-sink GL/D3D11 recovery.
+    ///   4. [`Self::load_full`] — cross-URI rebuild (Phase 5 Batch 1).
+    ///
+    /// Functions that take this lock MUST NOT call other functions that
+    /// also take this lock (would deadlock — `Mutex<()>` is not
+    /// reentrant). Helper functions like [`pipeline::attach_native_sink`],
+    /// [`pipeline::detach_native_sink`], [`pipeline::set_source_uri`], and
+    /// [`pipeline::attach_native_sink_or_fakesink`] do NOT take this lock
+    /// and can be called from any holder.
     attach_mutex: Mutex<()>,
     /// CD-4 — single-flight gate for loop-driven reload threads. CAS from
     /// `LOOP_OP_IDLE` to `LOOP_OP_RELOADING` at the entry of the unseekable
@@ -172,6 +187,27 @@ pub struct VideoPipelineRuntime {
     /// exits. Failed CAS ⇒ another reload is already in flight, drop this
     /// one. See module-level constants for state values.
     loop_op: AtomicU8,
+    /// Phase 5 / Track 1 / Task 1 (A1) — `(window_label → opaque OS window
+    /// handle as usize)` for every successful native-sink attach.
+    ///
+    /// Populated by [`Self::attach_window`] on success; removed by
+    /// [`Self::detach_window`]. The map drives the
+    /// detach-all-then-reattach-all sequence inside [`Self::load_full`]
+    /// (cross-URI rebuilds force `uridecodebin` and the upstream caps to
+    /// renegotiate; without detaching the GL/D3D11 sinks first they
+    /// inherit stale GL state from the prior stream and fail to convert
+    /// the first buffer of the new one — symptom:
+    /// `GstGLImageSinkBin/GstGLColorConvertElement: Failed to convert
+    /// video buffer`).
+    ///
+    /// Cleared by [`Self::unload`] when the pipeline is fully torn down.
+    /// The cached `usize` is the same opaque value the
+    /// `video_pipeline_attach_window` Tauri command resolved on the main
+    /// thread (NSView*/HWND/X Window XID/wl_surface*). On reattach the
+    /// runtime tries to re-resolve a fresh handle via the Tauri
+    /// AppHandle; the cached value is the fallback when re-resolution
+    /// fails (e.g. the window was closed between detach and reattach).
+    attached_handles: Mutex<HashMap<String, usize>>,
 }
 
 impl VideoPipelineRuntime {
@@ -197,6 +233,7 @@ impl VideoPipelineRuntime {
             cached_duration: Mutex::new(None),
             attach_mutex: Mutex::new(()),
             loop_op: AtomicU8::new(LOOP_OP_IDLE),
+            attached_handles: Mutex::new(HashMap::new()),
         }
     }
 
@@ -229,7 +266,86 @@ impl VideoPipelineRuntime {
     /// can fail or produce stale output on the next load. The `vtee` and any
     /// attached `webrtcbin` consumer branches are separate elements in the
     /// pipeline topology; they stay linked across the NULL→PAUSED transition.
-    pub fn load(&self, uri: &str) -> Result<(), AppError> {
+    pub fn load(&self, uri: &str, source_key: &str) -> Result<(), AppError> {
+        // Phase 3 — source dispatch matrix
+        // (`docs/plans/2026-04-26-video-loop-and-first-play-recovery.md`,
+        //  amended by `docs/plans/2026-04-26-phase5-hotfix-source-identity-dedup.md`).
+        //
+        // Same `source_key` as the snapshot ⇒ delegate to in-place
+        // `restart()` so we don't tear uridecodebin down through NULL
+        // (which on YouTube HLS sources triggers `Couldn't download
+        // fragments` because the signed/rate-limited segment URLs can't
+        // be re-pulled mid-session).
+        //
+        // Why `source_key` and NOT `uri`: yt-dlp returns a fresh signed
+        // URL on every `resolve_uri()` call (the `expire`, `sig`, `lsig`,
+        // `pot` query params rotate per resolution). String-equality on
+        // the URI would NEVER match for repeated YouTube loads of the
+        // same `videoId`, so the dispatch would always fall through to
+        // the heavy `load_full()` rebuild → double-rebuild crash. The
+        // stable `source_key` (e.g. `youtube:dQw4w9WgXcQ`) is
+        // deterministic per logical source and routes correctly.
+        //
+        // Different key (or cold start) ⇒ fall through to the existing
+        // full-reload path which rebuilds uridecodebin against the new
+        // source.
+        //
+        // Internal callers that explicitly need a full reload (e.g.
+        // `on_eos` LoopMode::None unseekable fallback after `restart()`
+        // has failed) call `load_full()` directly, bypassing this
+        // dispatch.
+        let snapshot_key = self.state.snapshot()?.source_key.clone();
+        if let Some(existing) = snapshot_key {
+            if existing == source_key {
+                log::info!(
+                    "video_pipeline.load: same source_key={source_key} (URI may differ \
+                     for yt-dlp), delegating to restart()"
+                );
+                return self.restart();
+            }
+        }
+
+        self.load_full(uri, source_key)
+    }
+
+    /// Full pipeline reload (NULL → URI swap → PAUSED) — the legacy
+    /// `load()` body. Public `load()` wraps this with the Phase 3 source
+    /// dispatch matrix so same-`source_key` calls delegate to `restart()`.
+    /// Direct callers of this method commit to the heavy reload path
+    /// regardless of snapshot state — used by the unseekable EOS fallback
+    /// in `on_eos` after `restart()` has failed.
+    ///
+    /// `source_key` is the stable identity key written into the snapshot
+    /// alongside `uri` so the next `load()` dispatch can detect a same-
+    /// source call and route to `restart()` instead of another rebuild.
+    /// See `docs/plans/2026-04-26-phase5-hotfix-source-identity-dedup.md`.
+    fn load_full(&self, uri: &str, source_key: &str) -> Result<(), AppError> {
+        // CRITICAL: serialize against `attach_window` / `detach_window` /
+        // `refresh_sinks` for the entire detach → NULL → URI swap → PAUSED →
+        // pad-readiness wait → reattach sequence. Without this lock, a
+        // concurrent IPC `attach_window("foo")` racing with `load_full`
+        // could:
+        //   - Insert into `attached_handles` after the detach-pass
+        //     snapshot was taken → phantom entry detached again on the
+        //     NEXT rebuild OR a double-attach if the IPC lands during
+        //     reattach.
+        //   - Call `attach_native_sink` while `load_full` is mid-rebuild
+        //     (pipeline NULL or pad-discovery in progress) → undefined
+        //     GStreamer state.
+        //
+        // The guard is dropped automatically when `load_full` returns
+        // (Ok or Err — the failure paths return through this scope too).
+        // Inner helpers (`pipeline::set_source_uri`,
+        // `pipeline::detach_native_sink`,
+        // `pipeline::attach_native_sink_or_fakesink`) do NOT take this
+        // lock themselves, so there is no reentrant-deadlock risk. See
+        // the lock-ordering invariant on the `attach_mutex` field doc.
+        let _attach_guard = self.attach_mutex.lock().map_err(|e| {
+            AppError::Internal(format!(
+                "video_pipeline.load_full attach_mutex poisoned: {e}"
+            ))
+        })?;
+
         let pipeline = self.get_or_init_pipeline()?;
         let pads = self.pads_snapshot()?;
 
@@ -248,6 +364,48 @@ impl VideoPipelineRuntime {
                 log::warn!(
                     "video_pipeline.load: emit {VIDEO_PIPELINE_FRAME_READY_EVENT} (ready=false) failed: {e}"
                 );
+            }
+        }
+
+        // Phase 5 / Track 1 / Task 1 (A1) — snapshot every currently-attached
+        // native sink BEFORE the NULL transition. The cross-URI rebuild we're
+        // about to perform tears uridecodebin and the upstream caps out
+        // through NULL; if we leave the GL/D3D11 sinks attached they
+        // inherit stale GL state from the prior stream and the first
+        // buffer of the new stream hits a sink whose color-converter is
+        // still configured for the old caps. Symptom in dogfood:
+        //
+        //   GstGLImageSinkBin/GstGLColorConvertElement: Failed to convert
+        //   video buffer
+        //
+        // …blocking PAUSED preroll → the entire load() fails. The
+        // detach-before-NULL contract gives each sink a chance to release
+        // its GL context cleanly, so the reattach below can build fresh
+        // GL/D3D11 contexts against the NEW stream's caps.
+        //
+        // Best-effort throughout: a per-sink failure logs and continues so
+        // a single broken window can't take down the whole reload. We do
+        // NOT clear `attached_handles` here — keeping the snapshot map
+        // intact lets the reattach loop re-add the SAME labels with
+        // possibly-fresher window handles.
+        let attached_snapshot: Vec<(String, usize)> = self
+            .attached_handles
+            .lock()
+            .map(|h| h.iter().map(|(k, v)| (k.clone(), *v)).collect())
+            .unwrap_or_default();
+        if !attached_snapshot.is_empty() {
+            log::info!(
+                "video_pipeline.load_full: detaching {} native sink(s) before NULL transition: {:?}",
+                attached_snapshot.len(),
+                attached_snapshot.iter().map(|(l, _)| l).collect::<Vec<_>>()
+            );
+            for (label, _) in &attached_snapshot {
+                if let Err(e) = pipeline::detach_native_sink(&pipeline, label) {
+                    log::warn!(
+                        "video_pipeline.load_full: pre-NULL detach for '{label}' failed: {e} \
+                         (continuing — reattach will best-effort rebuild)"
+                    );
+                }
             }
         }
 
@@ -289,23 +447,23 @@ impl VideoPipelineRuntime {
         }
 
         pipeline::set_source_uri(&pipeline, uri)?;
-        pipeline
-            .set_state(gst::State::Paused)
-            .map_err(|e| AppError::Internal(format!("video_pipeline.load set_state(PAUSED): {e}")))?;
-        // Block until PAUSED is fully reached (GstMessage::AsyncDone). This
-        // ensures uridecodebin has discovered and linked ALL pads (audio +
-        // video) and every sink has prerolled before the caller calls play().
-        // Without this wait, play() races pad-added: the H.264 video pad is
-        // discovered first so video renders immediately, while the audio pad
-        // arrives later — producing an audible "video without audio" gap on
-        // every load. The NULL wait above uses the same pattern.
-        let (change_result, _current, _pending) = pipeline.state(gst::ClockTime::NONE);
-        if let Err(e) = change_result {
-            // Drain bus error messages so the actual root cause (file not
-            // found, codec missing, expired yt-dlp URL, decoder fault, etc.)
-            // surfaces in the AppError instead of the opaque
-            // "Element failed to change its state". Without this, the
-            // frontend toast is uninterpretable for the operator.
+
+        // Helper closure: drain bus error messages and reset pipeline to NULL
+        // so the next load() starts clean. Returns concatenated error detail.
+        // Used by both the synchronous set_state failure path and the async
+        // state-wait failure path — without this, the frontend toast surfaces
+        // an opaque "Element failed to change its state" with no root cause.
+        //
+        // Phase 5 / Track 1 / Batch 1 review fix (Important 2): also clear
+        // `attached_handles` on the failure path. Sinks were detached at the
+        // top of `load_full` and the pipeline is now NULL'd, so the map's
+        // entries no longer correspond to live tee branches. The frontend
+        // must call `attach_window` again after a load failure anyway, so
+        // emptying the map matches the actual state. Without this, the next
+        // `load_full` retry would idempotently re-detach phantom entries
+        // and `resolve_window_handle` may fail if the user's window was
+        // destroyed in the interim.
+        let drain_and_reset = || -> String {
             let mut detail = String::new();
             if let Some(bus) = pipeline.bus() {
                 while let Some(msg) = bus.pop() {
@@ -324,10 +482,57 @@ impl VideoPipelineRuntime {
                     }
                 }
             }
-            // Drop the pipeline back to NULL so the next load() starts clean.
             // Failures during PAUSED transition leave uridecodebin in a half-
             // built state where retrying without NULL first fails repeatedly.
             let _ = pipeline.set_state(gst::State::Null);
+            // Wait for NULL to settle so the recovery teardown finishes before
+            // the caller retries. Best-effort; swallow errors.
+            let _ = pipeline.state(gst::ClockTime::from_seconds(2));
+            // Clear `attached_handles` — sinks were detached at the top of
+            // `load_full` and the pipeline is now NULL, so the map no
+            // longer reflects reality. Best-effort: ignore poisoned lock.
+            if let Ok(mut handles) = self.attached_handles.lock() {
+                if !handles.is_empty() {
+                    log::warn!(
+                        "video_pipeline.load_full: failure path clearing {} \
+                         entry/entries from attached_handles ({:?}) — sinks \
+                         were already detached at the top of load_full and \
+                         the pipeline is now NULL'd, so the map no longer \
+                         reflects live tee branches. Frontend must reattach.",
+                        handles.len(),
+                        handles.keys().collect::<Vec<_>>()
+                    );
+                    handles.clear();
+                }
+            }
+            detail
+        };
+
+        if let Err(e) = pipeline.set_state(gst::State::Paused) {
+            // Synchronous state-change failure (rare for Pipeline elements but
+            // surfaces on first-load when uridecodebin can't validate the URI
+            // synchronously, or when prior failure left pipeline corrupted).
+            // Drain bus + reset before returning.
+            let detail = drain_and_reset();
+            let suffix = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" — {detail}")
+            };
+            return Err(AppError::Internal(format!(
+                "video_pipeline.load set_state(PAUSED): {e}{suffix}"
+            )));
+        }
+        // Block until PAUSED is fully reached (GstMessage::AsyncDone). This
+        // ensures uridecodebin has discovered and linked ALL pads (audio +
+        // video) and every sink has prerolled before the caller calls play().
+        // Without this wait, play() races pad-added: the H.264 video pad is
+        // discovered first so video renders immediately, while the audio pad
+        // arrives later — producing an audible "video without audio" gap on
+        // every load. The NULL wait above uses the same pattern.
+        let (change_result, _current, _pending) = pipeline.state(gst::ClockTime::NONE);
+        if let Err(e) = change_result {
+            let detail = drain_and_reset();
             let suffix = if detail.is_empty() {
                 String::new()
             } else {
@@ -356,6 +561,115 @@ impl VideoPipelineRuntime {
                     "video_pipeline.load: no-more-pads not signalled within {:?}, proceeding",
                     PAD_DISCOVERY_TIMEOUT
                 );
+            }
+        }
+
+        // Phase 5 / Track 1 / Task 1 (A1) — reattach every native sink
+        // that was attached before the NULL transition. We do this AFTER
+        // PAUSED settled + pad-discovery completed so:
+        //   (a) the new stream's caps are fully negotiated upstream of the
+        //       tee (the new `video_caps` capsfilter from Task 3 ensures a
+        //       single canonical I420/NV12 format is locked in by now),
+        //   (b) the BLOCK_DOWNSTREAM probe inside `attach_native_sink`
+        //       has known-good caps to gate buffers against,
+        //   (c) the per-sink fakesink fallback (Task 2) can engage
+        //       without leaving the pipeline half-attached.
+        //
+        // Handle re-fetch policy: try `WebviewWindow::raw_window_handle()`
+        // through the AppHandle first (Tauri may have reallocated the
+        // underlying NSView/HWND if the window was hidden + reshown
+        // between detach and reattach); fall back to the cached `usize`
+        // when re-resolution fails (e.g. window was destroyed entirely).
+        if !attached_snapshot.is_empty() {
+            if let Some(app) = self.app.as_ref() {
+                log::info!(
+                    "video_pipeline.load_full: reattaching {} native sink(s) after PAUSED",
+                    attached_snapshot.len()
+                );
+                for (label, cached_handle) in &attached_snapshot {
+                    let resolved = resolve_window_handle(app, label).unwrap_or_else(|e| {
+                        log::warn!(
+                            "video_pipeline.load_full: re-resolve handle for '{label}' \
+                             failed ({e}); falling back to cached value 0x{:x}",
+                            cached_handle
+                        );
+                        *cached_handle
+                    });
+                    match pipeline::attach_native_sink_or_fakesink(&pipeline, label, resolved) {
+                        Ok(AttachResult::Native) => {
+                            // Refresh cached handle in case re-resolution gave
+                            // us a fresher value (window surface re-allocated).
+                            if let Ok(mut handles) = self.attached_handles.lock() {
+                                handles.insert(label.clone(), resolved);
+                            }
+                        }
+                        Ok(AttachResult::Fakesink { reason }) => {
+                            log::warn!(
+                                "video_pipeline.load_full: reattach for '{label}' fell back \
+                                 to fakesink ({reason})"
+                            );
+                            // Still refresh the cached handle so a follow-up
+                            // refreshSinks() can retry the native path against
+                            // the latest known good window value.
+                            if let Ok(mut handles) = self.attached_handles.lock() {
+                                handles.insert(label.clone(), resolved);
+                            }
+                            let event = VideoPipelineSinkDegraded {
+                                window_label: label.clone(),
+                                reason,
+                            };
+                            if let Err(emit_err) = event.emit(app) {
+                                log::warn!(
+                                    "video_pipeline.load_full: emit \
+                                     VideoPipelineSinkDegraded for '{label}' failed: \
+                                     {emit_err}"
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "video_pipeline.load_full: reattach for '{label}' failed \
+                                 entirely ({e}); dropping from attached_handles"
+                            );
+                            if let Ok(mut handles) = self.attached_handles.lock() {
+                                handles.remove(label);
+                            }
+                            let event = VideoPipelineSinkDegraded {
+                                window_label: label.clone(),
+                                reason: format!(
+                                    "reattach failed (no fakesink fallback): {e}"
+                                ),
+                            };
+                            if let Err(emit_err) = event.emit(app) {
+                                log::warn!(
+                                    "video_pipeline.load_full: emit \
+                                     VideoPipelineSinkDegraded for '{label}' failed: \
+                                     {emit_err}"
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Phase 5 / Track 1 / Batch 1 review fix (Important 3):
+                // when `app` is None (test mode), we have no AppHandle to
+                // re-resolve window handles against, so the snapshot
+                // cannot be reattached. The sinks were detached at the
+                // top of `load_full`, so leaving the map populated would
+                // create phantom entries pointing at nothing. Clear the
+                // map to match actual state — the test harness must call
+                // `attach_window` again after a load if it wants sinks
+                // reattached.
+                log::warn!(
+                    "video_pipeline.load_full: {} attached sink(s) detached for rebuild but \
+                     no AppHandle present to re-resolve window handles ({:?}); clearing \
+                     attached_handles to match actual state — caller must reattach",
+                    attached_snapshot.len(),
+                    attached_snapshot.iter().map(|(l, _)| l).collect::<Vec<_>>()
+                );
+                if let Ok(mut handles) = self.attached_handles.lock() {
+                    handles.clear();
+                }
             }
         }
 
@@ -533,7 +847,8 @@ impl VideoPipelineRuntime {
             }
         }
 
-        self.state.load(uri.to_string())?;
+        self.state
+            .set_source(uri.to_string(), source_key.to_string())?;
         // Task 3.1: start the bus watcher if it isn't already running so we
         // can observe EOS and either re-seek (loop=one) or emit the ended
         // event. Idempotent — no-op when already alive.
@@ -613,78 +928,102 @@ impl VideoPipelineRuntime {
     /// (pending state ≠ VoidPending) or not yet in PAUSED/PLAYING, the
     /// GStreamer seek is skipped silently and only the snapshot is updated.
     ///
-    /// **Phase A regression follow-up:** when seek_simple fails (typically
-    /// because the pipeline reached natural EOS and gst rejects new seeks
-    /// on the terminal source), fall back to reload+seek using the cached
-    /// URI from the state snapshot. This handles both seekable and
-    /// unseekable sources uniformly without requiring an upfront EOS
-    /// heuristic — try the fast path first, only pay the reload cost if
-    /// gst tells us the pipeline can't handle it.
+    /// **Phase A regression follow-up:** post-EOS recovery applies to BOTH
+    /// is_seekable=true and is_seekable=false sources. Originally the
+    /// canonical SEGMENT loop was supposed to keep seekable pipelines from
+    /// ever reaching EOS, but the initial-segment arm was deferred to
+    /// `set_loop(One)` (the FLUSH-on-PAUSED regression), which means
+    /// LoopMode::None playback DOES reach natural EOS even on seekable
+    /// sources. After that EOS, gst rejects `seek_simple` on the now-
+    /// terminal pipeline; the user-visible symptom is "Failed to seek"
+    /// when they scrub back or the queue advances. Fall through to the
+    /// reload+seek recovery using the cached URI — but ONLY when the
+    /// `post_eos` heuristic indicates a terminal pipeline. An unconditional
+    /// reload on every `try_seek_simple` rejection races the SEGMENT loop
+    /// (broadcaster → on_segment_done → arm_segment_seek can return Err
+    /// transiently mid-transition) and would re-`load()` the pipeline on
+    /// every loop iteration.
     pub fn seek(&self, secs: f64) -> Result<(), AppError> {
         let secs = secs.max(0.0);
 
-        let try_seek_result = self.try_seek_simple(secs)?;
-        if try_seek_result.is_ok() {
+        // EOS detection — done OUTSIDE the pipeline lock so the recovery
+        // path (which calls `load()` → takes the pipeline lock) doesn't
+        // deadlock. Heuristic: position within `EOS_PROXIMITY_US` of
+        // duration AND pipeline in Playing/Paused.
+        let post_eos = {
+            let guard = self.pipeline.lock()?;
+            if let Some(pipeline) = guard.as_ref() {
+                let pos = pipeline
+                    .query_position::<gst::ClockTime>()
+                    .map(|t| t.useconds())
+                    .unwrap_or(0);
+                let dur = pipeline
+                    .query_duration::<gst::ClockTime>()
+                    .map(|t| t.useconds())
+                    .unwrap_or(0);
+                let (_, current, pending) = pipeline.state(gst::ClockTime::ZERO);
+                let stable_and_seekable = pending == gst::State::VoidPending
+                    && (current == gst::State::Paused || current == gst::State::Playing);
+                stable_and_seekable && dur > 0 && pos >= dur.saturating_sub(EOS_PROXIMITY_US)
+            } else {
+                false
+            }
+        };
+
+        if post_eos {
+            // CD-4 single-flight: `restart()` self-gates via the `loop_op`
+            // CAS, so a user scrub landing exactly at EOS that races
+            // `on_eos`'s reload thread will be dropped at the inner CAS
+            // and return Ok harmlessly. The follow-up `seek_simple(secs)`
+            // below runs unconditionally because by then `restart()` has
+            // either completed (gate released) or been dropped (no-op);
+            // either way the pipeline is in a consistent state for the
+            // subsequent seek.
+            log::info!(
+                "video_pipeline.seek({secs:.3}s): post-EOS recovery, \
+                 doing in-place restart + seek"
+            );
+            // Phase 3 (2026-04-26) — switched from full pipeline reload to
+            // in-place `restart()` so YouTube HLS sources don't re-pull
+            // signed/rate-limited segments mid-session. `restart()` leaves
+            // the pipeline in PLAYING at position 0; we then seek to the
+            // user-requested position.
+            self.restart()?;
+            {
+                let guard = self.pipeline.lock()?;
+                if let Some(pipeline) = guard.as_ref() {
+                    let useconds = (secs * 1_000_000.0) as u64;
+                    let position = gst::ClockTime::from_useconds(useconds);
+                    pipeline
+                        .seek_simple(
+                            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                            position,
+                        )
+                        .map_err(|e| {
+                            AppError::Internal(format!(
+                                "video_pipeline.seek({secs:.3}s) post-EOS post-restart seek_simple: {e}"
+                            ))
+                        })?;
+                }
+            }
             self.state.seek(secs)?;
             return Ok(());
         }
-        let seek_err = try_seek_result.err().expect("checked above");
-        log::warn!(
-            "video_pipeline.seek({secs:.3}s) — fast path failed ({seek_err}); \
-             attempting reload+seek using cached URI"
-        );
 
-        // Reload recovery: gst rejected the seek on the live pipeline (most
-        // likely terminal post-EOS state). Reload the same URI from the
-        // state snapshot — this rebuilds the source element and lets the
-        // subsequent seek land cleanly.
-        if self
-            .loop_op
-            .compare_exchange(
-                LOOP_OP_IDLE,
-                LOOP_OP_RELOADING,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            )
-            .is_err()
-        {
-            log::info!(
-                "video_pipeline.seek({secs:.3}s): reload already in flight, dropping retry"
-            );
-            return Ok(());
-        }
-        let _release = LoopOpGuard::new(&self.loop_op);
-        let uri = self
-            .state
-            .snapshot()?
-            .uri
-            .clone()
-            .ok_or_else(|| {
-                AppError::Internal(format!(
-                    "video_pipeline.seek({secs:.3}s) reload: snapshot has no URI ({seek_err})"
-                ))
-            })?;
-        self.load(&uri)?;
-        {
-            let guard = self.pipeline.lock()?;
-            if let Some(pipeline) = guard.as_ref() {
-                let useconds = (secs * 1_000_000.0) as u64;
-                let position = gst::ClockTime::from_useconds(useconds);
-                pipeline
-                    .seek_simple(
-                        gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                        position,
-                    )
-                    .map_err(|e| {
-                        AppError::Internal(format!(
-                            "video_pipeline.seek({secs:.3}s) post-reload seek: {e}"
-                        ))
-                    })?;
+        // Non-post-EOS: try the fast-path seek. If gst rejects it, surface
+        // the error as AppError (the pre-`98db5ff` behaviour) instead of
+        // racing into a full reload — that race is what produced the
+        // "video_pipeline.load PAUSED state wait" cascade on every loop
+        // iteration after commit `98db5ff`.
+        match self.try_seek_simple(secs)? {
+            Ok(()) => {
+                self.state.seek(secs)?;
+                Ok(())
             }
+            Err(msg) => Err(AppError::Internal(format!(
+                "video_pipeline.seek({secs:.3}s): {msg}"
+            ))),
         }
-        self.state.seek(secs)?;
-        self.play()?;
-        Ok(())
     }
 
     /// Attempt the fast-path seek (no reload). Returns:
@@ -878,8 +1217,23 @@ impl VideoPipelineRuntime {
                     match arm_result {
                         Some(Err(e)) => {
                             log::warn!(
-                                "video_pipeline: set_loop(One) arm seek failed: {e}"
+                                "video_pipeline: set_loop(One) arm seek failed: {e} \
+                                 — attempting in-place restart() recovery"
                             );
+                            // Phase 3 (2026-04-26) — `arm_segment_seek` rejects
+                            // FLUSH-segment-seek when uridecodebin is in a
+                            // terminal/transitional state at EOS. Try in-place
+                            // restart so the next loop iteration can resume
+                            // without a full pipeline reload (which on YouTube
+                            // HLS would trigger fragment re-download failures).
+                            match self.restart() {
+                                Ok(()) => log::info!(
+                                    "video_pipeline: set_loop(One) restart() recovery succeeded"
+                                ),
+                                Err(re) => log::warn!(
+                                    "video_pipeline: set_loop(One) restart() recovery failed: {re}"
+                                ),
+                            }
                         }
                         Some(Ok(())) => {
                             if near_eos {
@@ -907,25 +1261,198 @@ impl VideoPipelineRuntime {
         Ok(())
     }
 
-    /// Seek to 0 and ensure the pipeline is PLAYING (Task 3.1).
+    /// In-place restart of the currently-loaded URI (Phase 3 — see
+    /// `docs/plans/2026-04-26-video-loop-and-first-play-recovery.md`).
     ///
-    /// Matches the legacy pause → seek → play sequence but collapsed server-
-    /// side so the frontend doesn't need to issue three round trips.
+    /// Avoids a full pipeline reload (NULL → URI swap → PAUSED → PLAYING)
+    /// which on YouTube HLS sources triggers `GstHLSDemux: Couldn't download
+    /// fragments` because re-pulling signed/rate-limited segments from
+    /// scratch fails mid-session. The in-place sequence keeps uridecodebin's
+    /// already-discovered pads + downloaded fragments intact:
+    ///
+    /// 1. `set_state(Paused)` — transitions back from EOS / PLAYING
+    /// 2. wait state stable (`pipeline.state(NONE)`)
+    /// 3. `seek_simple(FLUSH | KEY_UNIT, 0)` — reset playhead
+    /// 4. `set_state(Playing)` — resume playback
+    /// 5. wait state stable
     ///
     /// **Sourceless guard:** restart is the user-facing "loop / replay"
     /// action. When no URI has been loaded — typical after `unload()` clears
     /// the queue, or before the first load() on a freshly-built pipeline —
-    /// `seek(0)` silently no-ops (the snapshot stable_and_seekable check
-    /// rejects NULL/READY) and the subsequent `set_state(Playing)` would
-    /// return `StateChangeError` from a sourceless uridecodebin, surfacing
-    /// to the frontend as a generic INTERNAL_ERROR toast. There's nothing to
-    /// restart, so succeed silently.
+    /// succeed silently (nothing to restart). Regression guard:
+    /// `restart_with_no_source_is_silent_noop` test.
+    ///
+    /// **Lock-ordering note:** the pipeline guard is dropped before
+    /// `state.seek()` / `state.play()` so we don't hold pipeline.lock()
+    /// across a state-lock acquisition (matches the established `seek()` /
+    /// `play()` pattern in this file).
     pub fn restart(&self) -> Result<(), AppError> {
+        // Single-flight gate: a concurrent restart attempt is dropped.
+        // Whichever caller wins the CAS does the work; loser early-returns
+        // Ok because the winner will leave the pipeline in the same end
+        // state. Without this gate, parallel callers (load() same-URI
+        // dispatch, set_loop(One) recovery, Tauri command, on_eos fallback)
+        // could issue concurrent set_state(Paused) / set_state(Playing) /
+        // seek_simple events on the same pipeline → race + undefined gst
+        // behaviour.
+        //
+        // Internal callers that already hold the gate (currently `on_eos`'s
+        // reload thread, which needs to keep the gate held across the
+        // restart-then-fallback-to-load_full sequence) MUST call
+        // `restart_unguarded()` directly to avoid double-acquire.
+        if self
+            .loop_op
+            .compare_exchange(
+                LOOP_OP_IDLE,
+                LOOP_OP_RELOADING,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_err()
+        {
+            log::info!("video_pipeline.restart: another loop op in flight, dropping");
+            return Ok(());
+        }
+        let _release = LoopOpGuard::new(&self.loop_op);
+        self.restart_unguarded()
+    }
+
+    /// Inner restart body — assumes the caller already holds the
+    /// `loop_op` CAS gate. Public [`restart`] wraps this with CAS +
+    /// `LoopOpGuard`. Direct callers commit to managing the gate
+    /// themselves (currently only `on_eos`'s reload thread, which needs
+    /// to keep the gate held across the restart-then-load_full fallback
+    /// sequence).
+    ///
+    /// **Frame-ready event note:** in-place restart preserves the
+    /// existing pipeline (uridecodebin, decoders, sinks all stay alive),
+    /// so the previously-rendered frame stays valid on the projection
+    /// windows. We deliberately do NOT emit
+    /// `video-pipeline-frame-ready { ready: false }` here — projection
+    /// windows should keep showing the current (final) frame across the
+    /// brief PAUSED → seek(0) → PLAYING hitch rather than blanking back
+    /// to the prior slide. Contrast with `load_full()` which DOES emit
+    /// `ready: false` because the pipeline is being torn down to NULL.
+    fn restart_unguarded(&self) -> Result<(), AppError> {
         if self.state.snapshot()?.uri.is_none() {
             return Ok(());
         }
-        self.seek(0.0)?;
-        self.play()
+
+        // Local helper: drain bus error messages so any returned AppError
+        // carries diagnostic detail instead of an opaque "Element failed to
+        // change its state". Mirrors the `drain_and_reset` closure in
+        // `load()` but does NOT force the pipeline to NULL — restart's whole
+        // purpose is to keep uridecodebin's state intact.
+        let drain_bus_errors = |pipeline: &gst::Pipeline| -> String {
+            let mut detail = String::new();
+            if let Some(bus) = pipeline.bus() {
+                while let Some(msg) = bus.pop() {
+                    if let gst::MessageView::Error(err) = msg.view() {
+                        if !detail.is_empty() {
+                            detail.push_str("; ");
+                        }
+                        let src = err
+                            .src()
+                            .map(|s| s.path_string().to_string())
+                            .unwrap_or_else(|| "<unknown>".into());
+                        detail.push_str(&format!("{src}: {}", err.error()));
+                        if let Some(d) = err.debug() {
+                            detail.push_str(&format!(" ({d})"));
+                        }
+                    }
+                }
+            }
+            detail
+        };
+
+        // Take the pipeline out of the guard scope so we don't hold it
+        // across `state.seek()` / `state.play()` (those acquire the state
+        // lock). The Pipeline is internally an Arc-like GObject — cloning
+        // it is cheap and the cloned reference keeps the underlying object
+        // alive even if `unload()` clears the slot mid-restart.
+        let pipeline = {
+            let guard = self.pipeline.lock()?;
+            match guard.as_ref() {
+                Some(p) => p.clone(),
+                None => {
+                    return Err(AppError::Internal(
+                        "video_pipeline.restart: no pipeline loaded".into(),
+                    ));
+                }
+            }
+        };
+
+        // Step 1: set_state(Paused).
+        if let Err(e) = pipeline.set_state(gst::State::Paused) {
+            let detail = drain_bus_errors(&pipeline);
+            let suffix = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" — {detail}")
+            };
+            return Err(AppError::Internal(format!(
+                "video_pipeline.restart set_state(PAUSED): {e}{suffix}"
+            )));
+        }
+        // Step 2: wait stable (5 s cap — prevents indefinite IPC/thread block
+        // when the pipeline is in an error or terminal state).
+        let (change_result, _current, _pending) =
+            pipeline.state(gst::ClockTime::from_seconds(5));
+        if let Err(e) = change_result {
+            let detail = drain_bus_errors(&pipeline);
+            let suffix = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" — {detail}")
+            };
+            return Err(AppError::Internal(format!(
+                "video_pipeline.restart PAUSED state wait: {e}{suffix}"
+            )));
+        }
+
+        // Step 3: seek to 0 with FLUSH | KEY_UNIT.
+        if let Err(e) = pipeline.seek_simple(
+            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+            gst::ClockTime::ZERO,
+        ) {
+            return Err(AppError::Internal(format!(
+                "video_pipeline.restart seek_simple(0): {e}"
+            )));
+        }
+
+        // Step 4: set_state(Playing).
+        if let Err(e) = pipeline.set_state(gst::State::Playing) {
+            let detail = drain_bus_errors(&pipeline);
+            let suffix = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" — {detail}")
+            };
+            return Err(AppError::Internal(format!(
+                "video_pipeline.restart set_state(PLAYING): {e}{suffix}"
+            )));
+        }
+        // Step 5: wait stable (5 s cap — same rationale as the PAUSED wait above).
+        let (change_result, _current, _pending) =
+            pipeline.state(gst::ClockTime::from_seconds(5));
+        if let Err(e) = change_result {
+            let detail = drain_bus_errors(&pipeline);
+            let suffix = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" — {detail}")
+            };
+            return Err(AppError::Internal(format!(
+                "video_pipeline.restart PLAYING state wait: {e}{suffix}"
+            )));
+        }
+
+        // Mirror snapshot. `state.seek(0)` resets `position_secs` to 0;
+        // `state.play()` flips `paused = false`. Both acquire the state
+        // lock — pipeline guard is already dropped above.
+        self.state.seek(0.0)?;
+        self.state.play()?;
+        Ok(())
     }
 
     /// Bus-watcher callback for end-of-stream (Task 3.1).
@@ -1089,8 +1616,8 @@ impl VideoPipelineRuntime {
                     // point would leak `LOOP_OP_RELOADING` and permanently
                     // block all future reload attempts.
                     let _release = LoopOpGuard::new(&runtime.loop_op);
-                    let uri = match runtime.state.snapshot() {
-                        Ok(s) => s.uri.clone(),
+                    let (uri, source_key) = match runtime.state.snapshot() {
+                        Ok(s) => (s.uri.clone(), s.source_key.clone()),
                         Err(e) => {
                             log::warn!(
                                 "video_pipeline: on_eos reload thread snapshot read failed: {e}"
@@ -1108,9 +1635,45 @@ impl VideoPipelineRuntime {
                             return;
                         }
                     };
-                    if let Err(e) = runtime.load(&uri) {
+                    let source_key = source_key.unwrap_or_else(|| uri.clone());
+                    // Phase 3 (2026-04-26) — try in-place `restart()` first so
+                    // we don't re-pull HLS fragments / re-build uridecodebin on
+                    // every loop iteration. Falls through to the legacy
+                    // `load_full` (full reload) only when restart() fails
+                    // (preserves the unseekable-source fallback for live
+                    // streams that genuinely can't restart in place).
+                    //
+                    // We call `load_full` (not `load`) because the public
+                    // `load()` would dispatch back to `restart()` for the
+                    // same URI, infinitely deferring the actual full reload
+                    // we need here.
+                    //
+                    // Use `restart_unguarded` (NOT public `restart`) because
+                    // the on_eos handler already holds the `loop_op` CAS
+                    // gate (acquired pre-spawn, released by `_release` on
+                    // thread exit). Calling public `restart()` would CAS
+                    // against an already-held gate, see it busy, log
+                    // "another loop op in flight, dropping", and return
+                    // Ok early — masking real restart failures and
+                    // skipping the load_full fallback.
+                    match runtime.restart_unguarded() {
+                        Ok(()) => {
+                            log::info!(
+                                "video_pipeline: on_eos LoopMode::One — in-place restart \
+                                 succeeded (thread)"
+                            );
+                            return;
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "video_pipeline: on_eos LoopMode::One — restart() failed \
+                                 ({e}); falling back to full reload"
+                            );
+                        }
+                    }
+                    if let Err(e) = runtime.load_full(&uri, &source_key) {
                         log::warn!(
-                            "video_pipeline: on_eos reload thread load() failed: {e}"
+                            "video_pipeline: on_eos reload thread load_full() failed: {e}"
                         );
                         return;
                     }
@@ -1301,14 +1864,28 @@ impl VideoPipelineRuntime {
         if let Ok(mut cached) = self.cached_duration.lock() {
             *cached = None;
         }
+        // Phase 5 / Track 1 / Task 1 (A1) — drop every cached attached-window
+        // handle alongside the pipeline tear-down. After unload(), the
+        // pipeline is fully gone so no native sinks remain attached; the
+        // map MUST be empty before the next load() rebuilds. Note we do
+        // NOT call `detach_native_sink` per entry here because the
+        // pipeline transition to NULL below cleans up every child element
+        // (queue / conv / sink) atomically.
+        if let Ok(mut handles) = self.attached_handles.lock() {
+            handles.clear();
+        }
         let mut guard = self.pipeline.lock()?;
         if let Some(pipeline) = guard.take() {
             pipeline
                 .set_state(gst::State::Null)
                 .map_err(|e| AppError::Internal(format!("video_pipeline.unload set_state(NULL): {e}")))?;
-            // Wait for NULL transition to complete before dropping the
-            // pipeline so uridecodebin finishes tearing down its decoders.
-            let (change_result, _current, _pending) = pipeline.state(gst::ClockTime::NONE);
+            // Wait for NULL transition to complete before dropping the pipeline
+            // so uridecodebin finishes tearing down its decoders. 3 s cap —
+            // NULL transitions are fast in practice; the bound prevents an IPC
+            // hang if a sink is stuck in teardown (rare, seen with GL context
+            // destruction on macOS when the window was already closed).
+            let (change_result, _current, _pending) =
+                pipeline.state(gst::ClockTime::from_seconds(3));
             change_result.map_err(|e| {
                 AppError::Internal(format!("video_pipeline.unload NULL state wait: {e}"))
             })?;
@@ -1438,6 +2015,15 @@ impl VideoPipelineRuntime {
         // from the upstream stream — typically 1-4 s for standard GOP
         // sizes. This is the canonical GStreamer hot-attach pattern.
         pipeline::attach_native_sink(&pipeline, window_label, window_handle).map(|_| ())?;
+
+        // Phase 5 / Track 1 / Task 1 (A1) — record the successful attach
+        // so `load_full` (cross-URI rebuild) can detach + reattach all
+        // sinks around the NULL transition. Insert is the LAST action so
+        // a partial-attach failure above doesn't leave a phantom entry
+        // pointing at a half-attached sink.
+        if let Ok(mut handles) = self.attached_handles.lock() {
+            handles.insert(window_label.to_string(), window_handle);
+        }
         Ok(())
     }
 
@@ -1459,7 +2045,158 @@ impl VideoPipelineRuntime {
             drop(guard);
             pipeline::detach_native_sink(&pipeline, window_label)?;
         }
+        // Phase 5 / Track 1 / Task 1 (A1) — drop the cached handle whether
+        // or not the pipeline was built. detach_window is the canonical
+        // "this window is no longer attached" signal; cross-URI rebuilds
+        // (load_full) must not try to reattach a label the user explicitly
+        // detached.
+        if let Ok(mut handles) = self.attached_handles.lock() {
+            handles.remove(window_label);
+        }
         Ok(())
+    }
+
+    /// Phase 5 / Track 1 / Task 4 — recover from a per-sink GL/D3D11
+    /// failure without forcing a full pipeline rebuild.
+    ///
+    /// Snapshots the currently-attached windows, detaches each native
+    /// sink, then re-attaches via the [`pipeline::attach_native_sink_or_fakesink`]
+    /// helper so a single window's GL recovery failure can fall back to
+    /// `fakesink` instead of poisoning the rest of the pipeline.
+    /// `VideoPipelineSinkDegraded` is emitted for any window that lands
+    /// on the fakesink fallback so the frontend classifier (Batch 3) can
+    /// surface it pastorally.
+    ///
+    /// Returns the count of windows that successfully re-attached on the
+    /// **native** path. Fallback attaches and outright failures are
+    /// excluded from this count but still reflected in
+    /// `attached_handles` (fallback) or removed from it (failure) so the
+    /// invariant "every entry in `attached_handles` corresponds to a
+    /// live tee branch" holds across recovery cycles.
+    ///
+    /// Intended call site: the Batch 3 error classifier when it observes
+    /// the `gl_color_convert` bucket. NOT called from anywhere yet — the
+    /// IPC command is wired in this batch; the recovery loop is wired in
+    /// Batch 3.
+    pub fn refresh_sinks(&self) -> Result<usize, AppError> {
+        let _attach_guard = self
+            .attach_mutex
+            .lock()
+            .map_err(|e| AppError::Internal(format!("attach_mutex poisoned: {e}")))?;
+
+        let pipeline = {
+            let guard = self.pipeline.lock()?;
+            match guard.as_ref() {
+                Some(p) => p.clone(),
+                None => {
+                    log::info!("video_pipeline.refresh_sinks: no pipeline built — nothing to refresh");
+                    return Ok(0);
+                }
+            }
+        };
+
+        let snapshot: Vec<(String, usize)> = self
+            .attached_handles
+            .lock()
+            .map(|h| h.iter().map(|(k, v)| (k.clone(), *v)).collect())
+            .unwrap_or_default();
+        if snapshot.is_empty() {
+            log::info!("video_pipeline.refresh_sinks: no attached sinks — nothing to refresh");
+            return Ok(0);
+        }
+
+        log::info!(
+            "video_pipeline.refresh_sinks: refreshing {} sink(s): {:?}",
+            snapshot.len(),
+            snapshot.iter().map(|(l, _)| l).collect::<Vec<_>>()
+        );
+
+        // Detach pass — best-effort so a stuck sink can't block recovery
+        // for healthy ones.
+        for (label, _) in &snapshot {
+            if let Err(e) = pipeline::detach_native_sink(&pipeline, label) {
+                log::warn!(
+                    "video_pipeline.refresh_sinks: detach for '{label}' failed: {e} \
+                     (continuing — re-attach will best-effort rebuild)"
+                );
+            }
+        }
+
+        // Reattach pass — re-fetch fresh handles where possible; emit the
+        // typed degraded event for any fallback / failure so Batch 3's
+        // classifier can drive UX recovery.
+        let mut native_count: usize = 0;
+        for (label, cached_handle) in &snapshot {
+            let resolved = if let Some(app) = self.app.as_ref() {
+                resolve_window_handle(app, label).unwrap_or_else(|e| {
+                    log::warn!(
+                        "video_pipeline.refresh_sinks: re-resolve handle for '{label}' \
+                         failed ({e}); falling back to cached value 0x{:x}",
+                        cached_handle
+                    );
+                    *cached_handle
+                })
+            } else {
+                *cached_handle
+            };
+
+            match pipeline::attach_native_sink_or_fakesink(&pipeline, label, resolved) {
+                Ok(AttachResult::Native) => {
+                    native_count += 1;
+                    if let Ok(mut handles) = self.attached_handles.lock() {
+                        handles.insert(label.clone(), resolved);
+                    }
+                }
+                Ok(AttachResult::Fakesink { reason }) => {
+                    log::warn!(
+                        "video_pipeline.refresh_sinks: '{label}' fell back to fakesink ({reason})"
+                    );
+                    if let Ok(mut handles) = self.attached_handles.lock() {
+                        handles.insert(label.clone(), resolved);
+                    }
+                    if let Some(app) = self.app.as_ref() {
+                        let event = VideoPipelineSinkDegraded {
+                            window_label: label.clone(),
+                            reason,
+                        };
+                        if let Err(emit_err) = event.emit(app) {
+                            log::warn!(
+                                "video_pipeline.refresh_sinks: emit \
+                                 VideoPipelineSinkDegraded for '{label}' failed: {emit_err}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "video_pipeline.refresh_sinks: '{label}' failed entirely ({e}); \
+                         dropping from attached_handles"
+                    );
+                    if let Ok(mut handles) = self.attached_handles.lock() {
+                        handles.remove(label);
+                    }
+                    if let Some(app) = self.app.as_ref() {
+                        let event = VideoPipelineSinkDegraded {
+                            window_label: label.clone(),
+                            reason: format!("refresh failed (no fakesink fallback): {e}"),
+                        };
+                        if let Err(emit_err) = event.emit(app) {
+                            log::warn!(
+                                "video_pipeline.refresh_sinks: emit \
+                                 VideoPipelineSinkDegraded for '{label}' failed: {emit_err}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        log::info!(
+            "video_pipeline.refresh_sinks: complete — {} native, {} fallback/failed",
+            native_count,
+            snapshot.len() - native_count
+        );
+        Ok(native_count)
     }
 
     /// Forward an SDP answer to the matching consumer.
@@ -1700,6 +2437,80 @@ fn runtime_from_app(app: &tauri::AppHandle) -> Option<Arc<VideoPipelineRuntime>>
     use tauri::Manager;
     let state = app.try_state::<crate::state::AppState>()?;
     state.video_pipeline.as_ref().cloned()
+}
+
+/// Phase 5 / Track 1 / Task 1 (A1) — re-resolve a window's opaque OS handle
+/// (NSView*/HWND/X Window XID/wl_surface*) as a `usize`.
+///
+/// Mirrors the main-thread hop pattern used by
+/// `commands::video_pipeline::video_pipeline_attach_window` so platform
+/// surface accessors (which aren't safe to call off the main thread on
+/// macOS) run on the right thread; only an opaque `usize` crosses back
+/// over the channel so nothing `!Send` escapes.
+///
+/// Used by [`VideoPipelineRuntime::load_full`] and the
+/// `video_pipeline_refresh_sinks` IPC to obtain the current handle on
+/// reattach — the cached value in `attached_handles` may be stale if
+/// Tauri reallocated the window's underlying surface between detach and
+/// reattach.
+fn resolve_window_handle(
+    app: &tauri::AppHandle,
+    label: &str,
+) -> Result<usize, AppError> {
+    use tauri::Manager;
+    if app.get_webview_window(label).is_none() {
+        return Err(AppError::NotFound(format!(
+            "resolve_window_handle: window '{label}' not found"
+        )));
+    }
+    let (tx, rx) = std::sync::mpsc::channel::<Result<usize, AppError>>();
+    let app_for_main = app.clone();
+    let label_for_main = label.to_string();
+    app.run_on_main_thread(move || {
+        let result = (|| -> Result<usize, AppError> {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            let window = app_for_main
+                .get_webview_window(&label_for_main)
+                .ok_or_else(|| {
+                    AppError::NotFound(format!(
+                        "resolve_window_handle: window '{label_for_main}' not found"
+                    ))
+                })?;
+            let handle = window
+                .window_handle()
+                .map_err(|e| AppError::Internal(format!("window_handle() failed: {e}")))?;
+            let raw = handle.as_raw();
+            match raw {
+                #[cfg(target_os = "macos")]
+                RawWindowHandle::AppKit(h) => Ok(h.ns_view.as_ptr() as usize),
+                #[cfg(target_os = "windows")]
+                RawWindowHandle::Win32(h) => Ok(h.hwnd.get() as usize),
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "freebsd",
+                    target_os = "dragonfly",
+                    target_os = "netbsd",
+                    target_os = "openbsd"
+                ))]
+                RawWindowHandle::Xlib(h) => Ok(h.window as usize),
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "freebsd",
+                    target_os = "dragonfly",
+                    target_os = "netbsd",
+                    target_os = "openbsd"
+                ))]
+                RawWindowHandle::Wayland(h) => Ok(h.surface.as_ptr() as usize),
+                other => Err(AppError::Internal(format!(
+                    "unsupported window handle type: {other:?}"
+                ))),
+            }
+        })();
+        let _ = tx.send(result);
+    })
+    .map_err(|e| AppError::Tauri(format!("run_on_main_thread failed: {e}")))?;
+    rx.recv()
+        .map_err(|e| AppError::Internal(format!("main-thread channel closed: {e}")))?
 }
 
 /// CD-4 — RAII guard that releases the `loop_op` CAS gate on drop.
