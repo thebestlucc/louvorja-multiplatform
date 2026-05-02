@@ -308,6 +308,7 @@ pub fn run() {
             commands::video_pipeline::video_pipeline_unload,
             commands::video_pipeline::video_pipeline_attach_window,
             commands::video_pipeline::video_pipeline_detach_window,
+            commands::video_pipeline::video_pipeline_refresh_sinks,
             commands::video_pipeline::set_video_pipeline_flag,
         ])
         .events(tauri_specta::collect_events![
@@ -315,6 +316,7 @@ pub fn run() {
             crate::video_pipeline::events::VideoPipelineIce,
             crate::video_pipeline::events::VideoPipelineState,
             crate::video_pipeline::events::VideoPipelineEnded,
+            crate::video_pipeline::events::VideoPipelineSinkDegraded,
         ]);
 
     #[cfg(debug_assertions)]

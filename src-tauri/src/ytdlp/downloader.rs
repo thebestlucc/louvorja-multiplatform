@@ -204,6 +204,24 @@ fn find_output_file(output_dir: &Path, video_id: &str) -> Option<PathBuf> {
 /// (`docs/plans/2026-04-17-rust-video-pipeline.md`) for v2 split-format
 /// work.
 ///
+/// The leading `[protocol=https]` filter forces yt-dlp to pick a progressive
+/// HTTPS MP4 stream and excludes HLS-segmented (`m3u8_native` / `m3u8`) and
+/// DASH variants. HLS-backed selections cause:
+///   - fragment redownload on loop/restart (each segment refetched),
+///   - `GstTSDemux:tsdemux2: CONTINUITY` warnings at every segment boundary,
+///   - mid-session URL expiration (per-fragment signed URLs).
+/// Progressive MP4 is served via `qtdemux` (core gst-plugins-good, always
+/// present), uses a single signed URL valid for hours, and lets the in-place
+/// pipeline restart from Phase 3 simply rewind via `seek_simple(0)`.
+///
+/// Trade-off: progressive MP4 caps at itag 22 (~720p) for most YouTube
+/// videos — higher resolutions are only available as split video+audio
+/// (DASH). 720p is acceptable for the projection use case. Fallback chain
+/// is preserved if no progressive variant is available (rare).
+///
+/// See `docs/plans/2026-04-26-video-loop-and-first-play-recovery.md`
+/// (Phase 4) for the full rationale.
+///
 /// Blocking: spawns `yt-dlp` and waits for it to print a URL on stdout.
 /// Callers from async contexts should wrap with
 /// `tokio::task::spawn_blocking`.
@@ -215,7 +233,7 @@ pub fn resolve_streaming_url(binary_path: &Path, video_id: &str) -> Result<Strin
     // autoaudiosink to receive no data and produce silent playback. The final
     // `/best` keeps the v1 single-URL contract (no ffmpeg mux) as last resort.
     cmd.arg("-f")
-        .arg("best[ext=mp4][acodec!=none]/best[acodec!=none]/best")
+        .arg("best[ext=mp4][acodec!=none][protocol=https]/best[ext=mp4][acodec!=none]/best[acodec!=none]/best")
         .arg("--get-url")
         .arg("--no-warnings")
         .arg("--no-playlist")

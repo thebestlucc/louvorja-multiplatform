@@ -50,3 +50,20 @@ pub struct VideoPipelineState {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoPipelineEnded {}
+
+/// Outbound: the native sink for `window_label` could not be attached and
+/// fell back to `fakesink` so the rest of the pipeline (audio + other
+/// windows) keeps running. Phase 5 / Track 1 / Task 2 — Batch 3 will wire
+/// a frontend classifier that surfaces this as a pastoral toast with a
+/// "reopen window" recovery action.
+///
+/// `reason` carries the original native-attach error string (e.g.
+/// "gstreamer factory 'glimagesink': …" or
+/// "GstGLColorConvertElement: Failed to convert video buffer") so the
+/// classifier can map it into a typed bucket.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoPipelineSinkDegraded {
+    pub window_label: String,
+    pub reason: String,
+}

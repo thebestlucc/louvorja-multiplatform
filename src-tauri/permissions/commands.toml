@@ -363,6 +363,7 @@ allow = [
     "video_pipeline_unload",
     "video_pipeline_attach_window",
     "video_pipeline_detach_window",
+    "video_pipeline_refresh_sinks",
     "set_video_pipeline_flag"
 ]
 
