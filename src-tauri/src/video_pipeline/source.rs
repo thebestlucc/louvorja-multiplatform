@@ -43,6 +43,33 @@ pub enum MediaSource {
 }
 
 impl MediaSource {
+    /// Stable identity key for snapshot dedup. Unlike [`Self::resolve_uri`]
+    /// — which can return a fresh signed URL on every call for the YouTube
+    /// variant (yt-dlp re-fetches the manifest each time) — this key is
+    /// fully deterministic for a given source value:
+    ///
+    /// - `MediaSource::Local { absolute_path }` → `"local:{absolute_path}"`
+    /// - `MediaSource::Youtube { video_id }` → `"youtube:{video_id}"`
+    ///
+    /// Used by the runtime's same-source dispatch matrix
+    /// (`runtime::load`) to route repeated loads of the same logical
+    /// source to in-place `restart()` instead of a full `load_full()`
+    /// rebuild. Comparing `resolve_uri()` strings directly does not work
+    /// for YouTube because the signed URL rotates on every resolution
+    /// (`expire`, `sig`, `lsig`, `pot` query params change each call).
+    ///
+    /// See `docs/plans/2026-04-26-phase5-hotfix-source-identity-dedup.md`.
+    pub fn identity_key(&self) -> String {
+        match self {
+            MediaSource::Local { absolute_path } => {
+                format!("local:{}", absolute_path.display())
+            }
+            MediaSource::Youtube { video_id } => {
+                format!("youtube:{}", video_id)
+            }
+        }
+    }
+
     /// Resolve this source to a single URI suitable for `uridecodebin`.
     ///
     /// `ytdlp_binary` is the path to the `yt-dlp` executable. It is unused
@@ -189,6 +216,34 @@ mod tests {
         let uri = source.resolve_uri(dummy_binary()).expect("resolve");
         assert!(uri.starts_with("file://"), "expected file:// URI, got: {uri}");
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn identity_key_local_uses_absolute_path_prefix() {
+        let source = MediaSource::Local {
+            absolute_path: PathBuf::from("/abs/videos/foo.mp4"),
+        };
+        assert_eq!(source.identity_key(), "local:/abs/videos/foo.mp4");
+    }
+
+    #[test]
+    fn identity_key_youtube_uses_video_id_prefix() {
+        let source = MediaSource::Youtube {
+            video_id: "dQw4w9WgXcQ".to_string(),
+        };
+        assert_eq!(source.identity_key(), "youtube:dQw4w9WgXcQ");
+    }
+
+    /// The identity key MUST be deterministic across calls — it is the
+    /// snapshot dispatch key. Two YouTube sources with the same `video_id`
+    /// must produce the same key even though `resolve_uri()` would
+    /// produce a fresh signed URL each call.
+    #[test]
+    fn identity_key_is_deterministic_per_value() {
+        let a = MediaSource::Youtube { video_id: "X".into() };
+        let b = MediaSource::Youtube { video_id: "X".into() };
+        assert_eq!(a.identity_key(), b.identity_key());
+        assert_eq!(a.identity_key(), "youtube:X");
     }
 
     /// Manual / network test. Run with:

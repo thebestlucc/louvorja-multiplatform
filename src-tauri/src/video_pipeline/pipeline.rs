@@ -247,9 +247,41 @@ pub fn build_base_pipeline() -> Result<BuiltPipeline, AppError> {
     // requires the sink to be a known factory whose properties we control.
     let audio_sink = build_platform_audio_sink()?;
 
-    // --- video chain: queue -> videoconvert -> tee(name=vtee) ---
+    // --- video chain: queue -> videoconvert -> capsfilter(I420|NV12) -> tee(name=vtee) ---
+    //
+    // Phase 5 / Track 1 / Task 3 (A6): pin a single video format upstream of
+    // the tee so every per-window branch downstream sees identical caps.
+    // Without this, each branch's `glimagesink` / `d3d11videosink` could
+    // negotiate a DIFFERENT raw format with the upstream `video_convert`
+    // (e.g. one branch lands on YUY2 while another lands on NV12) and a
+    // mid-playback re-attach forces upstream to re-negotiate against the
+    // intersection — which is what produces the
+    // `GstGLColorConvertElement: Failed to convert video buffer` cascade
+    // when the second window's GL color-convert can't bridge the format
+    // change cleanly. The capsfilter offers `{I420, NV12}` so the
+    // hardware-decoder fast path stays available (NV12 is the canonical
+    // hardware-decoded format on macOS/Windows) while still allowing CPU
+    // decoders that prefer I420 to plug in without a forced conversion.
+    //
+    // The per-branch `videoconvert` in `attach_native_sink` becomes a
+    // pass-through under this contract — but kept in place because
+    // (a) the existing element-naming contract `<label>_conv` is referenced
+    //     by `detach_native_sink`, integration tests, and dogfood logs, and
+    // (b) on rare branches whose sink rejects both I420 and NV12 (e.g.
+    //     a custom RGB-only sink), the per-branch convert gives gst an
+    //     escape hatch without re-negotiating upstream.
     let video_queue = make_element("queue", "video_queue")?;
     let video_convert = make_element("videoconvert", "video_convert")?;
+    let video_caps = make_element("capsfilter", "video_caps")?;
+    // `video/x-raw,format={I420,NV12}` — accepts either YUV format upstream so
+    // hardware decoders that emit NV12 can pass through unchanged while CPU
+    // decoders emitting I420 also match. Built via the textual parser
+    // (`std::str::FromStr` for `gst::Caps`) because the builder API doesn't
+    // express format alternation as a single field value.
+    let video_format_caps: gst::Caps = "video/x-raw,format=(string){I420,NV12}"
+        .parse()
+        .map_err(|e| AppError::Internal(format!("gstreamer caps parse video format: {e}")))?;
+    video_caps.set_property("caps", &video_format_caps);
     let vtee = make_element("tee", "vtee")?;
     // Allow tee to roll to PLAYING with zero downstream consumers; webrtcbins
     // attach lazily later.
@@ -265,6 +297,7 @@ pub fn build_base_pipeline() -> Result<BuiltPipeline, AppError> {
             &audio_sink,
             &video_queue,
             &video_convert,
+            &video_caps,
             &vtee,
         ])
         .map_err(|e| AppError::Internal(format!("gstreamer add_many: {e}")))?;
@@ -279,8 +312,8 @@ pub fn build_base_pipeline() -> Result<BuiltPipeline, AppError> {
     ])
     .map_err(|e| AppError::Internal(format!("gstreamer link audio chain: {e}")))?;
 
-    // Statically link the video chain: queue -> convert -> tee.
-    gst::Element::link_many([&video_queue, &video_convert, &vtee])
+    // Statically link the video chain: queue -> convert -> capsfilter -> tee.
+    gst::Element::link_many([&video_queue, &video_convert, &video_caps, &vtee])
         .map_err(|e| AppError::Internal(format!("gstreamer link video chain: {e}")))?;
 
     // uridecodebin discovers streams at runtime via pad-added.
@@ -556,6 +589,18 @@ pub fn detach_webrtc_consumer(pipeline: &gst::Pipeline, name: &str) -> Result<()
 /// which path is active during the migration window.
 ///
 /// Returns the sink element so the caller can keep a handle for diagnostics.
+///
+/// TODO (Phase 3 deferred — `docs/plans/2026-04-26-video-loop-and-first-play-recovery.md`):
+/// dogfood logs surfaced `GstGLImageSinkBin:return/GstGLColorConvertElement:
+/// Failed to convert video buffer` errors during pipeline rebuild paths.
+/// Suspected root cause: GL sink retains stale GL context state when
+/// uridecodebin tears down and rebuilds. Candidate fixes include detaching
+/// native sinks before NULL transition (call `detach_window` on each) and
+/// re-attaching after PAUSED in the rebuild path, or installing a
+/// BLOCK_DOWNSTREAM probe across the rebuild. The Phase 3 in-place restart
+/// avoids the rebuild path for same-URI loops, so this TODO only matters
+/// for cross-URI loads — bundling the fix was deferred per user direction
+/// to keep Phase 3 minimal-risk.
 pub fn attach_native_sink(
     pipeline: &gst::Pipeline,
     label: &str,
@@ -778,6 +823,185 @@ pub fn attach_native_sink(
     tee_pad.remove_probe(probe_id);
 
     Ok(sink)
+}
+
+/// Outcome of [`attach_native_sink_or_fakesink`].
+///
+/// Distinguishes a successful native attach from the per-window
+/// `fakesink` fallback so the caller can surface a degraded-mode UX
+/// (Phase 5 / Track 1 / Task 2 — see
+/// `docs/plans/2026-04-26-phase5-stabilize-video-pipeline.md`).
+#[derive(Debug)]
+pub enum AttachResult {
+    /// The native sink (`glimagesink` / `d3d11videosink`) was attached and
+    /// will render directly into the supplied window handle.
+    Native,
+    /// The native sink failed; a `fakesink sync=true` was attached instead.
+    /// The pipeline keeps running and other windows are unaffected, but
+    /// THIS window will not display the video. `reason` carries the
+    /// original native-attach error string for diagnostics + UX surfacing.
+    Fakesink { reason: String },
+}
+
+/// Best-effort native-sink attach with a `fakesink` fallback.
+///
+/// Phase 5 / Track 1 / Task 2 (A4): a single window's GL/D3D11 failure
+/// must NOT block the entire shared pipeline. When
+/// [`attach_native_sink`] errors out (typically
+/// `GstGLColorConvertElement: Failed to convert video buffer` after a
+/// cross-URI rebuild on macOS, or a transient surface-allocation failure
+/// when the OS recycles a window's underlying view), we swap in a
+/// `fakesink sync=true` branch on the same `<label>_queue` /
+/// `<label>_conv` / `<label>` element-naming contract so the rest of the
+/// pipeline (audio + every other window's native sink) keeps producing
+/// frames.
+///
+/// The fallback `fakesink` honours the master clock (`sync=true`) so
+/// upstream demuxer pacing is preserved — the failed window simply
+/// renders nothing instead of stalling the tee. The per-window queue and
+/// `videoconvert` are still inserted to keep the element-naming contract
+/// honored by [`detach_native_sink`] (it looks up `<label>_queue` /
+/// `<label>_conv` / `<label>` regardless of which factory built the sink).
+///
+/// Returns [`AttachResult::Native`] on success or
+/// [`AttachResult::Fakesink`] on fallback. NEVER returns `Err` for a
+/// fallback-engaged path — only for catastrophic failures (e.g.
+/// `fakesink` factory missing — should be impossible in a working
+/// GStreamer install).
+pub fn attach_native_sink_or_fakesink(
+    pipeline: &gst::Pipeline,
+    label: &str,
+    window_handle: usize,
+) -> Result<AttachResult, AppError> {
+    match attach_native_sink(pipeline, label, window_handle) {
+        Ok(_) => Ok(AttachResult::Native),
+        Err(e) => {
+            let reason = e.to_string();
+            log::warn!(
+                "attach_native_sink_or_fakesink('{label}'): native attach failed ({reason}); \
+                 falling back to fakesink sync=true to keep pipeline alive"
+            );
+            // The native-sink path can fail mid-build (queue + conv added,
+            // sink build errored before tee link, or tee-pad linked but
+            // probe install failed). Defensive cleanup: best-effort
+            // detach of any partial state on the contract names so the
+            // fakesink fallback below can claim those names cleanly.
+            // `detach_native_sink` is idempotent against missing names.
+            if let Err(detach_err) = detach_native_sink(pipeline, label) {
+                log::warn!(
+                    "attach_native_sink_or_fakesink('{label}'): cleanup before fakesink \
+                     fallback failed: {detach_err} — fallback may also fail"
+                );
+            }
+
+            attach_fakesink_branch(pipeline, label).map(|_| AttachResult::Fakesink { reason })
+        }
+    }
+}
+
+/// Build the `vtee → <label>_queue → <label>_conv → <label> (fakesink)`
+/// fallback branch when [`attach_native_sink`] fails. Same element
+/// naming + tee-block-probe pattern as the native path so
+/// [`detach_native_sink`] cleans it up uniformly.
+fn attach_fakesink_branch(pipeline: &gst::Pipeline, label: &str) -> Result<(), AppError> {
+    let vtee = pipeline
+        .by_name("vtee")
+        .ok_or_else(|| AppError::Internal("gstreamer: missing 'vtee' element".into()))?;
+
+    let queue_name = format!("{label}_queue");
+    let conv_name = format!("{label}_conv");
+
+    // Same fail-loud guard as `attach_native_sink` — refuse to clobber
+    // residue from an incomplete prior detach.
+    for (kind, name) in [
+        ("queue", queue_name.as_str()),
+        ("videoconvert", conv_name.as_str()),
+        ("sink", label),
+    ] {
+        if pipeline.by_name(name).is_some() {
+            return Err(AppError::Internal(format!(
+                "attach_fakesink_branch('{label}'): pipeline already contains a {kind} \
+                 element named '{name}' — fallback cannot proceed"
+            )));
+        }
+    }
+
+    let queue = make_element("queue", &queue_name)?;
+    queue.set_property("max-size-buffers", 0u32);
+    queue.set_property("max-size-bytes", 0u32);
+    queue.set_property("max-size-time", 200_000_000u64);
+    queue.set_property_from_str("leaky", "no");
+
+    // Per-branch videoconvert kept for the same reason as the native path —
+    // honors the `<label>_conv` name contract used by `detach_native_sink`.
+    let conv = make_element("videoconvert", &conv_name)?;
+
+    // `fakesink sync=true` — honours the master clock so upstream demuxer
+    // pacing matches the rest of the tee branches. `async=false` keeps the
+    // sink from posting AsyncDone (we don't want the fallback branch
+    // re-arming the parent pipeline's preroll).
+    let sink = make_element("fakesink", label)?;
+    sink.set_property("sync", true);
+    sink.set_property("async", false);
+
+    pipeline
+        .add_many([&queue, &conv, &sink])
+        .map_err(|e| AppError::Internal(format!("gstreamer add_many (fakesink fallback): {e}")))?;
+    gst::Element::link_many([&queue, &conv, &sink])
+        .map_err(|e| AppError::Internal(format!("gstreamer link fakesink fallback: {e}")))?;
+
+    let tee_pad = vtee.request_pad_simple("src_%u").ok_or_else(|| {
+        AppError::Internal("gstreamer: tee.request_pad_simple returned None (fallback)".into())
+    })?;
+    let probe_id = tee_pad
+        .add_probe(gst::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+            gst::PadProbeReturn::Ok
+        })
+        .ok_or_else(|| {
+            AppError::Internal(
+                "gstreamer: failed to install BLOCK_DOWNSTREAM probe (fallback)".into(),
+            )
+        })?;
+
+    let queue_sink = queue
+        .static_pad("sink")
+        .ok_or_else(|| AppError::Internal("gstreamer: queue has no sink pad (fallback)".into()))?;
+    if let Err(e) = tee_pad.link(&queue_sink) {
+        tee_pad.remove_probe(probe_id);
+        return Err(AppError::Internal(format!(
+            "gstreamer link tee->queue (fakesink fallback): {e}"
+        )));
+    }
+
+    // Match the native-attach contract: sync each element to the parent
+    // and wait for preroll when parent is PAUSED/PLAYING. fakesink
+    // typically prerolls instantly so this is fast even on a live pipeline.
+    let parent_state = pipeline.current_state();
+    let needs_preroll = matches!(parent_state, gst::State::Paused | gst::State::Playing);
+    let preroll_timeout = gst::ClockTime::from_seconds(2);
+    for elem in [&queue, &conv, &sink] {
+        if let Err(e) = elem.sync_state_with_parent() {
+            tee_pad.remove_probe(probe_id);
+            return Err(AppError::Internal(format!(
+                "gstreamer sync state ({}, fakesink fallback): {e}",
+                elem.name()
+            )));
+        }
+        if !needs_preroll {
+            continue;
+        }
+        let (change, _current, _pending) = elem.state(preroll_timeout);
+        if let Err(e) = change {
+            tee_pad.remove_probe(probe_id);
+            return Err(AppError::Internal(format!(
+                "gstreamer state-wait '{}' (fakesink fallback): {e}",
+                elem.name()
+            )));
+        }
+    }
+
+    tee_pad.remove_probe(probe_id);
+    Ok(())
 }
 
 /// Detaches a previously-attached native sink.
@@ -1103,6 +1327,7 @@ mod tests {
             "audio_sink",
             "video_queue",
             "video_convert",
+            "video_caps",
             "vtee",
         ] {
             assert!(
