@@ -15,6 +15,7 @@ dist-ssr
 .pnpm-store/
 .tanstack/
 src-tauri/target/
+src-tauri/prototypes/
 src-tauri/binaries/
 # GStreamer runtime bundled into release builds by build.rs (Phase 5).
 # Populated on release `cargo build` / `tauri build`; referenced as a Tauri
