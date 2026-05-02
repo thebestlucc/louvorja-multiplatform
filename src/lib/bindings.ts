@@ -1860,6 +1860,30 @@ async videoPipelineDetachWindow(label: string) : Promise<Result<null, AppErrorRe
 }
 },
 /**
+ * Phase 5 / Track 1 / Task 4 — surgical recovery from a per-sink GL/D3D11
+ * failure (e.g. `GstGLColorConvertElement: Failed to convert video buffer`).
+ * 
+ * Snapshots the currently-attached windows, detaches each native sink,
+ * and re-attaches with a `fakesink` fallback per window so a single
+ * window's GL recovery failure cannot poison the entire pipeline.
+ * Returns the number of windows that successfully re-attached on the
+ * **native** path. Windows that fell back to `fakesink` are reported
+ * via the `videoPipelineSinkDegraded` event so the frontend classifier
+ * (Batch 3) can drive a pastoral UX recovery prompt.
+ * 
+ * This command is wired but NOT called from anywhere in this batch —
+ * the Batch 3 error classifier will trigger it from the
+ * `gl_color_convert` bucket.
+ */
+async videoPipelineRefreshSinks() : Promise<Result<number, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("video_pipeline_refresh_sinks") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Broadcast the `useRustVideoPipeline` flag value to every webview from
  * Rust core via `app.emit(...)`.
  * 
@@ -1901,11 +1925,13 @@ export const events = __makeEvents__<{
 videoPipelineEnded: VideoPipelineEnded,
 videoPipelineIce: VideoPipelineIce,
 videoPipelineOffer: VideoPipelineOffer,
+videoPipelineSinkDegraded: VideoPipelineSinkDegraded,
 videoPipelineState: VideoPipelineState
 }>({
 videoPipelineEnded: "video-pipeline-ended",
 videoPipelineIce: "video-pipeline-ice",
 videoPipelineOffer: "video-pipeline-offer",
+videoPipelineSinkDegraded: "video-pipeline-sink-degraded",
 videoPipelineState: "video-pipeline-state"
 })
 
@@ -2057,6 +2083,19 @@ export type VideoPipelineIce = { windowLabel: string; candidate: string; sdpMLin
  * Outbound: a webrtcbin produced an SDP offer for `window_label`.
  */
 export type VideoPipelineOffer = { windowLabel: string; sdp: string }
+/**
+ * Outbound: the native sink for `window_label` could not be attached and
+ * fell back to `fakesink` so the rest of the pipeline (audio + other
+ * windows) keeps running. Phase 5 / Track 1 / Task 2 — Batch 3 will wire
+ * a frontend classifier that surfaces this as a pastoral toast with a
+ * "reopen window" recovery action.
+ * 
+ * `reason` carries the original native-attach error string (e.g.
+ * "gstreamer factory 'glimagesink': …" or
+ * "GstGLColorConvertElement: Failed to convert video buffer") so the
+ * classifier can map it into a typed bucket.
+ */
+export type VideoPipelineSinkDegraded = { windowLabel: string; reason: string }
 /**
  * Outbound: periodic playback snapshot (position/duration/paused/volume).
  */
