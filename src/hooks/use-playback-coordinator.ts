@@ -356,15 +356,20 @@ export function usePlaybackCoordinator() {
       }
       playItem(currentIndex);
     } else if (currentIndex === -1) {
+      // Only clean up if the coordinator actually played something. When
+      // _lastPlayedIndex is null the queue was always empty — clearing state
+      // would wipe externally-initiated projections (bible direct, video card,
+      // liturgy) that called clearActivePlayback() → resetCoordinatorPlaybackState()
+      // before clearing the queue, intentionally leaving the sentinel null.
+      const hadQueueItems = _lastPlayedIndex !== null;
       _lastPlayedIndex = null;
       _lastPlayedItemId = null;
-      // Queue ended — stop audio, clear projection, and unload Playing Now
-      stopAudio();
-      useMediaPlayerStore.getState().unload();
-      useDisplayStore.getState().setCurrentProjectionType(null);
-      // Clear media-player-store slides so the effectiveSlides fallback in
-      // playing-now doesn't render a stale onlineVideo thumbnail after queue ends.
-      useMediaPlayerStore.getState().setSlides([]);
+      if (hadQueueItems) {
+        stopAudio();
+        useMediaPlayerStore.getState().unload();
+        useDisplayStore.getState().setCurrentProjectionType(null);
+        useMediaPlayerStore.getState().setSlides([]);
+      }
     }
   }, [currentIndex, items.length, replayTrigger, playItem, stopAudio]);
 
