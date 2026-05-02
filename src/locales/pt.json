@@ -1918,5 +1918,42 @@
     "errorNotFoundDescription": "O vídeo não pôde ser carregado porque o arquivo está ausente ou ilegível. Verifique se ele não foi movido ou excluído.",
     "errorInternalTitle": "Erro no reprodutor de vídeo",
     "errorInternalDescription": "O reprodutor de vídeo encontrou um problema inesperado. Tente projetar o vídeo novamente."
+  },
+  "videoPipelineErrors": {
+    "stateChangeFailed": {
+      "title": "Não foi possível iniciar o vídeo",
+      "why": "O reprodutor de vídeo recusou iniciar. Tentando novamente...",
+      "action": "Tentar de novo"
+    },
+    "glColorConvert": {
+      "title": "Falha gráfica em uma das telas",
+      "why": "Uma das telas de projeção teve problema gráfico. Reabrindo...",
+      "action": "Reabrir telas"
+    },
+    "hlsFragment": {
+      "title": "Conexão instável com o YouTube",
+      "why": "Falha ao baixar pedaços do vídeo. Tentando outra qualidade...",
+      "action": "Tentar de novo"
+    },
+    "uriInvalid": {
+      "title": "Endereço do vídeo inválido",
+      "why": "O link do vídeo expirou ou é inválido. Atualizando...",
+      "action": "Atualizar link"
+    },
+    "notFound": {
+      "title": "Arquivo de vídeo não encontrado",
+      "why": "O arquivo do vídeo não está no disco. Pode ter sido removido.",
+      "action": "Reabrir biblioteca"
+    },
+    "generic": {
+      "title": "Erro no reprodutor de vídeo",
+      "why": "Ocorreu um problema inesperado.",
+      "action": "Tentar de novo"
+    },
+    "sinkDegraded": {
+      "title": "Tela degradada",
+      "why": "A tela {{window}} perdeu a saída de vídeo por hardware ({{reason}}).",
+      "action": "Reabrir tela"
+    }
   }
 }

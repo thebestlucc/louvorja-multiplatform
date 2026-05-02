@@ -1918,5 +1918,42 @@
     "errorNotFoundDescription": "The video could not be loaded because the file is missing or unreadable. Check that it has not been moved or deleted.",
     "errorInternalTitle": "Video pipeline error",
     "errorInternalDescription": "The video player encountered an unexpected problem. Try projecting the video again."
+  },
+  "videoPipelineErrors": {
+    "stateChangeFailed": {
+      "title": "Could not start the video",
+      "why": "The video player refused to start. Trying again...",
+      "action": "Try again"
+    },
+    "glColorConvert": {
+      "title": "Graphics issue on one of the screens",
+      "why": "One of the projection screens hit a graphics problem. Reopening...",
+      "action": "Reopen screens"
+    },
+    "hlsFragment": {
+      "title": "Unstable connection to YouTube",
+      "why": "Failed to download pieces of the video. Trying a different quality...",
+      "action": "Try again"
+    },
+    "uriInvalid": {
+      "title": "Invalid video address",
+      "why": "The video link expired or is invalid. Refreshing...",
+      "action": "Refresh link"
+    },
+    "notFound": {
+      "title": "Video file not found",
+      "why": "The video file is not on disk. It may have been removed.",
+      "action": "Reopen library"
+    },
+    "generic": {
+      "title": "Video player error",
+      "why": "An unexpected problem occurred.",
+      "action": "Try again"
+    },
+    "sinkDegraded": {
+      "title": "Screen degraded",
+      "why": "The {{window}} screen lost its hardware video output ({{reason}}).",
+      "action": "Reopen screen"
+    }
   }
 }

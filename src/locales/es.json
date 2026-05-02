@@ -1918,5 +1918,42 @@
     "errorNotFoundDescription": "El vídeo no pudo cargarse porque el archivo no existe o no se puede leer. Verifica que no haya sido movido o eliminado.",
     "errorInternalTitle": "Error del reproductor de vídeo",
     "errorInternalDescription": "El reproductor de vídeo encontró un problema inesperado. Intenta proyectar el vídeo de nuevo."
+  },
+  "videoPipelineErrors": {
+    "stateChangeFailed": {
+      "title": "No se pudo iniciar el vídeo",
+      "why": "El reproductor de vídeo rechazó iniciar. Intentando de nuevo...",
+      "action": "Intentar de nuevo"
+    },
+    "glColorConvert": {
+      "title": "Falla gráfica en una de las pantallas",
+      "why": "Una de las pantallas de proyección tuvo un problema gráfico. Reabriendo...",
+      "action": "Reabrir pantallas"
+    },
+    "hlsFragment": {
+      "title": "Conexión inestable con YouTube",
+      "why": "Falló la descarga de fragmentos del vídeo. Intentando con otra calidad...",
+      "action": "Intentar de nuevo"
+    },
+    "uriInvalid": {
+      "title": "Dirección de vídeo no válida",
+      "why": "El enlace del vídeo expiró o no es válido. Actualizando...",
+      "action": "Actualizar enlace"
+    },
+    "notFound": {
+      "title": "Archivo de vídeo no encontrado",
+      "why": "El archivo de vídeo no está en el disco. Puede haber sido eliminado.",
+      "action": "Reabrir biblioteca"
+    },
+    "generic": {
+      "title": "Error del reproductor de vídeo",
+      "why": "Ocurrió un problema inesperado.",
+      "action": "Intentar de nuevo"
+    },
+    "sinkDegraded": {
+      "title": "Pantalla degradada",
+      "why": "La pantalla {{window}} perdió la salida de vídeo por hardware ({{reason}}).",
+      "action": "Reabrir pantalla"
+    }
   }
 }
