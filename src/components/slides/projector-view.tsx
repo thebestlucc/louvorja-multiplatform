@@ -43,13 +43,19 @@ export function ProjectorView() {
   // a black gap during pipeline init / cold-start / network buffering.
   // Promoted to `slide` by the `isFrameReady` effect below when ready flips
   // true, or cleared by `slide-cleared` / a non-video slide arrival.
-  const [pendingSlide, setPendingSlide] = useState<SlideContent | null>(null);
+  const [pendingSlide, _setPendingSlide] = useState<SlideContent | null>(null);
+  const pendingSlideRef = useRef<SlideContent | null>(null);
+  const setPendingSlide = useCallback((s: SlideContent | null) => {
+    pendingSlideRef.current = s;
+    _setPendingSlide(s);
+  }, []);
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
   const [blackScreen, setBlackScreen] = useState(false);
   const [logoScreen, setLogoScreen] = useState(false);
   const [alert, setAlert] = useState<AlertState | null>(null);
   const [now, setNow] = useState(() => new Date());
   const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+  const videoPlaybackTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
   const isFrameReady = useRustVideoPipelineStore((s) => s.isFrameReady);
 
   // P3.12 — Re-read the flag from disk on mount. Defensive belt-and-braces
@@ -67,12 +73,14 @@ export function ProjectorView() {
   }, []);
 
   // Phase 3 — attach the native GStreamer sink to this window when the Rust
-  // pipeline flag is on. Webview is transparent (see display/window.rs); the
-  // native sink renders BELOW it. When the flag is off, the legacy WebRTC
-  // path stays in charge via `RustVideoConsumer` / YouTube iframe.
+  // pipeline flag is on AND this window is in the user's playback targets.
+  // Webview is transparent (see display/window.rs); the native sink renders
+  // BELOW it. When the flag is off or projector is not in targets, the legacy
+  // WebRTC path stays in charge via `RustVideoConsumer` / YouTube iframe.
   useEffect(() => {
-    console.log(`[projector] useRustVideoPipeline=${useRustVideoPipeline} (effect re-run)`);
+    console.log(`[projector] useRustVideoPipeline=${useRustVideoPipeline} targets=${JSON.stringify(videoPlaybackTargets)} (effect re-run)`);
     if (!useRustVideoPipeline) return;
+    if (!videoPlaybackTargets.includes("projector")) return;
     console.log("[projector] attaching native GStreamer sink");
     attachVideoPipelineWindow("projector")
       .then(() => console.log("[projector] attach_window succeeded"))
@@ -85,14 +93,15 @@ export function ProjectorView() {
         console.error("[projector] detach_window failed", e);
       });
     };
-  }, [useRustVideoPipeline]);
+  }, [useRustVideoPipeline, videoPlaybackTargets]);
 
-  // Phase 3 — when the Rust pipeline owns rendering, html + body must be
-  // transparent so the native GStreamer sink underneath the WKWebView is
-  // visible. Component-scoped tweak (no global CSS) so the legacy path's
-  // body background stays unchanged when the flag is off.
+  // Phase 3 — when the Rust pipeline owns rendering AND projector is in targets,
+  // html + body must be transparent so the native GStreamer sink underneath the
+  // WKWebView is visible. Component-scoped tweak (no global CSS) so the legacy
+  // path's body background stays unchanged when the flag is off or projector
+  // is not in targets.
   useEffect(() => {
-    if (!useRustVideoPipeline) return;
+    if (!useRustVideoPipeline || !videoPlaybackTargets.includes("projector")) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtmlBg = html.style.background;
@@ -103,7 +112,35 @@ export function ProjectorView() {
       html.style.background = prevHtmlBg;
       body.style.background = prevBodyBg;
     };
+  }, [useRustVideoPipeline, videoPlaybackTargets]);
+
+  // Register the video-pipeline-frame-ready listener in THIS webview so the
+  // local Zustand store's isFrameReady updates (projector is a separate webview
+  // from main — each window has its own JS heap and store instance).
+  useEffect(() => {
+    if (!useRustVideoPipeline) return;
+    let safetyNetHandle: ReturnType<typeof setTimeout> | null = null;
+    const unsubPromise = listen<{ ready: boolean }>("video-pipeline-frame-ready", (e) => {
+      const ready = !!e.payload?.ready;
+      useRustVideoPipelineStore.getState().setState({ isFrameReady: ready });
+      if (safetyNetHandle) { clearTimeout(safetyNetHandle); safetyNetHandle = null; }
+      if (!ready) {
+        safetyNetHandle = setTimeout(() => {
+          safetyNetHandle = null;
+          // Only unblock if a slide is actually waiting — avoids spurious state flip
+          // when no video is buffered (e.g. pipeline reset between songs).
+          if (pendingSlideRef.current) {
+            useRustVideoPipelineStore.getState().setState({ isFrameReady: true });
+          }
+        }, 5000);
+      }
+    });
+    return () => {
+      if (safetyNetHandle) clearTimeout(safetyNetHandle);
+      unsubPromise.then((fn) => fn()).catch(() => {});
+    };
   }, [useRustVideoPipeline]);
+
   // slideKey only changes when the slide's visual identity (type + background) changes.
   // This prevents remounting the background image on every stanza change (which causes blinking).
   const [slideKey, setSlideKey] = useState(0);
@@ -133,7 +170,9 @@ export function ProjectorView() {
     // when the slide event arrives milliseconds before/after the ready flip).
     const ready = useRustVideoPipelineStore.getState().isFrameReady;
     const shouldBuffer =
-      useRustVideoPipeline && newSlide.slideType === "onlineVideo" && !ready;
+      useRustVideoPipeline &&
+      (newSlide.slideType === "onlineVideo" || newSlide.slideType === "video") &&
+      !ready;
 
     if (shouldBuffer) {
       setPendingSlide(newSlide);
@@ -331,7 +370,10 @@ export function ProjectorView() {
   // the wrapper transparent so the native GStreamer sink is visible BELOW the
   // webview. For every other slide type (lyrics/text/bible/etc) we still
   // want the opaque black backdrop so the OS desktop never bleeds through.
-  const renderingNativeVideo = useRustVideoPipeline && renderedSlide?.slideType === "onlineVideo";
+  const renderingNativeVideo =
+    useRustVideoPipeline &&
+    videoPlaybackTargets.includes("projector") &&
+    (renderedSlide?.slideType === "onlineVideo" || renderedSlide?.slideType === "video");
 
   return (
     <div className={cn("relative h-screen w-screen overflow-hidden", renderingNativeVideo ? "bg-transparent" : "bg-black")}>

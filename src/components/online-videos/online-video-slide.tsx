@@ -236,6 +236,7 @@ interface OnlineVideoSlideProps {
 export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSlideProps) {
   const { t } = useTranslation();
   const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+  const videoPlaybackTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
 
   // Live video renderer for projector/return screens
   const renderLiveVideo = () => {
@@ -246,6 +247,12 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
       // We must NOT cover the hole with anything opaque (no `bg-black`),
       // otherwise the operator sees a black square instead of the video.
       return <div className={cn("h-full w-full bg-transparent", className)} />;
+    }
+    // Legacy path: check if this render target is in the user's playback targets.
+    // If not, show a black placeholder instead of attaching a live follower.
+    const targetKey: "projector" | "return" = renderMode === "projector" ? "projector" : "return";
+    if (!videoPlaybackTargets.includes(targetKey)) {
+      return <div className={cn("h-full w-full bg-black", className)} />;
     }
     // P3.11 observability: if we ever reach here on projector/return when
     // the user expects the rust pipeline to own playback, the legacy follower

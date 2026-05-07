@@ -16,12 +16,18 @@ import { useRustVideoPipelineStore } from "./rust-video-pipeline-store";
  * having every webview listen for it (see [`startVideoPlayerCrossWindowSync`]).
  */
 const FLAG_CHANGED_EVENT = "video-pipeline:flag-changed";
+const TARGETS_CHANGED_EVENT = "video-pipeline:targets-changed";
 
 interface FlagChangedPayload {
   useRustVideoPipeline: boolean;
 }
 
+interface TargetsChangedPayload {
+  value: ("projector" | "return")[];
+}
+
 export type LoopMode = "none" | "one";
+export type VideoPlaybackTarget = "projector" | "return";
 
 interface VideoPlayerState {
   currentTime: number;
@@ -33,16 +39,19 @@ interface VideoPlayerState {
   videoSource: "youtube" | "local" | null;
   useRustVideoPipeline: boolean;
   loopMode: LoopMode;
-  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline" | "loopMode" | "setLoopMode">>) => void;
+  videoPlaybackTargets: VideoPlaybackTarget[];
+  setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline" | "loopMode" | "setLoopMode" | "videoPlaybackTargets" | "setVideoPlaybackTargets">>) => void;
   resetVideoState: () => void;
   setUseRustVideoPipeline: (v: boolean) => void;
   setLoopMode: (mode: LoopMode) => void;
+  setVideoPlaybackTargets: (targets: VideoPlaybackTarget[]) => void;
 }
 
 type VideoPlayerData = Pick<VideoPlayerState, "currentTime" | "duration" | "paused" | "volume" | "videoId" | "videoSrc" | "videoSource">;
 
 const USE_RUST_VIDEO_PIPELINE_KEY = "use_rust_video_pipeline";
 const VIDEO_LOOP_MODE_KEY = "video_loop_mode";
+const VIDEO_TARGETS_KEY = "video_playback_targets";
 
 const initialState: VideoPlayerData = {
   currentTime: 0,
@@ -58,6 +67,7 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   ...initialState,
   useRustVideoPipeline: getPreferenceSync<boolean>(USE_RUST_VIDEO_PIPELINE_KEY, false),
   loopMode: getPreferenceSync<LoopMode>(VIDEO_LOOP_MODE_KEY, "none"),
+  videoPlaybackTargets: getPreferenceSync<VideoPlaybackTarget[]>(VIDEO_TARGETS_KEY, ["projector", "return"]),
   setVideoState: (partial) => set(partial),
   resetVideoState: () => set(initialState),
   setUseRustVideoPipeline: (v) => {
@@ -100,6 +110,15 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
       videoPipeline.setLoop(mode).catch((err) => console.error("[video-pipeline] setLoop", err));
     }
   },
+  setVideoPlaybackTargets: (targets) => {
+    setPreference(VIDEO_TARGETS_KEY, targets).catch((err) =>
+      console.error("[video-player-store] targets persist failed", err),
+    );
+    invoke("set_video_pipeline_targets", { value: targets }).catch((err) =>
+      console.error("[video-player-store] targets broadcast failed", err),
+    );
+    set({ videoPlaybackTargets: targets });
+  },
 }));
 
 /**
@@ -119,9 +138,11 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
 export function hydrateVideoPlayerPreferences(): void {
   const useRust = getPreferenceSync<boolean>(USE_RUST_VIDEO_PIPELINE_KEY, false);
   const loop = getPreferenceSync<LoopMode>(VIDEO_LOOP_MODE_KEY, "none");
+  const targets = getPreferenceSync<VideoPlaybackTarget[]>(VIDEO_TARGETS_KEY, ["projector", "return"]);
   useVideoPlayerStore.setState({
     useRustVideoPipeline: useRust,
     loopMode: loop,
+    videoPlaybackTargets: targets,
   });
   // Observability: log the post-hydration flag value PER WEBVIEW so dogfood
   // can confirm projector + return read the same value as main. Removing this
@@ -143,9 +164,11 @@ export function hydrateVideoPlayerPreferences(): void {
 export async function refreshVideoPlayerPreferencesFromDisk(): Promise<void> {
   const useRust = await getPreference<boolean>(USE_RUST_VIDEO_PIPELINE_KEY, false);
   const loop = await getPreference<LoopMode>(VIDEO_LOOP_MODE_KEY, "none");
+  const targets = await getPreference<VideoPlaybackTarget[]>(VIDEO_TARGETS_KEY, ["projector", "return"]);
   useVideoPlayerStore.setState({
     useRustVideoPipeline: useRust,
     loopMode: loop,
+    videoPlaybackTargets: targets,
   });
 }
 
@@ -165,7 +188,7 @@ export async function refreshVideoPlayerPreferencesFromDisk(): Promise<void> {
  * (populated once at `initStorePreferences()` time, never refreshed).
  */
 export async function startVideoPlayerCrossWindowSync(): Promise<() => void> {
-  const unlisten = await listen<FlagChangedPayload>(FLAG_CHANGED_EVENT, (event) => {
+  const unlistenFlag = await listen<FlagChangedPayload>(FLAG_CHANGED_EVENT, (event) => {
     const v = event.payload?.useRustVideoPipeline;
     if (typeof v !== "boolean") {
       // Unexpected payload — re-read from disk as the safer fallback.
@@ -179,15 +202,31 @@ export async function startVideoPlayerCrossWindowSync(): Promise<() => void> {
     console.log(`[video-player-store] flag-changed on '${label}': useRustVideoPipeline=${v}`);
     useVideoPlayerStore.setState({ useRustVideoPipeline: v });
   });
-  // P3.12 — defensive replay: read the flag from disk immediately AFTER the
-  // listener is registered. Catches any flip that happened in the gap between
-  // bootstrap's hydration and listener registration (typically <50 ms but the
-  // window matters when the user toggles the flag right before opening the
-  // projector). Bypasses the in-memory cache via `getPreference()`.
+
+  const unlistenTargets = await listen<TargetsChangedPayload>(TARGETS_CHANGED_EVENT, (event) => {
+    const v = event.payload?.value;
+    if (!Array.isArray(v)) {
+      refreshVideoPlayerPreferencesFromDisk().catch((err) =>
+        console.error("[video-player-store] refresh from disk after bad targets payload", err),
+      );
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const label = (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label ?? "?";
+    console.log(`[video-player-store] targets-changed on '${label}': targets=${JSON.stringify(v)}`);
+    useVideoPlayerStore.setState({ videoPlaybackTargets: v as VideoPlaybackTarget[] });
+  });
+
+  // P3.12 — defensive replay: read all prefs from disk immediately AFTER the
+  // listeners are registered (see flag listener comment above for rationale).
   await refreshVideoPlayerPreferencesFromDisk().catch((err) =>
     console.error("[video-player-store] post-listen refresh failed", err),
   );
-  return unlisten;
+
+  return () => {
+    unlistenFlag();
+    unlistenTargets();
+  };
 }
 
 // ─── Streaming sync ────────────────────────────────────────────────────────────
