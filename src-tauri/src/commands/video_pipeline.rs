@@ -428,3 +428,25 @@ pub fn set_video_pipeline_flag(
     .map_err(|e| AppError::Internal(format!("emit flag-changed failed: {e}")))?;
     Ok(())
 }
+
+/// Broadcast the video playback targets (which screens show live video) to all
+/// webviews. Mirror of `set_video_pipeline_flag` — see its doc comment for the
+/// rationale on routing through Rust instead of JS-only pub/sub.
+///
+/// Event name and payload shape match the listener added to
+/// `src/stores/video-player-store.ts::startVideoPlayerCrossWindowSync` —
+/// CHANGE BOTH OR NEITHER.
+#[tauri::command]
+#[specta::specta]
+pub fn set_video_pipeline_targets(
+    app: tauri::AppHandle,
+    value: Vec<String>,
+) -> Result<(), AppError> {
+    log::debug!("set_video_pipeline_targets: broadcasting targets={value:?}");
+    app.emit(
+        "video-pipeline:targets-changed",
+        serde_json::json!({ "value": value }),
+    )
+    .map_err(|e| AppError::Internal(format!("emit targets-changed failed: {e}")))?;
+    Ok(())
+}

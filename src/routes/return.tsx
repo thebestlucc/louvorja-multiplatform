@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
@@ -39,7 +39,12 @@ function ReturnPage() {
   // slides under the rust pipeline until audio_sink first buffer fires.
   // Keeps the prior slide visible during pipeline init / cold-start instead
   // of a black gap. See projector-view.tsx for the full rationale.
-  const [pendingSlide, setPendingSlide] = useState<SlideContent | null>(null);
+  const [pendingSlide, _setPendingSlide] = useState<SlideContent | null>(null);
+  const pendingSlideRef = useRef<SlideContent | null>(null);
+  const setPendingSlide = useCallback((s: SlideContent | null) => {
+    pendingSlideRef.current = s;
+    _setPendingSlide(s);
+  }, []);
   const [nextSlide, setNextSlide] = useState<SlideContent | null>(null);
   const [slideTitle, setSlideTitle] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
@@ -56,6 +61,7 @@ function ReturnPage() {
   const logoImageSrc = useMediaSource(screenDefaults.logoImagePath);
   const clockLocale = localeFromLanguage(i18n.language);
   const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
+  const videoPlaybackTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
   const isFrameReady = useRustVideoPipelineStore((s) => s.isFrameReady);
 
   // P3.12 — Re-read the flag from disk on mount. See `projector-view.tsx`
@@ -67,11 +73,13 @@ function ReturnPage() {
     );
   }, []);
 
-  // Phase 3 — attach the native GStreamer sink to the "return" window. Mirror
-  // of the `ProjectorView` lifecycle (see projector-view.tsx for rationale).
+  // Phase 3 — attach the native GStreamer sink to the "return" window when the
+  // Rust pipeline flag is on AND the return window is in the user's playback
+  // targets. Mirror of the `ProjectorView` lifecycle (see projector-view.tsx).
   useEffect(() => {
-    console.log(`[return] useRustVideoPipeline=${useRustVideoPipeline} (effect re-run)`);
+    console.log(`[return] useRustVideoPipeline=${useRustVideoPipeline} targets=${JSON.stringify(videoPlaybackTargets)} (effect re-run)`);
     if (!useRustVideoPipeline) return;
+    if (!videoPlaybackTargets.includes("return")) return;
     console.log("[return] attaching native GStreamer sink");
     attachVideoPipelineWindow("return")
       .then(() => console.log("[return] attach_window succeeded"))
@@ -84,12 +92,13 @@ function ReturnPage() {
         console.error("[return] detach_window failed", e);
       });
     };
-  }, [useRustVideoPipeline]);
+  }, [useRustVideoPipeline, videoPlaybackTargets]);
 
   // Phase 3 — html + body transparent so the native GStreamer sink rendered
-  // BELOW the webview is visible (see projector-view.tsx for rationale).
+  // BELOW the webview is visible, but only when return is in playback targets
+  // (see projector-view.tsx for full rationale).
   useEffect(() => {
-    if (!useRustVideoPipeline) return;
+    if (!useRustVideoPipeline || !videoPlaybackTargets.includes("return")) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtmlBg = html.style.background;
@@ -99,6 +108,31 @@ function ReturnPage() {
     return () => {
       html.style.background = prevHtmlBg;
       body.style.background = prevBodyBg;
+    };
+  }, [useRustVideoPipeline, videoPlaybackTargets]);
+
+  // Register the video-pipeline-frame-ready listener in THIS webview so the
+  // local Zustand store's isFrameReady updates (return is a separate webview
+  // from main — each window has its own JS heap and store instance).
+  useEffect(() => {
+    if (!useRustVideoPipeline) return;
+    let safetyNetHandle: ReturnType<typeof setTimeout> | null = null;
+    const unsubPromise = listen<{ ready: boolean }>("video-pipeline-frame-ready", (e) => {
+      const ready = !!e.payload?.ready;
+      useRustVideoPipelineStore.getState().setState({ isFrameReady: ready });
+      if (safetyNetHandle) { clearTimeout(safetyNetHandle); safetyNetHandle = null; }
+      if (!ready) {
+        safetyNetHandle = setTimeout(() => {
+          safetyNetHandle = null;
+          if (pendingSlideRef.current) {
+            useRustVideoPipelineStore.getState().setState({ isFrameReady: true });
+          }
+        }, 5000);
+      }
+    });
+    return () => {
+      if (safetyNetHandle) clearTimeout(safetyNetHandle);
+      unsubPromise.then((fn) => fn()).catch(() => {});
     };
   }, [useRustVideoPipeline]);
 
@@ -134,7 +168,9 @@ function ReturnPage() {
       // getState() to honor fresh value at fire time and avoid stale closures.
       const ready = useRustVideoPipelineStore.getState().isFrameReady;
       const shouldBuffer =
-        useRustVideoPipeline && slide.slideType === "onlineVideo" && !ready;
+        useRustVideoPipeline &&
+        (slide.slideType === "onlineVideo" || slide.slideType === "video") &&
+        !ready;
       if (shouldBuffer) {
         setPendingSlide(slide);
         return;
@@ -305,7 +341,11 @@ function ReturnPage() {
   // BELOW the WKWebView/WebView2/WebKitGTK) is visible inside the top 70%.
   // Other slide types keep the opaque `bg-neutral-950` so the desktop never
   // bleeds through the operator's reference monitor.
-  const renderingNativeVideo = useRustVideoPipeline && currentSlideToRender?.slideType === "onlineVideo";
+  const renderingNativeVideo =
+    useRustVideoPipeline &&
+    videoPlaybackTargets.includes("return") &&
+    (currentSlideToRender?.slideType === "onlineVideo" ||
+      currentSlideToRender?.slideType === "video");
   const outerBg = renderingNativeVideo ? "bg-transparent" : "bg-neutral-950";
 
   if (noContent) {

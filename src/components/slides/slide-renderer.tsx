@@ -32,7 +32,7 @@ export function SlideRenderer({ slide, className, renderMode = "projector" }: Sl
   // can pick its own background. Under the Rust pipeline, that inner element
   // is transparent (native GStreamer sink renders BELOW the webview); under
   // the legacy path it stays black, so visual behaviour is unchanged.
-  const isOnlineVideo = slide && slide.slideType === "onlineVideo";
+  const isOnlineVideo = slide && (slide.slideType === "onlineVideo" || slide.slideType === "video");
 
   return (
     <div

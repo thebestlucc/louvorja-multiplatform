@@ -5,6 +5,7 @@ import type { SlideContent } from "../../lib/bindings";
 import { cn } from "../../lib/utils";
 import { VideoPlayer } from "./video-player";
 import { useVideoSource } from "../../hooks/use-video-source";
+import { useVideoPlayerStore } from "../../stores/video-player-store";
 
 type VideoCtrl = { action: "play" | "pause" | "seek" | "volume"; value?: number };
 
@@ -20,8 +21,14 @@ interface VideoSlideProps {
 
 export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
   const { t } = useTranslation();
+  const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
   const srcUrl = useVideoSource(slide.path ?? null);
   const projectorVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Rust pipeline: GStreamer native sink renders below the WebView — keep this
+  // layer fully transparent so the native video surface is visible.
+  // Guard placed AFTER all hooks to avoid conditional hook violation.
+  const isNativePipelineMode = useRustVideoPipeline && (renderMode === "projector" || renderMode === "return-current");
 
   // In projector mode: listen for control events + emit state back to main window
   useEffect(() => {
@@ -60,6 +67,10 @@ export function VideoSlide({ slide, renderMode, className }: VideoSlideProps) {
   }, [renderMode, slide.auto_play]);
 
   const muted = renderMode === "return-current" ? true : (slide.muted ?? false);
+
+  if (isNativePipelineMode) {
+    return <div className={cn("h-full w-full bg-transparent", className)} />;
+  }
 
   if (!srcUrl) {
     return (

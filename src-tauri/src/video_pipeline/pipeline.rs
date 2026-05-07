@@ -873,30 +873,44 @@ pub fn attach_native_sink_or_fakesink(
     label: &str,
     window_handle: usize,
 ) -> Result<AttachResult, AppError> {
-    match attach_native_sink(pipeline, label, window_handle) {
-        Ok(_) => Ok(AttachResult::Native),
-        Err(e) => {
-            let reason = e.to_string();
-            log::warn!(
-                "attach_native_sink_or_fakesink('{label}'): native attach failed ({reason}); \
-                 falling back to fakesink sync=true to keep pipeline alive"
-            );
-            // The native-sink path can fail mid-build (queue + conv added,
-            // sink build errored before tee link, or tee-pad linked but
-            // probe install failed). Defensive cleanup: best-effort
-            // detach of any partial state on the contract names so the
-            // fakesink fallback below can claim those names cleanly.
-            // `detach_native_sink` is idempotent against missing names.
-            if let Err(detach_err) = detach_native_sink(pipeline, label) {
+    // Attempt the native attach up to twice. On macOS, glimagesink can fail
+    // on the first attempt with a transient GL-context timing issue
+    // (VoidPending state from preroll timeout) when the window surface is
+    // still being initialised by the OS after a pipeline NULL cycle. A
+    // single 300 ms retry resolves the vast majority of these cases without
+    // meaningful latency cost. The cleanup step between attempts (detach)
+    // removes any partially-attached elements so the second attempt starts
+    // from a clean slate.
+    const MAX_ATTEMPTS: u8 = 2;
+    let mut last_err = String::new();
+    for attempt in 1..=MAX_ATTEMPTS {
+        match attach_native_sink(pipeline, label, window_handle) {
+            Ok(_) => return Ok(AttachResult::Native),
+            Err(e) => {
+                last_err = e.to_string();
                 log::warn!(
-                    "attach_native_sink_or_fakesink('{label}'): cleanup before fakesink \
-                     fallback failed: {detach_err} — fallback may also fail"
+                    "attach_native_sink_or_fakesink('{label}'): attempt {attempt}/{MAX_ATTEMPTS} \
+                     failed ({last_err})"
                 );
+                // Clean up partial state before retry / fallback.
+                if let Err(detach_err) = detach_native_sink(pipeline, label) {
+                    log::warn!(
+                        "attach_native_sink_or_fakesink('{label}'): cleanup after attempt \
+                         {attempt} failed: {detach_err}"
+                    );
+                }
+                if attempt < MAX_ATTEMPTS {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
             }
-
-            attach_fakesink_branch(pipeline, label).map(|_| AttachResult::Fakesink { reason })
         }
     }
+
+    log::warn!(
+        "attach_native_sink_or_fakesink('{label}'): all {MAX_ATTEMPTS} native attempts \
+         failed; falling back to fakesink sync=true to keep pipeline alive"
+    );
+    attach_fakesink_branch(pipeline, label).map(|_| AttachResult::Fakesink { reason: last_err })
 }
 
 /// Build the `vtee → <label>_queue → <label>_conv → <label> (fakesink)`

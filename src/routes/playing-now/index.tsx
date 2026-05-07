@@ -20,12 +20,17 @@ import { SlideFilmstrip } from "../../components/playing-now/slide-filmstrip";
 import { mediaHasSlides, mediaHasVideo } from "../../types/media";
 import { useRouteTour } from "../../hooks/use-route-tour";
 import { SpotlightTour } from "../../components/tour/spotlight-tour";
+import { Button } from "../../components/ui/button";
+import { MonitorPlay, Monitor } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/playing-now/")({
   component: PlayingNowScreen,
 });
 
 function PlayingNowScreen() {
+  const { t } = useTranslation();
+
   // Mount coordination hooks
   usePlaybackCoordinator();
   const actions = useMediaPlayer();
@@ -65,10 +70,13 @@ function PlayingNowScreen() {
   const useRustPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
   const loopMode = useVideoPlayerStore((s) => s.loopMode);
   const setLoopMode = useVideoPlayerStore((s) => s.setLoopMode);
+  const videoPlaybackTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
+  const setVideoPlaybackTargets = useVideoPlayerStore((s) => s.setVideoPlaybackTargets);
   const rustPositionSecs = useRustVideoPipelineStore((s) => s.positionSecs);
   const rustDurationSecs = useRustVideoPipelineStore((s) => s.durationSecs);
   const rustVolume = useRustVideoPipelineStore((s) => s.volume);
   const isVideoTimeline = currentItem ? mediaHasVideo(currentItem) : false;
+  const isVideoItem = isVideoTimeline;
   const usePipelineState = useRustPipeline && isVideoTimeline;
   const effectiveCurrentTime = usePipelineState ? rustPositionSecs * 1000 : currentTime;
   const effectiveDuration = usePipelineState ? rustDurationSecs * 1000 : duration;
@@ -141,6 +149,47 @@ function PlayingNowScreen() {
           }
         }}
       />
+
+      {/* Video screen target toggles — only shown when a video item is active */}
+      {isVideoItem && (
+        <div className="flex shrink-0 items-center gap-1 px-1">
+          <span className="text-xs text-muted-foreground mr-1">{t("playingNow.videoScreens")}:</span>
+          <Button
+            variant={videoPlaybackTargets.includes("projector") ? "default" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => {
+              const targets = useVideoPlayerStore.getState().videoPlaybackTargets;
+              const has = targets.includes("projector");
+              setVideoPlaybackTargets(
+                has ? targets.filter((target) => target !== "projector") : [...targets, "projector"],
+              );
+            }}
+            aria-label={t("playingNow.toggleProjector")}
+            aria-pressed={videoPlaybackTargets.includes("projector")}
+          >
+            <MonitorPlay className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("display.projector")}
+          </Button>
+          <Button
+            variant={videoPlaybackTargets.includes("return") ? "default" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => {
+              const targets = useVideoPlayerStore.getState().videoPlaybackTargets;
+              const has = targets.includes("return");
+              setVideoPlaybackTargets(
+                has ? targets.filter((target) => target !== "return") : [...targets, "return"],
+              );
+            }}
+            aria-label={t("playingNow.toggleReturn")}
+            aria-pressed={videoPlaybackTargets.includes("return")}
+          >
+            <Monitor className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("display.return")}
+          </Button>
+        </div>
+      )}
 
       {/* Main area: stage + queue */}
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-3">

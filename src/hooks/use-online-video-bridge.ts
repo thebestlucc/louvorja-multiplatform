@@ -129,6 +129,14 @@ export function useOnlineVideoBridge() {
     null,
   );
 
+  // Guards `justReset` from clearing `lastLoadedKeyRef` during `load_full`'s
+  // NULL-transition. During NULL the pipeline briefly emits positionSecs=0,
+  // durationSecs=0, paused=true — matching the justReset heuristic — but that
+  // must NOT be treated as a genuine stop. Set true just before
+  // `videoPipeline.load()` is called; cleared when isFrameReady flips true
+  // (load finished) or when the load fails.
+  const loadInProgressRef = useRef(false);
+
   // Forward declaration — `processOnlineVideoSlide` is the body of the
   // original `handleSlide`. Wrapped in a ref-like indirection so the
   // effect that drains the deferred slide can call it without a circular
@@ -142,8 +150,52 @@ export function useOnlineVideoBridge() {
     | null
   >(null);
 
+  const populateMediaPlayerStore = useCallback(
+    (
+      slide:
+        | Extract<SlideContent, { slideType: "onlineVideo" }>
+        | Extract<SlideContent, { slideType: "video" }>,
+    ) => {
+      const mpState = useMediaPlayerStore.getState();
+      if (slide.slideType === "video") {
+        const item: OfflineVideoMediaItem = {
+          type: "offline_video",
+          videoPath: slide.path,
+          title: "Video",
+          isManaged: slide.path.startsWith("media/"),
+        };
+        mpState.load(item);
+        return;
+      }
+      // onlineVideo
+      if (slide.source === "local" && slide.url) {
+        const item: OfflineVideoMediaItem = {
+          type: "offline_video",
+          videoPath: slide.url,
+          title: slide.title ?? "Video",
+          isManaged: slide.url.startsWith("media/"),
+        };
+        mpState.load(item);
+      } else if (slide.video_id) {
+        const item: OnlineVideoMediaItem = {
+          type: "online_video",
+          videoId: slide.video_id,
+          videoSource: "youtube",
+          title: slide.title ?? "Video",
+        };
+        mpState.load(item);
+      }
+    },
+    [],
+  );
+
   const handleSlide = useCallback((slide: SlideContent) => {
     if (slide.slideType !== "onlineVideo" && slide.slideType !== "video") return;
+
+    // Always populate the store so timelineSource flips to "video" immediately.
+    // The rust pipeline load itself may be deferred, but the store must be ready
+    // so controls don't silently no-op during the suspension window.
+    populateMediaPlayerStore(slide as Extract<SlideContent, { slideType: "onlineVideo" }> | Extract<SlideContent, { slideType: "video" }>);
 
     // Phase 5 / Track 1 / Task 7 — bridge suspension during pipeline
     // transition. If a previous load is still loading (isFrameReady=false +
@@ -182,7 +234,7 @@ export function useOnlineVideoBridge() {
     }
 
     processOnlineVideoSlideRef.current?.(slide);
-  }, []);
+  }, [populateMediaPlayerStore]);
 
   const processOnlineVideoSlide = useCallback(
     (
@@ -190,20 +242,10 @@ export function useOnlineVideoBridge() {
         | Extract<SlideContent, { slideType: "onlineVideo" }>
         | Extract<SlideContent, { slideType: "video" }>,
     ) => {
-      const mpState = useMediaPlayerStore.getState();
-
       // Local presentation video (slideType: "video") — path is always the
       // file path (absolute or managed-media relative). Drives the rust
       // pipeline the same way onlineVideo local does.
       if (slide.slideType === "video") {
-        const item: OfflineVideoMediaItem = {
-          type: "offline_video",
-          videoPath: slide.path,
-          title: "Video",
-          isManaged: slide.path.startsWith("media/"),
-        };
-        mpState.load(item);
-
         if (!useVideoPlayerStore.getState().useRustVideoPipeline) return;
 
         const resolveAndLoad = async () => {
@@ -215,10 +257,12 @@ export function useOnlineVideoBridge() {
           const key = mediaSourceKey(mediaSource);
           if (lastLoadedKeyRef.current === key) return;
           lastLoadedKeyRef.current = key;
+          loadInProgressRef.current = true;
           videoPipeline
             .load(mediaSource)
             .then(() => useMediaPlayerStore.getState().setStatus("playing"))
             .catch((err) => {
+              loadInProgressRef.current = false;
               lastLoadedKeyRef.current = null;
               console.error(
                 "[online-video-bridge] videoPipeline.load failed (local video)",
@@ -232,32 +276,9 @@ export function useOnlineVideoBridge() {
         return;
       }
 
-      // Always populate the media-player store. Removed the previous
-      // queue-active guard: direct projections (VideoCard project-to-projector,
-      // liturgy items, manual slide assignments) bypass the queue but still
-      // need the control bar to work. The queue-not-active path is no worse
-      // than the queue-active path — both just keep the store in sync with the
-      // slide that's already projecting.
-      if (slide.source === "local" && slide.url) {
-        const item: OfflineVideoMediaItem = {
-          type: "offline_video",
-          videoPath: slide.url,
-          title: slide.title ?? "Video",
-          isManaged: slide.url.startsWith("media/"),
-        };
-        mpState.load(item);
-      } else if (slide.video_id) {
-        const item: OnlineVideoMediaItem = {
-          type: "online_video",
-          videoId: slide.video_id,
-          videoSource: "youtube",
-          title: slide.title ?? "Video",
-        };
-        mpState.load(item);
-      } else {
-        // No resolvable source — don't touch the store further.
-        return;
-      }
+      // Guard: if no resolvable source for the rust pipeline, bail.
+      if (!slide.source && !slide.video_id) return;
+      if (slide.source === "local" && !slide.url) return;
 
       // When the rust pipeline flag is on, also drive the rust runtime so
       // controls + native sinks have something to attach to. Skipped when the
@@ -279,6 +300,7 @@ export function useOnlineVideoBridge() {
             return;
           }
           lastLoadedKeyRef.current = key;
+          loadInProgressRef.current = true;
           videoPipeline
             .load(mediaSource)
             .then(() => {
@@ -288,7 +310,8 @@ export function useOnlineVideoBridge() {
               useMediaPlayerStore.getState().setStatus("playing");
             })
             .catch((err) => {
-              // Load failed — clear dedup so a retry can land.
+              // Load failed — clear dedup and in-progress flag so a retry can land.
+              loadInProgressRef.current = false;
               lastLoadedKeyRef.current = null;
               // Backend errors surface via the `video-pipeline-error` event
               // listener (use-rust-video-pipeline-state). Just log here.
@@ -330,12 +353,17 @@ export function useOnlineVideoBridge() {
   // and `setUseRustVideoPipeline(false)` both call `videoPipeline.unload()`
   // followed by `useRustVideoPipelineStore.getState().reset()`. Subscribe
   // to that store and clear the dedup ref whenever it transitions back to
-  // the post-reset shape (positionSecs=0 + durationSecs=0 + paused=true) —
-  // otherwise re-projecting the same video after stop would silently skip
-  // the load (key matches stale ref → empty pipeline → black screen).
+  // the post-reset shape (positionSecs=0 + durationSecs=0 + paused=true).
+  //
+  // loadInProgressRef guard: during `load_full` the pipeline transiently
+  // emits 0/0/paused during the NULL state (before PAUSED reattach). Without
+  // this guard, justReset fires and clears `lastLoadedKeyRef`, causing the
+  // deferred-slide drain to bypass dedup → second load_full immediately after
+  // the first completes (observed: double load, app slowness, audio glitch).
   useEffect(() => {
     return useRustVideoPipelineStore.subscribe((state, prev) => {
       const justReset =
+        !loadInProgressRef.current &&
         state.positionSecs === 0 &&
         state.durationSecs === 0 &&
         state.paused &&
@@ -360,6 +388,8 @@ export function useOnlineVideoBridge() {
     const unsub = useRustVideoPipelineStore.subscribe((state, prev) => {
       // When isFrameReady flips false → true, drain any pending deferred slide.
       if (!prev.isFrameReady && state.isFrameReady) {
+        // Load completed — allow justReset to fire on subsequent genuine stops.
+        loadInProgressRef.current = false;
         const queued = deferredSlideRef.current;
         if (queued) {
           deferredSlideRef.current = null;

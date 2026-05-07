@@ -1921,6 +1921,23 @@ async setVideoPipelineFlag(value: boolean) : Promise<Result<null, AppErrorRespon
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Broadcast the video playback targets (which screens show live video) to all
+ * webviews. Mirror of `set_video_pipeline_flag` — see its doc comment for the
+ * rationale on routing through Rust instead of JS-only pub/sub.
+ * 
+ * Event name and payload shape match the listener added to
+ * `src/stores/video-player-store.ts::startVideoPlayerCrossWindowSync` —
+ * CHANGE BOTH OR NEITHER.
+ */
+async setVideoPipelineTargets(value: string[]) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_video_pipeline_targets", { value }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

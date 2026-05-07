@@ -310,6 +310,7 @@ pub fn run() {
             commands::video_pipeline::video_pipeline_detach_window,
             commands::video_pipeline::video_pipeline_refresh_sinks,
             commands::video_pipeline::set_video_pipeline_flag,
+            commands::video_pipeline::set_video_pipeline_targets,
         ])
         .events(tauri_specta::collect_events![
             crate::video_pipeline::events::VideoPipelineOffer,

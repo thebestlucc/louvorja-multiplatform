@@ -364,7 +364,8 @@ allow = [
     "video_pipeline_attach_window",
     "video_pipeline_detach_window",
     "video_pipeline_refresh_sinks",
-    "set_video_pipeline_flag"
+    "set_video_pipeline_flag",
+    "set_video_pipeline_targets"
 ]
 
 [[permission]]
