@@ -298,12 +298,18 @@ runs:
           # (harmless on ephemeral CI). ArgumentList passed as a SINGLE STRING
           # to match the proven pattern from fcast / alku-unicast green CI —
           # the array form silently mangles msiexec switches in some pwsh
-          # versions on windows-2025.
+          # versions on windows-2025. /l*v emits a verbose install log we
+          # can mine for errors when the post-install Test-Path check fails.
           function Invoke-Msi($msi, $label) {
             Write-Host "==> Installing GStreamer $label"
-            $proc = Start-Process msiexec -Wait -NoNewWindow -PassThru -ArgumentList "/i `"$msi`" /quiet /qn /norestart ADDLOCAL=ALL"
+            $msiLog = "$env:RUNNER_TEMP\msi-$label.log"
+            $proc = Start-Process msiexec -Wait -NoNewWindow -PassThru -ArgumentList "/i `"$msi`" /qn /norestart ADDLOCAL=ALL /l*v `"$msiLog`""
             Write-Host "  exit: $($proc.ExitCode)"
             if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              # Surface key lines from the MSI log on failure
+              if (Test-Path $msiLog) {
+                Get-Content $msiLog -Tail 30 | ForEach-Object { Write-Host "  msi-log: $_" }
+              }
               throw "msiexec $label ExitCode=$($proc.ExitCode)"
             }
           }
@@ -315,9 +321,35 @@ runs:
             ForEach-Object { $_.FullName } | Select-Object -First 80
 
           $gstRootClean = $gstRoot.TrimEnd('\')
-          $gstreamerPc  = "$gstRootClean\lib\pkgconfig\gstreamer-1.0.pc"
-          if (!(Test-Path $gstreamerPc)) { throw "gstreamer-1.0.pc not at $gstreamerPc" }
+          # Search filesystem-wide for the .pc file in case MSI installed
+          # to a non-default path (Program Files, etc.). Limit search to
+          # likely prefixes to keep this fast.
+          $foundPc = $null
+          foreach ($root in @("C:\gstreamer", "C:\Program Files\gstreamer", "C:\Program Files (x86)\gstreamer")) {
+            if (Test-Path $root) {
+              $hit = Get-ChildItem $root -Recurse -Filter "gstreamer-1.0.pc" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($hit) { $foundPc = $hit; break }
+            }
+          }
+          if (!$foundPc) {
+            Write-Host "::error::win-setup: gstreamer-1.0.pc not found under C:\gstreamer or Program Files"
+            # Tail of MSI install logs for diagnosis
+            foreach ($f in @("$env:RUNNER_TEMP\msi-runtime.log", "$env:RUNNER_TEMP\msi-devel.log")) {
+              if (Test-Path $f) {
+                Write-Host "==> Tail of $f"
+                Get-Content $f -Tail 40 | ForEach-Object {
+                  $short = if ($_.Length -gt 250) { $_.Substring(0,250) } else { $_ }
+                  Write-Host "::error::msi-tail: $short"
+                }
+              }
+            }
+            throw "gstreamer-1.0.pc absent after both MSI installs"
+          }
+          $gstreamerPc = $foundPc.FullName
+          $pcDir       = Split-Path $gstreamerPc -Parent
+          $gstInstallRoot = Split-Path (Split-Path $pcDir -Parent) -Parent  # ../../
           Write-Host "  gstreamer-1.0.pc: $gstreamerPc"
+          Write-Host "  install root:     $gstInstallRoot"
 
           # Locate pkg-config.exe (or pkgconf.exe — modern replacement). The
           # GStreamer MSI may or may not bundle it depending on version + the
@@ -325,7 +357,7 @@ runs:
           # we'll need to install MSYS2's pkgconf as a fallback.
           $pkgConfigExe = $null
           foreach ($name in @("pkg-config.exe", "pkgconf.exe")) {
-            $hit = Get-ChildItem "C:\gstreamer" -Recurse -Filter $name -ErrorAction SilentlyContinue | Select-Object -First 1
+            $hit = Get-ChildItem $gstInstallRoot -Recurse -Filter $name -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($hit) { $pkgConfigExe = $hit.FullName; break }
           }
           if ($pkgConfigExe) {
@@ -333,19 +365,18 @@ runs:
             $pkgConfigDir = Split-Path $pkgConfigExe -Parent
             echo "$pkgConfigDir" >> $env:GITHUB_PATH
           } else {
-            Write-Host "  no bundled pkg-config in C:\gstreamer; relying on MSYS2 setup step"
-            # Annotate every .exe in the install dir so the next CI run shows
-            # exactly what's there if MSYS2 also fails.
-            Get-ChildItem "C:\gstreamer" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Write-Host "  no bundled pkg-config in $gstInstallRoot; relying on MSYS2 setup step"
+            Get-ChildItem $gstInstallRoot -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
               ForEach-Object { Write-Host "::warning::gst-bin: $($_.FullName)" }
           }
 
           # PKG_CONFIG_ALLOW_CROSS=1 required for i686 cross from x86_64 host;
           # harmless on native x86_64.
-          echo "PKG_CONFIG_PATH=$gstRootClean\lib\pkgconfig" >> $env:GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$pcDir" >> $env:GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
           # GStreamer\bin FIRST on PATH (gst-launch, libs).
-          echo "$gstRootClean\bin" >> $env:GITHUB_PATH
+          $binDir = Join-Path $gstInstallRoot "bin"
+          if (Test-Path $binDir) { echo "$binDir" >> $env:GITHUB_PATH }
 
           Write-Host "==> windows setup complete"
         } catch {
