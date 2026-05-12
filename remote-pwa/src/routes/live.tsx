@@ -8,6 +8,9 @@ import {
   Loader,
   Play,
   Pause,
+  LayoutGrid,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
 import { useConnectionStore } from "@/stores/connection-store";
 import { useVideoTargetsStore } from "@/stores/video-targets-store";
@@ -39,6 +42,9 @@ export default function LiveRoute() {
   const [blackActive, setBlackActive] = useState(false);
   const [frozenActive, setFrozenActive] = useState(false);
 
+  // All-slides grid (modal dialog)
+  const [gridOpen, setGridOpen] = useState(false);
+
   // Debounce timer for volume
   const volumeDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -49,6 +55,16 @@ export default function LiveRoute() {
       }
     };
   }, []);
+
+  // Close grid on Escape
+  useEffect(() => {
+    if (!gridOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGridOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [gridOpen]);
 
   const sendCmd = useCallback(
     (op: string, payload: Record<string, unknown> = {}) => {
@@ -127,6 +143,29 @@ export default function LiveRoute() {
   const totalSlides = slide?.total ?? 0;
   const currentIndex = slide?.index ?? -1;
 
+  // Swipe-up from bottom 25% of viewport opens the all-slides grid.
+  // Threshold: 80px upward swipe. Bottom-zone gate avoids triggering on
+  // scroll gestures within the tile grid.
+  const touchStartYRef = useRef<number | null>(null);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartYRef.current = e.touches[0]?.clientY ?? null;
+  }, []);
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const startY = touchStartYRef.current;
+      touchStartYRef.current = null;
+      if (startY === null || totalSlides === 0) return;
+      const endY = e.changedTouches[0]?.clientY ?? startY;
+      const viewportHeight = window.innerHeight;
+      const inBottomZone = startY >= viewportHeight * 0.75;
+      const swipeUpDistance = startY - endY;
+      if (inBottomZone && swipeUpDistance > 80) {
+        setGridOpen(true);
+      }
+    },
+    [totalSlides],
+  );
+
   const isPlaying = audioStatus?.playing ?? false;
 
   // Contextual control gates
@@ -144,12 +183,14 @@ export default function LiveRoute() {
     sublabel: undefined,
   }));
 
-  // Now-playing strip data: prefer queue nowPlaying title, fall back to slide title/text
+  // Now-playing strip data: prefer queue nowPlaying title, fall back to slide title/text.
+  // Empty when neither queue nor slide is set — NoSlidesPlaceholder already shows the
+  // "Waiting for content" message in the main area.
   const stripTitle =
     queue?.nowPlaying?.title ??
     slide?.title ??
     slide?.text?.split("\n")[0] ??
-    t("remote.live.no_slide");
+    "";
   const stripSubtitle =
     totalSlides > 0 && typeof slide?.index === "number"
       ? `${slide.index + 1} / ${totalSlides}`
@@ -157,7 +198,11 @@ export default function LiveRoute() {
   const coverUrl = queue?.nowPlaying?.thumbnail;
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div
+      className="flex h-full flex-col bg-background"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Connection pill + presence */}
       <div className="flex items-center justify-between px-3 pt-1 flex-shrink-0">
         <ConnectionPill state={wsState} />
@@ -191,6 +236,34 @@ export default function LiveRoute() {
           {queue?.nowPlaying?.artist && (
             <p className="text-xs text-fg-muted truncate">{queue.nowPlaying.artist}</p>
           )}
+
+          {/* Skip prev/next for the audio queue */}
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              aria-label={t("remote.queue.skip_prev")}
+              onClick={() => sendCmd("audio.skip_prev", {})}
+              className={cn(
+                "flex items-center justify-center h-10 w-10 rounded-full border border-border bg-surface-1",
+                "text-fg active:scale-90 transition-transform",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              )}
+            >
+              <SkipBack className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label={t("remote.queue.skip_next")}
+              onClick={() => sendCmd("audio.skip_next", {})}
+              className={cn(
+                "flex items-center justify-center h-10 w-10 rounded-full border border-border bg-surface-1",
+                "text-fg active:scale-90 transition-transform",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              )}
+            >
+              <SkipForward className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
 
           {/* Seek slider */}
           <SeekSlider
@@ -244,11 +317,62 @@ export default function LiveRoute() {
         </section>
       )}
 
-      {/* Overlay row (logo + clear) — always visible alongside TransportBar */}
+      {/* Overlay row (all-slides + logo + clear) — always visible alongside TransportBar */}
       <div className="flex justify-center gap-3 px-4 py-2 flex-shrink-0">
+        {totalSlides > 0 && (
+          <OverlayButton
+            label={t("remote.live.all_slides")}
+            Icon={LayoutGrid}
+            onClick={() => setGridOpen(true)}
+          />
+        )}
         <OverlayButton label={t("remote.live.logo")} Icon={Image} onClick={handleLogo} />
         <OverlayButton label={t("remote.live.clear")} Icon={X} onClick={handleClear} />
       </div>
+
+      {/* All-slides dialog */}
+      {gridOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center"
+          onClick={() => setGridOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("remote.live.all_slides")}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-surface w-full max-w-2xl max-h-[85vh] rounded-t-2xl sm:rounded-2xl p-4 overflow-y-auto"
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {tiles.map((tile) => {
+                const isActive = tile.index === currentIndex;
+                return (
+                  <button
+                    key={tile.index}
+                    type="button"
+                    aria-label={`Slide ${tile.index + 1} of ${totalSlides}`}
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      handleGoto(tile.index);
+                      setGridOpen(false);
+                    }}
+                    className={cn(
+                      "relative rounded-lg p-3 min-h-[80px] flex flex-col justify-between cursor-pointer",
+                      "border transition-transform active:scale-[0.98]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      isActive
+                        ? "border-primary ring-1 ring-primary bg-primary/5 text-fg"
+                        : "border-border bg-surface-1 hover:bg-surface-2",
+                    )}
+                  >
+                    <span className="text-sm font-medium text-fg">{tile.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Transport Bar */}
       <TransportBar
