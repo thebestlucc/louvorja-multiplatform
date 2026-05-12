@@ -155,10 +155,15 @@ runs:
         # runner image's pre-installed libunwind8 is at an older point release
         # than libunwind-dev wants, deadlocking apt with "held broken packages"
         # unless we ask for libunwind-dev explicitly so apt plans the upgrade.
+        # gstreamer1.0-plugins-{base,good,bad} are RUNTIME plugins (.so files
+        # in /usr/lib/.../gstreamer-1.0/) needed by video_pipeline tests that
+        # call gst::ElementFactory::make for videotestsrc / queue / etc. The
+        # -dev packages only ship headers + import libs, not plugins.
         PACKAGES=(
           pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf
           libasound2-dev libssl-dev libxdo-dev xdg-utils clang libunwind-dev
           libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+          gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
           libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
         )
 
