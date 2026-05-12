@@ -156,6 +156,27 @@ jobs:
         shell: bash
         run: pnpm --filter remote-pwa build
       - name: Build Tauri bundles
-        uses: tauri-apps/tauri-action@v0
-        with:
-          args: ${{ matrix.args }}
+        shell: bash
+        env:
+          TAURI_SKIP_FRONTEND_BUILD: "true"
+        run: |
+          set +o pipefail
+          pnpm tauri build ${{ matrix.args }} 2>&1 | tee /tmp/tauri-build.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            # Surface rustc / linker errors as annotations so the cause is
+            # visible in the run summary without authenticated log access.
+            grep -E '(^error\[E[0-9]+\]|^error:|panicked at|^thread .* panicked|FAILED|^ld:|undefined symbol|cannot find|library not found|^[[:space:]]*--> )' /tmp/tauri-build.log \
+              | head -40 \
+              | while IFS= read -r line; do
+                  short=$(printf '%s' "$line" | head -c 250)
+                  echo "::error::tauri-build: $short"
+                done
+            # Also surface tail in case error pattern is unusual
+            tail -25 /tmp/tauri-build.log | while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              short=$(printf '%s' "$line" | head -c 250)
+              echo "::error::tauri-build-tail: $short"
+            done
+            exit "$rc"
+          fi
