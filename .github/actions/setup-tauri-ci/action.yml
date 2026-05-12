@@ -159,54 +159,62 @@ runs:
         # have all kinds of quirks that will cause problems").
 
         Write-Host "==> Downloading GStreamer $GST_VERSION ($arch) MSIs"
-        $runtime = "$env:RUNNER_TEMP\gstreamer-runtime.msi"
-        $devel   = "$env:RUNNER_TEMP\gstreamer-devel.msi"
+        $runtime = "$env:RUNNER_TEMP\gst-runtime.msi"
+        $devel   = "$env:RUNNER_TEMP\gst-devel.msi"
         $runtimeUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-msvc-$arch-$GST_VERSION.msi"
         $develUrl   = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-devel-msvc-$arch-$GST_VERSION.msi"
         Write-Host "  runtime: $runtimeUrl"
         Write-Host "  devel:   $develUrl"
-        Invoke-WebRequest -Uri $runtimeUrl -OutFile $runtime -UseBasicParsing
-        Invoke-WebRequest -Uri $develUrl   -OutFile $devel   -UseBasicParsing
+        # curl.exe is preinstalled on windows-2022/2025 and is more reliable
+        # for large binary downloads than Invoke-WebRequest.
+        curl.exe --fail --location --retry 3 --silent --show-error --output $runtime $runtimeUrl
+        if ($LASTEXITCODE -ne 0) { throw "curl runtime exit $LASTEXITCODE" }
+        curl.exe --fail --location --retry 3 --silent --show-error --output $devel   $develUrl
+        if ($LASTEXITCODE -ne 0) { throw "curl devel exit $LASTEXITCODE" }
+        Write-Host "  runtime: $((Get-Item $runtime).Length) bytes"
+        Write-Host "  devel:   $((Get-Item $devel).Length) bytes"
 
-        # msiexec exit codes: 0 = success, 3010 = success but reboot required
-        # (harmless on CI, the runner is ephemeral). Anything else is a real
-        # error — 1602=user cancel, 1603=fatal, 1618=another install in
-        # progress, etc.
+        # msiexec exit codes: 0 success; 3010 success with reboot required
+        # (harmless on ephemeral CI). ArgumentList passed as a SINGLE STRING
+        # to match the proven pattern from fcast / alku-unicast green CI —
+        # the array form silently mangles msiexec switches in some pwsh
+        # versions on windows-2025.
         function Invoke-Msi($msi, $label) {
           Write-Host "==> Installing GStreamer $label"
-          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList `
-            '/i', $msi, '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
-          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
-            throw "msiexec $label failed (ExitCode=$($p.ExitCode))"
+          $proc = Start-Process msiexec -Wait -NoNewWindow -PassThru -ArgumentList "/i `"$msi`" /quiet /qn /norestart ADDLOCAL=ALL"
+          Write-Host "  exit: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+            throw "msiexec $label ExitCode=$($proc.ExitCode)"
           }
-          Write-Host "  msiexec $label exit=$($p.ExitCode)"
         }
         Invoke-Msi $runtime "runtime"
         Invoke-Msi $devel   "devel"
 
-        # Verify both the bundled pkg-config and the .pc files are present.
-        $bundledPkgConfig = "$($gstRoot)bin\pkg-config.exe"
+        Write-Host "==> Post-install: contents of C:\gstreamer (depth 3)"
+        Get-ChildItem "C:\gstreamer" -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+          ForEach-Object { $_.FullName } | Select-Object -First 80
+
+        # Trim trailing backslash for cleaner path joins.
+        $gstRootClean = $gstRoot.TrimEnd('\')
+        $bundledPkgConfig = "$gstRootClean\bin\pkg-config.exe"
+        $gstreamerPc      = "$gstRootClean\lib\pkgconfig\gstreamer-1.0.pc"
+
         if (!(Test-Path $bundledPkgConfig)) {
-          Write-Host "ERROR: $bundledPkgConfig not found — listing $($gstRoot)bin:"
-          Get-ChildItem "$($gstRoot)bin" -ErrorAction SilentlyContinue | Select-Object -First 50 Name
-          throw "GStreamer bundled pkg-config.exe missing"
+          throw "Bundled pkg-config.exe not at $bundledPkgConfig (see directory dump above)"
+        }
+        if (!(Test-Path $gstreamerPc)) {
+          throw "gstreamer-1.0.pc not at $gstreamerPc (see directory dump above)"
         }
         Write-Host "  bundled pkg-config: $bundledPkgConfig"
-
-        if (!(Test-Path "$($gstRoot)lib\pkgconfig\gstreamer-1.0.pc")) {
-          Write-Host "ERROR: gstreamer-1.0.pc not found under $gstRoot — listing install dirs:"
-          Get-ChildItem "C:\gstreamer" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 50 FullName
-          throw "GStreamer devel headers were not installed at expected path"
-        }
+        Write-Host "  gstreamer-1.0.pc:   $gstreamerPc"
 
         # PKG_CONFIG_ALLOW_CROSS=1 is required for the i686 cross from x86_64 host;
         # harmless on native.
-        echo "PKG_CONFIG_PATH=$($gstRoot)lib\pkgconfig" >> $env:GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$gstRootClean\lib\pkgconfig" >> $env:GITHUB_ENV
         echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
         # GStreamer\bin FIRST on PATH — gstreamer-rs requires its bundled
-        # pkg-config to win over any other one (which there shouldn't be on
-        # windows-2025, but defensive).
-        echo "$($gstRoot)bin" >> $env:GITHUB_PATH
+        # pkg-config to win over any other one.
+        echo "$gstRootClean\bin" >> $env:GITHUB_PATH
 
     - name: Install mold linker (Linux)
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
