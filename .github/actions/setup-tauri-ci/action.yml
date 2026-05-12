@@ -70,25 +70,43 @@ runs:
       shell: bash
       run: |
         set -x
+        # Some runner images leave unattended-upgrades or dpkg in a half-configured
+        # state — make installs lock-resilient before doing anything.
+        sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
+        sudo killall -q unattended-upgr unattended-upgrades 2>/dev/null || true
+        sudo dpkg --configure -a || true
+
         sudo apt-get update
+
+        PACKAGES=(
+          pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf
+          libasound2-dev libssl-dev libxdo-dev xdg-utils clang
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+          libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+          libayatana-appindicator3-dev
+        )
+
+        # Diagnostic: print availability per-package BEFORE the install so the next
+        # CI log identifies any package the runner's apt cache can't resolve.
+        echo "=== Package availability ($(lsb_release -ds 2>/dev/null || uname -a)) ==="
+        missing=0
+        for pkg in "${PACKAGES[@]}"; do
+          if apt-cache show "$pkg" >/dev/null 2>&1; then
+            cand=$(apt-cache policy "$pkg" 2>/dev/null | awk -F': ' '/Candidate/ {print $2}')
+            printf '  OK:      %-40s %s\n' "$pkg" "$cand"
+          else
+            printf '  MISSING: %s\n' "$pkg"
+            missing=$((missing + 1))
+          fi
+        done
+        if [ "$missing" -gt 0 ]; then
+          echo "ERROR: $missing package(s) not in apt cache — aborting before install"
+          exit 1
+        fi
+
         sudo apt-get install -y --no-install-recommends \
-          pkg-config \
-          libglib2.0-dev \
-          libgtk-3-dev \
-          libwebkit2gtk-4.1-dev \
-          libsoup-3.0-dev \
-          libjavascriptcoregtk-4.1-dev \
-          libayatana-appindicator3-dev \
-          librsvg2-dev \
-          patchelf \
-          libasound2-dev \
-          libssl-dev \
-          libxdo-dev \
-          xdg-utils \
-          clang \
-          libgstreamer1.0-dev \
-          libgstreamer-plugins-base1.0-dev \
-          libgstreamer-plugins-bad1.0-dev
+          -o DPkg::Lock::Timeout=120 \
+          "${PACKAGES[@]}"
 
     - name: Install GStreamer (macOS)
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
@@ -122,9 +140,18 @@ runs:
         $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
         $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
 
-        Write-Host "==> Installing pkgconfiglite via choco"
-        choco install --yes --no-progress pkgconfiglite
-        if ($LASTEXITCODE -ne 0) { throw "choco install pkgconfiglite failed ($LASTEXITCODE)" }
+        Write-Host "==> Ensuring pkg-config is on PATH"
+        $pkgConfig = Get-Command pkg-config -ErrorAction SilentlyContinue
+        if (!$pkgConfig) {
+          Write-Host "  pkg-config not on PATH — installing pkgconfiglite via choco"
+          choco install --yes --no-progress pkgconfiglite
+          if ($LASTEXITCODE -ne 0) { throw "choco install pkgconfiglite failed (LASTEXITCODE=$LASTEXITCODE)" }
+          # Refresh PATH in current session so subsequent commands find it
+          $env:PATH = "C:\ProgramData\chocolatey\bin;$env:PATH"
+          $pkgConfig = Get-Command pkg-config -ErrorAction SilentlyContinue
+          if (!$pkgConfig) { throw "pkg-config still not on PATH after choco install" }
+        }
+        Write-Host "  pkg-config: $($pkgConfig.Source)"
 
         Write-Host "==> Downloading GStreamer $GST_VERSION ($arch) MSIs"
         $runtime = "$env:RUNNER_TEMP\gstreamer-runtime.msi"
