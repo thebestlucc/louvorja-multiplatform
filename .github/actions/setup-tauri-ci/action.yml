@@ -115,26 +115,38 @@ runs:
         # installed. Also release any holds set by the image build.
         echo "::group::Diagnose package state"
         echo "--- Held packages ---"
-        sudo apt-mark showhold || true
+        held=$(sudo apt-mark showhold 2>/dev/null | tr '\n' ' ')
+        echo "$held"
+        for pkg in $held; do
+          echo "::error::held: $pkg"
+        done
         echo "--- apt-cache policy libgstreamer1.0-dev ---"
-        apt-cache policy libgstreamer1.0-dev || true
+        apt-cache policy libgstreamer1.0-dev 2>&1 | tee /tmp/policy-dev.txt
         echo "--- apt-cache policy libgstreamer1.0-0 ---"
-        apt-cache policy libgstreamer1.0-0 || true
+        apt-cache policy libgstreamer1.0-0 2>&1 | tee /tmp/policy-rt.txt
+        # Surface installed vs candidate as annotations
+        for f in /tmp/policy-dev.txt /tmp/policy-rt.txt; do
+          while IFS= read -r line; do
+            case "$line" in
+              *Installed:*|*Candidate:*) echo "::error::policy: $line" ;;
+            esac
+          done < "$f"
+        done
         echo "::endgroup::"
 
-        echo "::group::Release holds + upgrade pre-installed runtime libs"
-        held=$(sudo apt-mark showhold 2>/dev/null | tr '\n' ' ')
+        echo "::group::Release holds + bring system to latest"
         if [ -n "$held" ]; then
           sudo apt-mark unhold $held || true
         fi
-        sudo apt-get install -y --only-upgrade -o DPkg::Lock::Timeout=120 \
-          libgstreamer1.0-0 \
-          libgstreamer-plugins-base1.0-0 \
-          libgstreamer-plugins-bad1.0-0 \
-          libsoup-3.0-0 \
-          libwebkit2gtk-4.1-0 \
-          libjavascriptcoregtk-4.1-0 \
-          libgtk-3-0 libglib2.0-0 librsvg2-2 || true
+        # Broad upgrade — the "held broken packages" error means the resolver
+        # can't reconcile installed runtime versions with the -dev candidates.
+        # Bumping every installed package to its candidate version is the
+        # least-surprise way to clear that.
+        sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+          --with-new-pkgs \
+          -o DPkg::Lock::Timeout=120 \
+          -o Dpkg::Options::="--force-confnew" \
+          -o Dpkg::Options::="--force-confdef" || true
         echo "::endgroup::"
 
         # libsoup-3.0-dev + libjavascriptcoregtk-4.1-dev come transitively
@@ -160,13 +172,17 @@ runs:
 
         if [ "$apt_rc" -ne 0 ]; then
           echo "::group::apt failure analysis"
-          # Emit each apt error / warning line as an annotation (truncated
-          # to 200 chars each — GH annotations cap longer lines).
-          while IFS= read -r line; do
-            short=$(printf '%s' "$line" | head -c 200)
-            echo "::error::apt: $short"
-          done < <(printf '%s\n' "$apt_log" | grep -E '^(E:|W:|Err:|\s*Unable to|\s*Hash Sum|\s*Failed|\s*Package .* is not available)' | head -10)
-          # Also try per-package install to identify which one is the culprit.
+          # Emit non-trivial apt output lines as annotations so the resolver
+          # explanation (Depends:/but it is/The following ...) is visible
+          # without authenticated log access. Skip pure progress noise.
+          printf '%s\n' "$apt_log" \
+            | grep -v -E '^(Reading package lists|Building dependency tree|Reading state information|Selecting previously|Preparing to unpack|Unpacking |Setting up |Processing triggers|Get:[0-9]|Fetched |Need to get |After this|^[[:space:]]*$)' \
+            | head -40 \
+            | while IFS= read -r line; do
+                short=$(printf '%s' "$line" | head -c 250)
+                echo "::error::apt: $short"
+              done
+          # Per-package install to identify which exact name fails.
           echo "Per-package retry to identify failing package:"
           for pkg in "${PACKAGES[@]}"; do
             if sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 "$pkg" >/dev/null 2>&1; then
