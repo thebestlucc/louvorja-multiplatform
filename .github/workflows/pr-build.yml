@@ -92,7 +92,11 @@ jobs:
         shell: bash
         run: |
           set +o pipefail
-          cargo test --locked --manifest-path src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-test.log
+          # video_pipeline tests drive the pipeline to PAUSED/PLAYING which
+          # makes glimagesink + the webrtc encoder allocate a real GL context.
+          # Without a display this panics on the state transition; xvfb-run
+          # provides a virtual X display so the tests can complete headlessly.
+          xvfb-run -a cargo test --locked --manifest-path src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-test.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
             grep -E '(^error\[E[0-9]+\]|^error:|panicked at|^thread .* panicked|FAILED|^test .* \.\.\. FAILED)' /tmp/cargo-test.log \
