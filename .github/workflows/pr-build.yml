@@ -75,10 +75,34 @@ jobs:
         run: node .github/scripts/check-commands-toml.mjs
       - name: Rust check
         shell: bash
-        run: cargo check --locked --manifest-path src-tauri/Cargo.toml
+        run: |
+          set +o pipefail
+          cargo check --locked --manifest-path src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-check.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            grep -E '(^error\[E[0-9]+\]|^error:|^warning:|^   --> |panicked at|^thread .* panicked)' /tmp/cargo-check.log \
+              | head -40 \
+              | while IFS= read -r line; do
+                  short=$(printf '%s' "$line" | head -c 250)
+                  echo "::error::rustc: $short"
+                done
+            exit "$rc"
+          fi
       - name: Run Rust tests
         shell: bash
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+        run: |
+          set +o pipefail
+          cargo test --locked --manifest-path src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-test.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            grep -E '(^error\[E[0-9]+\]|^error:|panicked at|^thread .* panicked|FAILED|^test .* \.\.\. FAILED)' /tmp/cargo-test.log \
+              | head -40 \
+              | while IFS= read -r line; do
+                  short=$(printf '%s' "$line" | head -c 250)
+                  echo "::error::rust-test: $short"
+                done
+            exit "$rc"
+          fi
 
   tauri-build:
     needs:
