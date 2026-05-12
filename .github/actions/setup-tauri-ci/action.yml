@@ -65,12 +65,356 @@ runs:
         # Keep cache even on failed builds so partial compilation is reusable next run
         cache-on-failure: true
 
-    - name: Cache Linux apt packages
+    - name: Install Linux system dependencies
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+      shell: bash
+      run: |
+        # Use GH Actions log-grouping so the failing sub-step is unambiguous
+        # in the log (the parent step name only says "Run ./.github/...").
+
+        echo "::group::OS + sources.list inspection"
+        cat /etc/os-release || true
+        uname -a || true
+        echo "--- /etc/apt/sources.list ---"
+        cat /etc/apt/sources.list 2>/dev/null || echo "(absent)"
+        echo "--- /etc/apt/sources.list.d/ ---"
+        ls -la /etc/apt/sources.list.d/ 2>/dev/null || true
+        for f in /etc/apt/sources.list.d/*; do
+          [ -f "$f" ] && echo "=== $f ===" && cat "$f"
+        done
+        echo "::endgroup::"
+
+        echo "::group::Demote Azure mirror (runner-images#8846)"
+        # Rewrite Azure → canonical archive.ubuntu.com across all sources files.
+        sudo find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print \
+          -exec sudo sed -i \
+            -e 's|http://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            {} +
+        # Confirm the rewrite
+        grep -RhE '^(deb|URIs:)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
+        echo "::endgroup::"
+
+        echo "::group::Lock-resilient prep"
+        sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
+        sudo killall -q unattended-upgr unattended-upgrades 2>/dev/null || true
+        sudo dpkg --configure -a || true
+        echo "::endgroup::"
+
+        echo "::group::apt-get update"
+        sudo apt-get update
+        echo "::endgroup::"
+
+        # The ubuntu-22.04 / -arm runner images pre-install some GStreamer
+        # runtime libs at the initial jammy version, while the matching
+        # -dev packages from jammy-updates / -security require newer
+        # point releases — the solver gets stuck on "held broken packages"
+        # if we don't bump the pre-installed pieces first. Apt patterns
+        # (the `?` suffix) only work in `apt search`, not `apt-get install`,
+        # so use --only-upgrade which silently skips packages that aren't
+        # installed. Also release any holds set by the image build.
+        echo "::group::Diagnose package state"
+        echo "--- Held packages ---"
+        held=$(sudo apt-mark showhold 2>/dev/null | tr '\n' ' ')
+        echo "$held"
+        for pkg in $held; do
+          echo "::error::held: $pkg"
+        done
+        echo "--- apt-cache policy libgstreamer1.0-dev ---"
+        apt-cache policy libgstreamer1.0-dev 2>&1 | tee /tmp/policy-dev.txt
+        echo "--- apt-cache policy libgstreamer1.0-0 ---"
+        apt-cache policy libgstreamer1.0-0 2>&1 | tee /tmp/policy-rt.txt
+        # Surface installed vs candidate as annotations
+        for f in /tmp/policy-dev.txt /tmp/policy-rt.txt; do
+          while IFS= read -r line; do
+            case "$line" in
+              *Installed:*|*Candidate:*) echo "::error::policy: $line" ;;
+            esac
+          done < "$f"
+        done
+        echo "::endgroup::"
+
+        echo "::group::Release holds + bring system to latest"
+        if [ -n "$held" ]; then
+          sudo apt-mark unhold $held || true
+        fi
+        # Broad upgrade — the "held broken packages" error means the resolver
+        # can't reconcile installed runtime versions with the -dev candidates.
+        # Bumping every installed package to its candidate version is the
+        # least-surprise way to clear that.
+        sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+          --with-new-pkgs \
+          -o DPkg::Lock::Timeout=120 \
+          -o Dpkg::Options::="--force-confnew" \
+          -o Dpkg::Options::="--force-confdef" || true
+        echo "::endgroup::"
+
+        # gstreamer1.0-plugins-{base,good,bad,ugly} + -gl + -libav + -nice
+        # ship the .so plugins that ElementFactory::make resolves at runtime.
+        # Cargo tests in video_pipeline construct:
+        #   videotestsrc/audiotestsrc/videoconvert/audioconvert/audioresample
+        #     → plugins-base
+        #   queue/h264parse → core / plugins-bad
+        #   glimagesink → gstreamer1.0-gl (SEPARATE package)
+        #   x264enc → plugins-ugly (license-restricted, separate)
+        #   avenc_aac → gstreamer1.0-libav (FFmpeg-backed encoder)
+        #   webrtcbin (consumer.rs) → plugins-bad + gstreamer1.0-nice for ICE
+        #   mp4mux/aacparse → plugins-good
+        # xvfb provides a virtual X display for tests that drive pipelines
+        # to PAUSED/PLAYING — glimagesink + webrtc encoder need a real GL
+        # context once state-machine reaches PAUSED.
+        PACKAGES=(
+          pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf
+          libasound2-dev libssl-dev libxdo-dev xdg-utils clang libunwind-dev
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+          gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+          gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+          gstreamer1.0-gl gstreamer1.0-libav gstreamer1.0-nice
+          xvfb
+          libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+        )
+
+        # Try the bulk install first; if it fails, capture the apt error
+        # lines as GH Actions error annotations so the failure summary
+        # surfaces the problem (visible without authenticated log access).
+        echo "::group::apt-get install (bulk)"
+        set +e
+        apt_log=$(sudo apt-get install -y --no-install-recommends \
+          -o DPkg::Lock::Timeout=120 "${PACKAGES[@]}" 2>&1)
+        apt_rc=$?
+        set -e
+        echo "$apt_log"
+        echo "::endgroup::"
+
+        if [ "$apt_rc" -ne 0 ]; then
+          echo "::group::apt failure analysis"
+          # Emit apt resolver explanation lines as annotations. Grep is now
+          # explicit for error/dep patterns AND keeps head -40 of all output
+          # as a fallback — annotations are visible without auth.
+          printf '%s\n' "$apt_log" \
+            | grep -E '(^E:|^W:|^Err:|^N:|Depends:|Conflicts:|but it is|The following|Unable to correct|Sub-process|dpkg:|cannot |returned an error|trying to overwrite)' \
+            | head -40 \
+            | while IFS= read -r line; do
+                short=$(printf '%s' "$line" | head -c 250)
+                echo "::error::apt-err: $short"
+              done
+          # Fallback: also emit the tail of apt output (where post-install
+          # errors usually appear) so we don't miss anything.
+          printf '%s\n' "$apt_log" | tail -25 | while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            short=$(printf '%s' "$line" | head -c 250)
+            echo "::error::apt-tail: $short"
+          done
+
+          # Per-package retry — if every package installs individually,
+          # the bulk failure was a transient dpkg/trigger issue, not a
+          # real dependency problem. Treat that case as success.
+          echo "Per-package retry to identify failing package:"
+          any_fail=0
+          for pkg in "${PACKAGES[@]}"; do
+            if sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 "$pkg" >/dev/null 2>&1; then
+              echo "  OK:   $pkg"
+            else
+              echo "  FAIL: $pkg"
+              echo "::error::apt failed on package: $pkg"
+              any_fail=1
+            fi
+          done
+          echo "::endgroup::"
+          if [ "$any_fail" -eq 0 ]; then
+            echo "Bulk install failed but per-package retry installed every package — continuing."
+          else
+            exit "$apt_rc"
+          fi
+        fi
+
+        echo "Linux deps install OK"
+
+    - name: Install GStreamer (macOS)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        # Official universal pkg (includes both arm64 and x86_64 slices) — required
+        # for universal-apple-darwin builds. Homebrew only ships host-arch builds.
+        # URL path is /macos/ (the /osx/ path is the legacy mirror; /macos/ is
+        # what current 1.24.x uploads use).
+        GST_VERSION="1.24.13"
+        TMP="$(mktemp -d)"
+        curl -fL --retry 3 -o "${TMP}/runtime.pkg" \
+          "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-${GST_VERSION}-universal.pkg"
+        curl -fL --retry 3 -o "${TMP}/devel.pkg" \
+          "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-universal.pkg"
+        sudo installer -pkg "${TMP}/runtime.pkg" -target /
+        sudo installer -pkg "${TMP}/devel.pkg" -target /
+        GST_PREFIX="/Library/Frameworks/GStreamer.framework/Versions/1.0"
+        echo "PKG_CONFIG_PATH=${GST_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+        # universal-apple-darwin builds cross-compile to x86_64-apple-darwin from
+        # the arm64 macos-latest host. pkg-config-rs refuses to use a host
+        # pkg-config for a different target arch unless this is set. The
+        # GStreamer.framework's dylibs are universal (fat binaries containing
+        # both archs), so the same .pc files work for both targets.
+        echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
+        echo "${GST_PREFIX}/bin" >> "$GITHUB_PATH"
+
+    - name: Install pkg-config + GStreamer (Windows)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $ProgressPreference = "SilentlyContinue"  # IWR ~10x faster without progress UI
+
+        # Wrap whole script in try/catch so any thrown exception surfaces
+        # as a GH Actions annotation visible in the run summary without
+        # authenticated log access.
+        try {
+          $GST_VERSION = "1.24.13"
+          $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
+          $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
+          Write-Host "==> windows setup start: arch=$arch gstRoot=$gstRoot"
+
+          # NOTE: do NOT install chocolatey/pkgconfiglite — its SourceForge HTTP
+          # download is broken on windows-2025 (ROCm/TheRock#2898, numpy#30187).
+          # Strawberry Perl's bundled pkg-config.bat was removed (runner-images
+          # #9693), so the runner has no pkg-config at all. The GStreamer dev MSI
+          # ships its own pkg-config.exe at $gstRoot\bin\pkg-config.exe and the
+          # gstreamer-rs README mandates it be FIRST on PATH.
+
+          Write-Host "==> Downloading GStreamer $GST_VERSION ($arch) MSIs"
+          $runtime = "$env:RUNNER_TEMP\gst-runtime.msi"
+          $devel   = "$env:RUNNER_TEMP\gst-devel.msi"
+          $runtimeUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-msvc-$arch-$GST_VERSION.msi"
+          $develUrl   = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-devel-msvc-$arch-$GST_VERSION.msi"
+          Write-Host "  runtime: $runtimeUrl"
+          Write-Host "  devel:   $develUrl"
+          curl.exe --fail --location --retry 3 --silent --show-error --output $runtime $runtimeUrl
+          if ($LASTEXITCODE -ne 0) { throw "curl runtime exit $LASTEXITCODE" }
+          curl.exe --fail --location --retry 3 --silent --show-error --output $devel   $develUrl
+          if ($LASTEXITCODE -ne 0) { throw "curl devel exit $LASTEXITCODE" }
+          Write-Host "  runtime: $((Get-Item $runtime).Length) bytes"
+          Write-Host "  devel:   $((Get-Item $devel).Length) bytes"
+
+          # msiexec exit codes: 0 success; 3010 success with reboot required
+          # (harmless on ephemeral CI). ArgumentList passed as a SINGLE STRING
+          # to match the proven pattern from fcast / alku-unicast green CI —
+          # the array form silently mangles msiexec switches in some pwsh
+          # versions on windows-2025. ROOTDRIVE=C: forces install to C: —
+          # without it the MSI picks the largest free drive (D:\ on GH-hosted
+          # Windows runners) and our PATH/PKG_CONFIG_PATH expectations break.
+          # /l*v emits a verbose install log we can mine for errors when the
+          # post-install search fails.
+          function Invoke-Msi($msi, $label) {
+            Write-Host "==> Installing GStreamer $label"
+            $msiLog = "$env:RUNNER_TEMP\msi-$label.log"
+            $proc = Start-Process msiexec -Wait -NoNewWindow -PassThru -ArgumentList "/i `"$msi`" /qn /norestart ADDLOCAL=ALL ROOTDRIVE=C:\ /l*v `"$msiLog`""
+            Write-Host "  exit: $($proc.ExitCode)"
+            if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              if (Test-Path $msiLog) {
+                Get-Content $msiLog -Tail 30 | ForEach-Object { Write-Host "  msi-log: $_" }
+              }
+              throw "msiexec $label ExitCode=$($proc.ExitCode)"
+            }
+          }
+          Invoke-Msi $runtime "runtime"
+          Invoke-Msi $devel   "devel"
+
+          Write-Host "==> Post-install: contents of C:\gstreamer + D:\gstreamer (depth 3)"
+          foreach ($root in @("C:\gstreamer", "D:\gstreamer")) {
+            if (Test-Path $root) {
+              Write-Host "  -- $root --"
+              Get-ChildItem $root -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName } | Select-Object -First 80
+            }
+          }
+
+          $gstRootClean = $gstRoot.TrimEnd('\')
+          # Search every plausible prefix — GH Windows runners may pick D:\
+          # as the install root if C:\ has less free space at MSI time.
+          $foundPc = $null
+          foreach ($root in @("C:\gstreamer", "D:\gstreamer", "C:\Program Files\gstreamer", "C:\Program Files (x86)\gstreamer")) {
+            if (Test-Path $root) {
+              $hit = Get-ChildItem $root -Recurse -Filter "gstreamer-1.0.pc" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($hit) { $foundPc = $hit; break }
+            }
+          }
+          if (!$foundPc) {
+            Write-Host "::error::win-setup: gstreamer-1.0.pc not found under C:\gstreamer or Program Files"
+            # Tail of MSI install logs for diagnosis
+            foreach ($f in @("$env:RUNNER_TEMP\msi-runtime.log", "$env:RUNNER_TEMP\msi-devel.log")) {
+              if (Test-Path $f) {
+                Write-Host "==> Tail of $f"
+                Get-Content $f -Tail 40 | ForEach-Object {
+                  $short = if ($_.Length -gt 250) { $_.Substring(0,250) } else { $_ }
+                  Write-Host "::error::msi-tail: $short"
+                }
+              }
+            }
+            throw "gstreamer-1.0.pc absent after both MSI installs"
+          }
+          $gstreamerPc = $foundPc.FullName
+          $pcDir       = Split-Path $gstreamerPc -Parent
+          $gstInstallRoot = Split-Path (Split-Path $pcDir -Parent) -Parent  # ../../
+          Write-Host "  gstreamer-1.0.pc: $gstreamerPc"
+          Write-Host "  install root:     $gstInstallRoot"
+
+          # Locate pkg-config.exe (or pkgconf.exe — modern replacement). The
+          # GStreamer MSI may or may not bundle it depending on version + the
+          # ADDLOCAL feature set. Search the install tree first; if not there,
+          # we'll need to install MSYS2's pkgconf as a fallback.
+          $pkgConfigExe = $null
+          foreach ($name in @("pkg-config.exe", "pkgconf.exe")) {
+            $hit = Get-ChildItem $gstInstallRoot -Recurse -Filter $name -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { $pkgConfigExe = $hit.FullName; break }
+          }
+          if ($pkgConfigExe) {
+            Write-Host "  bundled pkg-config: $pkgConfigExe"
+            $pkgConfigDir = Split-Path $pkgConfigExe -Parent
+            echo "$pkgConfigDir" >> $env:GITHUB_PATH
+          } else {
+            Write-Host "  no bundled pkg-config in $gstInstallRoot; relying on MSYS2 setup step"
+            Get-ChildItem $gstInstallRoot -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "::warning::gst-bin: $($_.FullName)" }
+          }
+
+          # PKG_CONFIG_ALLOW_CROSS=1 required for i686 cross from x86_64 host;
+          # harmless on native x86_64.
+          echo "PKG_CONFIG_PATH=$pcDir" >> $env:GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
+          # GStreamer\bin FIRST on PATH (gst-launch, libs).
+          $binDir = Join-Path $gstInstallRoot "bin"
+          if (Test-Path $binDir) { echo "$binDir" >> $env:GITHUB_PATH }
+
+          Write-Host "==> windows setup complete"
+        } catch {
+          $msg = $_.Exception.Message -replace "[\r\n]+", " "
+          if ($msg.Length -gt 200) { $msg = $msg.Substring(0, 200) }
+          Write-Host "::error::win-setup: $msg"
+          throw
+        }
+
+    - name: Install MSYS2 pkgconf (Windows)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
+      uses: msys2/setup-msys2@v2
       with:
-        packages: pkg-config libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev libxdo-dev xdg-utils clang libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
-        version: 1.2
+        msystem: MINGW64
+        install: mingw-w64-x86_64-pkgconf
+        update: false
+        path-type: inherit
+
+    - name: Verify pkg-config on PATH (Windows)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        # Prepend MSYS2 mingw64\bin to PATH so the cross-compile build script
+        # (run by cargo) can find pkgconf.exe from any shell.
+        echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+        $found = Get-Command pkgconf -ErrorAction SilentlyContinue
+        if (!$found) { $found = Get-Command pkg-config -ErrorAction SilentlyContinue }
+        if (!$found) {
+          Write-Host "::error::win-setup: pkg-config / pkgconf not on PATH after MSYS2 install"
+          exit 1
+        }
+        Write-Host "  pkg-config resolved to: $($found.Source)"
 
     - name: Install mold linker (Linux)
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}

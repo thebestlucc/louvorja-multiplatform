@@ -1,0 +1,194 @@
+name: pr-build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: pr-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app sources
+        uses: actions/checkout@v6.0.2
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            global.css
+            index.html
+            package.json
+            pnpm-lock.yaml
+            pnpm-workspace.yaml
+            public
+            remote-pwa
+            src
+            tests
+            tsconfig.json
+            tsconfig.node.json
+            tsconfig.unit-tests.json
+            vite.config.ts
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-tauri-ci
+        with:
+          setup-rust: "false"
+          install-linux-deps: "false"
+      - name: Build frontend
+        shell: bash
+        run: pnpm build
+      - name: Run root unit tests
+        shell: bash
+        run: pnpm test:unit
+      - name: Run remote-pwa tests
+        shell: bash
+        run: pnpm --filter remote-pwa test -- --run
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: frontend-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  rust-checks:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - name: Checkout app sources
+        uses: actions/checkout@v6.0.2
+      - uses: ./.github/actions/setup-tauri-ci
+      - name: Build remote-pwa (required by include_dir! in src/remote/assets.rs)
+        shell: bash
+        run: pnpm --filter remote-pwa build
+      - name: Verify commands.toml matches collect_commands!
+        shell: bash
+        run: node .github/scripts/check-commands-toml.mjs
+      - name: Rust check
+        shell: bash
+        run: |
+          set +o pipefail
+          cargo check --locked --manifest-path src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-check.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            grep -E '(^error\[E[0-9]+\]|^error:|^warning:|^   --> |panicked at|^thread .* panicked)' /tmp/cargo-check.log \
+              | head -40 \
+              | while IFS= read -r line; do
+                  short=$(printf '%s' "$line" | head -c 250)
+                  echo "::error::rustc: $short"
+                done
+            exit "$rc"
+          fi
+      - name: Run Rust tests
+        shell: bash
+        run: |
+          set +o pipefail
+          # video_pipeline tests drive the pipeline to PAUSED/PLAYING which
+          # makes glimagesink + the webrtc encoder allocate a real GL context.
+          # Without a display this panics on the state transition; xvfb-run
+          # provides a virtual X display so the tests can complete headlessly.
+          # Two specific tests additionally need ICE candidate gathering
+          # against a STUN server / real GLX (xvfb's software GLX often can't
+          # reach PLAYING with glimagesink). Skip them in CI; developers can
+          # still run them locally with a real graphics stack + network.
+          xvfb-run -a cargo test --locked --manifest-path src-tauri/Cargo.toml \
+            -- \
+            --skip subscribe_emits_offer_through_signaling_channel \
+            --skip video_pipeline_reaches_playing_within_2s \
+            2>&1 | tee /tmp/cargo-test.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            grep -E '(^error\[E[0-9]+\]|^error:|panicked at|^thread .* panicked|FAILED|^test .* \.\.\. FAILED)' /tmp/cargo-test.log \
+              | head -40 \
+              | while IFS= read -r line; do
+                  short=$(printf '%s' "$line" | head -c 250)
+                  echo "::error::rust-test: $short"
+                done
+            exit "$rc"
+          fi
+
+  tauri-build:
+    needs:
+      - frontend-checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-universal
+            platform: macos-latest
+            args: "--target universal-apple-darwin"
+            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+            cache_suffix: "universal"
+          - name: linux-x86_64
+            platform: ubuntu-22.04
+            args: ""
+            rust_targets: ""
+            cache_suffix: ""
+          - name: linux-aarch64
+            platform: ubuntu-22.04-arm
+            args: ""
+            rust_targets: ""
+            cache_suffix: ""
+          - name: windows-x86_64
+            platform: windows-latest
+            args: ""
+            rust_targets: ""
+            cache_suffix: ""
+          - name: windows-x86
+            platform: windows-latest
+            args: "--target i686-pc-windows-msvc"
+            rust_targets: "i686-pc-windows-msvc"
+            cache_suffix: "x86"
+    runs-on: ${{ matrix.platform }}
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - name: Checkout app sources
+        uses: actions/checkout@v6.0.2
+      - uses: ./.github/actions/setup-tauri-ci
+        with:
+          rust-targets: ${{ matrix.rust_targets }}
+          cache-suffix: ${{ matrix.cache_suffix }}
+      - name: Download frontend dist
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: frontend-dist
+          path: dist
+      - name: Build remote-pwa (required by include_dir! in src/remote/assets.rs)
+        shell: bash
+        run: pnpm --filter remote-pwa build
+      - name: Build Tauri bundles
+        shell: bash
+        env:
+          TAURI_SKIP_FRONTEND_BUILD: "true"
+        run: |
+          set +o pipefail
+          pnpm tauri build ${{ matrix.args }} 2>&1 | tee /tmp/tauri-build.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            # Surface rustc / linker errors as annotations so the cause is
+            # visible in the run summary without authenticated log access.
+            grep -E '(^error\[E[0-9]+\]|^error:|panicked at|^thread .* panicked|FAILED|^ld:|undefined symbol|cannot find|library not found|^[[:space:]]*--> )' /tmp/tauri-build.log \
+              | head -40 \
+              | while IFS= read -r line; do
+                  short=$(printf '%s' "$line" | head -c 250)
+                  echo "::error::tauri-build: $short"
+                done
+            # Also surface tail in case error pattern is unusual
+            tail -25 /tmp/tauri-build.log | while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              short=$(printf '%s' "$line" | head -c 250)
+              echo "::error::tauri-build-tail: $short"
+            done
+            exit "$rc"
+          fi
