@@ -7,9 +7,9 @@ import * as assert from "node:assert";
 import { useVideoPlayerStore } from "../../src/stores/video-player-store";
 
 describe("videoPlayerStore", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     useVideoPlayerStore.getState().resetVideoState();
-    useVideoPlayerStore.getState().setUseRustVideoPipeline(false);
+    await useVideoPlayerStore.getState().setUseRustVideoPipeline(false);
   });
 
   test("initial state", () => {
@@ -51,14 +51,14 @@ describe("videoPlayerStore", () => {
     assert.strictEqual(useVideoPlayerStore.getState().useRustVideoPipeline, false);
   });
 
-  test("setUseRustVideoPipeline(true) updates state", () => {
-    useVideoPlayerStore.getState().setUseRustVideoPipeline(true);
+  test("setUseRustVideoPipeline(true) updates state", async () => {
+    await useVideoPlayerStore.getState().setUseRustVideoPipeline(true);
     assert.strictEqual(useVideoPlayerStore.getState().useRustVideoPipeline, true);
   });
 
-  test("setUseRustVideoPipeline(false) resets to false", () => {
-    useVideoPlayerStore.getState().setUseRustVideoPipeline(true);
-    useVideoPlayerStore.getState().setUseRustVideoPipeline(false);
+  test("setUseRustVideoPipeline(false) resets to false", async () => {
+    await useVideoPlayerStore.getState().setUseRustVideoPipeline(true);
+    await useVideoPlayerStore.getState().setUseRustVideoPipeline(false);
     assert.strictEqual(useVideoPlayerStore.getState().useRustVideoPipeline, false);
   });
 });
