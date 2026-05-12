@@ -69,15 +69,14 @@ runs:
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
       shell: bash
       run: |
+        set -x
         sudo apt-get update
+        # Install in two groups so a missing package in one group still leaves
+        # a useful log of which group succeeded.
         sudo apt-get install -y --no-install-recommends \
           pkg-config \
           libglib2.0-dev \
           libgtk-3-dev \
-          libwebkit2gtk-4.1-dev \
-          libsoup-3.0-dev \
-          libjavascriptcoregtk-4.1-dev \
-          libappindicator3-dev \
           librsvg2-dev \
           patchelf \
           libasound2-dev \
@@ -88,6 +87,11 @@ runs:
           libgstreamer1.0-dev \
           libgstreamer-plugins-base1.0-dev \
           libgstreamer-plugins-bad1.0-dev
+        sudo apt-get install -y --no-install-recommends \
+          libwebkit2gtk-4.1-dev \
+          libsoup-3.0-dev \
+          libjavascriptcoregtk-4.1-dev \
+          libappindicator3-dev
 
     - name: Install GStreamer (macOS)
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
@@ -95,12 +99,14 @@ runs:
       run: |
         # Official universal pkg (includes both arm64 and x86_64 slices) — required
         # for universal-apple-darwin builds. Homebrew only ships host-arch builds.
-        GST_VERSION="1.24.10"
+        # URL path is /macos/ (the /osx/ path is the legacy mirror; /macos/ is
+        # what current 1.24.x uploads use).
+        GST_VERSION="1.24.13"
         TMP="$(mktemp -d)"
         curl -fL --retry 3 -o "${TMP}/runtime.pkg" \
-          "https://gstreamer.freedesktop.org/data/pkg/osx/${GST_VERSION}/gstreamer-1.0-${GST_VERSION}-universal.pkg"
+          "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-${GST_VERSION}-universal.pkg"
         curl -fL --retry 3 -o "${TMP}/devel.pkg" \
-          "https://gstreamer.freedesktop.org/data/pkg/osx/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-universal.pkg"
+          "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-universal.pkg"
         sudo installer -pkg "${TMP}/runtime.pkg" -target /
         sudo installer -pkg "${TMP}/devel.pkg" -target /
         GST_PREFIX="/Library/Frameworks/GStreamer.framework/Versions/1.0"
@@ -111,7 +117,7 @@ runs:
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
       shell: pwsh
       run: |
-        $GST_VERSION = "1.24.10"
+        $GST_VERSION = "1.24.13"
         $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
         $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
 
