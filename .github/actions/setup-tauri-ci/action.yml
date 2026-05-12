@@ -65,12 +65,72 @@ runs:
         # Keep cache even on failed builds so partial compilation is reusable next run
         cache-on-failure: true
 
-    - name: Cache Linux apt packages
+    - name: Install Linux system dependencies
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
-      uses: awalsh128/cache-apt-pkgs-action@v1.6.0
-      with:
-        packages: pkg-config libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev libxdo-dev xdg-utils clang libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
-        version: 1.2
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          pkg-config \
+          libglib2.0-dev \
+          libgtk-3-dev \
+          libwebkit2gtk-4.1-dev \
+          libsoup-3.0-dev \
+          libjavascriptcoregtk-4.1-dev \
+          libappindicator3-dev \
+          librsvg2-dev \
+          patchelf \
+          libasound2-dev \
+          libssl-dev \
+          libxdo-dev \
+          xdg-utils \
+          clang \
+          libgstreamer1.0-dev \
+          libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev
+
+    - name: Install GStreamer (macOS)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        # Official universal pkg (includes both arm64 and x86_64 slices) — required
+        # for universal-apple-darwin builds. Homebrew only ships host-arch builds.
+        GST_VERSION="1.24.10"
+        TMP="$(mktemp -d)"
+        curl -fL --retry 3 -o "${TMP}/runtime.pkg" \
+          "https://gstreamer.freedesktop.org/data/pkg/osx/${GST_VERSION}/gstreamer-1.0-${GST_VERSION}-universal.pkg"
+        curl -fL --retry 3 -o "${TMP}/devel.pkg" \
+          "https://gstreamer.freedesktop.org/data/pkg/osx/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-universal.pkg"
+        sudo installer -pkg "${TMP}/runtime.pkg" -target /
+        sudo installer -pkg "${TMP}/devel.pkg" -target /
+        GST_PREFIX="/Library/Frameworks/GStreamer.framework/Versions/1.0"
+        echo "PKG_CONFIG_PATH=${GST_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+        echo "${GST_PREFIX}/bin" >> "$GITHUB_PATH"
+
+    - name: Install pkg-config + GStreamer (Windows)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        $GST_VERSION = "1.24.10"
+        $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
+        $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
+
+        # pkg-config binary on PATH (glib-sys / gdk-sys / gstreamer-sys all probe it)
+        choco install --yes --no-progress pkgconfiglite
+
+        # GStreamer runtime + devel (devel ships glib-2.0.pc, gstreamer-1.0.pc, etc.)
+        $runtime = "$env:RUNNER_TEMP\gstreamer-runtime.msi"
+        $devel   = "$env:RUNNER_TEMP\gstreamer-devel.msi"
+        Invoke-WebRequest -Uri "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-msvc-$arch-$GST_VERSION.msi" -OutFile $runtime
+        Invoke-WebRequest -Uri "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-devel-msvc-$arch-$GST_VERSION.msi" -OutFile $devel
+        Start-Process msiexec.exe -Wait -ArgumentList '/i', $runtime, '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
+        Start-Process msiexec.exe -Wait -ArgumentList '/i', $devel,   '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
+
+        # Env for build script + linker. PKG_CONFIG_ALLOW_CROSS=1 is required for
+        # the i686-pc-windows-msvc cross from the x86_64 host; harmless on native.
+        echo "PKG_CONFIG_PATH=$($gstRoot)lib\pkgconfig" >> $env:GITHUB_ENV
+        echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
+        echo "$($gstRoot)bin" >> $env:GITHUB_PATH
 
     - name: Install mold linker (Linux)
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
