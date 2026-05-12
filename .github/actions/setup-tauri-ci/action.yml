@@ -69,8 +69,8 @@ runs:
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
       uses: awalsh128/cache-apt-pkgs-action@v1.6.0
       with:
-        packages: pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev xdg-utils clang
-        version: 1.0
+        packages: pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev xdg-utils clang libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+        version: 1.1
 
     - name: Install mold linker (Linux)
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}

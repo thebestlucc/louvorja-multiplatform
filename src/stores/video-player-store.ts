@@ -42,7 +42,7 @@ interface VideoPlayerState {
   videoPlaybackTargets: VideoPlaybackTarget[];
   setVideoState: (partial: Partial<Omit<VideoPlayerState, "setVideoState" | "resetVideoState" | "setUseRustVideoPipeline" | "useRustVideoPipeline" | "loopMode" | "setLoopMode" | "videoPlaybackTargets" | "setVideoPlaybackTargets">>) => void;
   resetVideoState: () => void;
-  setUseRustVideoPipeline: (v: boolean) => void;
+  setUseRustVideoPipeline: (v: boolean) => Promise<void>;
   setLoopMode: (mode: LoopMode) => void;
   setVideoPlaybackTargets: (targets: VideoPlaybackTarget[]) => void;
 }
@@ -70,7 +70,7 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
   videoPlaybackTargets: getPreferenceSync<VideoPlaybackTarget[]>(VIDEO_TARGETS_KEY, ["projector", "return"]),
   setVideoState: (partial) => set(partial),
   resetVideoState: () => set(initialState),
-  setUseRustVideoPipeline: (v) => {
+  setUseRustVideoPipeline: async (v) => {
     const prev = useVideoPlayerStore.getState().useRustVideoPipeline;
     if (prev === v) return;
     // FB-1: persist → broadcast → unload → set local. The previous order
@@ -86,20 +86,17 @@ export const useVideoPlayerStore = create<VideoPlayerState>((set) => ({
     // already in the target mode. When toggling OFF, unload runs after
     // broadcast so projection windows have already detached their native
     // sinks before the rust pipeline is torn down.
-    setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v)
-      .catch((err) => console.error("[video-player-store] flag persist failed", err))
-      .then(() =>
-        invoke("set_video_pipeline_flag", { value: v }).catch((err) =>
-          console.error("[video-player-store] flag broadcast failed", err),
-        ),
-      )
-      .then(() => {
-        if (prev && !v) {
-          videoPipeline.unload().catch(() => {});
-          useRustVideoPipelineStore.getState().reset();
-        }
-        set({ useRustVideoPipeline: v });
-      });
+    await setPreference(USE_RUST_VIDEO_PIPELINE_KEY, v).catch((err) =>
+      console.error("[video-player-store] flag persist failed", err),
+    );
+    await invoke("set_video_pipeline_flag", { value: v }).catch((err) =>
+      console.error("[video-player-store] flag broadcast failed", err),
+    );
+    if (prev && !v) {
+      videoPipeline.unload().catch(() => {});
+      useRustVideoPipelineStore.getState().reset();
+    }
+    set({ useRustVideoPipeline: v });
   },
   setLoopMode: (mode) => {
     set({ loopMode: mode });
