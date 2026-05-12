@@ -260,6 +260,7 @@ export default function LiveRoute() {
         onFreeze={handleFreeze}
         blackActive={blackActive}
         frozenActive={frozenActive}
+        showSlideControls={totalSlides > 0}
       />
     </div>
   );
