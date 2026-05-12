@@ -69,54 +69,54 @@ runs:
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
       shell: bash
       run: |
-        set -x
-        # The Azure mirror used by ubuntu-22.04 / -arm runner images has
-        # documented sync lag (actions/runner-images#8846, #9768, #7210) —
-        # apt sees 404 / Hash Sum mismatch on packages that exist on the
-        # canonical mirror. Rewrite every sources.list entry that points at
-        # Azure to use archive.ubuntu.com directly. apt only reads
-        # /etc/apt/sources.list and /etc/apt/sources.list.d/* — modifying
-        # /etc/apt/apt-mirrors.txt does NOT change apt's behavior.
-        sudo find /etc/apt -type f \( -name 'sources.list' -o -name '*.list' -o -name '*.sources' \) -print -exec sudo sed -i \
-          -e 's|http://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
-          -e 's|https://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
-          {} +
-        # Dump the post-edit state for diagnostic visibility
-        grep -RhE '^(deb|URIs)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
+        # Use GH Actions log-grouping so the failing sub-step is unambiguous
+        # in the log (the parent step name only says "Run ./.github/...").
 
-        # Lock-resilient prep (background unattended-upgrades + half-configured dpkg)
+        echo "::group::OS + sources.list inspection"
+        cat /etc/os-release || true
+        uname -a || true
+        echo "--- /etc/apt/sources.list ---"
+        cat /etc/apt/sources.list 2>/dev/null || echo "(absent)"
+        echo "--- /etc/apt/sources.list.d/ ---"
+        ls -la /etc/apt/sources.list.d/ 2>/dev/null || true
+        for f in /etc/apt/sources.list.d/*; do
+          [ -f "$f" ] && echo "=== $f ===" && cat "$f"
+        done
+        echo "::endgroup::"
+
+        echo "::group::Demote Azure mirror (runner-images#8846)"
+        # Rewrite Azure → canonical archive.ubuntu.com across all sources files.
+        sudo find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print \
+          -exec sudo sed -i \
+            -e 's|http://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            {} +
+        # Confirm the rewrite
+        grep -RhE '^(deb|URIs:)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
+        echo "::endgroup::"
+
+        echo "::group::Lock-resilient prep"
         sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
         sudo killall -q unattended-upgr unattended-upgrades 2>/dev/null || true
         sudo dpkg --configure -a || true
+        echo "::endgroup::"
 
-        # Retry update — jammy mirror is flaky
-        for i in 1 2 3; do
-          sudo apt-get update -o Acquire::Retries=3 && break
-          sleep $((i * 5))
-        done
+        echo "::group::apt-get update"
+        sudo apt-get update
+        echo "::endgroup::"
 
-        # libsoup-3.0-dev + libjavascriptcoregtk-4.1-dev are Depends of
-        # libwebkit2gtk-4.1-dev — apt resolves them. Listing explicitly on
-        # jammy-arm sometimes selects a stale version from the Azure mirror.
-        # Pattern verified against Moosync/Moosync release CI (Tauri 2 +
-        # ubuntu-22.04 + ubuntu-22.04-arm, currently green).
-        PACKAGES=(
-          pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf
-          libasound2-dev libssl-dev libxdo-dev xdg-utils clang
-          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+        # libsoup-3.0-dev + libjavascriptcoregtk-4.1-dev come transitively
+        # via libwebkit2gtk-4.1-dev (verified against Moosync/Moosync green CI).
+        echo "::group::apt-get install"
+        sudo apt-get install -y --no-install-recommends \
+          -o DPkg::Lock::Timeout=120 \
+          pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf \
+          libasound2-dev libssl-dev libxdo-dev xdg-utils clang \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev \
           libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
-        )
+        echo "::endgroup::"
 
-        # Retry install — same mirror flakiness applies during fetch
-        for i in 1 2 3; do
-          if sudo apt-get install -y --no-install-recommends \
-              -o DPkg::Lock::Timeout=120 "${PACKAGES[@]}"; then
-            break
-          fi
-          [ "$i" = "3" ] && exit 1
-          sleep $((i * 10))
-          sudo apt-get update || true
-        done
+        echo "Linux deps install OK"
 
     - name: Install GStreamer (macOS)
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
