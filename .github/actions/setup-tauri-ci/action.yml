@@ -107,14 +107,46 @@ runs:
 
         # libsoup-3.0-dev + libjavascriptcoregtk-4.1-dev come transitively
         # via libwebkit2gtk-4.1-dev (verified against Moosync/Moosync green CI).
-        echo "::group::apt-get install"
-        sudo apt-get install -y --no-install-recommends \
-          -o DPkg::Lock::Timeout=120 \
-          pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf \
-          libasound2-dev libssl-dev libxdo-dev xdg-utils clang \
-          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev \
+        PACKAGES=(
+          pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf
+          libasound2-dev libssl-dev libxdo-dev xdg-utils clang
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
           libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+        )
+
+        # Try the bulk install first; if it fails, capture the apt error
+        # lines as GH Actions error annotations so the failure summary
+        # surfaces the problem (visible without authenticated log access).
+        echo "::group::apt-get install (bulk)"
+        set +e
+        apt_log=$(sudo apt-get install -y --no-install-recommends \
+          -o DPkg::Lock::Timeout=120 "${PACKAGES[@]}" 2>&1)
+        apt_rc=$?
+        set -e
+        echo "$apt_log"
         echo "::endgroup::"
+
+        if [ "$apt_rc" -ne 0 ]; then
+          echo "::group::apt failure analysis"
+          # Emit each apt error / warning line as an annotation (truncated
+          # to 200 chars each — GH annotations cap longer lines).
+          while IFS= read -r line; do
+            short=$(printf '%s' "$line" | head -c 200)
+            echo "::error::apt: $short"
+          done < <(printf '%s\n' "$apt_log" | grep -E '^(E:|W:|Err:|\s*Unable to|\s*Hash Sum|\s*Failed|\s*Package .* is not available)' | head -10)
+          # Also try per-package install to identify which one is the culprit.
+          echo "Per-package retry to identify failing package:"
+          for pkg in "${PACKAGES[@]}"; do
+            if sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 "$pkg" >/dev/null 2>&1; then
+              echo "  OK:   $pkg"
+            else
+              echo "  FAIL: $pkg"
+              echo "::error::apt failed on package: $pkg"
+            fi
+          done
+          echo "::endgroup::"
+          exit "$apt_rc"
+        fi
 
         echo "Linux deps install OK"
 
