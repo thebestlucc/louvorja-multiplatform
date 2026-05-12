@@ -71,12 +71,14 @@ runs:
       run: |
         set -x
         sudo apt-get update
-        # Install in two groups so a missing package in one group still leaves
-        # a useful log of which group succeeded.
         sudo apt-get install -y --no-install-recommends \
           pkg-config \
           libglib2.0-dev \
           libgtk-3-dev \
+          libwebkit2gtk-4.1-dev \
+          libsoup-3.0-dev \
+          libjavascriptcoregtk-4.1-dev \
+          libayatana-appindicator3-dev \
           librsvg2-dev \
           patchelf \
           libasound2-dev \
@@ -87,11 +89,6 @@ runs:
           libgstreamer1.0-dev \
           libgstreamer-plugins-base1.0-dev \
           libgstreamer-plugins-bad1.0-dev
-        sudo apt-get install -y --no-install-recommends \
-          libwebkit2gtk-4.1-dev \
-          libsoup-3.0-dev \
-          libjavascriptcoregtk-4.1-dev \
-          libappindicator3-dev
 
     - name: Install GStreamer (macOS)
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
@@ -117,23 +114,43 @@ runs:
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
       shell: pwsh
       run: |
+        $ErrorActionPreference = "Stop"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $ProgressPreference = "SilentlyContinue"  # IWR ~10x faster without progress UI
+
         $GST_VERSION = "1.24.13"
         $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
         $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
 
-        # pkg-config binary on PATH (glib-sys / gdk-sys / gstreamer-sys all probe it)
+        Write-Host "==> Installing pkgconfiglite via choco"
         choco install --yes --no-progress pkgconfiglite
+        if ($LASTEXITCODE -ne 0) { throw "choco install pkgconfiglite failed ($LASTEXITCODE)" }
 
-        # GStreamer runtime + devel (devel ships glib-2.0.pc, gstreamer-1.0.pc, etc.)
+        Write-Host "==> Downloading GStreamer $GST_VERSION ($arch) MSIs"
         $runtime = "$env:RUNNER_TEMP\gstreamer-runtime.msi"
         $devel   = "$env:RUNNER_TEMP\gstreamer-devel.msi"
-        Invoke-WebRequest -Uri "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-msvc-$arch-$GST_VERSION.msi" -OutFile $runtime
-        Invoke-WebRequest -Uri "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-devel-msvc-$arch-$GST_VERSION.msi" -OutFile $devel
-        Start-Process msiexec.exe -Wait -ArgumentList '/i', $runtime, '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
-        Start-Process msiexec.exe -Wait -ArgumentList '/i', $devel,   '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
+        $runtimeUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-msvc-$arch-$GST_VERSION.msi"
+        $develUrl   = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-devel-msvc-$arch-$GST_VERSION.msi"
+        Write-Host "  runtime: $runtimeUrl"
+        Write-Host "  devel:   $develUrl"
+        Invoke-WebRequest -Uri $runtimeUrl -OutFile $runtime -UseBasicParsing
+        Invoke-WebRequest -Uri $develUrl   -OutFile $devel   -UseBasicParsing
 
-        # Env for build script + linker. PKG_CONFIG_ALLOW_CROSS=1 is required for
-        # the i686-pc-windows-msvc cross from the x86_64 host; harmless on native.
+        Write-Host "==> Installing GStreamer runtime"
+        $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $runtime, '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
+        if ($p.ExitCode -ne 0) { throw "msiexec runtime failed ($($p.ExitCode))" }
+        Write-Host "==> Installing GStreamer devel"
+        $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $devel,   '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
+        if ($p.ExitCode -ne 0) { throw "msiexec devel failed ($($p.ExitCode))" }
+
+        if (!(Test-Path "$($gstRoot)lib\pkgconfig\gstreamer-1.0.pc")) {
+          Write-Host "ERROR: gstreamer-1.0.pc not found under $gstRoot — listing install dirs:"
+          Get-ChildItem "C:\gstreamer" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 50 FullName
+          throw "GStreamer devel headers were not installed at expected path"
+        }
+
+        # PKG_CONFIG_ALLOW_CROSS=1 is required for the i686 cross from x86_64 host;
+        # harmless on native. Env var name uses dot replacement (system-deps convention).
         echo "PKG_CONFIG_PATH=$($gstRoot)lib\pkgconfig" >> $env:GITHUB_ENV
         echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
         echo "$($gstRoot)bin" >> $env:GITHUB_PATH
