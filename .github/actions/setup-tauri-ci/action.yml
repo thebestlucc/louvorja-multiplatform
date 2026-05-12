@@ -298,15 +298,17 @@ runs:
           # (harmless on ephemeral CI). ArgumentList passed as a SINGLE STRING
           # to match the proven pattern from fcast / alku-unicast green CI —
           # the array form silently mangles msiexec switches in some pwsh
-          # versions on windows-2025. /l*v emits a verbose install log we
-          # can mine for errors when the post-install Test-Path check fails.
+          # versions on windows-2025. ROOTDRIVE=C: forces install to C: —
+          # without it the MSI picks the largest free drive (D:\ on GH-hosted
+          # Windows runners) and our PATH/PKG_CONFIG_PATH expectations break.
+          # /l*v emits a verbose install log we can mine for errors when the
+          # post-install search fails.
           function Invoke-Msi($msi, $label) {
             Write-Host "==> Installing GStreamer $label"
             $msiLog = "$env:RUNNER_TEMP\msi-$label.log"
-            $proc = Start-Process msiexec -Wait -NoNewWindow -PassThru -ArgumentList "/i `"$msi`" /qn /norestart ADDLOCAL=ALL /l*v `"$msiLog`""
+            $proc = Start-Process msiexec -Wait -NoNewWindow -PassThru -ArgumentList "/i `"$msi`" /qn /norestart ADDLOCAL=ALL ROOTDRIVE=C:\ /l*v `"$msiLog`""
             Write-Host "  exit: $($proc.ExitCode)"
             if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-              # Surface key lines from the MSI log on failure
               if (Test-Path $msiLog) {
                 Get-Content $msiLog -Tail 30 | ForEach-Object { Write-Host "  msi-log: $_" }
               }
@@ -316,16 +318,20 @@ runs:
           Invoke-Msi $runtime "runtime"
           Invoke-Msi $devel   "devel"
 
-          Write-Host "==> Post-install: contents of C:\gstreamer (depth 3)"
-          Get-ChildItem "C:\gstreamer" -Recurse -Depth 3 -ErrorAction SilentlyContinue |
-            ForEach-Object { $_.FullName } | Select-Object -First 80
+          Write-Host "==> Post-install: contents of C:\gstreamer + D:\gstreamer (depth 3)"
+          foreach ($root in @("C:\gstreamer", "D:\gstreamer")) {
+            if (Test-Path $root) {
+              Write-Host "  -- $root --"
+              Get-ChildItem $root -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName } | Select-Object -First 80
+            }
+          }
 
           $gstRootClean = $gstRoot.TrimEnd('\')
-          # Search filesystem-wide for the .pc file in case MSI installed
-          # to a non-default path (Program Files, etc.). Limit search to
-          # likely prefixes to keep this fast.
+          # Search every plausible prefix — GH Windows runners may pick D:\
+          # as the install root if C:\ has less free space at MSI time.
           $foundPc = $null
-          foreach ($root in @("C:\gstreamer", "C:\Program Files\gstreamer", "C:\Program Files (x86)\gstreamer")) {
+          foreach ($root in @("C:\gstreamer", "D:\gstreamer", "C:\Program Files\gstreamer", "C:\Program Files (x86)\gstreamer")) {
             if (Test-Path $root) {
               $hit = Get-ChildItem $root -Recurse -Filter "gstreamer-1.0.pc" -ErrorAction SilentlyContinue | Select-Object -First 1
               if ($hit) { $foundPc = $hit; break }
