@@ -105,23 +105,36 @@ runs:
         sudo apt-get update
         echo "::endgroup::"
 
-        # The ubuntu-22.04 / -arm runner images pre-install
-        # libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, and
-        # libgstreamer-plugins-bad1.0-0 at the initial jammy version, but
-        # jammy-updates / jammy-security ships a newer point release whose
-        # ABI requires a coordinated upgrade. Asking apt to install the
-        # matching -dev packages without first upgrading the runtime libs
-        # leaves the solver in a "held broken packages" deadlock (E: Unable
-        # to correct problems, you have held broken packages.). Upgrade
-        # GStreamer + libsoup + webkit runtime libs first to clear it.
-        echo "::group::Upgrade pre-installed gstreamer/soup/webkit runtimes"
+        # The ubuntu-22.04 / -arm runner images pre-install some GStreamer
+        # runtime libs at the initial jammy version, while the matching
+        # -dev packages from jammy-updates / -security require newer
+        # point releases — the solver gets stuck on "held broken packages"
+        # if we don't bump the pre-installed pieces first. Apt patterns
+        # (the `?` suffix) only work in `apt search`, not `apt-get install`,
+        # so use --only-upgrade which silently skips packages that aren't
+        # installed. Also release any holds set by the image build.
+        echo "::group::Diagnose package state"
+        echo "--- Held packages ---"
+        sudo apt-mark showhold || true
+        echo "--- apt-cache policy libgstreamer1.0-dev ---"
+        apt-cache policy libgstreamer1.0-dev || true
+        echo "--- apt-cache policy libgstreamer1.0-0 ---"
+        apt-cache policy libgstreamer1.0-0 || true
+        echo "::endgroup::"
+
+        echo "::group::Release holds + upgrade pre-installed runtime libs"
+        held=$(sudo apt-mark showhold 2>/dev/null | tr '\n' ' ')
+        if [ -n "$held" ]; then
+          sudo apt-mark unhold $held || true
+        fi
         sudo apt-get install -y --only-upgrade -o DPkg::Lock::Timeout=120 \
-          'libgstreamer1.0-0?' \
-          'libgstreamer-plugins-base1.0-0?' \
-          'libgstreamer-plugins-bad1.0-0?' \
-          'libsoup-3.0-0?' \
-          'libwebkit2gtk-4.1-0?' \
-          'libjavascriptcoregtk-4.1-0?' || true
+          libgstreamer1.0-0 \
+          libgstreamer-plugins-base1.0-0 \
+          libgstreamer-plugins-bad1.0-0 \
+          libsoup-3.0-0 \
+          libwebkit2gtk-4.1-0 \
+          libjavascriptcoregtk-4.1-0 \
+          libgtk-3-0 libglib2.0-0 librsvg2-2 || true
         echo "::endgroup::"
 
         # libsoup-3.0-dev + libjavascriptcoregtk-4.1-dev come transitively
