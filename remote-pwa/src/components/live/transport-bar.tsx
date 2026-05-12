@@ -11,6 +11,7 @@ export interface TransportBarProps {
   onFreeze: () => void;
   blackActive: boolean;
   frozenActive: boolean;
+  showSlideControls?: boolean;
   className?: string;
 }
 
@@ -23,6 +24,7 @@ export function TransportBar({
   onFreeze,
   blackActive,
   frozenActive,
+  showSlideControls = true,
   className,
 }: TransportBarProps) {
   return (
@@ -34,15 +36,17 @@ export function TransportBar({
     >
       {/* Left: transport controls */}
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Previous slide"
-          onClick={onPrev}
-          className="h-10 w-10"
-        >
-          <SkipBack className="h-5 w-5" aria-hidden="true" />
-        </Button>
+        {showSlideControls && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Previous slide"
+            onClick={onPrev}
+            className="h-10 w-10"
+          >
+            <SkipBack className="h-5 w-5" aria-hidden="true" />
+          </Button>
+        )}
 
         <Button
           variant="ghost"
@@ -58,15 +62,17 @@ export function TransportBar({
           )}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Next slide"
-          onClick={onNext}
-          className="h-10 w-10"
-        >
-          <SkipForward className="h-5 w-5" aria-hidden="true" />
-        </Button>
+        {showSlideControls && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Next slide"
+            onClick={onNext}
+            className="h-10 w-10"
+          >
+            <SkipForward className="h-5 w-5" aria-hidden="true" />
+          </Button>
+        )}
       </div>
 
       {/* Spacer */}
