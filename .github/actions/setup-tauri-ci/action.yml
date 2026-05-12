@@ -70,43 +70,51 @@ runs:
       shell: bash
       run: |
         set -x
-        # Some runner images leave unattended-upgrades or dpkg in a half-configured
-        # state — make installs lock-resilient before doing anything.
+        # The priority:1 Azure mirror used by the ubuntu-22.04 / -arm runner
+        # images has documented sync lag (actions/runner-images#8846, #9768,
+        # #7210) — apt sees 404/Hash Sum mismatch on packages that exist on
+        # the canonical mirror. Demote Azure so apt falls through to
+        # archive.ubuntu.com / security.ubuntu.com immediately.
+        if [ -f /etc/apt/apt-mirrors.txt ]; then
+          sudo sed -i \
+            -e 's|^http://azure\.archive\.ubuntu\.com/ubuntu/[[:space:]]\+priority:1|http://archive.ubuntu.com/ubuntu/\tpriority:9|' \
+            /etc/apt/apt-mirrors.txt || true
+          cat /etc/apt/apt-mirrors.txt || true
+        fi
+
+        # Lock-resilient prep (background unattended-upgrades + half-configured dpkg)
         sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
         sudo killall -q unattended-upgr unattended-upgrades 2>/dev/null || true
         sudo dpkg --configure -a || true
 
-        sudo apt-get update
+        # Retry update — jammy mirror is flaky
+        for i in 1 2 3; do
+          sudo apt-get update -o Acquire::Retries=3 && break
+          sleep $((i * 5))
+        done
 
+        # libsoup-3.0-dev + libjavascriptcoregtk-4.1-dev are Depends of
+        # libwebkit2gtk-4.1-dev — apt resolves them. Listing explicitly on
+        # jammy-arm sometimes selects a stale version from the Azure mirror.
+        # Pattern verified against Moosync/Moosync release CI (Tauri 2 +
+        # ubuntu-22.04 + ubuntu-22.04-arm, currently green).
         PACKAGES=(
           pkg-config libglib2.0-dev libgtk-3-dev librsvg2-dev patchelf
           libasound2-dev libssl-dev libxdo-dev xdg-utils clang
           libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
-          libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
-          libayatana-appindicator3-dev
+          libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
         )
 
-        # Diagnostic: print availability per-package BEFORE the install so the next
-        # CI log identifies any package the runner's apt cache can't resolve.
-        echo "=== Package availability ($(lsb_release -ds 2>/dev/null || uname -a)) ==="
-        missing=0
-        for pkg in "${PACKAGES[@]}"; do
-          if apt-cache show "$pkg" >/dev/null 2>&1; then
-            cand=$(apt-cache policy "$pkg" 2>/dev/null | awk -F': ' '/Candidate/ {print $2}')
-            printf '  OK:      %-40s %s\n' "$pkg" "$cand"
-          else
-            printf '  MISSING: %s\n' "$pkg"
-            missing=$((missing + 1))
+        # Retry install — same mirror flakiness applies during fetch
+        for i in 1 2 3; do
+          if sudo apt-get install -y --no-install-recommends \
+              -o DPkg::Lock::Timeout=120 "${PACKAGES[@]}"; then
+            break
           fi
+          [ "$i" = "3" ] && exit 1
+          sleep $((i * 10))
+          sudo apt-get update || true
         done
-        if [ "$missing" -gt 0 ]; then
-          echo "ERROR: $missing package(s) not in apt cache — aborting before install"
-          exit 1
-        fi
-
-        sudo apt-get install -y --no-install-recommends \
-          -o DPkg::Lock::Timeout=120 \
-          "${PACKAGES[@]}"
 
     - name: Install GStreamer (macOS)
       if: ${{ inputs.setup-rust == 'true' && runner.os == 'macOS' }}
@@ -140,18 +148,13 @@ runs:
         $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
         $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
 
-        Write-Host "==> Ensuring pkg-config is on PATH"
-        $pkgConfig = Get-Command pkg-config -ErrorAction SilentlyContinue
-        if (!$pkgConfig) {
-          Write-Host "  pkg-config not on PATH — installing pkgconfiglite via choco"
-          choco install --yes --no-progress pkgconfiglite
-          if ($LASTEXITCODE -ne 0) { throw "choco install pkgconfiglite failed (LASTEXITCODE=$LASTEXITCODE)" }
-          # Refresh PATH in current session so subsequent commands find it
-          $env:PATH = "C:\ProgramData\chocolatey\bin;$env:PATH"
-          $pkgConfig = Get-Command pkg-config -ErrorAction SilentlyContinue
-          if (!$pkgConfig) { throw "pkg-config still not on PATH after choco install" }
-        }
-        Write-Host "  pkg-config: $($pkgConfig.Source)"
+        # NOTE: do NOT install chocolatey/pkgconfiglite — its SourceForge HTTP
+        # download is broken on windows-2025 (ROCm/TheRock#2898, numpy#30187).
+        # Strawberry Perl's bundled pkg-config.bat was removed (runner-images
+        # #9693), so the runner has no pkg-config at all. The GStreamer dev MSI
+        # ships its own pkg-config.exe at $gstRoot\bin\pkg-config.exe and the
+        # gstreamer-rs README mandates it be FIRST on PATH ("other versions
+        # have all kinds of quirks that will cause problems").
 
         Write-Host "==> Downloading GStreamer $GST_VERSION ($arch) MSIs"
         $runtime = "$env:RUNNER_TEMP\gstreamer-runtime.msi"
@@ -170,6 +173,15 @@ runs:
         $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $devel,   '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
         if ($p.ExitCode -ne 0) { throw "msiexec devel failed ($($p.ExitCode))" }
 
+        # Verify both the bundled pkg-config and the .pc files are present.
+        $bundledPkgConfig = "$($gstRoot)bin\pkg-config.exe"
+        if (!(Test-Path $bundledPkgConfig)) {
+          Write-Host "ERROR: $bundledPkgConfig not found — listing $($gstRoot)bin:"
+          Get-ChildItem "$($gstRoot)bin" -ErrorAction SilentlyContinue | Select-Object -First 50 Name
+          throw "GStreamer bundled pkg-config.exe missing"
+        }
+        Write-Host "  bundled pkg-config: $bundledPkgConfig"
+
         if (!(Test-Path "$($gstRoot)lib\pkgconfig\gstreamer-1.0.pc")) {
           Write-Host "ERROR: gstreamer-1.0.pc not found under $gstRoot — listing install dirs:"
           Get-ChildItem "C:\gstreamer" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 50 FullName
@@ -177,9 +189,12 @@ runs:
         }
 
         # PKG_CONFIG_ALLOW_CROSS=1 is required for the i686 cross from x86_64 host;
-        # harmless on native. Env var name uses dot replacement (system-deps convention).
+        # harmless on native.
         echo "PKG_CONFIG_PATH=$($gstRoot)lib\pkgconfig" >> $env:GITHUB_ENV
         echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
+        # GStreamer\bin FIRST on PATH — gstreamer-rs requires its bundled
+        # pkg-config to win over any other one (which there shouldn't be on
+        # windows-2025, but defensive).
         echo "$($gstRoot)bin" >> $env:GITHUB_PATH
 
     - name: Install mold linker (Linux)
