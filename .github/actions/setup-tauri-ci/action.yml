@@ -236,6 +236,12 @@ runs:
         sudo installer -pkg "${TMP}/devel.pkg" -target /
         GST_PREFIX="/Library/Frameworks/GStreamer.framework/Versions/1.0"
         echo "PKG_CONFIG_PATH=${GST_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+        # universal-apple-darwin builds cross-compile to x86_64-apple-darwin from
+        # the arm64 macos-latest host. pkg-config-rs refuses to use a host
+        # pkg-config for a different target arch unless this is set. The
+        # GStreamer.framework's dylibs are universal (fat binaries containing
+        # both archs), so the same .pc files work for both targets.
+        echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
         echo "${GST_PREFIX}/bin" >> "$GITHUB_PATH"
 
     - name: Install pkg-config + GStreamer (Windows)
