@@ -303,20 +303,36 @@ runs:
             ForEach-Object { $_.FullName } | Select-Object -First 80
 
           $gstRootClean = $gstRoot.TrimEnd('\')
-          $bundledPkgConfig = "$gstRootClean\bin\pkg-config.exe"
-          $gstreamerPc      = "$gstRootClean\lib\pkgconfig\gstreamer-1.0.pc"
+          $gstreamerPc  = "$gstRootClean\lib\pkgconfig\gstreamer-1.0.pc"
+          if (!(Test-Path $gstreamerPc)) { throw "gstreamer-1.0.pc not at $gstreamerPc" }
+          Write-Host "  gstreamer-1.0.pc: $gstreamerPc"
 
-          if (!(Test-Path $bundledPkgConfig)) { throw "Bundled pkg-config.exe not at $bundledPkgConfig" }
-          if (!(Test-Path $gstreamerPc))      { throw "gstreamer-1.0.pc not at $gstreamerPc" }
-          Write-Host "  bundled pkg-config: $bundledPkgConfig"
-          Write-Host "  gstreamer-1.0.pc:   $gstreamerPc"
+          # Locate pkg-config.exe (or pkgconf.exe — modern replacement). The
+          # GStreamer MSI may or may not bundle it depending on version + the
+          # ADDLOCAL feature set. Search the install tree first; if not there,
+          # we'll need to install MSYS2's pkgconf as a fallback.
+          $pkgConfigExe = $null
+          foreach ($name in @("pkg-config.exe", "pkgconf.exe")) {
+            $hit = Get-ChildItem "C:\gstreamer" -Recurse -Filter $name -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { $pkgConfigExe = $hit.FullName; break }
+          }
+          if ($pkgConfigExe) {
+            Write-Host "  bundled pkg-config: $pkgConfigExe"
+            $pkgConfigDir = Split-Path $pkgConfigExe -Parent
+            echo "$pkgConfigDir" >> $env:GITHUB_PATH
+          } else {
+            Write-Host "  no bundled pkg-config in C:\gstreamer; relying on MSYS2 setup step"
+            # Annotate every .exe in the install dir so the next CI run shows
+            # exactly what's there if MSYS2 also fails.
+            Get-ChildItem "C:\gstreamer" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "::warning::gst-bin: $($_.FullName)" }
+          }
 
           # PKG_CONFIG_ALLOW_CROSS=1 required for i686 cross from x86_64 host;
           # harmless on native x86_64.
           echo "PKG_CONFIG_PATH=$gstRootClean\lib\pkgconfig" >> $env:GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $env:GITHUB_ENV
-          # GStreamer\bin FIRST on PATH — gstreamer-rs requires its bundled
-          # pkg-config to win over any other one.
+          # GStreamer\bin FIRST on PATH (gst-launch, libs).
           echo "$gstRootClean\bin" >> $env:GITHUB_PATH
 
           Write-Host "==> windows setup complete"
@@ -326,6 +342,30 @@ runs:
           Write-Host "::error::win-setup: $msg"
           throw
         }
+
+    - name: Install MSYS2 pkgconf (Windows)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        install: mingw-w64-x86_64-pkgconf
+        update: false
+        path-type: inherit
+
+    - name: Verify pkg-config on PATH (Windows)
+      if: ${{ inputs.setup-rust == 'true' && runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        # Prepend MSYS2 mingw64\bin to PATH so the cross-compile build script
+        # (run by cargo) can find pkgconf.exe from any shell.
+        echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+        $found = Get-Command pkgconf -ErrorAction SilentlyContinue
+        if (!$found) { $found = Get-Command pkg-config -ErrorAction SilentlyContinue }
+        if (!$found) {
+          Write-Host "::error::win-setup: pkg-config / pkgconf not on PATH after MSYS2 install"
+          exit 1
+        }
+        Write-Host "  pkg-config resolved to: $($found.Source)"
 
     - name: Install mold linker (Linux)
       if: ${{ inputs.install-linux-deps == 'true' && runner.os == 'Linux' }}
