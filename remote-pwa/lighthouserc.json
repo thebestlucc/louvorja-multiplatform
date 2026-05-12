@@ -1,9 +1,7 @@
 {
   "ci": {
     "collect": {
-      "staticDistDir": "./dist",
       "settings": {
-        "preset": "mobile",
         "formFactor": "mobile",
         "screenEmulation": {
           "mobile": true,

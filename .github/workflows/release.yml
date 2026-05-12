@@ -70,9 +70,9 @@ jobs:
       - name: Checkout app sources
         uses: actions/checkout@v6.0.2
       - uses: ./.github/actions/setup-tauri-ci
-        with:
-          setup-node: "false"
-          install-frontend-deps: "false"
+      - name: Build remote-pwa (required by include_dir! in src/remote/assets.rs)
+        shell: bash
+        run: pnpm --filter remote-pwa build
       - name: Verify commands.toml matches collect_commands!
         shell: bash
         run: node .github/scripts/check-commands-toml.mjs
@@ -138,6 +138,9 @@ jobs:
         with:
           name: frontend-dist
           path: dist
+      - name: Build remote-pwa (required by include_dir! in src/remote/assets.rs)
+        shell: bash
+        run: pnpm --filter remote-pwa build
       - name: Inject updater endpoint and public key
         shell: bash
         env:
