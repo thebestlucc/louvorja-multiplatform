@@ -172,28 +172,44 @@ runs:
 
         if [ "$apt_rc" -ne 0 ]; then
           echo "::group::apt failure analysis"
-          # Emit non-trivial apt output lines as annotations so the resolver
-          # explanation (Depends:/but it is/The following ...) is visible
-          # without authenticated log access. Skip pure progress noise.
+          # Emit apt resolver explanation lines as annotations. Grep is now
+          # explicit for error/dep patterns AND keeps head -40 of all output
+          # as a fallback — annotations are visible without auth.
           printf '%s\n' "$apt_log" \
-            | grep -v -E '^(Reading package lists|Building dependency tree|Reading state information|Selecting previously|Preparing to unpack|Unpacking |Setting up |Processing triggers|Get:[0-9]|Fetched |Need to get |After this|^[[:space:]]*$)' \
+            | grep -E '(^E:|^W:|^Err:|^N:|Depends:|Conflicts:|but it is|The following|Unable to correct|Sub-process|dpkg:|cannot |returned an error|trying to overwrite)' \
             | head -40 \
             | while IFS= read -r line; do
                 short=$(printf '%s' "$line" | head -c 250)
-                echo "::error::apt: $short"
+                echo "::error::apt-err: $short"
               done
-          # Per-package install to identify which exact name fails.
+          # Fallback: also emit the tail of apt output (where post-install
+          # errors usually appear) so we don't miss anything.
+          printf '%s\n' "$apt_log" | tail -25 | while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            short=$(printf '%s' "$line" | head -c 250)
+            echo "::error::apt-tail: $short"
+          done
+
+          # Per-package retry — if every package installs individually,
+          # the bulk failure was a transient dpkg/trigger issue, not a
+          # real dependency problem. Treat that case as success.
           echo "Per-package retry to identify failing package:"
+          any_fail=0
           for pkg in "${PACKAGES[@]}"; do
             if sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 "$pkg" >/dev/null 2>&1; then
               echo "  OK:   $pkg"
             else
               echo "  FAIL: $pkg"
               echo "::error::apt failed on package: $pkg"
+              any_fail=1
             fi
           done
           echo "::endgroup::"
-          exit "$apt_rc"
+          if [ "$any_fail" -eq 0 ]; then
+            echo "Bulk install failed but per-package retry installed every package — continuing."
+          else
+            exit "$apt_rc"
+          fi
         fi
 
         echo "Linux deps install OK"
