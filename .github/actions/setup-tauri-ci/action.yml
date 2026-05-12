@@ -70,17 +70,19 @@ runs:
       shell: bash
       run: |
         set -x
-        # The priority:1 Azure mirror used by the ubuntu-22.04 / -arm runner
-        # images has documented sync lag (actions/runner-images#8846, #9768,
-        # #7210) — apt sees 404/Hash Sum mismatch on packages that exist on
-        # the canonical mirror. Demote Azure so apt falls through to
-        # archive.ubuntu.com / security.ubuntu.com immediately.
-        if [ -f /etc/apt/apt-mirrors.txt ]; then
-          sudo sed -i \
-            -e 's|^http://azure\.archive\.ubuntu\.com/ubuntu/[[:space:]]\+priority:1|http://archive.ubuntu.com/ubuntu/\tpriority:9|' \
-            /etc/apt/apt-mirrors.txt || true
-          cat /etc/apt/apt-mirrors.txt || true
-        fi
+        # The Azure mirror used by ubuntu-22.04 / -arm runner images has
+        # documented sync lag (actions/runner-images#8846, #9768, #7210) —
+        # apt sees 404 / Hash Sum mismatch on packages that exist on the
+        # canonical mirror. Rewrite every sources.list entry that points at
+        # Azure to use archive.ubuntu.com directly. apt only reads
+        # /etc/apt/sources.list and /etc/apt/sources.list.d/* — modifying
+        # /etc/apt/apt-mirrors.txt does NOT change apt's behavior.
+        sudo find /etc/apt -type f \( -name 'sources.list' -o -name '*.list' -o -name '*.sources' \) -print -exec sudo sed -i \
+          -e 's|http://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+          -e 's|https://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+          {} +
+        # Dump the post-edit state for diagnostic visibility
+        grep -RhE '^(deb|URIs)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
 
         # Lock-resilient prep (background unattended-upgrades + half-configured dpkg)
         sudo systemctl stop unattended-upgrades.service 2>/dev/null || true
@@ -166,12 +168,21 @@ runs:
         Invoke-WebRequest -Uri $runtimeUrl -OutFile $runtime -UseBasicParsing
         Invoke-WebRequest -Uri $develUrl   -OutFile $devel   -UseBasicParsing
 
-        Write-Host "==> Installing GStreamer runtime"
-        $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $runtime, '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
-        if ($p.ExitCode -ne 0) { throw "msiexec runtime failed ($($p.ExitCode))" }
-        Write-Host "==> Installing GStreamer devel"
-        $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $devel,   '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
-        if ($p.ExitCode -ne 0) { throw "msiexec devel failed ($($p.ExitCode))" }
+        # msiexec exit codes: 0 = success, 3010 = success but reboot required
+        # (harmless on CI, the runner is ephemeral). Anything else is a real
+        # error — 1602=user cancel, 1603=fatal, 1618=another install in
+        # progress, etc.
+        function Invoke-Msi($msi, $label) {
+          Write-Host "==> Installing GStreamer $label"
+          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList `
+            '/i', $msi, '/quiet', '/qn', '/norestart', 'ADDLOCAL=ALL'
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+            throw "msiexec $label failed (ExitCode=$($p.ExitCode))"
+          }
+          Write-Host "  msiexec $label exit=$($p.ExitCode)"
+        }
+        Invoke-Msi $runtime "runtime"
+        Invoke-Msi $devel   "devel"
 
         # Verify both the bundled pkg-config and the .pc files are present.
         $bundledPkgConfig = "$($gstRoot)bin\pkg-config.exe"
