@@ -43,11 +43,6 @@ function PackSyncSettingsInline() {
       toast.success(t("settings.packSync.upToDate"));
       return;
     }
-    // Pack sync not configured in this build (CDN_MANIFEST_URL empty) — skip silently.
-    if (plan.manifestVersion === 0 && plan.availableLanguages.length === 0) {
-      toast.info(t("settings.packSync.notConfigured"));
-      return;
-    }
     // No language selected yet but languages are available on CDN → open dialog for setup
     const needsLanguageSetup = plan.selectedLanguages.length === 0 && plan.availableLanguages.length > 0;
     if (plan.items.length === 0 && !needsLanguageSetup) {

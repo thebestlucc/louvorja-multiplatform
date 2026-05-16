@@ -1,7 +1,10 @@
 fn main() {
-    // Load .env from the repo root (one level up from src-tauri/).
+    // Load .env from the repo root (three levels up: src-tauri → desktop → apps → root).
     // In CI the variable is set directly in the environment, so this is a no-op there.
-    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent().unwrap()  // apps/desktop
+        .parent().unwrap()  // apps
+        .parent().unwrap(); // repo root
     let env_path = repo_root.join(".env");
     let _ = dotenvy::from_path(&env_path);
 
