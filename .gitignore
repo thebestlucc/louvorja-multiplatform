@@ -14,25 +14,26 @@ dist-ssr
 .tmp-test-dist
 .pnpm-store/
 .tanstack/
-src-tauri/target/
-src-tauri/prototypes/
-src-tauri/binaries/
+.vite/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/prototypes/
+apps/desktop/src-tauri/binaries/
 # GStreamer runtime bundled into release builds by build.rs (Phase 5).
 # Populated on release `cargo build` / `tauri build`; referenced as a Tauri
 # bundle resource. Never commit — vendored dylibs/DLLs are large and platform-
 # specific.
-src-tauri/gstreamer-runtime/
+apps/desktop/src-tauri/gstreamer-runtime/
 # Generated test fixtures (Phase 1.2 video pipeline integration test creates short.mp4)
-src-tauri/tests/fixtures/
+apps/desktop/src-tauri/tests/fixtures/
 
 # SQLite database files — never commit runtime data to the repo
 *.db
 *.db-wal
 *.db-shm
 # Exception: legacy Delphi database kept for importer feature (column name mapping)
-!src-tauri/src/db/database.db
+!apps/desktop/src-tauri/src/db/database.db
 # Generated bible database (built by build_bible binary from resources/bible/*.sqlite)
-src-tauri/resources/bible.db
+apps/desktop/src-tauri/resources/bible.db
 
 # Editor directories and files
 .vscode/*
@@ -49,6 +50,7 @@ src-tauri/resources/bible.db
 legacy-app
 legacy-reference
 docs/*
+docs/plans/
 !docs/installation/
 !docs/USER_GUIDE.md
 !docs/MIGRATION_GUIDE.md
@@ -63,3 +65,4 @@ TODO.md
 # Qwen AI integration artifacts (personal/local only, not project source)
 .qwen/
 QWEN.md
+.scratch

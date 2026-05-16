@@ -1,21 +1,60 @@
 # Contributing
 
 ## Prerequisites
+
 - Node.js 22+
 - pnpm 10+
 - Rust stable
-- Tauri dependencies for your operating system
+
+### System dependencies (GStreamer)
+
+The Rust video pipeline links against GStreamer 1.24+ at compile time. Install before running `pnpm tauri dev`.
+
+**macOS**
+
+```bash
+brew install gstreamer
+```
+
+(`pkgconf` is pulled in automatically as a transitive dependency — no separate install needed, no `PKG_CONFIG_PATH` change required.)
+
+**Linux (Debian/Ubuntu)**
+
+```bash
+sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+  libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-nice
+```
+
+**Linux (Fedora/RHEL)**
+
+```bash
+sudo dnf install gstreamer1-devel gstreamer1-plugins-base-devel \
+  gstreamer1-plugins-good gstreamer1-plugins-bad-free \
+  gstreamer1-plugins-ugly gstreamer1-libav gstreamer1-plugin-libnice
+```
+
+**Windows**
+
+Install the official MSVC GStreamer **runtime + development** packages (1.24+) from <https://gstreamer.freedesktop.org/download/>. Use the default install path.
 
 ## Setup
 ```bash
 pnpm install
+pnpm --filter remote-pwa build   # required for Rust compile (embedded in binary)
 ```
 
 ## Local checks
 ```bash
-pnpm exec tsc --noEmit
+# From repo root
+pnpm build
+pnpm test
+
+# Or from apps/desktop/ directly
+cd apps/desktop
+npx tsc --noEmit
 cargo check --manifest-path src-tauri/Cargo.toml
-pnpm exec vite build
 ```
 
 ## Branch and commit expectations

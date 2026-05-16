@@ -7,6 +7,22 @@ CLAUDE_CODE_MAX_OUTPUT_TOKENS=20000
 
 ---
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical label strings (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context repo — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` files. See `docs/agents/domain.md`.
+
+---
+
 ## Design System Rules
 
 ### Component Organization
@@ -128,35 +144,48 @@ Roadmap and feature decisions are tracked in `docs/phase-*` folders (`PRD.md`, `
 
 ## Prerequisites
 
-Node ≥ 20, pnpm ≥ 10, Rust stable (≥ 1.80). Tauri 2 requires system WebView (WebKitGTK on Linux, WebView2 on Windows — macOS uses built-in WKWebView).
+Node ≥ 20, pnpm ≥ 10, Rust stable (≥ 1.80). Tauri 2 requires system WebView (WebKitGTK on Linux, WebView2 on Windows — macOS uses built-in WKWebView). **GStreamer 1.24+ required** — `brew install gstreamer` on macOS (pkgconf included), `libgstreamer1.0-dev` + plugins on Linux, official MSVC installer on Windows. See `CONTRIBUTING.md`. Missing GStreamer = `glib-sys` build failure.
 
 ## Commands
 
 ```bash
 # Package manager/tooling — ALWAYS use pnpm, NEVER npm or deno
-# Monorepo: root + remote-pwa/ are pnpm workspaces. Use --filter for sub-package commands.
-pnpm install              # install deps
-pnpm add <pkg>            # add frontend dep
-pnpm tauri add <plugin>   # add Tauri plugin (auto-registers in Cargo + permissions + init)
+# Monorepo workspace: apps/desktop, apps/remote-pwa. Use --filter for sub-package commands.
+pnpm install              # install all workspace deps
+pnpm add --filter desktop <pkg>  # add frontend dep to desktop
+pnpm --filter desktop tauri add <plugin>  # add Tauri plugin
 
-# Build & check
-pnpm vite build           # frontend build (also regenerates routeTree.gen.ts)
-npx tsc --noEmit          # TypeScript check only
-cargo build --manifest-path src-tauri/Cargo.toml  # Rust build only
-pnpm tauri dev             # full dev mode (frontend + Rust); also regenerates bindings.ts via tauri-specta
-pnpm test:unit            # run unit tests
-pnpm lint:i18n            # validate i18n key coverage across all 3 locales
+# Build & check (root delegates to apps/desktop)
+pnpm build                # frontend build (also regenerates routeTree.gen.ts)
+pnpm --filter desktop exec tsc --noEmit   # TypeScript check only
+cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml  # Rust build only
+pnpm dev                  # full dev mode (frontend + Rust); also regenerates bindings.ts via tauri-specta
+pnpm test                 # run unit tests
+pnpm --filter desktop lint:i18n  # validate i18n key coverage across all 3 locales
 
 # IMPORTANT: Do not run `deno` commands in this repository.
-# IMPORTANT: After adding new TanStack Router routes, run `pnpm vite build`
-# BEFORE `npx tsc --noEmit` — the Vite plugin generates routeTree.gen.ts
+# IMPORTANT: After adding new TanStack Router routes, run `pnpm build`
+# BEFORE `tsc --noEmit` — the Vite plugin generates routeTree.gen.ts
 # and tsc will fail on stale route types otherwise.
 ```
 
 ## Project Structure
 
 ```
-src/                          # Frontend (React)
+apps/
+├── desktop/                  # Main Tauri desktop app
+│   ├── src/                  # Frontend (React)
+│   ├── src-tauri/            # Rust backend
+│   ├── public/               # Static assets
+│   ├── tests/                # Unit tests
+│   ├── index.html
+│   ├── global.css
+│   ├── vite.config.ts
+│   └── tsconfig*.json
+├── remote-pwa/               # Companion phone/tablet web app
+└── admin-panel/              # Next.js CDN pack publishing tool (not in pnpm workspace)
+
+apps/desktop/src/             # Frontend (React)
 ├── components/
 │   ├── display/              # projector-controls
 │   ├── layout/               # sidebar, header, status-bar
@@ -197,7 +226,7 @@ src/                          # Frontend (React)
 ├── stores/                   # Zustand stores (presentation-store, display-store, audio-store, ui-store, queue-store, theme-store, content-sync-store)
 └── types/                    # TypeScript type definitions
 
-src-tauri/src/                # Backend (Rust)
+apps/desktop/src-tauri/src/   # Backend (Rust)
 ├── lib.rs                    # Tauri setup, command registration, plugin init
 ├── state.rs                  # AppState (db, current_slide, projector_open, ytdlp), AudioState, YtdlpRuntimeState
 ├── error.rs                  # AppError enum (Database, Io, SerdeJson, NotFound, Internal, Tauri)
@@ -352,19 +381,19 @@ src-tauri/src/                # Backend (Rust)
 - **Realtime sync anti-pattern:** Never implement polling loops for live synchronization (audio/timer/clock/projection/streaming). Use event-driven pub/sub from Rust emitters to frontend listeners. If polling is temporarily unavoidable, document the rationale and removal plan.
 - **Playback/editor separation:** Presentation editor flows must not mutate the active playback queue or projection synchronization lifecycle. Keep queue control in playback routes/hooks only.
 - **CI/CD pipeline:** GitHub Actions with 5-platform matrix (macOS ARM/Intel, Linux x64/ARM, Windows). Uses `tauri-apps/tauri-action@v0` with Rust cache, Ed25519 signing, and draft releases. Signing env vars: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-- **Admin panel:** Separate Next.js 14 App Router project at `admin-panel/`. Manages CDN pack publishing: file upload, `canonicalPackPath()` path normalization, `manifest.ts` types (`ContentManifest`, `ManifestPack` with `language` BCP 47 + `databases` per-language DB entries), R2 upload. Run with `pnpm build` inside `admin-panel/`.
-- **Remote PWA (`remote-pwa/`):** Companion web app for controlling LouvorJA from a phone/tablet. Deployed as PWA; served by Tauri backend's built-in HTTP+WS server. Tech stack: React 19, TanStack Router (file-based), Zustand, i18next (same 3 locales), Tailwind v4, Vitest + Testing Library. Commands: `pnpm --filter remote-pwa dev`, `pnpm --filter remote-pwa build`, `pnpm --filter remote-pwa test`. Routes: `pair → search → queue → live → service → settings`. Key patterns:
+- **Admin panel:** Separate Next.js 14 App Router project at `apps/admin-panel/`. Manages CDN pack publishing: file upload, `canonicalPackPath()` path normalization, `manifest.ts` types (`ContentManifest`, `ManifestPack` with `language` BCP 47 + `databases` per-language DB entries), R2 upload. Run with `pnpm build` inside `apps/admin-panel/`.
+- **Remote PWA (`apps/remote-pwa/`):** Companion web app for controlling LouvorJA from a phone/tablet. Deployed as PWA; served by Tauri backend's built-in HTTP+WS server. Tech stack: React 19, TanStack Router (file-based), Zustand, i18next (same 3 locales), Tailwind v4, Vitest + Testing Library. Commands: `pnpm --filter remote-pwa dev`, `pnpm --filter remote-pwa build`, `pnpm --filter remote-pwa test`. Routes: `pair → search → queue → live → service → settings`. Key patterns:
   - **Pairing flow:** HTTP POST `/pair` (with PIN) → receive device token (base64url) → WebSocket upgrade using `["bearer", token]` subprotocol (browsers block custom headers on WS upgrade)
   - **HMAC auth:** Each outbound envelope signed with HMAC-SHA256. Token decoded from base64url to raw bytes before use as key — Rust backend uses raw bytes, mismatch = all commands rejected (see `lib/crypto.ts` + `lib/ws-client.ts`)
   - **Crypto fallback:** `lib/crypto.ts` provides pure-JS SHA-256/HMAC for non-secure (HTTP) contexts where `crypto.subtle` is undefined
   - **Reconnect:** Exponential backoff 1/2/4/8s (capped) in `ws-client.ts`
   - **Wake lock:** `hooks/use-wake-lock.ts` prevents screen sleep during active session
   - **Storage:** `lib/storage.ts` persists pairing credentials (device token, host URL) to localStorage
-  - **CI:** `.github/workflows/remote-perf.yml` runs Lighthouse perf audit on push (`remote-pwa/lighthouserc.json`)
+  - **CI:** `.github/workflows/remote-perf.yml` runs Lighthouse perf audit on push (`apps/remote-pwa/lighthouserc.json`)
   - **HMAC requires serde_json preserve_order:** `serde_json = { features = ["preserve_order"] }` in `src-tauri/Cargo.toml` is MANDATORY for the remote WS HMAC verification. Without it, `serde_json::Value` uses `BTreeMap` (alphabetical keys) — re-serialization changes key order from client's insertion order (`JSON.stringify`), breaking HMAC byte-match. Single-key payloads work by accident; **2+ key payloads fail silently** (e.g., `bible.list_chapters { versionId, book }` was rejected while `bible.list_books { versionId }` worked).
-  - **WS error envelope protocol:** Server sends `{ type: "error", op: <reqOp>, payload: { error: "..." } }` on handler failure. Client MUST early-return on `type === "error"` and NOT dispatch to op handlers — otherwise payload-shape guards fail silently (e.g. bible chapters showing empty grid when versionId invalid). See `remote-pwa/src/lib/ws-client.ts`.
-  - **Stale-state trap in browse UIs:** `useEffect` resetting browse state with deps `[tab, ws, wsState]` resets on ANY ws reconnect mid-flow, bouncing users to first step. Split into (1) tab-only reset, (2) `[tab, ws, wsState]` fetch with guard on existing state. See `remote-pwa/src/routes/search.tsx` bible browse.
-  - **HighlightedSnippet pattern:** FTS `snippet()` returns text with `<mark>...</mark>`. Rendering `{text}` in React escapes the tags to literals. Use `HighlightedSnippet` — splits on `/(<mark>.*?<\/mark>)/g`, slices inner text, wraps in React `<mark>` elements. Identical code in `src/components/ui/highlighted-snippet.tsx` and `remote-pwa/src/components/ui/highlighted-snippet.tsx`.
+  - **WS error envelope protocol:** Server sends `{ type: "error", op: <reqOp>, payload: { error: "..." } }` on handler failure. Client MUST early-return on `type === "error"` and NOT dispatch to op handlers — otherwise payload-shape guards fail silently (e.g. bible chapters showing empty grid when versionId invalid). See `apps/remote-pwa/src/lib/ws-client.ts`.
+  - **Stale-state trap in browse UIs:** `useEffect` resetting browse state with deps `[tab, ws, wsState]` resets on ANY ws reconnect mid-flow, bouncing users to first step. Split into (1) tab-only reset, (2) `[tab, ws, wsState]` fetch with guard on existing state. See `apps/remote-pwa/src/routes/search.tsx` bible browse.
+  - **HighlightedSnippet pattern:** FTS `snippet()` returns text with `<mark>...</mark>`. Rendering `{text}` in React escapes the tags to literals. Use `HighlightedSnippet` — splits on `/(<mark>.*?<\/mark>)/g`, slices inner text, wraps in React `<mark>` elements. Identical code in `src/components/ui/highlighted-snippet.tsx` and `apps/remote-pwa/src/components/ui/highlighted-snippet.tsx`.
   - **Version-scoped bible search:** `bible.search` WS op accepts optional `versionId`. When user picks a version in browse UI, remote passes `selectedVersion.id`; else searches all versions. Backend `search_bible_text(conn, query, version_id: Option<i64>)` already supports this.
 - **Online Videos feature:** YouTube integration with playlist management, offline download via yt-dlp, and projector iframe rendering. Key patterns:
   - **YouTube API commands use spawned threads** (`std::thread::spawn`) with Tauri event emission on completion. Frontend `useYoutubeEvents()` hook listens to events and invalidates TanStack Query caches.
@@ -472,7 +501,7 @@ rtk prisma              # Prisma without ASCII art (88%)
 ```bash
 rtk ls <path>           # Tree format, compact (65%)
 rtk read <file>         # Code reading with filtering (60%)
-rtk grep <pattern>      # Search grouped by file (75%)
+rtk grep <pattern>      # Search grouped by file (75%). Format flags (-c, -l, -L, -o, -Z) run raw.
 rtk find <pattern>      # Find grouped by directory (70%)
 ```
 

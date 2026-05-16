@@ -11,8 +11,8 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const LIB_RS = resolve(ROOT, "src-tauri/src/lib.rs");
-const COMMANDS_TOML = resolve(ROOT, "src-tauri/permissions/commands.toml");
+const LIB_RS = resolve(ROOT, "apps/desktop/src-tauri/src/lib.rs");
+const COMMANDS_TOML = resolve(ROOT, "apps/desktop/src-tauri/permissions/commands.toml");
 
 // --- Parse collect_commands! block from lib.rs ---
 const libSrc = readFileSync(LIB_RS, "utf8");

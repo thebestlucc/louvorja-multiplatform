@@ -5,7 +5,7 @@ const endpoint = process.env.TAURI_UPDATER_ENDPOINT?.trim();
 const pubkey = process.env.TAURI_UPDATER_PUBLIC_KEY?.trim();
 const skipFrontendBuild = process.env.TAURI_SKIP_FRONTEND_BUILD?.trim() === "true";
 
-const configPath = "src-tauri/tauri.conf.json";
+const configPath = "apps/desktop/src-tauri/tauri.conf.json";
 const raw = fs.readFileSync(configPath, "utf8");
 const json = JSON.parse(raw);
 

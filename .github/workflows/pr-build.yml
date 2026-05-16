@@ -77,7 +77,7 @@ jobs:
         shell: bash
         run: |
           set +o pipefail
-          cargo check --locked --manifest-path src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-check.log
+          cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml 2>&1 | tee /tmp/cargo-check.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
             grep -E '(^error\[E[0-9]+\]|^error:|^warning:|^   --> |panicked at|^thread .* panicked)' /tmp/cargo-check.log \
@@ -100,10 +100,11 @@ jobs:
           # against a STUN server / real GLX (xvfb's software GLX often can't
           # reach PLAYING with glimagesink). Skip them in CI; developers can
           # still run them locally with a real graphics stack + network.
-          xvfb-run -a cargo test --locked --manifest-path src-tauri/Cargo.toml \
+          xvfb-run -a cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml \
             -- \
             --skip subscribe_emits_offer_through_signaling_channel \
             --skip video_pipeline_reaches_playing_within_2s \
+            --skip attach_native_sink_to_playing_pipeline_keeps_pipeline_playing \
             2>&1 | tee /tmp/cargo-test.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then

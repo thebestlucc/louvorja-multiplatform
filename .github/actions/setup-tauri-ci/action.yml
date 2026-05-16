@@ -58,7 +58,7 @@ runs:
       if: ${{ inputs.setup-rust == 'true' }}
       uses: swatinem/rust-cache@v2
       with:
-        workspaces: "./src-tauri -> target"
+        workspaces: "./apps/desktop/src-tauri -> target"
         # Native jobs share cache per OS; cross-compiled jobs add a suffix to avoid collisions
         shared-key: "tauri-${{ runner.os }}${{ inputs.cache-suffix != '' && format('-{0}', inputs.cache-suffix) || '' }}"
         save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
