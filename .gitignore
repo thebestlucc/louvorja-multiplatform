@@ -59,6 +59,8 @@ docs/plans/
 !docs/architecture.md
 
 TODO.md
+*-specs.md
+*-spec.md
 # Session lock files (stale lock from expired Claude Code sessions)
 .claude/scheduled_tasks.lock
 
