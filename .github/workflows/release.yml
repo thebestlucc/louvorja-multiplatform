@@ -25,19 +25,20 @@ jobs:
           filter: blob:none
           sparse-checkout: |
             .github
-            global.css
-            index.html
             package.json
             pnpm-lock.yaml
             pnpm-workspace.yaml
-            public
-            remote-pwa
-            src
-            tests
-            tsconfig.json
-            tsconfig.node.json
-            tsconfig.unit-tests.json
-            vite.config.ts
+            apps/desktop/global.css
+            apps/desktop/index.html
+            apps/desktop/package.json
+            apps/desktop/public
+            apps/desktop/src
+            apps/desktop/tests
+            apps/desktop/tsconfig.json
+            apps/desktop/tsconfig.node.json
+            apps/desktop/tsconfig.unit-tests.json
+            apps/desktop/vite.config.ts
+            apps/remote-pwa
           sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-tauri-ci
         with:
@@ -48,7 +49,7 @@ jobs:
         run: pnpm build
       - name: Run root unit tests
         shell: bash
-        run: pnpm test:unit
+        run: pnpm test
       - name: Run remote-pwa tests
         shell: bash
         run: pnpm --filter remote-pwa test -- --run

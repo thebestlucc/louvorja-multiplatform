@@ -22,19 +22,20 @@ jobs:
           filter: blob:none
           sparse-checkout: |
             .github
-            global.css
-            index.html
             package.json
             pnpm-lock.yaml
             pnpm-workspace.yaml
-            public
-            remote-pwa
-            src
-            tests
-            tsconfig.json
-            tsconfig.node.json
-            tsconfig.unit-tests.json
-            vite.config.ts
+            apps/desktop/global.css
+            apps/desktop/index.html
+            apps/desktop/package.json
+            apps/desktop/public
+            apps/desktop/src
+            apps/desktop/tests
+            apps/desktop/tsconfig.json
+            apps/desktop/tsconfig.node.json
+            apps/desktop/tsconfig.unit-tests.json
+            apps/desktop/vite.config.ts
+            apps/remote-pwa
           sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-tauri-ci
         with:
@@ -45,7 +46,7 @@ jobs:
         run: pnpm build
       - name: Run root unit tests
         shell: bash
-        run: pnpm test:unit
+        run: pnpm test
       - name: Run remote-pwa tests
         shell: bash
         run: pnpm --filter remote-pwa test -- --run
@@ -53,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.0
         with:
           name: frontend-dist
-          path: dist
+          path: apps/desktop/dist
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -164,7 +165,7 @@ jobs:
         uses: actions/download-artifact@v8.0.1
         with:
           name: frontend-dist
-          path: dist
+          path: apps/desktop/dist
       - name: Build remote-pwa (required by include_dir! in src/remote/assets.rs)
         shell: bash
         run: pnpm --filter remote-pwa build
