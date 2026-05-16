@@ -3,7 +3,7 @@
 ## Where to configure
 
 1. Local/default updater placeholders:
-- `src-tauri/tauri.conf.json`
+- `apps/desktop/src-tauri/tauri.conf.json`
   - `plugins.updater.endpoints`
   - `plugins.updater.pubkey`
 
@@ -17,11 +17,11 @@
 
 3. Release workflow wiring:
 - `.github/workflows/release.yml`
-- The workflow injects endpoint and public key into `src-tauri/tauri.conf.json` via:
+- The workflow injects endpoint and public key into `apps/desktop/src-tauri/tauri.conf.json` via:
   - `.github/scripts/inject-updater-config.mjs`
 
 ## Notes
 
 - Never commit private signing keys.
 - Public key (`pubkey`) is safe to ship in app config.
-- For local testing, you can set a test endpoint/pubkey directly in `src-tauri/tauri.conf.json`.
+- For local testing, you can set a test endpoint/pubkey directly in `apps/desktop/src-tauri/tauri.conf.json`.

@@ -3,10 +3,10 @@ name: remote-pwa performance
 on:
   push:
     paths:
-      - "remote-pwa/**"
+      - "apps/remote-pwa/**"
   pull_request:
     paths:
-      - "remote-pwa/**"
+      - "apps/remote-pwa/**"
 
 concurrency:
   group: remote-perf-${{ github.workflow }}-${{ github.ref }}
@@ -38,7 +38,7 @@ jobs:
 
       - name: Check gzipped bundle size (200 KB limit)
         run: |
-          GZIP_BYTES=$(find remote-pwa/dist -name "*.js" -o -name "*.css" | sort | xargs gzip -c | wc -c)
+          GZIP_BYTES=$(find apps/remote-pwa/dist -name "*.js" -o -name "*.css" | sort | xargs gzip -c | wc -c)
           LIMIT=204800
           echo "Gzipped dist size: ${GZIP_BYTES} bytes (limit: ${LIMIT})"
           if [ "${GZIP_BYTES}" -gt "${LIMIT}" ]; then
@@ -52,7 +52,7 @@ jobs:
 
       - name: Start static file server
         run: |
-          http-server remote-pwa/dist --port 9001 --silent &
+          http-server apps/remote-pwa/dist --port 9001 --silent &
           echo "HTTP_SERVER_PID=$!" >> "$GITHUB_ENV"
           for i in $(seq 1 10); do
             curl -s http://localhost:9001 > /dev/null && break
@@ -60,7 +60,7 @@ jobs:
           done
 
       - name: Run Lighthouse CI
-        run: lhci autorun --config=remote-pwa/lighthouserc.json --collect.url=http://localhost:9001
+        run: lhci autorun --config=apps/remote-pwa/lighthouserc.json --collect.url=http://localhost:9001
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 

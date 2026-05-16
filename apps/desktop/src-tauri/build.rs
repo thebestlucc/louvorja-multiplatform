@@ -17,7 +17,7 @@ fn main() {
     // `include_dir!` does NOT emit rerun hints, so without this watcher the
     // Rust binary keeps a stale PWA bundle after a `pnpm --filter remote-pwa
     // build`. Walk the dist tree and declare every file as a rerun dependency.
-    let pwa_dist = repo_root.join("remote-pwa").join("dist");
+    let pwa_dist = repo_root.join("apps").join("remote-pwa").join("dist");
     fn emit_rerun_recursive(path: &std::path::Path) {
         if path.is_dir() {
             println!("cargo:rerun-if-changed={}", path.display());

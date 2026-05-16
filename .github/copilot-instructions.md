@@ -37,6 +37,6 @@ Church worship desktop app: **Tauri 2 + React 19 + Rust**.
 
 - `src/lib/tauri.ts` — typed `invoke()` wrappers (one per command)
 - `src/lib/queries.ts` — TanStack Query hooks
-- `src-tauri/src/lib.rs` — command registration
-- `src-tauri/src/db/migrations.rs` — schema versioning
-- `src-tauri/src/error.rs` — `AppError` enum
+- `apps/desktop/src-tauri/src/lib.rs` — command registration
+- `apps/desktop/src-tauri/src/db/migrations.rs` — schema versioning
+- `apps/desktop/src-tauri/src/error.rs` — `AppError` enum
