@@ -9,9 +9,11 @@ import { useDisplayStore } from "../../stores/display-store";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { useRustVideoPipelineStore } from "../../stores/rust-video-pipeline-store";
 import { navigateBible } from "../../lib/tauri/bible";
+import { toggleBlackScreen, setIsFrozen } from "../../lib/tauri/display";
+import { useMemo } from "react";
+import { wrapBibleAwareSlideActions } from "../../lib/bible-aware-slide-actions";
 import * as videoPipeline from "../../lib/tauri/video-pipeline";
 import { usePresentationStore } from "../../stores/presentation-store";
-import { useSlides } from "../../hooks/use-slides";
 import { QueuePanel } from "../../components/playing-now/queue-panel";
 import { PreviewCanvas } from "../../components/playing-now/preview-canvas";
 import { ControlBar } from "../../components/playing-now/control-bar";
@@ -23,6 +25,7 @@ import { SpotlightTour } from "../../components/tour/spotlight-tour";
 import { Button } from "../../components/ui/button";
 import { MonitorPlay, Monitor } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { cn } from "../../lib/utils";
 
 export const Route = createFileRoute("/playing-now/")({
   component: PlayingNowScreen,
@@ -34,7 +37,6 @@ function PlayingNowScreen() {
   // Mount coordination hooks
   usePlaybackCoordinator();
   const actions = useMediaPlayer();
-  usePlayingNowKeyboard(actions);
 
   // Read store state
   const {
@@ -64,6 +66,16 @@ function PlayingNowScreen() {
   const bibleContext = useDisplayStore((s) => s.bibleContext);
   const navigate = useNavigate();
 
+  // Bible projection routes prev/next through navigate_bible (split-aware,
+  // updates Rust bp.context). Hand the same wrapped handlers to the keyboard
+  // hook so ArrowLeft/Right behave like the on-screen Prev/Next buttons.
+  const isBibleProjection = currentProjectionType === "bible" && bibleContext !== null;
+  const keyboardActions = useMemo(
+    () => wrapBibleAwareSlideActions(actions, isBibleProjection, navigateBible),
+    [actions, isBibleProjection],
+  );
+  usePlayingNowKeyboard(keyboardActions);
+
   // When the Rust pipeline flag is on AND the active item is video, source
   // currentTime/duration/volume from the 10 Hz Rust state stream instead of
   // the legacy `video-state` Tauri events bridged into useMediaPlayerStore.
@@ -82,8 +94,6 @@ function PlayingNowScreen() {
   const effectiveDuration = usePipelineState ? rustDurationSecs * 1000 : duration;
   const effectiveVolume = usePipelineState ? rustVolume : volume;
 
-  const isBibleProjection = currentProjectionType === "bible" && bibleContext !== null;
-
   const handleGoToBible = () => {
     if (bibleContext) {
       navigate({
@@ -100,7 +110,6 @@ function PlayingNowScreen() {
   const presentationActiveIndex = usePresentationStore((s) => s.activeSlideIndex);
   const isPlayingLiturgy = usePresentationStore((s) => s.isPlayingLiturgy);
   const isFrozen = useDisplayStore((s) => s.isFrozen);
-  const { projectSlideWithContext } = useSlides();
   const effectiveSlides = slides;
   const effectiveActiveIndex = slides.length > 0 ? activeSlideIndex : presentationActiveIndex;
 
@@ -140,13 +149,15 @@ function PlayingNowScreen() {
         title={headerTitle}
         subtitle={headerSubtitle}
         frozen={isFrozen}
+        isBlack={overlay === "black"}
+        onBlackToggle={() => { toggleBlackScreen().catch(() => {}); }}
         onFreezeToggle={() => {
           const next = !useDisplayStore.getState().isFrozen;
           useDisplayStore.getState().setFrozen(next);
-          if (!next && currentSlide) {
-            const nextSlide = effectiveSlides[effectiveActiveIndex + 1] ?? null;
-            projectSlideWithContext(currentSlide, nextSlide, effectiveActiveIndex, effectiveSlides.length, headerTitle).catch(() => {});
-          }
+          // Rust set_is_frozen flushes the latest slide + context on unfreeze.
+          // No frontend re-project — that path (projectSlideWithContext) would
+          // clobber currentProjectionType to "hymn" for bible projections.
+          setIsFrozen(next).catch(() => {});
         }}
       />
 
@@ -192,27 +203,34 @@ function PlayingNowScreen() {
       )}
 
       {/* Main area: stage + queue */}
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-3">
-        {/* Left: preview canvas + filmstrip */}
-        <section className="flex h-full min-w-0 min-h-0 flex-col gap-2 overflow-hidden">
-          <div className="min-h-0 flex-1">
-            <PreviewCanvas
-              currentItem={currentItem}
-              currentSlide={currentSlide}
-              overlay={overlay}
-              isProjectorOpen={isProjectorOpen}
-            />
-          </div>
-          {showFilmstrip && (
+      <div className={cn(
+        "min-h-0 flex-1",
+        showFilmstrip
+          ? "grid grid-cols-[124px_minmax(0,1fr)_auto] gap-3"
+          : "grid grid-cols-[minmax(0,1fr)_auto] gap-3"
+      )}>
+        {/* Left rail: slide filmstrip */}
+        {showFilmstrip && (
+          <aside className="self-start max-h-[50vh] overflow-y-auto" aria-label="Slides">
             <SlideFilmstrip
               slides={effectiveSlides}
               activeIndex={effectiveActiveIndex}
               onSlideClick={actions.goToSlide}
             />
-          )}
+          </aside>
+        )}
+
+        {/* Center: preview canvas */}
+        <section className="self-start aspect-video min-w-0 overflow-hidden rounded-lg">
+          <PreviewCanvas
+            currentItem={currentItem}
+            currentSlide={currentSlide}
+            overlay={overlay}
+            isProjectorOpen={isProjectorOpen}
+          />
         </section>
 
-        {/* Right: queue — lets QueuePanel manage its own width (40/280px) */}
+        {/* Right: queue */}
         <div data-tour="playing-queue" className="h-full">
           <QueuePanel />
         </div>
@@ -234,8 +252,8 @@ function PlayingNowScreen() {
           onStop={actions.stop}
           onRestart={actions.restart}
           onSeek={actions.seek}
-          onPrevSlide={isBibleProjection ? () => navigateBible("prev") : actions.prevSlide}
-          onNextSlide={isBibleProjection ? () => navigateBible("next") : actions.nextSlide}
+          onPrevSlide={isBibleProjection ? () => navigateBible("prev").catch(() => {}) : actions.prevSlide}
+          onNextSlide={isBibleProjection ? () => navigateBible("next").catch(() => {}) : actions.nextSlide}
           onVolumeChange={actions.setVolume}
           onMuteToggle={() => {
             const s = useAudioStore.getState();

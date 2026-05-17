@@ -124,6 +124,7 @@ allow = [
     "clear_current_slide",
     "set_slide_context",
     "get_slide_context",
+    "set_is_frozen",
     "toggle_black_screen",
     "toggle_logo_screen",
     "get_overlay_state",

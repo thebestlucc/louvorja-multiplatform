@@ -386,14 +386,14 @@ export function ProjectorView() {
       {/* Black screen overlay */}
       <div
         className={cn(
-          "absolute inset-0 bg-black transition-opacity duration-500",
+          "absolute inset-0 z-[100] bg-black transition-opacity duration-500",
           blackScreen ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       />
       {/* Logo screen overlay (also shown when no slide content) */}
       <div
         className={cn(
-          "absolute inset-0 flex items-center justify-center bg-black transition-opacity duration-500",
+          "absolute inset-0 z-[100] flex items-center justify-center bg-black transition-opacity duration-500",
           showLogo ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >

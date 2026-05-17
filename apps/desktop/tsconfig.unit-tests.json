@@ -16,6 +16,7 @@
   },
   "include": [
     "tests/lib/audio-sync.test.ts",
+    "tests/lib/bible-aware-slide-actions.test.ts",
     "tests/lib/content-sync-presentation.test.ts",
     "tests/lib/hymn-slides.test.ts",
     "tests/lib/project-service-item.test.ts",
@@ -41,6 +42,7 @@
     "tests/hooks/use-playback-coordinator.test.ts",
     "tests/hooks/use-rust-video-pipeline.test.ts",
     "src/lib/audio-sync.ts",
+    "src/lib/bible-aware-slide-actions.ts",
     "src/lib/content-sync-presentation.ts",
     "src/lib/hymn-slides.ts",
     "src/lib/media-path.ts",

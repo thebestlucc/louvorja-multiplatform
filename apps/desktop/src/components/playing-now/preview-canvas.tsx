@@ -78,11 +78,7 @@ export function PreviewCanvas({
 
   // Slide preview (hymn, presentation, bible, etc.)
   if (currentSlide) {
-    return (
-      <div className="flex h-full items-center justify-center bg-black/90 p-4">
-        <ScaledSlidePreview slide={currentSlide} />
-      </div>
-    );
+    return <ScaledSlidePreview slide={currentSlide} className="h-full w-full rounded-lg" />;
   }
 
   // Empty state — no item and no slide

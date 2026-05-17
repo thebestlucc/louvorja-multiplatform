@@ -997,6 +997,14 @@ async getSlideContext() : Promise<Result<SlideContext | null, AppErrorResponse>>
     else return { status: "error", error: e  as any };
 }
 },
+async setIsFrozen(frozen: boolean) : Promise<Result<null, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_is_frozen", { frozen }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async toggleBlackScreen() : Promise<Result<OverlayState, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("toggle_black_screen") };

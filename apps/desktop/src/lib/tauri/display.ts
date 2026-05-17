@@ -87,6 +87,10 @@ export async function getSlideContext(): Promise<SlideContext | null> {
   return tauriInvoke<SlideContext | null>("get_slide_context");
 }
 
+export async function setIsFrozen(frozen: boolean): Promise<void> {
+  return tauriInvoke<void>("set_is_frozen", { frozen });
+}
+
 export async function setMonitorConfig(monitorId: string, role: string): Promise<void> {
   return tauriInvoke<void>("set_monitor_config", { monitorId, role });
 }

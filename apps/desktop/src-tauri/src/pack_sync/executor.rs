@@ -89,7 +89,12 @@ fn clear_background_io_priority() {
 
 #[cfg(target_os = "macos")]
 fn set_background_io_priority() {
-    let result = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, 19) };
+    // PRIO_DARWIN_THREAD (3) scopes to the calling thread only.
+    // PRIO_DARWIN_BG (0x1000) enables background CPU + I/O scheduling class.
+    // Using PRIO_PROCESS here would degrade the entire app process.
+    const PRIO_DARWIN_THREAD: libc::c_int = 3;
+    const PRIO_DARWIN_BG: libc::c_int = 0x1000;
+    let result = unsafe { libc::setpriority(PRIO_DARWIN_THREAD, 0, PRIO_DARWIN_BG) };
     if result != 0 {
         log::warn!("[pack-sync] Failed to set background I/O priority (macOS): errno={}", std::io::Error::last_os_error());
     }
@@ -97,7 +102,8 @@ fn set_background_io_priority() {
 
 #[cfg(target_os = "macos")]
 fn clear_background_io_priority() {
-    let result = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, 0) };
+    const PRIO_DARWIN_THREAD: libc::c_int = 3;
+    let result = unsafe { libc::setpriority(PRIO_DARWIN_THREAD, 0, 0) };
     if result != 0 {
         log::warn!("[pack-sync] Failed to clear background I/O priority (macOS): errno={}", std::io::Error::last_os_error());
     }

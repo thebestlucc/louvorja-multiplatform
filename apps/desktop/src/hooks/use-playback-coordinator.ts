@@ -163,6 +163,7 @@ async function playBibleItem(item: QueueItem) {
   const pres = usePresentationStore.getState();
   pres.setActiveSlideIndex(startIdx);
   displayStore.getState().setCurrentProjectionType("bible");
+  // Rust persists the slide to state even while frozen and replays on unfreeze.
   await catcher(setCurrentSlide(slides[startIdx]));
 }
 
@@ -258,7 +259,8 @@ async function playVideoItem(item: QueueItem) {
     }
   }
 
-  // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle
+  // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle.
+  // Rust persists the slide to state even while frozen and replays on unfreeze.
   await catcher(setCurrentSlide(slide));
 }
 
@@ -294,6 +296,7 @@ async function playPresentationItem(item: QueueItem) {
   useMediaPlayerStore.getState().setSlides(slides);
   usePresentationStore.getState().setActiveSlideIndex(0);
   useDisplayStore.getState().setCurrentProjectionType("presentation");
+  // Rust persists the slide to state even while frozen and replays on unfreeze.
   await catcher(setCurrentSlide(slides[0]));
 }
 

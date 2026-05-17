@@ -249,6 +249,7 @@ pub struct AppState {
     pub current_slide: RwLock<Option<SlideContent>>,
     pub current_slide_version: AtomicU64,
     pub projector_open: AtomicBool,
+    pub is_frozen: AtomicBool,
     pub overlay: RwLock<OverlayRuntimeState>,
     pub return_open: AtomicBool,
     pub slide_context: RwLock<Option<SlideContext>>,
