@@ -6,12 +6,31 @@ use crate::display::{
 };
 use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
-use crate::state::{AppState, StreamingState};
+use crate::state::{AlertState, AppState, StreamingState};
 use crate::utils::catcher::catcher;
 use display_info::DisplayInfo as ExternalDisplayInfo;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
+
+/// Build the legacy OverlayState response shape from a Hub Snapshot. Returned
+/// by the `toggle_*` / `set_alert` / `clear_alert` commands so callers that
+/// haven't yet migrated to useProjectionState still receive the current state
+/// synchronously alongside the Delta the Hub will broadcast.
+fn overlay_state_from_snapshot(
+    snapshot: &crate::projection::ProjectionSnapshot,
+) -> OverlayState {
+    let alert = snapshot.alert.as_ref().map(|a| AlertState {
+        text: a.text.clone(),
+        is_visible: true,
+        is_ticker: a.is_ticker,
+    });
+    OverlayState {
+        black_screen: matches!(snapshot.overlay, crate::projection::OverlayMode::Black),
+        logo_screen: matches!(snapshot.overlay, crate::projection::OverlayMode::Logo),
+        alert,
+    }
+}
 
 const MONITORS_CHANGED_EVENT: &str = "monitors-changed";
 const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -374,35 +393,20 @@ pub fn clear_current_slide(
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     stop_live_utility_projection(&state)?;
-    {
-        let (current, err) = catcher(state.current_slide.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut current = current.unwrap();
-        *current = None;
-    }
-    {
-        let (ctx, err) = catcher(state.slide_context.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut ctx = ctx.unwrap();
-        *ctx = None;
-    }
-    // Funnel slide + context clears into the Hub. SseSurface re-broadcasts
-    // empty music + bible + return payloads to all live SSE consumers;
-    // DeltaSurface emits one projection-delta to all webview consumers.
+    // Clear slide + context atomically in the Hub. SseSurface re-broadcasts
+    // empty payloads to all live SSE consumers; DeltaSurface emits one
+    // projection-delta to all webview consumers.
     {
         let hub = state.projection.clone();
         tauri::async_runtime::block_on(async move {
-            let _ = hub.apply(crate::projection::Mutation::SetSlide(None)).await;
-            let _ = hub.apply(crate::projection::Mutation::SetContext(None)).await;
+            let _ = hub
+                .apply_batch(vec![
+                    crate::projection::Mutation::SetSlide(None),
+                    crate::projection::Mutation::SetContext(None),
+                ])
+                .await;
         });
     }
-    // AppState.current_slide_version is still read by get_current_slide for
-    // webview mount-time hydration; bump for that path.
-    state.current_slide_version.fetch_add(1, Ordering::SeqCst);
 
     // Video state clear stays direct: video broadcaster is not yet on the Hub
     // (out of scope for Phase 2/3).
@@ -459,31 +463,22 @@ pub fn toggle_black_screen(
     _app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.is_black_screen = !overlay.is_black_screen;
-    if overlay.is_black_screen {
-        overlay.is_logo_screen = false;
-    }
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-    // Funnel into the Hub via block_on so the DeltaSurface re-emits
-    // projection-delta before the command returns; otherwise the frontend
-    // toggle button would race the Surface.
-    {
-        let hub = state.projection.clone();
-        let mode = overlay_mode_from_bools(overlay.is_black_screen, overlay.is_logo_screen);
-        tauri::async_runtime::block_on(async move {
-            let _ = hub.apply(crate::projection::Mutation::SetOverlay(mode)).await;
-        });
-    }
-    Ok(result)
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let (snap, _rx) = hub.attach().await;
+        let next = if matches!(snap.overlay, crate::projection::OverlayMode::Black) {
+            crate::projection::OverlayMode::None
+        } else {
+            crate::projection::OverlayMode::Black
+        };
+        let _ = state
+            .projection
+            .apply(crate::projection::Mutation::SetOverlay(next))
+            .await;
+        let (snap2, _rx2) = state.projection.attach().await;
+        snap2
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
@@ -492,40 +487,22 @@ pub fn toggle_logo_screen(
     _app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.is_logo_screen = !overlay.is_logo_screen;
-    if overlay.is_logo_screen {
-        overlay.is_black_screen = false;
-    }
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-    {
-        let hub = state.projection.clone();
-        let mode = overlay_mode_from_bools(overlay.is_black_screen, overlay.is_logo_screen);
-        tauri::async_runtime::block_on(async move {
-            let _ = hub.apply(crate::projection::Mutation::SetOverlay(mode)).await;
-        });
-    }
-    Ok(result)
-}
-
-fn overlay_mode_from_bools(black: bool, logo: bool) -> crate::projection::OverlayMode {
-    // Mutual exclusion is enforced by the toggle callers above. If both ever
-    // become true through a future code path, prefer Black (more disruptive).
-    if black {
-        crate::projection::OverlayMode::Black
-    } else if logo {
-        crate::projection::OverlayMode::Logo
-    } else {
-        crate::projection::OverlayMode::None
-    }
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let (snap, _rx) = hub.attach().await;
+        let next = if matches!(snap.overlay, crate::projection::OverlayMode::Logo) {
+            crate::projection::OverlayMode::None
+        } else {
+            crate::projection::OverlayMode::Logo
+        };
+        let _ = state
+            .projection
+            .apply(crate::projection::Mutation::SetOverlay(next))
+            .await;
+        let (snap2, _rx2) = state.projection.attach().await;
+        snap2
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
@@ -537,37 +514,16 @@ pub fn set_alert(
     state: tauri::State<'_, AppState>,
     _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.alert.text = text;
-    overlay.alert.is_ticker = is_ticker;
-    overlay.alert.is_visible = true;
-
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-
-    // Funnel into the Hub. SseSurface re-broadcasts the alert payload;
-    // DeltaSurface emits one projection-delta to all webview consumers.
-    {
-        let hub = state.projection.clone();
-        let alert = crate::projection::Alert {
-            text: overlay.alert.text.clone(),
-            is_ticker: overlay.alert.is_ticker,
-        };
-        tauri::async_runtime::block_on(async move {
-            let _ = hub
-                .apply(crate::projection::Mutation::SetAlert(Some(alert)))
-                .await;
-        });
-    }
-
-    Ok(result)
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let alert = crate::projection::Alert { text, is_ticker };
+        let _ = hub
+            .apply(crate::projection::Mutation::SetAlert(Some(alert)))
+            .await;
+        let (snap, _rx) = hub.attach().await;
+        snap
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
@@ -577,29 +533,13 @@ pub fn clear_alert(
     state: tauri::State<'_, AppState>,
     _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.alert.is_visible = false;
-
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-
-    // Funnel cleared alert into the Hub. SseSurface broadcasts the cleared
-    // alert payload; DeltaSurface emits one projection-delta to all webview consumers.
-    {
-        let hub = state.projection.clone();
-        tauri::async_runtime::block_on(async move {
-            let _ = hub.apply(crate::projection::Mutation::SetAlert(None)).await;
-        });
-    }
-
-    Ok(result)
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let _ = hub.apply(crate::projection::Mutation::SetAlert(None)).await;
+        let (snap, _rx) = hub.attach().await;
+        snap
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]

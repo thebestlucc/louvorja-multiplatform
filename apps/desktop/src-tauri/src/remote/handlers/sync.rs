@@ -7,9 +7,19 @@
 //! to every connected WS client automatically.
 
 use crate::{error::AppError, state::{AppState, AudioState}};
-use crate::display::projection::SlideChangedPayload;
-use std::sync::atomic::Ordering;
+use crate::db::models::SlideContent;
 use tauri::{AppHandle, Emitter, Manager};
+
+/// Inlined replacement for the deleted `display::projection::SlideChangedPayload`.
+/// Kept inside the remote module since the remote WS protocol still publishes
+/// `slide.changed { slide, version }` envelopes and `events.rs` listens to the
+/// `"slide-changed"` Tauri event to fan that out.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteSlideChangedPayload {
+    slide: SlideContent,
+    version: u64,
+}
 
 /// Emit current slide + audio status so freshly-connected remotes can sync.
 ///
@@ -17,17 +27,15 @@ use tauri::{AppHandle, Emitter, Manager};
 /// - `"slide-changed"` with the current `SlideContent` (skipped if no slide is active)
 /// - `"audio-status"` with position/duration/volume/playing (always emitted)
 pub async fn sync_state(app: &AppHandle) -> Result<serde_json::Value, AppError> {
-    // ── 1. Current slide ────────────────────────────────────────────────────
+    // ── 1. Current slide (read from the Projection Hub) ────────────────────
     if let Some(app_state) = app.try_state::<AppState>() {
-        let slide_opt = app_state
-            .current_slide
-            .read()
-            .map_err(|_| AppError::Internal("current_slide lock poisoned".into()))?
-            .clone();
-
-        if let Some(slide) = slide_opt {
-            let version = app_state.current_slide_version.load(Ordering::SeqCst);
-            app.emit("slide-changed", &SlideChangedPayload { slide, version })
+        let (snapshot, _rx) = app_state.projection.attach().await;
+        if let Some(slide) = snapshot.current_slide {
+            let payload = RemoteSlideChangedPayload {
+                slide,
+                version: snapshot.version,
+            };
+            app.emit("slide-changed", &payload)
                 .map_err(|e| AppError::Tauri(e.to_string()))?;
         }
     }

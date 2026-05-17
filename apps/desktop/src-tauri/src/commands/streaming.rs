@@ -380,17 +380,12 @@ pub fn start_streaming_server(
         }
     }
 
-    let (current_slide, err) = catcher(app_state.current_slide.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let current_slide = current_slide.unwrap().clone();
-
-    let (slide_context, err) = catcher(app_state.slide_context.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let slide_context = slide_context.unwrap().clone();
+    let hub = app_state.projection.clone();
+    let (current_slide, slide_context) =
+        tauri::async_runtime::block_on(async move {
+            let (snapshot, _rx) = hub.attach().await;
+            (snapshot.current_slide, snapshot.context)
+        });
 
     let (server, err) = catcher(state.server.lock());
     if let Some(e) = err {
@@ -455,17 +450,12 @@ pub fn set_streaming_broadcast(
     state: tauri::State<'_, StreamingState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let (current_slide, err) = catcher(app_state.current_slide.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let current_slide = current_slide.unwrap().clone();
-
-    let (slide_context, err) = catcher(app_state.slide_context.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let slide_context = slide_context.unwrap().clone();
+    let hub = app_state.projection.clone();
+    let (current_slide, slide_context) =
+        tauri::async_runtime::block_on(async move {
+            let (snapshot, _rx) = hub.attach().await;
+            (snapshot.current_slide, snapshot.context)
+        });
 
     let (server, err) = catcher(state.server.lock());
     if let Some(e) = err {

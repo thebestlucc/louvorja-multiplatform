@@ -22,8 +22,8 @@ mod video_server;
 mod youtube;
 mod ytdlp;
 
-use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState, VideoServerState};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use state::{AppState, AudioState, StreamingState, TimerRuntimeState, VideoServerState};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
 use tauri::{Emitter, Manager};
 
@@ -508,13 +508,8 @@ pub fn run() {
                 ytdlp: Mutex::new(crate::state::YtdlpRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 timer_update_stop: Mutex::new(None),
-                current_slide: RwLock::new(None),
-                current_slide_version: AtomicU64::new(0),
                 projector_open: AtomicBool::new(false),
-                is_frozen: AtomicBool::new(false),
-                overlay: RwLock::new(OverlayRuntimeState::default()),
                 return_open: AtomicBool::new(false),
-                slide_context: RwLock::new(None),
                 global_shortcuts: RwLock::new(std::collections::HashMap::new()),
                 bible_projection: Mutex::new(state::BibleProjectionState {
                     font_system,
