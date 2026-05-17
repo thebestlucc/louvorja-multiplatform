@@ -257,16 +257,13 @@ pub struct AppState {
     /// Used by update_global_shortcut to unregister before re-registering.
     pub global_shortcuts: RwLock<HashMap<String, String>>,
     pub bible_projection: Mutex<BibleProjectionState>,
-    /// Canonical Projection State owner. Phase 1: silent shadow writes only —
-    /// not yet wired to any Surface. See `.scratch/arch-projection-hub/`.
+    /// Canonical Projection State owner. Single source of truth for all
+    /// projection state — slide, context, overlay, freeze, alert.
     pub projection: Arc<crate::projection::ProjectionHub>,
-    /// Keeps the projection WebviewSurface alive for the app lifetime. Dropping
-    /// this handle cancels the surface's hub-attach loop.
-    pub webview_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
-    /// Keeps the projection DeltaSurface alive for the app lifetime. Same
-    /// pattern as `webview_surface_handle`. The DeltaSurface emits one
-    /// `projection-delta` Tauri event per Hub Delta; consumed by the
-    /// `useProjectionState` hook in ProjectorView + ReturnView.
+    /// Keeps the projection DeltaSurface alive for the app lifetime. Dropping
+    /// this handle cancels the surface's hub-attach loop. The DeltaSurface
+    /// emits one `projection-delta` Tauri event per Hub Delta; consumed by
+    /// the `useProjectionState` hook in all consumer windows.
     pub delta_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
     pub remote: crate::remote::state::RemoteServerState,
     /// Singleton runtime for the Rust GStreamer video pipeline. Populated in

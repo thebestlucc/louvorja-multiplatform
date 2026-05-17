@@ -407,8 +407,7 @@ pub fn clear_current_slide(
     }
     // Funnel slide + context clears into the Hub. SseSurface re-broadcasts
     // empty music + bible + return payloads to all live SSE consumers;
-    // WebviewSurface emits slide-cleared + slide-context(null) to the
-    // projector/return webviews.
+    // DeltaSurface emits one projection-delta to all webview consumers.
     {
         let hub = state.projection.clone();
         tauri::async_runtime::block_on(async move {
@@ -502,8 +501,8 @@ pub fn toggle_black_screen(
         logo_screen: overlay.is_logo_screen,
         alert: Some(overlay.alert.clone()),
     };
-    // Funnel into the Hub via block_on so the WebviewSurface re-emits
-    // overlay-changed before the command returns; otherwise the frontend
+    // Funnel into the Hub via block_on so the DeltaSurface re-emits
+    // projection-delta before the command returns; otherwise the frontend
     // toggle button would race the Surface.
     {
         let hub = state.projection.clone();
@@ -597,7 +596,7 @@ pub fn set_alert(
     };
 
     // Funnel into the Hub. SseSurface re-broadcasts the alert payload;
-    // WebviewSurface emits overlay-changed.
+    // DeltaSurface emits one projection-delta to all webview consumers.
     {
         let hub = state.projection.clone();
         let alert = crate::projection::Alert {
@@ -635,7 +634,7 @@ pub fn clear_alert(
     };
 
     // Funnel cleared alert into the Hub. SseSurface broadcasts the cleared
-    // alert payload; WebviewSurface emits overlay-changed.
+    // alert payload; DeltaSurface emits one projection-delta to all webview consumers.
     {
         let hub = state.projection.clone();
         tauri::async_runtime::block_on(async move {

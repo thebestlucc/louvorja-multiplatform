@@ -20,4 +20,3 @@ pub use state::{Alert, OverlayMode};
 pub use surface::{spawn_surface, ProjectionSurface, SurfaceHandle};
 pub use surfaces::delta_event::DeltaSurface;
 pub use surfaces::sse::{SseChannel, SseSurface};
-pub use surfaces::webview::WebviewSurface;
