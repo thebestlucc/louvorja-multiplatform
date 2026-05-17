@@ -1,7 +1,8 @@
 use crate::db::models::{SlideContent, SlideContext};
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum OverlayMode {
     #[default]
@@ -10,7 +11,7 @@ pub enum OverlayMode {
     Logo,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Alert {
     pub text: String,

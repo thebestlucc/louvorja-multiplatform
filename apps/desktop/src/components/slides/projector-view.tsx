@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { getOverlayState } from "../../lib/tauri";
-import { useSlideVersion } from "../../hooks/use-slide-version";
-import type { AlertState, OverlayState, SlideContent } from "../../lib/bindings";
+import { useProjectionState } from "../../hooks/use-projection-state";
+import type { AlertState, SlideContent } from "../../lib/bindings";
 import { SlideRenderer } from "./slide-renderer";
 import { useAllSettings, useTimerState } from "../../lib/queries";
 import {
@@ -50,9 +49,16 @@ export function ProjectorView() {
     _setPendingSlide(s);
   }, []);
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
-  const [blackScreen, setBlackScreen] = useState(false);
-  const [logoScreen, setLogoScreen] = useState(false);
-  const [alert, setAlert] = useState<AlertState | null>(null);
+  const projection = useProjectionState();
+  const blackScreen = projection?.overlay === "black";
+  const logoScreen = projection?.overlay === "logo";
+  const alert: AlertState | null = projection?.alert
+    ? {
+        text: projection.alert.text,
+        isVisible: true,
+        isTicker: projection.alert.isTicker,
+      }
+    : null;
   const [now, setNow] = useState(() => new Date());
   const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
   const videoPlaybackTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
@@ -186,7 +192,26 @@ export function ProjectorView() {
     commitSlide(newSlide);
   }, [commitSlide, useRustVideoPipeline]);
 
-  useSlideVersion({ onSlide: handleSlide });
+  // Phase 4 — drive slide flow from the Hub Snapshot instead of legacy
+  // slide-changed / slide-cleared / getCurrentSlide. Reference-equality on
+  // currentSlide is safe: applyDelta only swaps the field when a slideChanged
+  // event arrives, so the previous reference is reused otherwise.
+  const hubSlide = projection?.currentSlide ?? null;
+  const prevHubSlideRef = useRef<SlideContent | null | undefined>(undefined);
+  useEffect(() => {
+    if (prevHubSlideRef.current === hubSlide) return;
+    prevHubSlideRef.current = hubSlide;
+    if (hubSlide === null) {
+      // Mirror legacy slide-cleared handling.
+      prevSlideRef.current = null;
+      setSlide(null);
+      setPendingSlide(null);
+      setUtilityProjection(null);
+      setSlideKey((prev) => prev + 1);
+      return;
+    }
+    handleSlide(hubSlide);
+  }, [hubSlide, handleSlide, setPendingSlide]);
 
   // Promote pending slide to live once the pipeline starts producing samples.
   // This is the swap moment — the buffered onlineVideo slide replaces the
@@ -208,68 +233,6 @@ export function ProjectorView() {
       setPendingSlide(null);
     }
   }, [useRustVideoPipeline, pendingSlide, commitSlide]);
-
-  // Listen to overlay changes
-  useEffect(() => {
-    let isMounted = true;
-    let unlistenFn: (() => void) | null = null;
-
-    listen<OverlayState>("overlay-changed", (event) => {
-      if (!isMounted) return;
-      setBlackScreen(event.payload.blackScreen);
-      setLogoScreen(event.payload.logoScreen);
-      setAlert(event.payload.alert ?? null);
-    }).then((fn) => {
-      if (isMounted) {
-        unlistenFn = fn;
-      } else {
-        fn();
-      }
-    });
-
-    getOverlayState()
-      .then((state) => {
-        if (!isMounted) return;
-        setBlackScreen(state.blackScreen);
-        setLogoScreen(state.logoScreen);
-        setAlert(state.alert ?? null);
-      })
-      .catch(() => {});
-
-    return () => {
-      isMounted = false;
-      unlistenFn?.();
-    };
-  }, []);
-
-  // Listen to slide cleared — reset to logo
-  useEffect(() => {
-    let isMounted = true;
-    let unlistenFn: (() => void) | null = null;
-
-    listen("slide-cleared", () => {
-      if (!isMounted) return;
-      prevSlideRef.current = null;
-      setSlide(null);
-      // Drop any buffered onlineVideo slide too — clearing means "no content
-      // anywhere", we don't want a stale held slide to pop in if frame-ready
-      // arrives moments later.
-      setPendingSlide(null);
-      setUtilityProjection(null);
-      setSlideKey((prev) => prev + 1);
-    }).then((fn) => {
-      if (isMounted) {
-        unlistenFn = fn;
-      } else {
-        fn();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      unlistenFn?.();
-    };
-  }, []);
 
   // Listen to utility live projection ticks
   useEffect(() => {

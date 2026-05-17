@@ -198,6 +198,7 @@ pub fn run() {
             commands::display::set_slide_on_projector,
             commands::display::set_slide_on_return,
             commands::display::get_current_slide,
+            commands::display::get_projection_snapshot,
             commands::display::clear_current_slide,
             commands::display::set_slide_context,
             commands::display::get_slide_context,
@@ -529,6 +530,7 @@ pub fn run() {
                 }),
                 projection: crate::projection::ProjectionHub::new(),
                 webview_surface_handle: Mutex::new(None),
+                delta_surface_handle: Mutex::new(None),
                 remote: crate::remote::state::RemoteServerState::default(),
                 video_pipeline: Some(video_pipeline_runtime),
             });
@@ -544,6 +546,21 @@ pub fn run() {
                 let surface = crate::projection::WebviewSurface::new(app.handle().clone());
                 let handle = crate::projection::spawn_surface(hub, surface);
                 if let Ok(mut slot) = app_state.webview_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
+
+            // Phase 4 — wire the projection DeltaSurface: Hub → single
+            // `projection-delta` Tauri event per Delta. Consumed by the
+            // `useProjectionState` hook in ProjectorView + ReturnView, which
+            // applies each Delta to a local mirror of the Snapshot they
+            // fetched on mount via `get_projection_snapshot`.
+            {
+                let app_state = app.state::<AppState>();
+                let hub = app_state.projection.clone();
+                let surface = crate::projection::DeltaSurface::new(app.handle().clone());
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = app_state.delta_surface_handle.lock() {
                     *slot = Some(handle);
                 };
             }

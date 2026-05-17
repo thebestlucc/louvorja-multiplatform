@@ -263,6 +263,11 @@ pub struct AppState {
     /// Keeps the projection WebviewSurface alive for the app lifetime. Dropping
     /// this handle cancels the surface's hub-attach loop.
     pub webview_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
+    /// Keeps the projection DeltaSurface alive for the app lifetime. Same
+    /// pattern as `webview_surface_handle`. The DeltaSurface emits one
+    /// `projection-delta` Tauri event per Hub Delta; consumed by the
+    /// `useProjectionState` hook in ProjectorView + ReturnView.
+    pub delta_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
     pub remote: crate::remote::state::RemoteServerState,
     /// Singleton runtime for the Rust GStreamer video pipeline. Populated in
     /// `lib.rs` `setup()` after this struct is constructed; commands access

@@ -5,6 +5,7 @@ import type {
   SlideContext,
   OverlayState,
   MonitorConfig,
+  ProjectionSnapshot,
 } from "../bindings";
 
 async function tauriInvoke<T>(
@@ -41,6 +42,10 @@ export async function setSlideOnReturn(slideData: SlideContent): Promise<void> {
 
 export async function getCurrentSlide(): Promise<{ slide: SlideContent | null; version: number }> {
   return tauriInvoke<{ slide: SlideContent | null; version: number }>("get_current_slide");
+}
+
+export async function getProjectionSnapshot(): Promise<ProjectionSnapshot> {
+  return tauriInvoke<ProjectionSnapshot>("get_projection_snapshot");
 }
 
 export async function clearCurrentSlide(): Promise<void> {

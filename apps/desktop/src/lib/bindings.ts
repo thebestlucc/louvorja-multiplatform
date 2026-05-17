@@ -973,6 +973,20 @@ async getCurrentSlide() : Promise<Result<CurrentSlideResponse, AppErrorResponse>
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Phase 4 — canonical Projection State accessor. Returns a Snapshot of the
+ * Hub's current state. Called by `useProjectionState` on mount; the hook then
+ * listens for `projection-delta` Tauri events and applies the universal
+ * recovery rule (`delta.fromVersion != local → re-fetch snapshot`).
+ */
+async getProjectionSnapshot() : Promise<Result<ProjectionSnapshot, AppErrorResponse>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_projection_snapshot") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async clearCurrentSlide() : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("clear_current_slide") };
@@ -1977,6 +1991,7 @@ videoPipelineState: "video-pipeline-state"
  */
 export type AddPlaylistInput = { playlistId: string; channelId: string; channelTitle: string; playlistTitle: string; thumbnailUrl: string }
 export type Album = { name: string; hymnCount: number }
+export type Alert = { text: string; isTicker: boolean }
 export type AlertState = { text: string; isVisible: boolean; isTicker: boolean }
 export type AppErrorResponse = { code: string; message: string; details: string | null }
 export type AudioStatusPayload = { positionMs: number; durationMs: number; isPlaying: boolean; isPaused: boolean; volume: number; currentFile: string | null }
@@ -1997,6 +2012,7 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
  */
 export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: string }
 export type CurrentSlideResponse = { slide: SlideContent | null; version: number }
+export type DeltaEvent = { kind: "slideChanged"; slide: SlideContent | null } | { kind: "contextChanged"; context: SlideContext | null } | { kind: "overlayChanged"; overlay: OverlayMode } | { kind: "freezeChanged"; frozen: boolean } | { kind: "alertChanged"; alert: Alert | null }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number | null; createdAt: string; updatedAt: string }
@@ -2054,6 +2070,7 @@ export type OnlineVideo = { id: number; idPlaylist: number; videoId: string; seq
  * `video_count` is a computed COUNT(*) subquery.
  */
 export type OnlineVideoPlaylist = { id: number; idChannel: number | null; playlistId: string; title: string | null; description: string | null; images: string | null; status: string; error: string | null; coverPath: string | null; channelTitle: string | null; videoCount: number | null; isCustom: boolean }
+export type OverlayMode = "none" | "black" | "logo"
 export type OverlayState = { blackScreen: boolean; logoScreen: boolean; alert: AlertState | null }
 /**
  * Diagnostic: lists top-level dirs and a sample of files under app_data_dir.
@@ -2069,6 +2086,8 @@ export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: n
  */
 export type PairingInfo = { token: string; pin: string; expiresAt: number; qrSvg: string; url: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
+export type ProjectionDelta = { fromVersion: number; toVersion: number; events: DeltaEvent[] }
+export type ProjectionSnapshot = { version: number; currentSlide: SlideContent | null; context: SlideContext | null; overlay: OverlayMode; frozen: boolean; alert: Alert | null }
 export type RefPosition = "bottom" | "top" | "hidden"
 /**
  * A paired remote control device stored in the `remote_devices` table.

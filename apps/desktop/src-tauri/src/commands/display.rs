@@ -369,6 +369,19 @@ pub fn get_current_slide(
     Ok(CurrentSlideResponse { slide: current.clone(), version })
 }
 
+/// Phase 4 — canonical Projection State accessor. Returns a Snapshot of the
+/// Hub's current state. Called by `useProjectionState` on mount; the hook then
+/// listens for `projection-delta` Tauri events and applies the universal
+/// recovery rule (`delta.fromVersion != local → re-fetch snapshot`).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_projection_snapshot(
+    state: tauri::State<'_, AppState>,
+) -> Result<crate::projection::ProjectionSnapshot, AppError> {
+    let (snapshot, _rx) = state.projection.attach().await;
+    Ok(snapshot)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn clear_current_slide(

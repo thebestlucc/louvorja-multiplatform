@@ -121,6 +121,7 @@ allow = [
     "close_return_window",
     "set_current_slide",
     "get_current_slide",
+    "get_projection_snapshot",
     "clear_current_slide",
     "set_slide_context",
     "get_slide_context",
@@ -298,6 +299,7 @@ description = "Minimal commands needed for projector/return windows"
 [permission.commands]
 allow = [
     "get_current_slide",
+    "get_projection_snapshot",
     "get_slide_context",
     "get_overlay_state",
     "get_timer_state",

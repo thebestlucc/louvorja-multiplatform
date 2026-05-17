@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import type { SlideContent, SlideContext, OverlayState, AlertState } from "../lib/bindings";
-import { getSlideContext, getOverlayState, closeReturnWindow } from "../lib/tauri";
-import { useSlideVersion } from "../hooks/use-slide-version";
+import type { SlideContent, AlertState } from "../lib/bindings";
+import { closeReturnWindow } from "../lib/tauri";
+import { useProjectionState } from "../hooks/use-projection-state";
 import { SlideRenderer } from "../components/slides/slide-renderer";
 import { useAllSettings, useTimerState } from "../lib/queries";
 import { AlertOverlay } from "../components/display/alert-overlay";
@@ -45,16 +45,23 @@ function ReturnPage() {
     pendingSlideRef.current = s;
     _setPendingSlide(s);
   }, []);
-  const [nextSlide, setNextSlide] = useState<SlideContent | null>(null);
-  const [slideTitle, setSlideTitle] = useState("");
-  const [slideIndex, setSlideIndex] = useState(0);
-  const [slideTotal, setSlideTotal] = useState(0);
   const [clock, setClock] = useState("");
   const [clockNow, setClockNow] = useState(() => new Date());
   const [utilityProjection, setUtilityProjection] = useState<UtilityProjectionEventPayload | null>(null);
-  const [blackScreen, setBlackScreen] = useState(false);
-  const [logoScreen, setLogoScreen] = useState(false);
-  const [alert, setAlert] = useState<AlertState | null>(null);
+  const projection = useProjectionState();
+  const nextSlide = projection?.context?.next ?? null;
+  const slideTitle = projection?.context?.title ?? "";
+  const slideIndex = projection?.context?.index ?? 0;
+  const slideTotal = projection?.context?.total ?? 0;
+  const blackScreen = projection?.overlay === "black";
+  const logoScreen = projection?.overlay === "logo";
+  const alert: AlertState | null = projection?.alert
+    ? {
+        text: projection.alert.text,
+        isVisible: true,
+        isTicker: projection.alert.isTicker,
+      }
+    : null;
   const { data: allSettings } = useAllSettings();
   const screenDefaults = useMemo(() => parseProjectorScreenDefaults(allSettings), [allSettings]);
   const { data: timerState } = useTimerState({ enabled: screenDefaults.contentType === "timer" });
@@ -181,18 +188,22 @@ function ReturnPage() {
     [useRustVideoPipeline],
   );
 
-  useSlideVersion({
-    onSlide: handleSlide,
-    onClear: () => {
+  // Phase 4 — drive slide flow from the Hub Snapshot. Reference-equality on
+  // currentSlide is safe: applyDelta only swaps the field when a slideChanged
+  // event arrives, so the previous reference is reused otherwise.
+  const hubSlide = projection?.currentSlide ?? null;
+  const prevHubSlideRef = useRef<SlideContent | null | undefined>(undefined);
+  useEffect(() => {
+    if (prevHubSlideRef.current === hubSlide) return;
+    prevHubSlideRef.current = hubSlide;
+    if (hubSlide === null) {
       setCurrentSlide(null);
       setPendingSlide(null);
-      setNextSlide(null);
       setUtilityProjection(null);
-      setSlideTitle("");
-      setSlideIndex(0);
-      setSlideTotal(0);
-    },
-  });
+      return;
+    }
+    handleSlide(hubSlide);
+  }, [hubSlide, handleSlide, setPendingSlide]);
 
   // Promote pending slide to live when pipeline produces first buffer.
   useEffect(() => {
@@ -210,55 +221,6 @@ function ReturnPage() {
       setPendingSlide(null);
     }
   }, [useRustVideoPipeline, pendingSlide]);
-
-  // Listen to slide context
-  useEffect(() => {
-    const unlisten = listen<SlideContext>("slide-context", (event) => {
-      const ctx = event.payload;
-      setNextSlide(ctx.next);
-      setSlideIndex(ctx.index);
-      setSlideTotal(ctx.total);
-      setSlideTitle(ctx.title);
-    });
-
-    getSlideContext()
-      .then((ctx) => {
-        if (ctx) {
-          setNextSlide(ctx.next);
-          setSlideIndex(ctx.index);
-          setSlideTotal(ctx.total);
-          setSlideTitle(ctx.title);
-          return;
-        }
-        setNextSlide(null);
-        setSlideIndex(0);
-        setSlideTotal(0);
-        setSlideTitle("");
-      })
-      .catch(() => {});
-
-    return () => { unlisten.then((fn) => fn()); };
-  }, []);
-
-  // Listen to overlay changes
-  useEffect(() => {
-    const unlisten = listen<OverlayState>("overlay-changed", (event) => {
-      setBlackScreen(event.payload.blackScreen);
-      setLogoScreen(event.payload.logoScreen);
-      setAlert(event.payload.alert ?? null);
-    });
-
-    getOverlayState()
-      .then((state) => {
-        setBlackScreen(state.blackScreen);
-        setLogoScreen(state.logoScreen);
-        setAlert(state.alert ?? null);
-      })
-      .catch(() => {});
-
-    return () => { unlisten.then((fn) => fn()); };
-  }, []);
-
 
   // Listen to utility live projection ticks
   useEffect(() => {
