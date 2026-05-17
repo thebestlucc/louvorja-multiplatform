@@ -1,5 +1,5 @@
 // src/hooks/use-media-player.ts
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import { clearCurrentSlide } from "../lib/tauri/display";
 import i18next from "i18next";
@@ -14,7 +14,7 @@ import { useSlides } from "./use-slides";
 import { resolveSlideSeekTimestamp, findSlideAtPosition, resolvePlaybackVariantPaths } from "../lib/audio-sync";
 import { resetCoordinatorPlaybackState } from "./use-playback-coordinator";
 import * as videoPipeline from "../lib/tauri/video-pipeline";
-import type { OverlayState } from "../lib/bindings";
+import { useProjectionState } from "./use-projection-state";
 
 /** Read the feature flag fresh each call (avoids stale closures across HMR). */
 function useRustPipeline(): boolean {
@@ -76,32 +76,31 @@ export function useMediaPlayer() {
       else unlisteners.push(u);
     }).catch(() => {});
 
-    // Overlay changes
-    listen<OverlayState>("overlay-changed", (event) => {
-      const overlay = event.payload?.blackScreen
-        ? "black"
-        : event.payload?.logoScreen
-          ? "logo"
-          : null;
-      store.getState().setOverlay(overlay);
-    }).then((u) => {
-      if (!mounted) u();
-      else unlisteners.push(u);
-    }).catch(() => {});
-
-    // Slide cleared
-    listen("slide-cleared", () => {
-      useMediaPlayerStore.getState().stop();
-    }).then((u) => {
-      if (!mounted) u();
-      else unlisteners.push(u);
-    }).catch(() => {});
-
     return () => {
       mounted = false;
       unlisteners.forEach((u) => u());
     };
   }, []);
+
+  // Hub-derived overlay + slide-clear (Phase 5). overlay-changed and
+  // slide-cleared event listeners replaced by snapshot-derived effects.
+  const projection = useProjectionState();
+  const prevSlideRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!projection) return;
+    const overlay = projection.overlay === "black"
+      ? "black"
+      : projection.overlay === "logo"
+        ? "logo"
+        : null;
+    store.getState().setOverlay(overlay);
+
+    const prev = prevSlideRef.current;
+    if (prev && !projection.currentSlide) {
+      useMediaPlayerStore.getState().stop();
+    }
+    prevSlideRef.current = projection.currentSlide;
+  }, [projection]);
 
   // --- Actions with side effects ---
 
