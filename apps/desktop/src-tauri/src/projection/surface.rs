@@ -221,8 +221,8 @@ mod tests {
         yield_for(20).await;
         assert_eq!(hydrates.lock().unwrap().as_slice(), &[0]);
 
-        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
         hub.apply(Mutation::SetOverlay(OverlayMode::Black)).await.unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Logo)).await.unwrap();
         yield_for(20).await;
 
         let d = deliveries.lock().unwrap();
@@ -238,14 +238,14 @@ mod tests {
         let _handle = spawn_surface(hub.clone(), surface);
 
         yield_for(20).await;
-        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Black)).await.unwrap();
         yield_for(20).await;
 
         assert!(deliveries.lock().unwrap().is_empty(),
             "no deliver while is_alive=false");
 
         alive.store(true, Ordering::SeqCst);
-        hub.apply(Mutation::SetOverlay(OverlayMode::Black)).await.unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Logo)).await.unwrap();
         yield_for(20).await;
         assert_eq!(deliveries.lock().unwrap().len(), 1,
             "deliver resumes when is_alive=true");
@@ -263,7 +263,7 @@ mod tests {
         yield_for(20).await;
 
         let before = deliveries.lock().unwrap().len();
-        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Black)).await.unwrap();
         yield_for(20).await;
         let after = deliveries.lock().unwrap().len();
         assert_eq!(before, after, "no deliveries after handle dropped");

@@ -1,7 +1,7 @@
 use super::delta::{DeltaEvent, ProjectionDelta};
 use super::mutation::Mutation;
 use super::snapshot::ProjectionSnapshot;
-use super::state::{OverlayMode, ProjectionState};
+use super::state::{OverlayMode, PreFreezeFields, ProjectionState};
 use crate::error::AppError;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
@@ -37,6 +37,7 @@ impl ProjectionHub {
     /// if all Mutations are no-ops, no version bump and no Delta.
     pub async fn apply_batch(self: &Arc<Self>, ms: Vec<Mutation>) -> Result<(), AppError> {
         let mut state = self.state.lock().await;
+        let was_frozen = state.frozen;
         let from_version = state.version;
         let mut events: Vec<DeltaEvent> = Vec::new();
 
@@ -46,6 +47,58 @@ impl ProjectionHub {
                     merge_event(&mut events, event);
                 }
             }
+        }
+
+        let now_frozen = state.frozen;
+
+        // false → true: capture snapshot of broadcastable fields so a later
+        // unfreeze can emit a coalesced Delta covering everything that
+        // changed during the freeze window.
+        if !was_frozen && now_frozen {
+            state.pre_freeze = Some(PreFreezeFields {
+                current_slide: state.current_slide.clone(),
+                context: state.context.clone(),
+                overlay: state.overlay.clone(),
+                alert: state.alert.clone(),
+            });
+        }
+
+        // true → false: replace `events` with a coalesced unfreeze Delta —
+        // one event per field that differs from the pre-freeze snapshot,
+        // plus the FreezeChanged{false} carrying the gate transition.
+        if was_frozen && !now_frozen {
+            if let Some(pre) = state.pre_freeze.take() {
+                let mut coalesced: Vec<DeltaEvent> = Vec::new();
+                if !slides_equal(&pre.current_slide, &state.current_slide) {
+                    coalesced.push(DeltaEvent::SlideChanged {
+                        slide: state.current_slide.clone(),
+                    });
+                }
+                if !contexts_equal(&pre.context, &state.context) {
+                    coalesced.push(DeltaEvent::ContextChanged {
+                        context: state.context.clone(),
+                    });
+                }
+                if pre.overlay != state.overlay {
+                    coalesced.push(DeltaEvent::OverlayChanged {
+                        overlay: state.overlay.clone(),
+                    });
+                }
+                if pre.alert != state.alert {
+                    coalesced.push(DeltaEvent::AlertChanged {
+                        alert: state.alert.clone(),
+                    });
+                }
+                coalesced.push(DeltaEvent::FreezeChanged { frozen: false });
+                events = coalesced;
+            }
+        }
+
+        // Frozen gate: if state was frozen entering this batch AND is still
+        // frozen exiting it, suppress broadcast and version bump entirely.
+        // State mutations are retained so a later unfreeze can replay them.
+        if was_frozen && now_frozen {
+            return Ok(());
         }
 
         if events.is_empty() {
@@ -322,7 +375,9 @@ mod tests {
         let (snapshot, mut rx) = hub.attach().await;
         let mut local_version = snapshot.version;
 
-        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Black))
+            .await
+            .unwrap();
         let delta1 = rx.recv().await.unwrap();
         // Apply locally.
         assert_eq!(delta1.from_version, local_version);
@@ -541,5 +596,136 @@ mod tests {
         hub.apply(Mutation::SetContext(None)).await.unwrap();
         let (snapshot, _rx) = hub.attach().await;
         assert_eq!(snapshot.version, 0);
+    }
+
+    /// While frozen, a mutation must apply to internal state (so attach() sees
+    /// it and so the eventual unfreeze can replay it) BUT must not broadcast
+    /// a Delta — subscribers (Surfaces) stay quiet until unfreeze.
+    #[tokio::test]
+    async fn frozen_mutation_applies_to_state_but_does_not_broadcast() {
+        let hub = ProjectionHub::new();
+        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        let (_snap, mut rx) = hub.attach().await;
+
+        hub.apply(Mutation::SetSlide(Some(lyrics("frozen-v1"))))
+            .await
+            .unwrap();
+
+        assert!(
+            rx.try_recv().is_err(),
+            "mutation while frozen must not broadcast a Delta"
+        );
+
+        let (snap, _rx2) = hub.attach().await;
+        assert!(
+            snap.current_slide.is_some(),
+            "state must still mutate while frozen"
+        );
+    }
+
+    /// Unfreeze must emit a single coalesced Delta carrying every field that
+    /// changed during the freeze window. Surfaces apply one transition; no
+    /// per-frozen-mutation Deltas leak. The Delta also carries
+    /// FreezeChanged{false} so consumers update their frozen indicator.
+    #[tokio::test]
+    async fn unfreeze_emits_coalesced_delta_with_changes_accumulated_while_frozen() {
+        let hub = ProjectionHub::new();
+        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        let (_snap, mut rx) = hub.attach().await;
+
+        // Three mutations while frozen — none broadcast.
+        hub.apply(Mutation::SetSlide(Some(lyrics("v1"))))
+            .await
+            .unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Black))
+            .await
+            .unwrap();
+        hub.apply(Mutation::SetAlert(Some(Alert {
+            text: "hi".into(),
+            is_ticker: false,
+        })))
+        .await
+        .unwrap();
+        assert!(rx.try_recv().is_err(), "no Deltas while frozen");
+
+        // Unfreeze: one Delta carrying the three changes + FreezeChanged{false}.
+        hub.apply(Mutation::SetFreeze(false)).await.unwrap();
+
+        let delta = rx.recv().await.expect("unfreeze must emit a Delta");
+        assert!(rx.try_recv().is_err(), "unfreeze must emit exactly one Delta");
+
+        let has_slide = delta.events.iter().any(|e| matches!(
+            e,
+            DeltaEvent::SlideChanged { slide: Some(_) }
+        ));
+        let has_overlay_black = delta.events.iter().any(|e| matches!(
+            e,
+            DeltaEvent::OverlayChanged { overlay: OverlayMode::Black }
+        ));
+        let has_alert = delta.events.iter().any(|e| matches!(
+            e,
+            DeltaEvent::AlertChanged { alert: Some(_) }
+        ));
+        let has_unfreeze = delta.events.iter().any(|e| matches!(
+            e,
+            DeltaEvent::FreezeChanged { frozen: false }
+        ));
+        assert!(has_slide, "Delta missing SlideChanged: {:?}", delta.events);
+        assert!(has_overlay_black, "Delta missing OverlayChanged(Black): {:?}", delta.events);
+        assert!(has_alert, "Delta missing AlertChanged: {:?}", delta.events);
+        assert!(has_unfreeze, "Delta missing FreezeChanged(false): {:?}", delta.events);
+    }
+
+    /// Freeze then immediately unfreeze, no mutations between. The unfreeze
+    /// Delta must carry only the FreezeChanged{false} transition (no field
+    /// events, since no fields changed during the empty freeze window). Pins
+    /// the "what does no-op unfreeze emit" decision called out in the Phase 5
+    /// spec acceptance criteria.
+    /// While frozen, version must not bump even though state mutates. So the
+    /// from_version of the eventual unfreeze Delta equals the consumer's
+    /// last-seen version → no false gap, no spurious re-hydrate.
+    #[tokio::test]
+    async fn frozen_window_preserves_version_continuity_across_unfreeze() {
+        let hub = ProjectionHub::new();
+        let (_snap, mut rx) = hub.attach().await;
+
+        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        let freeze_delta = rx.recv().await.unwrap();
+        let local_version_after_freeze = freeze_delta.to_version;
+
+        // Several mutations while frozen — none bump version.
+        hub.apply(Mutation::SetSlide(Some(lyrics("v1")))).await.unwrap();
+        hub.apply(Mutation::SetOverlay(OverlayMode::Black)).await.unwrap();
+        hub.apply(Mutation::SetSlide(Some(lyrics("v2")))).await.unwrap();
+
+        hub.apply(Mutation::SetFreeze(false)).await.unwrap();
+        let unfreeze_delta = rx.recv().await.unwrap();
+
+        assert_eq!(
+            unfreeze_delta.from_version, local_version_after_freeze,
+            "unfreeze Delta from_version must equal consumer's last-seen version (no gap)"
+        );
+        assert_eq!(
+            unfreeze_delta.to_version,
+            local_version_after_freeze + 1,
+            "unfreeze bumps version exactly once for the whole frozen window"
+        );
+    }
+
+    #[tokio::test]
+    async fn unfreeze_without_intermediate_mutations_emits_only_freeze_event() {
+        let hub = ProjectionHub::new();
+        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        let (_snap, mut rx) = hub.attach().await;
+
+        hub.apply(Mutation::SetFreeze(false)).await.unwrap();
+
+        let delta = rx.recv().await.expect("unfreeze emits a Delta");
+        assert!(rx.try_recv().is_err(), "exactly one Delta");
+        assert_eq!(delta.events.len(), 1, "events: {:?}", delta.events);
+        match &delta.events[0] {
+            DeltaEvent::FreezeChanged { frozen } => assert!(!*frozen),
+            other => panic!("unexpected event: {:?}", other),
+        }
     }
 }

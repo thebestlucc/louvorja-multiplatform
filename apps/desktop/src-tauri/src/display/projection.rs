@@ -26,7 +26,6 @@ pub fn update_current_slide(
     _streaming_state: &StreamingState,
     slide_data: SlideContent,
 ) -> Result<(), AppError> {
-    // Enrich online_video slides with local path if the video has been downloaded
     let mut slide_data = slide_data;
     if let SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
         let vid = video_id.clone();
@@ -42,8 +41,8 @@ pub fn update_current_slide(
         }
     }
 
-    // Always update server-side state so a later unfreeze flush sees the latest
-    // navigation. The freeze gate below only suppresses outbound events.
+    // Maintain AppState legacy mirrors for now (read by get_current_slide /
+    // get_slide_context until Slice 5 removes those commands).
     {
         let mut current = state
             .current_slide
@@ -51,9 +50,6 @@ pub fn update_current_slide(
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
-    // AppState.current_slide_version is still read by get_current_slide for
-    // webview mount-time hydration; bump for that path. Phase 4 replaces this
-    // with a get_projection_snapshot command sourced from the Hub.
     state.current_slide_version.fetch_add(1, Ordering::SeqCst);
 
     let current_title = streaming_slide_title(&slide_data);
@@ -86,17 +82,12 @@ pub fn update_current_slide(
         }
     };
 
-    if state.is_frozen.load(Ordering::Relaxed) {
-        return Ok(());
-    }
-
     funnel_to_hub(app, state, &slide_data, &slide_context)
 }
 
-/// Apply slide + context to the ProjectionHub. The SseSurface and the
-/// WebviewSurface attached to the Hub turn the resulting Delta into SSE
-/// broadcasts and Tauri webview events respectively. Caller is responsible
-/// for the freeze decision; this performs the side effects unconditionally.
+/// Apply slide + context to the ProjectionHub. The Hub's own freeze gate
+/// suppresses broadcast while frozen and emits a coalesced Delta on unfreeze;
+/// callers funnel unconditionally.
 pub fn funnel_to_hub(
     _app: &AppHandle,
     state: &AppState,
@@ -108,52 +99,14 @@ pub fn funnel_to_hub(
     let context_for_hub = slide_context.clone();
     tauri::async_runtime::block_on(async move {
         let _ = hub
-            .apply(crate::projection::Mutation::SetSlide(Some(slide_for_hub)))
-            .await;
-        let _ = hub
-            .apply(crate::projection::Mutation::SetContext(Some(context_for_hub)))
+            .apply_batch(vec![
+                crate::projection::Mutation::SetSlide(Some(slide_for_hub)),
+                crate::projection::Mutation::SetContext(Some(context_for_hub)),
+            ])
             .await;
     });
 
     Ok(())
-}
-
-/// Re-emit the current slide + context after an unfreeze. Reads state and replays
-/// the same events `update_current_slide` would have fired while frozen.
-/// No-op if no slide is currently set.
-pub fn flush_projection_state(
-    app: &AppHandle,
-    state: &AppState,
-    _streaming_state: &StreamingState,
-) -> Result<(), AppError> {
-    let slide_data = {
-        let current = state
-            .current_slide
-            .read()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        current.clone()
-    };
-    let Some(slide_data) = slide_data else {
-        return Ok(());
-    };
-
-    let slide_context = {
-        let ctx = state
-            .slide_context
-            .read()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        ctx.clone().unwrap_or_else(|| SlideContext {
-            next: None,
-            index: 0,
-            total: 1,
-            title: streaming_slide_title(&slide_data),
-            current_slide_start_ms: None,
-            next_slide_start_ms: None,
-            audio_duration_ms: None,
-        })
-    };
-
-    funnel_to_hub(app, state, &slide_data, &slide_context)
 }
 
 pub fn update_slide_context(
@@ -162,7 +115,6 @@ pub fn update_slide_context(
     _streaming_state: &StreamingState,
     context_data: SlideContext,
 ) -> Result<(), AppError> {
-    // Always persist context to state so a later unfreeze flush has the latest.
     {
         let mut ctx = state
             .slide_context
@@ -171,12 +123,6 @@ pub fn update_slide_context(
         *ctx = Some(context_data.clone());
     }
 
-    if state.is_frozen.load(Ordering::Relaxed) {
-        return Ok(());
-    }
-
-    // Funnel into the Hub. SseSurface re-broadcasts music + return; WebviewSurface
-    // emits slide-context to the projector/return webviews.
     let hub = state.projection.clone();
     let context_for_hub = context_data.clone();
     tauri::async_runtime::block_on(async move {
@@ -186,37 +132,4 @@ pub fn update_slide_context(
     });
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::AtomicBool;
-
-    /// `set_is_frozen` uses `swap` to detect the true→false transition. If
-    /// `swap` ever returned the new value instead of the previous one, the
-    /// flush would either fire on every call or never. Lock that contract.
-    #[test]
-    fn atomic_swap_returns_previous_value_for_flush_detection() {
-        let flag = AtomicBool::new(true);
-        let previous = flag.swap(false, Ordering::Relaxed);
-        assert!(previous, "swap must return the value held before the store");
-        assert!(!flag.load(Ordering::Relaxed));
-
-        let previous = flag.swap(false, Ordering::Relaxed);
-        assert!(!previous, "no-op transition must report previous as false");
-    }
-
-    /// The flush trigger is "previous && !frozen". Pin the predicate so a
-    /// future refactor can't silently flip it.
-    #[test]
-    fn flush_trigger_only_fires_on_true_to_false_transition() {
-        fn should_flush(previous: bool, frozen: bool) -> bool {
-            previous && !frozen
-        }
-        assert!(!should_flush(false, false));
-        assert!(!should_flush(false, true));
-        assert!(!should_flush(true, true));
-        assert!(should_flush(true, false));
-    }
 }

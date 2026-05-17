@@ -4,7 +4,6 @@ use crate::display::{
     detect_manufacturer, extract_model, infer_connection_type, stable_monitor_id,
     parse_monitor_id, open_fullscreen_window, update_current_slide, update_slide_context,
 };
-use crate::display::projection::flush_projection_state;
 use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
 use crate::state::{AppState, StreamingState};
@@ -467,25 +466,19 @@ pub fn get_slide_context(
 #[specta::specta]
 pub fn set_is_frozen(
     frozen: bool,
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
-    streaming_state: tauri::State<'_, StreamingState>,
+    _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
-    let previous = state.is_frozen.swap(frozen, Ordering::Relaxed);
-    // Phase 1 shadow write.
-    {
-        let hub = state.projection.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = hub
-                .apply(crate::projection::Mutation::SetFreeze(frozen))
-                .await;
-        });
-    }
-    // On unfreeze, replay the latest slide/context so projector + return + streaming
-    // clients catch up with any navigation that happened while frozen.
-    if previous && !frozen {
-        flush_projection_state(&app, &state, &streaming_state)?;
-    }
+    // Hub-side freeze gate (Phase 5): the Hub buffers field mutations while
+    // frozen and emits one coalesced Delta on unfreeze. No AppState mirror,
+    // no manual flush — `hub.apply(SetFreeze)` is the single source of truth.
+    let hub = state.projection.clone();
+    tauri::async_runtime::block_on(async move {
+        let _ = hub
+            .apply(crate::projection::Mutation::SetFreeze(frozen))
+            .await;
+    });
     Ok(())
 }
 

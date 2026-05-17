@@ -25,6 +25,18 @@ pub(super) struct ProjectionState {
     pub overlay: OverlayMode,
     pub frozen: bool,
     pub alert: Option<Alert>,
+    /// Snapshot of the 4 broadcastable fields at the moment freeze flipped
+    /// false→true. Used to compute the coalesced unfreeze Delta: any field
+    /// that differs from this snapshot is included as one event. `None` while
+    /// not frozen.
+    pub pre_freeze: Option<PreFreezeFields>,
+}
+
+pub(super) struct PreFreezeFields {
+    pub current_slide: Option<SlideContent>,
+    pub context: Option<SlideContext>,
+    pub overlay: OverlayMode,
+    pub alert: Option<Alert>,
 }
 
 impl ProjectionState {
@@ -36,6 +48,7 @@ impl ProjectionState {
             overlay: OverlayMode::None,
             frozen: false,
             alert: None,
+            pre_freeze: None,
         }
     }
 }
