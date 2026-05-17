@@ -7,6 +7,10 @@
       "slide": null
     },
     {
+      "kind": "contextChanged",
+      "context": null
+    },
+    {
       "kind": "overlayChanged",
       "overlay": "none"
     },

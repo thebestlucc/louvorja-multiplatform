@@ -560,6 +560,43 @@ pub fn run() {
             // Initialize Streaming Server State
             app.manage(StreamingState::default());
 
+            // Wire the projection SseSurface: snapshot/Delta funnel from the
+            // ProjectionHub into the four projection SSE broadcasters. After
+            // this, every projection state change flows Hub → Surface → SSE,
+            // and late-joining SSE consumers get a canonical Snapshot via
+            // SseSurface::materialize_snapshot_for instead of stale latest_message.
+            {
+                let app_state = app.state::<AppState>();
+                let streaming_state = app.state::<StreamingState>();
+                let hub = app_state.projection.clone();
+                let (music_bc, bible_bc, return_bc, alert_bc) = {
+                    let server = streaming_state.server.lock().expect("streaming server lock");
+                    (
+                        server.music_broadcaster.clone(),
+                        server.bible_broadcaster.clone(),
+                        server.return_broadcaster.clone(),
+                        server.alert_broadcaster.clone(),
+                    )
+                };
+                let surface = crate::projection::SseSurface::new(
+                    music_bc,
+                    bible_bc,
+                    return_bc,
+                    alert_bc,
+                    hub.clone(),
+                    Some(app_data_dir.clone()),
+                );
+                if let Ok(server) = streaming_state.server.lock() {
+                    server.set_sse_surface(surface.clone());
+                }
+                // Spawn-surface drives the Hub→Surface loop for app lifetime;
+                // dropping the stored SurfaceHandle would cancel it.
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = streaming_state.sse_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
+
             // Initialize Video Server State (loopback-only, for serving local video files)
             app.manage(VideoServerState::default());
 

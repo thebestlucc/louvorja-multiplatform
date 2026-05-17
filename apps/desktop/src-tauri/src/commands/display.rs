@@ -13,10 +13,6 @@ use display_info::DisplayInfo as ExternalDisplayInfo;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use crate::commands::streaming::{
-    empty_return_stream_payload,
-    empty_streaming_music_payload,
-};
 
 const MONITORS_CHANGED_EVENT: &str = "monitors-changed";
 const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -389,13 +385,6 @@ pub fn clear_current_slide(
         let mut current = current.unwrap();
         *current = None;
     }
-    // Phase 1 shadow write.
-    {
-        let hub = state.projection.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = hub.apply(crate::projection::Mutation::SetSlide(None)).await;
-        });
-    }
     {
         let (ctx, err) = catcher(state.slide_context.write());
         if let Some(e) = err {
@@ -404,15 +393,22 @@ pub fn clear_current_slide(
         let mut ctx = ctx.unwrap();
         *ctx = None;
     }
+    // Funnel slide + context clears into the Hub. SseSurface re-broadcasts
+    // empty music + bible + return payloads to all live SSE consumers.
+    {
+        let hub = state.projection.clone();
+        tauri::async_runtime::block_on(async move {
+            let _ = hub.apply(crate::projection::Mutation::SetSlide(None)).await;
+            let _ = hub.apply(crate::projection::Mutation::SetContext(None)).await;
+        });
+    }
     let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
     app.emit("slide-cleared", serde_json::json!({ "version": version }))
         .map_err(|e| AppError::Tauri(e.to_string()))?;
 
+    // Video state clear stays direct: video broadcaster is not yet on the Hub
+    // (out of scope for Phase 2).
     if let Ok(server) = streaming_state.server.lock() {
-        server.broadcast_music(&empty_streaming_music_payload().to_string());
-        server.broadcast_bible(&serde_json::json!({ "reference": "", "text": "" }).to_string());
-        server.broadcast_return(&empty_return_stream_payload().to_string());
-        // Clear video state on streaming clients
         let video_clear = serde_json::json!({
             "type": "state",
             "action": "clear",
@@ -576,7 +572,7 @@ pub fn set_alert(
     is_ticker: bool,
     app: AppHandle,
     state: tauri::State<'_, AppState>,
-    streaming_state: tauri::State<'_, StreamingState>,
+    _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
     let (overlay, err) = catcher(state.overlay.write());
     if let Some(e) = err {
@@ -594,19 +590,14 @@ pub fn set_alert(
     };
     let _ = app.emit("overlay-changed", &result);
 
-    if let Ok(server) = streaming_state.server.lock() {
-        if let Ok(payload) = serde_json::to_string(&overlay.alert) {
-            server.broadcast_alert(&payload);
-        }
-    }
-    // Phase 1 shadow write.
+    // Funnel into the Hub so SseSurface re-broadcasts the alert payload.
     {
         let hub = state.projection.clone();
         let alert = crate::projection::Alert {
             text: overlay.alert.text.clone(),
             is_ticker: overlay.alert.is_ticker,
         };
-        tauri::async_runtime::spawn(async move {
+        tauri::async_runtime::block_on(async move {
             let _ = hub
                 .apply(crate::projection::Mutation::SetAlert(Some(alert)))
                 .await;
@@ -621,7 +612,7 @@ pub fn set_alert(
 pub fn clear_alert(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
-    streaming_state: tauri::State<'_, StreamingState>,
+    _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
     let (overlay, err) = catcher(state.overlay.write());
     if let Some(e) = err {
@@ -637,15 +628,11 @@ pub fn clear_alert(
     };
     let _ = app.emit("overlay-changed", &result);
 
-    if let Ok(server) = streaming_state.server.lock() {
-        if let Ok(payload) = serde_json::to_string(&overlay.alert) {
-            server.broadcast_alert(&payload);
-        }
-    }
-    // Phase 1 shadow write.
+    // Funnel cleared alert into the Hub so SseSurface broadcasts the cleared
+    // alert payload to all live SSE consumers.
     {
         let hub = state.projection.clone();
-        tauri::async_runtime::spawn(async move {
+        tauri::async_runtime::block_on(async move {
             let _ = hub.apply(crate::projection::Mutation::SetAlert(None)).await;
         });
     }

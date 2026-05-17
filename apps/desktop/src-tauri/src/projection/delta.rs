@@ -1,5 +1,5 @@
 use super::state::{Alert, OverlayMode};
-use crate::db::models::SlideContent;
+use crate::db::models::{SlideContent, SlideContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,6 +14,7 @@ pub struct ProjectionDelta {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum DeltaEvent {
     SlideChanged { slide: Option<SlideContent> },
+    ContextChanged { context: Option<SlideContext> },
     OverlayChanged { overlay: OverlayMode },
     FreezeChanged { frozen: bool },
     AlertChanged { alert: Option<Alert> },

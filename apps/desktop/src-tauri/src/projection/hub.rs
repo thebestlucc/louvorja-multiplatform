@@ -68,7 +68,6 @@ impl ProjectionHub {
     /// receiver for subsequent Deltas. Atomic — the subscription is
     /// created before the state lock is released, so no Delta can be
     /// applied between snapshot and subscribe.
-    #[allow(dead_code)] // Phase 2 entry point for SseSurface.
     pub async fn attach(
         self: &Arc<Self>,
     ) -> (ProjectionSnapshot, broadcast::Receiver<ProjectionDelta>) {
@@ -82,11 +81,13 @@ impl ProjectionHub {
 fn mutation_to_events(m: Mutation) -> Vec<DeltaEvent> {
     match m {
         Mutation::SetSlide(slide) => vec![DeltaEvent::SlideChanged { slide }],
+        Mutation::SetContext(context) => vec![DeltaEvent::ContextChanged { context }],
         Mutation::SetOverlay(overlay) => vec![DeltaEvent::OverlayChanged { overlay }],
         Mutation::SetFreeze(frozen) => vec![DeltaEvent::FreezeChanged { frozen }],
         Mutation::SetAlert(alert) => vec![DeltaEvent::AlertChanged { alert }],
         Mutation::ClearAll => vec![
             DeltaEvent::SlideChanged { slide: None },
+            DeltaEvent::ContextChanged { context: None },
             DeltaEvent::OverlayChanged { overlay: OverlayMode::None },
             DeltaEvent::AlertChanged { alert: None },
         ],
@@ -102,6 +103,14 @@ fn apply_event_if_changed(state: &mut ProjectionState, event: &DeltaEvent) -> bo
                 false
             } else {
                 state.current_slide = slide.clone();
+                true
+            }
+        }
+        DeltaEvent::ContextChanged { context } => {
+            if contexts_equal(&state.context, context) {
+                false
+            } else {
+                state.context = context.clone();
                 true
             }
         }
@@ -147,9 +156,10 @@ fn merge_event(events: &mut Vec<DeltaEvent>, new: DeltaEvent) {
 fn event_discriminant(e: &DeltaEvent) -> u8 {
     match e {
         DeltaEvent::SlideChanged { .. } => 0,
-        DeltaEvent::OverlayChanged { .. } => 1,
-        DeltaEvent::FreezeChanged { .. } => 2,
-        DeltaEvent::AlertChanged { .. } => 3,
+        DeltaEvent::ContextChanged { .. } => 1,
+        DeltaEvent::OverlayChanged { .. } => 2,
+        DeltaEvent::FreezeChanged { .. } => 3,
+        DeltaEvent::AlertChanged { .. } => 4,
     }
 }
 
@@ -160,6 +170,20 @@ fn event_discriminant(e: &DeltaEvent) -> u8 {
 fn slides_equal(
     a: &Option<crate::db::models::SlideContent>,
     b: &Option<crate::db::models::SlideContent>,
+) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(x), Some(y)) => serde_json::to_value(x).ok() == serde_json::to_value(y).ok(),
+        _ => false,
+    }
+}
+
+/// SlideContext does not derive PartialEq (nested SlideContent inside `next`
+/// would force the same derivation chain). Compare serialized form — same
+/// cost profile as `slides_equal`.
+fn contexts_equal(
+    a: &Option<crate::db::models::SlideContext>,
+    b: &Option<crate::db::models::SlideContext>,
 ) -> bool {
     match (a, b) {
         (None, None) => true,
@@ -377,6 +401,7 @@ mod tests {
         let snapshot = ProjectionSnapshot {
             version: 0,
             current_slide: None,
+            context: None,
             overlay: OverlayMode::None,
             frozen: false,
             alert: None,
@@ -402,6 +427,7 @@ mod tests {
                 text_color: None,
                 text_size: None,
             }),
+            context: None,
             overlay: OverlayMode::None,
             frozen: false,
             alert: None,
@@ -444,6 +470,7 @@ mod tests {
             to_version: 6,
             events: vec![
                 DeltaEvent::SlideChanged { slide: None },
+                DeltaEvent::ContextChanged { context: None },
                 DeltaEvent::OverlayChanged { overlay: OverlayMode::None },
                 DeltaEvent::AlertChanged { alert: None },
             ],
@@ -452,5 +479,67 @@ mod tests {
             &delta,
             include_str!("fixtures/deltas/batch-clear-all.json"),
         );
+    }
+
+    #[test]
+    fn delta_context_changed_matches_fixture() {
+        let delta = ProjectionDelta {
+            from_version: 3,
+            to_version: 4,
+            events: vec![DeltaEvent::ContextChanged {
+                context: Some(crate::db::models::SlideContext {
+                    next: None,
+                    index: 2,
+                    total: 5,
+                    title: "Amazing Grace".to_string(),
+                    current_slide_start_ms: None,
+                    next_slide_start_ms: None,
+                    audio_duration_ms: None,
+                }),
+            }],
+        };
+        assert_matches_fixture(
+            &delta,
+            include_str!("fixtures/deltas/context-changed.json"),
+        );
+    }
+
+    #[tokio::test]
+    async fn set_context_bumps_version_and_emits_context_changed() {
+        let hub = ProjectionHub::new();
+        let (_snapshot, mut rx) = hub.attach().await;
+
+        hub.apply(Mutation::SetContext(Some(
+            crate::db::models::SlideContext {
+                next: None,
+                index: 0,
+                total: 1,
+                title: "Hymn".to_string(),
+                current_slide_start_ms: None,
+                next_slide_start_ms: None,
+                audio_duration_ms: None,
+            },
+        )))
+        .await
+        .unwrap();
+
+        let delta = rx.recv().await.expect("delta should arrive");
+        assert_eq!(delta.to_version, 1);
+        assert_eq!(delta.events.len(), 1);
+        match &delta.events[0] {
+            DeltaEvent::ContextChanged { context } => {
+                assert_eq!(context.as_ref().unwrap().title, "Hymn");
+            }
+            other => panic!("unexpected event: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn set_context_noop_does_not_bump_version() {
+        let hub = ProjectionHub::new();
+        // initial state has context = None; SetContext(None) is a no-op.
+        hub.apply(Mutation::SetContext(None)).await.unwrap();
+        let (snapshot, _rx) = hub.attach().await;
+        assert_eq!(snapshot.version, 0);
     }
 }

@@ -34,40 +34,6 @@ fn build_bible_context_payload(
     })
 }
 
-fn broadcast_bible_stream_payloads(
-    server: &crate::streaming::StreamingServer,
-    slide_data: &SlideContent,
-    reference: &str,
-) {
-    let music_json = serde_json::json!({
-        "label": "",
-        "text": "",
-        "title": "",
-        "subtitle": "",
-    });
-    server.broadcast_music(&music_json.to_string());
-
-    let bible_json = serde_json::json!({
-        "reference": reference,
-        "text": slide_data.text().unwrap_or(""),
-    });
-    server.broadcast_bible(&bible_json.to_string());
-
-    let return_json = serde_json::json!({
-        "current": {
-            "label": slide_data.label().unwrap_or(""),
-            "text": slide_data.text().unwrap_or(""),
-            "title": slide_data.title().unwrap_or(""),
-            "subtitle": slide_data.subtitle().unwrap_or(""),
-        },
-        "next": null,
-        "index": 0,
-        "total": 1,
-        "title": reference,
-    });
-    server.broadcast_return(&return_json.to_string());
-}
-
 #[tauri::command]
 #[specta::specta]
 pub fn get_bible_versions(

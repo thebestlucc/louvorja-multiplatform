@@ -1,6 +1,7 @@
 {
   "version": 0,
   "currentSlide": null,
+  "context": null,
   "overlay": "none",
   "frozen": false,
   "alert": null

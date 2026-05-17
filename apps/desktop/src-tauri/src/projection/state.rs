@@ -1,4 +1,4 @@
-use crate::db::models::SlideContent;
+use crate::db::models::{SlideContent, SlideContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -20,6 +20,7 @@ pub struct Alert {
 pub(super) struct ProjectionState {
     pub version: u64,
     pub current_slide: Option<SlideContent>,
+    pub context: Option<SlideContext>,
     pub overlay: OverlayMode,
     pub frozen: bool,
     pub alert: Option<Alert>,
@@ -30,6 +31,7 @@ impl ProjectionState {
         Self {
             version: 0,
             current_slide: None,
+            context: None,
             overlay: OverlayMode::None,
             frozen: false,
             alert: None,

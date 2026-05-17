@@ -1,0 +1,18 @@
+{
+  "fromVersion": 3,
+  "toVersion": 4,
+  "events": [
+    {
+      "kind": "contextChanged",
+      "context": {
+        "next": null,
+        "index": 2,
+        "total": 5,
+        "title": "Amazing Grace",
+        "currentSlideStartMs": null,
+        "nextSlideStartMs": null,
+        "audioDurationMs": null
+      }
+    }
+  ]
+}

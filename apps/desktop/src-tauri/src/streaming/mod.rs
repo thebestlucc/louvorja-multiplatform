@@ -16,6 +16,11 @@ use tauri::{AppHandle, Emitter};
 
 pub struct SseBroadcaster {
     senders: Mutex<HashMap<usize, Sender<String>>>,
+    /// Sticky replay buffer used by transports that have no other way to
+    /// hydrate late-joining consumers (video state, audio status, utility,
+    /// ui). Projection channels (music/bible/return/alert) DO NOT use this
+    /// any more — see SseSurface::materialize_snapshot_for, which builds the
+    /// connect-time payload from the canonical Projection State.
     latest_message: Mutex<Option<String>>,
     next_id: AtomicUsize,
 }
@@ -29,14 +34,13 @@ impl SseBroadcaster {
         }
     }
 
-    pub fn subscribe(&self) -> (usize, Receiver<String>, Option<String>) {
+    pub fn subscribe(&self) -> (usize, Receiver<String>) {
         let (tx, rx) = mpsc::channel();
         let subscription_id = self.next_id.fetch_add(1, Ordering::Relaxed);
         if let Ok(mut senders) = self.senders.lock() {
             senders.insert(subscription_id, tx);
         }
-        let latest_message = self.latest_message.lock().ok().and_then(|msg| msg.clone());
-        (subscription_id, rx, latest_message)
+        (subscription_id, rx)
     }
 
     pub fn unsubscribe(&self, subscription_id: usize) {
@@ -78,6 +82,13 @@ impl SseBroadcaster {
             senders.clear();
         }
     }
+
+    pub fn has_subscribers(&self) -> bool {
+        self.senders
+            .lock()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
+    }
 }
 
 // --- Streaming Server ---
@@ -97,6 +108,7 @@ pub struct StreamingServer {
     latest_audio_status: Arc<Mutex<Option<String>>>,
     ui_language: Arc<Mutex<String>>,
     media_root: Arc<Mutex<Option<PathBuf>>>,
+    sse_surface: Arc<Mutex<Option<Arc<crate::projection::SseSurface>>>>,
     listener: Option<Arc<TcpListener>>,
     is_running: Arc<AtomicBool>,
     broadcast_enabled: Arc<AtomicBool>,
@@ -142,6 +154,7 @@ impl StreamingServer {
             latest_audio_status: Arc::new(Mutex::new(None)),
             ui_language: Arc::new(Mutex::new("pt".to_string())),
             media_root: Arc::new(Mutex::new(None)),
+            sse_surface: Arc::new(Mutex::new(None)),
             listener: None,
             is_running: Arc::new(AtomicBool::new(false)),
             broadcast_enabled: Arc::new(AtomicBool::new(true)),
@@ -174,6 +187,16 @@ impl StreamingServer {
             "language": normalize_language(language),
         });
         self.ui_broadcaster.broadcast(&payload.to_string());
+    }
+
+    /// Register the live SSE projection surface. After this call, SSE HTTP
+    /// handlers route projection routes (`/sse/music`, `/sse/bible`,
+    /// `/sse/return`, `/sse/alert`, `/state/...`) through
+    /// `SseSurface::materialize_snapshot_for` for connect-time hydration.
+    pub fn set_sse_surface(&self, surface: Arc<crate::projection::SseSurface>) {
+        if let Ok(mut slot) = self.sse_surface.lock() {
+            *slot = Some(surface);
+        }
     }
 
     pub fn set_media_root(&self, media_root: PathBuf) {
@@ -222,6 +245,7 @@ impl StreamingServer {
         let media_root = Arc::clone(&self.media_root);
         let sse_clients = Arc::clone(&self.sse_clients);
         let app_handle = Arc::clone(&self.app_handle);
+        let sse_surface_slot = Arc::clone(&self.sse_surface);
 
         self.thread_handle = Some(thread::spawn(move || {
             while is_running.load(Ordering::SeqCst) {
@@ -245,6 +269,10 @@ impl StreamingServer {
                             Arc::clone(&latest_audio_status);
                         let sse_clients_for_connection = Arc::clone(&sse_clients);
                         let app_handle_for_connection = Arc::clone(&app_handle);
+                        let sse_surface_for_connection = sse_surface_slot
+                            .lock()
+                            .ok()
+                            .and_then(|guard| guard.clone());
 
                         thread::spawn(move || {
                             let context = ConnectionContext {
@@ -261,6 +289,7 @@ impl StreamingServer {
                                 is_running: &running,
                                 sse_clients: &sse_clients_for_connection,
                                 app_handle: &app_handle_for_connection,
+                                sse_surface: sse_surface_for_connection,
                             };
                             handle_connection(stream, &context);
                         });
@@ -350,6 +379,7 @@ impl StreamingServer {
         }
     }
 
+    #[allow(dead_code)] // Phase 2: alerts now flow through SseSurface; kept for parity with the other channel helpers.
     pub fn broadcast_alert(&self, data: &str) {
         if self.is_running.load(Ordering::SeqCst) && self.broadcast_enabled.load(Ordering::SeqCst) {
             self.alert_broadcaster.broadcast(data);
@@ -435,6 +465,10 @@ struct ConnectionContext<'a> {
     is_running: &'a Arc<AtomicBool>,
     sse_clients: &'a Arc<AtomicUsize>,
     app_handle: &'a Arc<OnceLock<AppHandle>>,
+    /// Set once `StreamingServer::set_sse_surface` has been called from
+    /// `lib.rs` setup. Projection routes route through this for connect-time
+    /// hydration instead of the deprecated `latest_message` sticky replay.
+    sse_surface: Option<Arc<crate::projection::SseSurface>>,
 }
 
 fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
@@ -444,6 +478,8 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         None => return,
     };
 
+    use crate::projection::SseChannel;
+
     match request.path.as_str() {
         "/" => serve_html(&mut stream, STATUS_HTML),
         "/music" => serve_html(&mut stream, include_str!("templates/music.html")),
@@ -451,30 +487,25 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         "/return" => serve_html(&mut stream, include_str!("templates/return.html")),
         "/status" => serve_json(&mut stream, r#"{"ok":true}"#),
         "/state/music" => {
-            let body = context
-                .music_bc
-                .latest_payload()
-                .unwrap_or_else(|| {
-                    r#"{"slideType":"","videoPath":"","label":"","text":"","title":"","subtitle":"","backgroundImage":"","backgroundColor":"","textColor":"","textSize":0,"audioPath":""}"#
-                        .to_string()
-                });
+            let body = projection_initial(context, SseChannel::Music).unwrap_or_else(|| {
+                r#"{"slideType":"","videoPath":"","label":"","text":"","title":"","subtitle":"","backgroundImage":"","backgroundColor":"","textColor":"","textSize":0,"audioPath":""}"#
+                    .to_string()
+            });
             serve_json(&mut stream, &body);
         }
         "/state/bible" => {
-            let body = context
-                .bible_bc
-                .latest_payload()
+            let body = projection_initial(context, SseChannel::Bible)
                 .unwrap_or_else(|| r#"{"reference":"","text":""}"#.to_string());
             serve_json(&mut stream, &body);
         }
         "/state/return" => {
-            let body = context.return_bc.latest_payload().unwrap_or_else(|| {
+            let body = projection_initial(context, SseChannel::Return).unwrap_or_else(|| {
                 r#"{"current":null,"next":null,"index":0,"total":0,"title":""}"#.to_string()
             });
             serve_json(&mut stream, &body);
         }
         "/state/alert" => {
-            let body = context.alert_bc.latest_payload().unwrap_or_else(|| {
+            let body = projection_initial(context, SseChannel::Alert).unwrap_or_else(|| {
                 r#"{"text":"","isVisible":false,"isTicker":false}"#.to_string()
             });
             serve_json(&mut stream, &body);
@@ -509,13 +540,62 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
             });
             serve_json(&mut stream, &body);
         }
-        "/sse/music" => serve_sse(stream, context.music_bc, context.is_running, context.sse_clients, context.app_handle),
-        "/sse/bible" => serve_sse(stream, context.bible_bc, context.is_running, context.sse_clients, context.app_handle),
-        "/sse/return" => serve_sse(stream, context.return_bc, context.is_running, context.sse_clients, context.app_handle),
-        "/sse/alert" => serve_sse(stream, context.alert_bc, context.is_running, context.sse_clients, context.app_handle),
-        "/sse/utility" => serve_sse(stream, context.utility_bc, context.is_running, context.sse_clients, context.app_handle),
-        "/sse/ui" => serve_sse(stream, context.ui_bc, context.is_running, context.sse_clients, context.app_handle),
-        "/sse/video" => serve_sse(stream, context.video_bc, context.is_running, context.sse_clients, context.app_handle),
+        "/sse/music" => serve_sse(
+            stream,
+            context.music_bc,
+            projection_initial(context, SseChannel::Music),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/bible" => serve_sse(
+            stream,
+            context.bible_bc,
+            projection_initial(context, SseChannel::Bible),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/return" => serve_sse(
+            stream,
+            context.return_bc,
+            projection_initial(context, SseChannel::Return),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/alert" => serve_sse(
+            stream,
+            context.alert_bc,
+            projection_initial(context, SseChannel::Alert),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/utility" => serve_sse(
+            stream,
+            context.utility_bc,
+            context.utility_bc.latest_payload(),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/ui" => serve_sse(
+            stream,
+            context.ui_bc,
+            context.ui_bc.latest_payload(),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
+        "/sse/video" => serve_sse(
+            stream,
+            context.video_bc,
+            context.video_bc.latest_payload(),
+            context.is_running,
+            context.sse_clients,
+            context.app_handle,
+        ),
         // Multiplexed SSE endpoints — one connection carries multiple named event
         // streams so a single browser tab opens 1 persistent connection instead of 3.
         // Chrome caps HTTP/1.1 at 6 connections per origin, so without this a /music
@@ -524,9 +604,17 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         "/sse/combined/music" => serve_sse_multi(
             stream,
             &[
-                ("music", context.music_bc),
-                ("alert", context.alert_bc),
-                ("video", context.video_bc),
+                (
+                    "music",
+                    context.music_bc,
+                    projection_initial(context, SseChannel::Music),
+                ),
+                (
+                    "alert",
+                    context.alert_bc,
+                    projection_initial(context, SseChannel::Alert),
+                ),
+                ("video", context.video_bc, context.video_bc.latest_payload()),
             ],
             context.is_running,
             context.sse_clients,
@@ -535,9 +623,17 @@ fn handle_connection(mut stream: TcpStream, context: &ConnectionContext<'_>) {
         "/sse/combined/return" => serve_sse_multi(
             stream,
             &[
-                ("return", context.return_bc),
-                ("alert", context.alert_bc),
-                ("video", context.video_bc),
+                (
+                    "return",
+                    context.return_bc,
+                    projection_initial(context, SseChannel::Return),
+                ),
+                (
+                    "alert",
+                    context.alert_bc,
+                    projection_initial(context, SseChannel::Alert),
+                ),
+                ("video", context.video_bc, context.video_bc.latest_payload()),
             ],
             context.is_running,
             context.sse_clients,
@@ -642,9 +738,23 @@ impl Drop for SseClientGuard {
     }
 }
 
+/// Build the initial SSE payload for a projection channel via the live
+/// SseSurface. Returns `None` if the surface has not yet been wired (early
+/// startup) so the caller can fall back to a default payload.
+fn projection_initial(
+    context: &ConnectionContext<'_>,
+    channel: crate::projection::SseChannel,
+) -> Option<String> {
+    context
+        .sse_surface
+        .as_ref()
+        .map(|surface| surface.materialize_snapshot_for(channel))
+}
+
 fn serve_sse(
     mut stream: TcpStream,
     broadcaster: &Arc<SseBroadcaster>,
+    initial_payload: Option<String>,
     is_running: &Arc<AtomicBool>,
     sse_clients: &Arc<AtomicUsize>,
     app_handle: &Arc<OnceLock<AppHandle>>,
@@ -667,10 +777,13 @@ fn serve_sse(
         return;
     }
 
-    // Subscribe to the broadcaster and immediately replay latest payload.
-    let (subscription_id, rx, latest_message) = broadcaster.subscribe();
-    if let Some(initial_message) = latest_message {
-        if stream.write_all(initial_message.as_bytes()).is_err() {
+    // Subscribe to the broadcaster, then immediately send the caller-supplied
+    // initial payload (built before subscribe so projection channels get a
+    // canonical Hub snapshot, not a stale broadcaster cache).
+    let (subscription_id, rx) = broadcaster.subscribe();
+    if let Some(initial) = initial_payload {
+        let formatted = format!("data: {}\n\n", initial);
+        if stream.write_all(formatted.as_bytes()).is_err() {
             broadcaster.unsubscribe(subscription_id);
             return;
         }
@@ -754,7 +867,7 @@ fn serve_sse(
 /// name. The client uses `addEventListener(name, ...)` to dispatch by stream.
 fn serve_sse_multi(
     mut stream: TcpStream,
-    streams: &[(&str, &Arc<SseBroadcaster>)],
+    streams: &[(&str, &Arc<SseBroadcaster>, Option<String>)],
     is_running: &Arc<AtomicBool>,
     sse_clients: &Arc<AtomicUsize>,
     app_handle: &Arc<OnceLock<AppHandle>>,
@@ -779,18 +892,14 @@ fn serve_sse_multi(
     let (out_tx, out_rx) = mpsc::channel::<String>();
     let mut subs: Vec<(Arc<SseBroadcaster>, usize)> = Vec::with_capacity(streams.len());
 
-    for (name, broadcaster) in streams {
+    for (name, broadcaster, initial_payload) in streams {
         let event_name = name.to_string();
-        let (subscription_id, rx, latest_message) = broadcaster.subscribe();
+        let (subscription_id, rx) = broadcaster.subscribe();
         subs.push((Arc::clone(broadcaster), subscription_id));
 
-        // Replay the latest payload immediately so late-joining clients get the
-        // current state without waiting for the next broadcast.
-        if let Some(raw) = latest_message {
-            let payload = raw
-                .strip_prefix("data: ")
-                .unwrap_or(&raw)
-                .trim_end_matches(['\r', '\n']);
+        // Send the caller-supplied initial payload so late-joining clients
+        // get the current state without waiting for the next broadcast.
+        if let Some(payload) = initial_payload {
             let tagged = format!("event: {}\ndata: {}\n\n", event_name, payload);
             if stream.write_all(tagged.as_bytes()).is_err() {
                 for (bc, id) in subs {

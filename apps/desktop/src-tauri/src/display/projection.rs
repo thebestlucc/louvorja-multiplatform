@@ -1,12 +1,8 @@
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::db::models::{SlideContent, SlideContext};
-use crate::commands::streaming::{
-    build_music_stream_payload, build_return_stream_payload,
-    empty_streaming_music_payload, is_empty_hymn_gap_slide, streaming_slide_payload,
-    streaming_slide_title,
-};
+use crate::commands::streaming::{is_empty_hymn_gap_slide, streaming_slide_title};
 use std::sync::atomic::Ordering;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -27,7 +23,7 @@ pub struct CurrentSlideResponse {
 pub fn update_current_slide(
     app: &AppHandle,
     state: &AppState,
-    streaming_state: &StreamingState,
+    _streaming_state: &StreamingState,
     slide_data: SlideContent,
 ) -> Result<(), AppError> {
     // Enrich online_video slides with local path if the video has been downloaded
@@ -56,18 +52,6 @@ pub fn update_current_slide(
         *current = Some(slide_data.clone());
     }
     let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
-
-    // Phase 1 shadow write: mirror into ProjectionHub. Fire-and-forget;
-    // failure must not break the legacy event path.
-    {
-        let hub = state.projection.clone();
-        let slide_shadow = slide_data.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = hub
-                .apply(crate::projection::Mutation::SetSlide(Some(slide_shadow)))
-                .await;
-        });
-    }
 
     let current_title = streaming_slide_title(&slide_data);
     let slide_context = {
@@ -103,47 +87,39 @@ pub fn update_current_slide(
         return Ok(());
     }
 
-    emit_slide_and_broadcast(app, streaming_state, &slide_data, &slide_context, version)
+    emit_and_funnel(app, state, &slide_data, &slide_context, version)
 }
 
-/// Emit slide-changed + slide-context events and broadcast to streaming clients.
-/// Caller is responsible for the freeze decision; this performs side effects unconditionally.
-pub fn emit_slide_and_broadcast(
+/// Apply slide + context to the ProjectionHub (SSE flows through the
+/// SseSurface attached to the hub) and emit the legacy Tauri events for
+/// the projector/return webviews (Phase 3 deletes those). Caller is
+/// responsible for the freeze decision; this performs the side effects
+/// unconditionally.
+pub fn emit_and_funnel(
     app: &AppHandle,
-    streaming_state: &StreamingState,
+    state: &AppState,
     slide_data: &SlideContent,
     slide_context: &SlideContext,
     version: u64,
 ) -> Result<(), AppError> {
+    // Funnel into the Hub BEFORE Tauri emits so the SseSurface re-broadcast
+    // reflects the new state before any consumer reacts to slide-changed.
+    let hub = state.projection.clone();
+    let slide_for_hub = slide_data.clone();
+    let context_for_hub = slide_context.clone();
+    tauri::async_runtime::block_on(async move {
+        let _ = hub
+            .apply(crate::projection::Mutation::SetSlide(Some(slide_for_hub)))
+            .await;
+        let _ = hub
+            .apply(crate::projection::Mutation::SetContext(Some(context_for_hub)))
+            .await;
+    });
+
     app.emit("slide-changed", &SlideChangedPayload { slide: slide_data.clone(), version })
         .map_err(|e| AppError::Tauri(e.to_string()))?;
     app.emit("slide-context", slide_context)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
-
-    let app_data_dir = app.path().app_data_dir().ok();
-    let adr = app_data_dir.as_deref();
-
-    if let Ok(server) = streaming_state.server.lock() {
-        if slide_data.slide_type() == "bible" {
-            let json = serde_json::json!({
-                "reference": slide_data
-                    .title()
-                    .or_else(|| slide_data.label())
-                    .unwrap_or(""),
-                "text": slide_data.text().unwrap_or(""),
-            });
-            server.broadcast_bible(&json.to_string());
-            server.broadcast_music(&empty_streaming_music_payload().to_string());
-        } else {
-            server.broadcast_music(
-                &build_music_stream_payload(slide_data, Some(slide_context), adr).to_string(),
-            );
-            let clear_bible = serde_json::json!({ "reference": "", "text": "" });
-            server.broadcast_bible(&clear_bible.to_string());
-        }
-        let return_payload = build_return_stream_payload(slide_data, Some(slide_context), adr);
-        server.broadcast_return(&return_payload.to_string());
-    }
 
     Ok(())
 }
@@ -154,7 +130,7 @@ pub fn emit_slide_and_broadcast(
 pub fn flush_projection_state(
     app: &AppHandle,
     state: &AppState,
-    streaming_state: &StreamingState,
+    _streaming_state: &StreamingState,
 ) -> Result<(), AppError> {
     let slide_data = {
         let current = state
@@ -184,13 +160,13 @@ pub fn flush_projection_state(
     };
 
     let version = state.current_slide_version.load(Ordering::SeqCst);
-    emit_slide_and_broadcast(app, streaming_state, &slide_data, &slide_context, version)
+    emit_and_funnel(app, state, &slide_data, &slide_context, version)
 }
 
 pub fn update_slide_context(
     app: &AppHandle,
     state: &AppState,
-    streaming_state: &StreamingState,
+    _streaming_state: &StreamingState,
     context_data: SlideContext,
 ) -> Result<(), AppError> {
     // Always persist context to state so a later unfreeze flush has the latest.
@@ -206,31 +182,18 @@ pub fn update_slide_context(
         return Ok(());
     }
 
+    // Funnel into the Hub so SseSurface re-broadcasts music + return for the
+    // new context before any consumer reacts to slide-context.
+    let hub = state.projection.clone();
+    let context_for_hub = context_data.clone();
+    tauri::async_runtime::block_on(async move {
+        let _ = hub
+            .apply(crate::projection::Mutation::SetContext(Some(context_for_hub)))
+            .await;
+    });
+
     app.emit("slide-context", &context_data)
         .map_err(|e| AppError::Tauri(e.to_string()))?;
-
-    let app_data_dir = app.path().app_data_dir().ok();
-    let adr = app_data_dir.as_deref();
-
-    if let Ok(server) = streaming_state.server.lock() {
-        let current_slide = state.current_slide.read().ok().and_then(|s| s.clone());
-        if let Some(slide) = current_slide.as_ref() {
-            let music_json = build_music_stream_payload(slide, Some(&context_data), adr);
-            server.broadcast_music(&music_json.to_string());
-        }
-
-        let json = serde_json::json!({
-            "current": current_slide.as_ref().map(|s| streaming_slide_payload(s, adr)),
-            "next": context_data.next.as_ref().map(|s| streaming_slide_payload(s, adr)),
-            "index": context_data.index,
-            "total": context_data.total,
-            "title": context_data.title,
-            "currentSlideStartMs": context_data.current_slide_start_ms,
-            "nextSlideStartMs": context_data.next_slide_start_ms,
-            "audioDurationMs": context_data.audio_duration_ms,
-        });
-        server.broadcast_return(&json.to_string());
-    }
 
     Ok(())
 }

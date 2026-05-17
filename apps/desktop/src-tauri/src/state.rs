@@ -281,6 +281,9 @@ impl Default for AudioState {
 
 pub struct StreamingState {
     pub server: Mutex<StreamingServer>,
+    /// Keeps the projection SseSurface alive for the app lifetime. Dropping
+    /// this handle cancels the surface's hub-attach loop.
+    pub sse_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
 }
 
 impl Default for StreamingState {
@@ -293,6 +296,7 @@ impl StreamingState {
     pub fn new(port: u16) -> Self {
         Self {
             server: Mutex::new(StreamingServer::new(port)),
+            sse_surface_handle: Mutex::new(None),
         }
     }
 }
