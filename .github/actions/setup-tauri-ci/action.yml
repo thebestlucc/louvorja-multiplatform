@@ -236,7 +236,7 @@ runs:
       run: |
         # Official universal pkg (includes both arm64 and x86_64 slices) — required
         # for universal-apple-darwin builds. Homebrew only ships host-arch builds.
-        GST_VERSION="1.29.1"
+        GST_VERSION="1.24.13"
         TMP="$(mktemp -d)"
         curl -fL --retry 3 --user-agent "curl/8.0" -o "${TMP}/runtime.pkg" \
           "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-${GST_VERSION}-universal.pkg"
@@ -266,7 +266,7 @@ runs:
         # as a GH Actions annotation visible in the run summary without
         # authenticated log access.
         try {
-          $GST_VERSION = "1.29.1"
+          $GST_VERSION = "1.24.13"
           $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
           $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
           Write-Host "==> windows setup start: arch=$arch gstRoot=$gstRoot"
