@@ -353,23 +353,8 @@ pub fn set_slide_on_return(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn get_current_slide(
-    state: tauri::State<'_, AppState>,
-) -> Result<crate::display::projection::CurrentSlideResponse, AppError> {
-    use crate::display::projection::CurrentSlideResponse;
-    use std::sync::atomic::Ordering;
-    let current = state
-        .current_slide
-        .read()
-        .map_err(|_| AppError::Internal("lock poisoned".into()))?;
-    let version = state.current_slide_version.load(Ordering::SeqCst);
-    Ok(CurrentSlideResponse { slide: current.clone(), version })
-}
-
-/// Phase 4 — canonical Projection State accessor. Returns a Snapshot of the
-/// Hub's current state. Called by `useProjectionState` on mount; the hook then
+/// Canonical Projection State accessor. Returns a Snapshot of the Hub's
+/// current state. Called by `useProjectionState` on mount; the hook then
 /// listens for `projection-delta` Tauri events and applies the universal
 /// recovery rule (`delta.fromVersion != local → re-fetch snapshot`).
 #[tauri::command]
@@ -446,19 +431,6 @@ pub fn set_slide_context(
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     update_slide_context(&app, &state, &streaming_state, context_data)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_slide_context(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<SlideContext>, AppError> {
-    let (ctx, err) = catcher(state.slide_context.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let ctx = ctx.unwrap();
-    Ok(ctx.clone())
 }
 
 #[tauri::command]
@@ -554,21 +526,6 @@ fn overlay_mode_from_bools(black: bool, logo: bool) -> crate::projection::Overla
     } else {
         crate::projection::OverlayMode::None
     }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let overlay = overlay.unwrap();
-    Ok(OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    })
 }
 
 #[tauri::command]
