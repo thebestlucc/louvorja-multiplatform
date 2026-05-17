@@ -260,6 +260,9 @@ pub struct AppState {
     /// Canonical Projection State owner. Phase 1: silent shadow writes only —
     /// not yet wired to any Surface. See `.scratch/arch-projection-hub/`.
     pub projection: Arc<crate::projection::ProjectionHub>,
+    /// Keeps the projection WebviewSurface alive for the app lifetime. Dropping
+    /// this handle cancels the surface's hub-attach loop.
+    pub webview_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
     pub remote: crate::remote::state::RemoteServerState,
     /// Singleton runtime for the Rust GStreamer video pipeline. Populated in
     /// `lib.rs` `setup()` after this struct is constructed; commands access

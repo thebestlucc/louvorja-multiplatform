@@ -528,9 +528,25 @@ pub fn run() {
                     part_index: 0,
                 }),
                 projection: crate::projection::ProjectionHub::new(),
+                webview_surface_handle: Mutex::new(None),
                 remote: crate::remote::state::RemoteServerState::default(),
                 video_pipeline: Some(video_pipeline_runtime),
             });
+
+            // Wire the projection WebviewSurface: Hub → Tauri events
+            // (slide-changed / slide-cleared / slide-context / overlay-changed)
+            // for the projector + return webviews. Compat shim — same event
+            // names and payload shapes as the legacy emit sites that Phase 3
+            // removes from command handlers and display::projection.
+            {
+                let app_state = app.state::<AppState>();
+                let hub = app_state.projection.clone();
+                let surface = crate::projection::WebviewSurface::new(app.handle().clone());
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = app_state.webview_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
 
             // Manage a disabled AudioState immediately (non-blocking).
             // A background thread attempts real audio init with a 5s timeout;

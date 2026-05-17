@@ -372,7 +372,7 @@ pub fn get_current_slide(
 #[tauri::command]
 #[specta::specta]
 pub fn clear_current_slide(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
@@ -394,7 +394,9 @@ pub fn clear_current_slide(
         *ctx = None;
     }
     // Funnel slide + context clears into the Hub. SseSurface re-broadcasts
-    // empty music + bible + return payloads to all live SSE consumers.
+    // empty music + bible + return payloads to all live SSE consumers;
+    // WebviewSurface emits slide-cleared + slide-context(null) to the
+    // projector/return webviews.
     {
         let hub = state.projection.clone();
         tauri::async_runtime::block_on(async move {
@@ -402,12 +404,12 @@ pub fn clear_current_slide(
             let _ = hub.apply(crate::projection::Mutation::SetContext(None)).await;
         });
     }
-    let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
-    app.emit("slide-cleared", serde_json::json!({ "version": version }))
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
+    // AppState.current_slide_version is still read by get_current_slide for
+    // webview mount-time hydration; bump for that path.
+    state.current_slide_version.fetch_add(1, Ordering::SeqCst);
 
     // Video state clear stays direct: video broadcaster is not yet on the Hub
-    // (out of scope for Phase 2).
+    // (out of scope for Phase 2/3).
     if let Ok(server) = streaming_state.server.lock() {
         let video_clear = serde_json::json!({
             "type": "state",
@@ -477,7 +479,7 @@ pub fn set_is_frozen(
 #[tauri::command]
 #[specta::specta]
 pub fn toggle_black_screen(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
     let (overlay, err) = catcher(state.overlay.write());
@@ -494,12 +496,13 @@ pub fn toggle_black_screen(
         logo_screen: overlay.is_logo_screen,
         alert: Some(overlay.alert.clone()),
     };
-    let _ = app.emit("overlay-changed", &result);
-    // Phase 1 shadow write: collapse two-bool overlay into OverlayMode enum.
+    // Funnel into the Hub via block_on so the WebviewSurface re-emits
+    // overlay-changed before the command returns; otherwise the frontend
+    // toggle button would race the Surface.
     {
         let hub = state.projection.clone();
         let mode = overlay_mode_from_bools(overlay.is_black_screen, overlay.is_logo_screen);
-        tauri::async_runtime::spawn(async move {
+        tauri::async_runtime::block_on(async move {
             let _ = hub.apply(crate::projection::Mutation::SetOverlay(mode)).await;
         });
     }
@@ -509,7 +512,7 @@ pub fn toggle_black_screen(
 #[tauri::command]
 #[specta::specta]
 pub fn toggle_logo_screen(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
     let (overlay, err) = catcher(state.overlay.write());
@@ -526,12 +529,10 @@ pub fn toggle_logo_screen(
         logo_screen: overlay.is_logo_screen,
         alert: Some(overlay.alert.clone()),
     };
-    let _ = app.emit("overlay-changed", &result);
-    // Phase 1 shadow write.
     {
         let hub = state.projection.clone();
         let mode = overlay_mode_from_bools(overlay.is_black_screen, overlay.is_logo_screen);
-        tauri::async_runtime::spawn(async move {
+        tauri::async_runtime::block_on(async move {
             let _ = hub.apply(crate::projection::Mutation::SetOverlay(mode)).await;
         });
     }
@@ -570,7 +571,7 @@ pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlaySta
 pub fn set_alert(
     text: String,
     is_ticker: bool,
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
     _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
@@ -588,9 +589,9 @@ pub fn set_alert(
         logo_screen: overlay.is_logo_screen,
         alert: Some(overlay.alert.clone()),
     };
-    let _ = app.emit("overlay-changed", &result);
 
-    // Funnel into the Hub so SseSurface re-broadcasts the alert payload.
+    // Funnel into the Hub. SseSurface re-broadcasts the alert payload;
+    // WebviewSurface emits overlay-changed.
     {
         let hub = state.projection.clone();
         let alert = crate::projection::Alert {
@@ -610,7 +611,7 @@ pub fn set_alert(
 #[tauri::command]
 #[specta::specta]
 pub fn clear_alert(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
     _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
@@ -626,10 +627,9 @@ pub fn clear_alert(
         logo_screen: overlay.is_logo_screen,
         alert: Some(overlay.alert.clone()),
     };
-    let _ = app.emit("overlay-changed", &result);
 
-    // Funnel cleared alert into the Hub so SseSurface broadcasts the cleared
-    // alert payload to all live SSE consumers.
+    // Funnel cleared alert into the Hub. SseSurface broadcasts the cleared
+    // alert payload; WebviewSurface emits overlay-changed.
     {
         let hub = state.projection.clone();
         tauri::async_runtime::block_on(async move {

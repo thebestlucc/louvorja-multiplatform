@@ -19,3 +19,4 @@ pub use state::{Alert, OverlayMode};
 #[allow(unused_imports)]
 pub use surface::{spawn_surface, ProjectionSurface, SurfaceHandle};
 pub use surfaces::sse::{SseChannel, SseSurface};
+pub use surfaces::webview::WebviewSurface;

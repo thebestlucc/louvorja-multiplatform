@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use crate::error::AppError;
 use crate::state::{AppState, StreamingState};
 use crate::db::models::{SlideContent, SlideContext};
@@ -51,7 +51,10 @@ pub fn update_current_slide(
             .map_err(|e| AppError::Internal(e.to_string()))?;
         *current = Some(slide_data.clone());
     }
-    let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
+    // AppState.current_slide_version is still read by get_current_slide for
+    // webview mount-time hydration; bump for that path. Phase 4 replaces this
+    // with a get_projection_snapshot command sourced from the Hub.
+    state.current_slide_version.fetch_add(1, Ordering::SeqCst);
 
     let current_title = streaming_slide_title(&slide_data);
     let slide_context = {
@@ -87,23 +90,19 @@ pub fn update_current_slide(
         return Ok(());
     }
 
-    emit_and_funnel(app, state, &slide_data, &slide_context, version)
+    funnel_to_hub(app, state, &slide_data, &slide_context)
 }
 
-/// Apply slide + context to the ProjectionHub (SSE flows through the
-/// SseSurface attached to the hub) and emit the legacy Tauri events for
-/// the projector/return webviews (Phase 3 deletes those). Caller is
-/// responsible for the freeze decision; this performs the side effects
-/// unconditionally.
-pub fn emit_and_funnel(
-    app: &AppHandle,
+/// Apply slide + context to the ProjectionHub. The SseSurface and the
+/// WebviewSurface attached to the Hub turn the resulting Delta into SSE
+/// broadcasts and Tauri webview events respectively. Caller is responsible
+/// for the freeze decision; this performs the side effects unconditionally.
+pub fn funnel_to_hub(
+    _app: &AppHandle,
     state: &AppState,
     slide_data: &SlideContent,
     slide_context: &SlideContext,
-    version: u64,
 ) -> Result<(), AppError> {
-    // Funnel into the Hub BEFORE Tauri emits so the SseSurface re-broadcast
-    // reflects the new state before any consumer reacts to slide-changed.
     let hub = state.projection.clone();
     let slide_for_hub = slide_data.clone();
     let context_for_hub = slide_context.clone();
@@ -115,11 +114,6 @@ pub fn emit_and_funnel(
             .apply(crate::projection::Mutation::SetContext(Some(context_for_hub)))
             .await;
     });
-
-    app.emit("slide-changed", &SlideChangedPayload { slide: slide_data.clone(), version })
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
-    app.emit("slide-context", slide_context)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     Ok(())
 }
@@ -159,12 +153,11 @@ pub fn flush_projection_state(
         })
     };
 
-    let version = state.current_slide_version.load(Ordering::SeqCst);
-    emit_and_funnel(app, state, &slide_data, &slide_context, version)
+    funnel_to_hub(app, state, &slide_data, &slide_context)
 }
 
 pub fn update_slide_context(
-    app: &AppHandle,
+    _app: &AppHandle,
     state: &AppState,
     _streaming_state: &StreamingState,
     context_data: SlideContext,
@@ -182,8 +175,8 @@ pub fn update_slide_context(
         return Ok(());
     }
 
-    // Funnel into the Hub so SseSurface re-broadcasts music + return for the
-    // new context before any consumer reacts to slide-context.
+    // Funnel into the Hub. SseSurface re-broadcasts music + return; WebviewSurface
+    // emits slide-context to the projector/return webviews.
     let hub = state.projection.clone();
     let context_for_hub = context_data.clone();
     tauri::async_runtime::block_on(async move {
@@ -191,9 +184,6 @@ pub fn update_slide_context(
             .apply(crate::projection::Mutation::SetContext(Some(context_for_hub)))
             .await;
     });
-
-    app.emit("slide-context", &context_data)
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
 
     Ok(())
 }
