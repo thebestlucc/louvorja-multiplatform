@@ -257,6 +257,9 @@ pub struct AppState {
     /// Used by update_global_shortcut to unregister before re-registering.
     pub global_shortcuts: RwLock<HashMap<String, String>>,
     pub bible_projection: Mutex<BibleProjectionState>,
+    /// Canonical Projection State owner. Phase 1: silent shadow writes only —
+    /// not yet wired to any Surface. See `.scratch/arch-projection-hub/`.
+    pub projection: Arc<crate::projection::ProjectionHub>,
     pub remote: crate::remote::state::RemoteServerState,
     /// Singleton runtime for the Rust GStreamer video pipeline. Populated in
     /// `lib.rs` `setup()` after this struct is constructed; commands access

@@ -389,6 +389,13 @@ pub fn clear_current_slide(
         let mut current = current.unwrap();
         *current = None;
     }
+    // Phase 1 shadow write.
+    {
+        let hub = state.projection.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = hub.apply(crate::projection::Mutation::SetSlide(None)).await;
+        });
+    }
     {
         let (ctx, err) = catcher(state.slide_context.write());
         if let Some(e) = err {
@@ -454,6 +461,15 @@ pub fn set_is_frozen(
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     let previous = state.is_frozen.swap(frozen, Ordering::Relaxed);
+    // Phase 1 shadow write.
+    {
+        let hub = state.projection.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = hub
+                .apply(crate::projection::Mutation::SetFreeze(frozen))
+                .await;
+        });
+    }
     // On unfreeze, replay the latest slide/context so projector + return + streaming
     // clients catch up with any navigation that happened while frozen.
     if previous && !frozen {
@@ -483,6 +499,14 @@ pub fn toggle_black_screen(
         alert: Some(overlay.alert.clone()),
     };
     let _ = app.emit("overlay-changed", &result);
+    // Phase 1 shadow write: collapse two-bool overlay into OverlayMode enum.
+    {
+        let hub = state.projection.clone();
+        let mode = overlay_mode_from_bools(overlay.is_black_screen, overlay.is_logo_screen);
+        tauri::async_runtime::spawn(async move {
+            let _ = hub.apply(crate::projection::Mutation::SetOverlay(mode)).await;
+        });
+    }
     Ok(result)
 }
 
@@ -507,7 +531,27 @@ pub fn toggle_logo_screen(
         alert: Some(overlay.alert.clone()),
     };
     let _ = app.emit("overlay-changed", &result);
+    // Phase 1 shadow write.
+    {
+        let hub = state.projection.clone();
+        let mode = overlay_mode_from_bools(overlay.is_black_screen, overlay.is_logo_screen);
+        tauri::async_runtime::spawn(async move {
+            let _ = hub.apply(crate::projection::Mutation::SetOverlay(mode)).await;
+        });
+    }
     Ok(result)
+}
+
+fn overlay_mode_from_bools(black: bool, logo: bool) -> crate::projection::OverlayMode {
+    // Mutual exclusion is enforced by the toggle callers above. If both ever
+    // become true through a future code path, prefer Black (more disruptive).
+    if black {
+        crate::projection::OverlayMode::Black
+    } else if logo {
+        crate::projection::OverlayMode::Logo
+    } else {
+        crate::projection::OverlayMode::None
+    }
 }
 
 #[tauri::command]
@@ -555,6 +599,19 @@ pub fn set_alert(
             server.broadcast_alert(&payload);
         }
     }
+    // Phase 1 shadow write.
+    {
+        let hub = state.projection.clone();
+        let alert = crate::projection::Alert {
+            text: overlay.alert.text.clone(),
+            is_ticker: overlay.alert.is_ticker,
+        };
+        tauri::async_runtime::spawn(async move {
+            let _ = hub
+                .apply(crate::projection::Mutation::SetAlert(Some(alert)))
+                .await;
+        });
+    }
 
     Ok(result)
 }
@@ -584,6 +641,13 @@ pub fn clear_alert(
         if let Ok(payload) = serde_json::to_string(&overlay.alert) {
             server.broadcast_alert(&payload);
         }
+    }
+    // Phase 1 shadow write.
+    {
+        let hub = state.projection.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = hub.apply(crate::projection::Mutation::SetAlert(None)).await;
+        });
     }
 
     Ok(result)

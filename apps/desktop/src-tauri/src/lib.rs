@@ -527,6 +527,7 @@ pub fn run() {
                     projector_size: None,
                     part_index: 0,
                 }),
+                projection: crate::projection::ProjectionHub::new(),
                 remote: crate::remote::state::RemoteServerState::default(),
                 video_pipeline: Some(video_pipeline_runtime),
             });

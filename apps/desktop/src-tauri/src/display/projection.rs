@@ -57,6 +57,18 @@ pub fn update_current_slide(
     }
     let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
 
+    // Phase 1 shadow write: mirror into ProjectionHub. Fire-and-forget;
+    // failure must not break the legacy event path.
+    {
+        let hub = state.projection.clone();
+        let slide_shadow = slide_data.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = hub
+                .apply(crate::projection::Mutation::SetSlide(Some(slide_shadow)))
+                .await;
+        });
+    }
+
     let current_title = streaming_slide_title(&slide_data);
     let slide_context = {
         let mut context = state

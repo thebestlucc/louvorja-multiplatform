@@ -1,0 +1,18 @@
+{
+  "fromVersion": 5,
+  "toVersion": 6,
+  "events": [
+    {
+      "kind": "slideChanged",
+      "slide": null
+    },
+    {
+      "kind": "overlayChanged",
+      "overlay": "none"
+    },
+    {
+      "kind": "alertChanged",
+      "alert": null
+    }
+  ]
+}
