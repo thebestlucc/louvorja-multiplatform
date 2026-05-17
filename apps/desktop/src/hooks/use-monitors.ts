@@ -11,8 +11,8 @@ import {
 } from "../lib/tauri";
 import { catcher, thrower } from "../lib/catcher";
 import { useDisplayStore } from "../stores/display-store";
-import type { OverlayState } from "../types/presentation";
 import { resolveProjectionMonitorIndexes } from "../lib/monitor-resolution";
+import { useProjectionState } from "./use-projection-state";
 
 export function useMonitorsControl() {
   const { data: monitors } = useMonitors();
@@ -48,16 +48,15 @@ export function useMonitorsControl() {
     };
   }, [setReturnWindowOpen]);
 
-  // Sync overlay state
+  // Overlay state from the Projection Hub (Phase 5). Reference-stable
+  // snapshot.overlay enum drives the local Zustand mirror; black/logo bools
+  // derived on each render.
+  const projection = useProjectionState();
   useEffect(() => {
-    const unlisten = listen<OverlayState>("overlay-changed", (event) => {
-      setBlackScreen(event.payload.blackScreen);
-      setLogoScreen(event.payload.logoScreen);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [setBlackScreen, setLogoScreen]);
+    if (!projection) return;
+    setBlackScreen(projection.overlay === "black");
+    setLogoScreen(projection.overlay === "logo");
+  }, [projection, setBlackScreen, setLogoScreen]);
 
   // Projector
   const openProjector = useCallback(
