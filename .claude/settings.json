@@ -48,5 +48,30 @@
     "superpowers@claude-plugins-official": true,
     "claude-mem@thedotmack": true,
     "caveman@caveman": true
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/hooks/mempal_save_hook.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/hooks/mempal_precompact_hook.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
