@@ -20,7 +20,6 @@ import {
   importPptx,
   exportPptx,
 } from "../tauri";
-import { getCurrentSlide } from "../tauri/display";
 import { queryKeys } from "./keys";
 
 export function usePresentations() {
@@ -202,13 +201,5 @@ export function useExportPptx() {
   return useMutation({
     mutationFn: ({ presentationId, path }: { presentationId: number; path: string }) =>
       exportPptx(presentationId, path),
-  });
-}
-
-export function useCurrentSlide() {
-  return useQuery({
-    queryKey: ["slide", "current"] as const,
-    queryFn: () => getCurrentSlide(),
-    staleTime: Infinity,
   });
 }

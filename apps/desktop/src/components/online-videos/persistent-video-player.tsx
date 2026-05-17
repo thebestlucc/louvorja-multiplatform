@@ -332,7 +332,7 @@ export function PersistentVideoPlayer() {
   // When the Rust GStreamer pipeline is active it owns audio output (autoaudiosink).
   // Rendering YouTubeMaster or LocalVideoMaster alongside it would produce double
   // audio and conflict with the Rust-path controls. Suppress HTML5 players entirely;
-  // useSlideVersion / handleSlide still run so media-player-store stays populated.
+  // useProjectionState / handleSlide still run so media-player-store stays populated.
   if (useRustPipeline) {
     return null;
   }
