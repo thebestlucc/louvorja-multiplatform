@@ -25,7 +25,7 @@
 // element lifecycle when the rust pipeline is OFF.
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { useSlideVersion } from "./use-slide-version";
+import { useProjectionState } from "./use-projection-state";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
 import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
@@ -347,7 +347,24 @@ export function useOnlineVideoBridge() {
     lastLoadedKeyRef.current = null;
   }, []);
 
-  useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
+  // Hub-driven slide bridge (Phase 5). Reference-equality on
+  // snapshot.currentSlide is safe — applyDelta only swaps the field when a
+  // slideChanged event arrives, so identical references mean "no slide
+  // change" (proved in Phase 4). Null → fire handleClear; non-null → fire
+  // handleSlide.
+  const projection = useProjectionState();
+  const lastSlideRef = useRef<SlideContent | null>(null);
+  useEffect(() => {
+    if (!projection) return;
+    const current = projection.currentSlide;
+    if (current === lastSlideRef.current) return;
+    lastSlideRef.current = current;
+    if (current === null) {
+      handleClear();
+    } else {
+      handleSlide(current);
+    }
+  }, [projection, handleSlide, handleClear]);
 
   // E-2 (plan): also reset on rust pipeline unload. `useMediaPlayer.stop()`
   // and `setUseRustVideoPipeline(false)` both call `videoPipeline.unload()`
