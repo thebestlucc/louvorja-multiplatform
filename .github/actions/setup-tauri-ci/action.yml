@@ -268,7 +268,7 @@ runs:
         # as a GH Actions annotation visible in the run summary without
         # authenticated log access.
         try {
-          $GST_VERSION = "1.24.13"
+          $GST_VERSION = "1.24.12"
           $arch = if ("${{ inputs.cache-suffix }}" -eq "x86") { "x86" } else { "x86_64" }
           $gstRoot = if ($arch -eq "x86") { "C:\gstreamer\1.0\msvc_x86\" } else { "C:\gstreamer\1.0\msvc_x86_64\" }
           Write-Host "==> windows setup start: arch=$arch gstRoot=$gstRoot"
