@@ -2,13 +2,20 @@ use crate::db::queries::{content_sync, settings};
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::catcher::catcher;
+use rusqlite;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::thread::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
+
+/// Per-language FTS background thread handles.
+/// Joined before any Phase 3 file rename to prevent Windows file-in-use errors.
+static FTS_HANDLES: LazyLock<Mutex<HashMap<String, JoinHandle<()>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const MAX_CONCURRENT_DOWNLOADS: usize = 3;
 
@@ -546,6 +553,15 @@ pub fn execute_pack_sync(
             continue;
         }
 
+        // Join any pending FTS background thread for this language before renaming.
+        // On Windows, open file handles block rename — the background thread from
+        // a previous sync must finish before we replace the DB file.
+        if let Ok(mut handles) = FTS_HANDLES.lock() {
+            if let Some(handle) = handles.remove(lang) {
+                let _ = handle.join();
+            }
+        }
+
         // Step 1: Remove old pool AND old caps from state (releases file handles on Windows).
         // Caps are removed alongside the pool so no concurrent reader encounters
         // (pool gone, stale caps still present).
@@ -587,18 +603,12 @@ pub fn execute_pack_sync(
             dest_path
         };
 
-        // Step 3: Open new pool and initialise FTS5 index
+        // Step 3: Open new pool and make it available for queries immediately.
+        // FTS init and index creation run in a background thread so they don't
+        // delay the "sync completed" event — data is queryable (with LIKE fallback)
+        // while FTS is building.
         match content_sync::open_content_db_pool(&dest) {
             Ok(new_pool) => {
-                match new_pool.get() {
-                    Ok(content_conn) => {
-                        let _ = content_sync::init_content_db_fts(&content_conn, lang);
-                        content_sync::ensure_content_db_indexes(&content_conn);
-                    }
-                    Err(e) => {
-                        log::warn!("[pack-sync] FTS init failed for {}: {}", lang, e);
-                    }
-                }
                 // Step 4: Probe capabilities from new pool before inserting it into content_dbs.
                 // Mirrors startup ordering invariant: caps inserted before pool so any concurrent
                 // reader that sees the pool will already find a capability entry.
@@ -634,6 +644,43 @@ pub fn execute_pack_sync(
                     &format!("pack_sync.db_version.{}", lang),
                     &item.pack_version.to_string(),
                 );
+
+                // Step 5: Background FTS init — runs after pool is live so hymn list
+                // queries work immediately.  Uses a dedicated connection with
+                // synchronous=OFF so WAL fsyncs don't stall the bulk INSERT + OPTIMIZE
+                // on HDD/eMMC devices.
+                let dest_fts = dest.clone();
+                let lang_fts = lang.clone();
+                let app_fts = app.clone();
+                let fts_handle = std::thread::spawn(move || {
+                    match rusqlite::Connection::open(&dest_fts) {
+                        Ok(fts_conn) => {
+                            if let Err(e) = content_sync::init_content_db_fts(&fts_conn, &lang_fts) {
+                                log::warn!("[pack-sync] Background FTS init failed for {}: {}", lang_fts, e);
+                                return;
+                            }
+                            // Ensure column indexes via pool connection (no sync=OFF needed).
+                            if let Some(st) = app_fts.try_state::<AppState>() {
+                                if let Ok(dbs) = st.content_dbs.read() {
+                                    if let Some(pool) = dbs.get(&lang_fts).cloned() {
+                                        drop(dbs);
+                                        if let Ok(idx_conn) = pool.get() {
+                                            content_sync::ensure_content_db_indexes(&idx_conn);
+                                        }
+                                    }
+                                }
+                            }
+                            let _ = app_fts.emit("fts-ready", &lang_fts);
+                            log::info!("[pack-sync] FTS background init complete for {}", lang_fts);
+                        }
+                        Err(e) => {
+                            log::warn!("[pack-sync] FTS background: could not open DB for {}: {}", lang_fts, e);
+                        }
+                    }
+                });
+                if let Ok(mut handles) = FTS_HANDLES.lock() {
+                    handles.insert(lang.clone(), fts_handle);
+                }
             }
             Err(e) => {
                 log::warn!("[pack-sync] Pool open failed for {}: {}", lang, e);
