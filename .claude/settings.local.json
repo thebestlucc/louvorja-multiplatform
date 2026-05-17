@@ -42,6 +42,31 @@
       "Bash(ls -la /Users/lojaintegrada/Documents/projects/personal/louvorja-multiplataform/src-tauri/src/commands/*.rs)"
     ]
   },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/luc/.claude/plugins/marketplaces/mempalace/hooks/mempal_save_hook.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/luc/.claude/plugins/marketplaces/mempalace/hooks/mempal_precompact_hook.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "rust-skills@rust-skills": true,
     "superpowers@claude-plugins-official": true,
