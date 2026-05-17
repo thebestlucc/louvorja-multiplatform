@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
-import type { OverlayState } from "../../lib/bindings";
-import { getOverlayState } from "../../lib/tauri";
+import { useRef } from "react";
+import { useProjectionState } from "../../hooks/use-projection-state";
 import { useRustVideoPipeline } from "../../hooks/use-rust-video-pipeline";
 import { cn } from "../../lib/utils";
 
@@ -33,28 +31,10 @@ export function RustVideoConsumer({
   const videoRef = useRef<HTMLVideoElement>(null);
   useRustVideoPipeline({ windowLabel, videoRef });
 
-  const [overlayActive, setOverlayActive] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    // Seed initial state in case the component mounts while an overlay is on.
-    getOverlayState()
-      .then((s) => {
-        if (cancelled) return;
-        setOverlayActive(!!s.blackScreen || !!s.logoScreen);
-      })
-      .catch(() => {});
-
-    const unlistenPromise = listen<OverlayState>("overlay-changed", (event) => {
-      setOverlayActive(!!event.payload.blackScreen || !!event.payload.logoScreen);
-    });
-
-    return () => {
-      cancelled = true;
-      unlistenPromise.then((fn) => fn()).catch(() => {});
-    };
-  }, []);
+  // Hub-derived overlay (Phase 5). null snapshot → assume no overlay
+  // (component will hide once first snapshot resolves if needed).
+  const projection = useProjectionState();
+  const overlayActive = projection?.overlay === "black" || projection?.overlay === "logo";
 
   return (
     <video

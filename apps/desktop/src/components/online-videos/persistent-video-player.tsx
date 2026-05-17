@@ -1,7 +1,7 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emitTo } from "@tauri-apps/api/event";
-import { useSlideVersion } from "../../hooks/use-slide-version";
+import { useProjectionState } from "../../hooks/use-projection-state";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { YouTubeMaster } from "./youtube-master";
@@ -267,7 +267,22 @@ export function PersistentVideoPlayer() {
     }
   }, [handleClear]);
 
-  useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
+  // Hub-driven slide bridge (Phase 5). Reference-equality on
+  // snapshot.currentSlide is safe (Phase 4 receipt): only swaps when a
+  // slideChanged event arrives, so identical refs mean "no slide change."
+  const projection = useProjectionState();
+  const lastSlideRef = useRef<SlideContent | null>(null);
+  useEffect(() => {
+    if (!projection) return;
+    const current = projection.currentSlide;
+    if (current === lastSlideRef.current) return;
+    lastSlideRef.current = current;
+    if (current === null) {
+      handleClear();
+    } else {
+      handleSlide(current);
+    }
+  }, [projection, handleSlide, handleClear]);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
   useEffect(() => {
