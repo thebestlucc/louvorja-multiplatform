@@ -108,7 +108,7 @@ export function useBible(projectionSettings?: BibleProjectionSettings) {
     const settingsJson = ps ? JSON.stringify({
       mode: {
         alignment: ps.textAlign ?? "center",
-        refPosition: ps.referencePosition === "bottom" ? "bottom" : "top",
+        refPosition: !ps.showReference ? "hidden" : ps.referencePosition === "bottom" ? "bottom" : "top",
         textShadow: ps.textShadow ?? false,
         gradient: ps.backgroundGradient ? {
           angle: ps.backgroundGradient.angle,
