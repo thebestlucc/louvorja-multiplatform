@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import {
   clearCurrentSlide,
-  getCurrentSlide,
-  getSlideContext,
   setCurrentSlide,
   setSlideContext,
 } from "../lib/tauri";
+import { getProjectionSnapshot } from "../lib/tauri/display";
 import { useDisplayStore } from "../stores/display-store";
 import type { UtilityProjectionPayload, UtilityProjectionKind } from "../types/utilities";
 import type { SlideContent, SlideContext } from "../lib/bindings";
@@ -29,11 +28,8 @@ export function useUtilityProjection(_kind: UtilityProjectionKind) {
     async (payload: UtilityProjectionPayload) => {
       if (!isProjecting) {
         await clearActivePlayback();
-        const [slideResponse, context] = await Promise.all([
-          getCurrentSlide(),
-          getSlideContext(),
-        ]);
-        snapshotRef.current = { slide: slideResponse.slide, context };
+        const snap = await getProjectionSnapshot();
+        snapshotRef.current = { slide: snap.currentSlide, context: snap.context };
         setCurrentProjectionType("utility");
       }
 
