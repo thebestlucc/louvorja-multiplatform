@@ -11,15 +11,16 @@ pub fn update_current_slide(
     slide_data: SlideContent,
 ) -> Result<(), AppError> {
     let mut slide_data = slide_data;
-    if let SlideContent::OnlineVideo { ref video_id, ref mut source, ref mut url, .. } = slide_data {
-        let vid = video_id.clone();
-        if let Ok(conn) = state.db.get() {
-            if let Ok(Some(local_path)) =
-                crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
-            {
-                if !local_path.is_empty() {
-                    *source = crate::db::models::slides::VideoSource::Local;
-                    *url = local_path;
+    if let SlideContent::OnlineVideo { ref mut source, .. } = slide_data {
+        if let crate::db::models::slides::VideoSource::Youtube { video_id } = source {
+            let vid = video_id.clone();
+            if let Ok(conn) = state.db.get() {
+                if let Ok(Some(local_path)) =
+                    crate::db::queries::online_videos::get_video_local_path(&conn, &vid)
+                {
+                    if !local_path.is_empty() {
+                        *source = crate::db::models::slides::VideoSource::Local { url: local_path };
+                    }
                 }
             }
         }

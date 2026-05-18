@@ -397,10 +397,16 @@ pub fn export_pptx_slides(
                 }
                 s
             }
-            SlideContent::OnlineVideo { url, title: video_title, .. } => {
+            SlideContent::OnlineVideo { source, title: video_title } => {
                 let slide_title = video_title.as_deref().unwrap_or("Online Video");
                 let mut s = PptSlideContent::new(slide_title);
-                s = s.add_bullet(url);
+                let bullet = match source {
+                    crate::db::models::slides::VideoSource::Local { url } => url.clone(),
+                    crate::db::models::slides::VideoSource::Youtube { video_id } => {
+                        format!("https://www.youtube.com/watch?v={}", video_id)
+                    }
+                };
+                s = s.add_bullet(&bullet);
                 if !notes_str.is_empty() {
                     s = s.notes(notes_str);
                 }
