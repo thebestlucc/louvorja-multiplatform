@@ -19,4 +19,5 @@ pub use state::{Alert, OverlayMode};
 #[allow(unused_imports)]
 pub use surface::{spawn_surface, ProjectionSurface, SurfaceHandle};
 pub use surfaces::delta_event::DeltaSurface;
+pub use surfaces::remote_ws::RemoteWsSurface;
 pub use surfaces::sse::{SseChannel, SseSurface};

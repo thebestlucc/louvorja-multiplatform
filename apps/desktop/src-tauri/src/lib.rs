@@ -606,6 +606,22 @@ pub fn run() {
                 };
             }
 
+            // Wire the RemoteWsSurface: ProjectionHub → unsigned envelopes onto
+            // the remote broadcast channel. Each WS session subscribes a
+            // broadcast::Receiver and signs envelopes with its per-device HMAC
+            // key before forwarding to the socket. Replaces the legacy
+            // `slide-changed` / `overlay-changed` Tauri event re-emit loop.
+            {
+                let app_state = app.state::<AppState>();
+                let hub = app_state.projection.clone();
+                let broadcast_tx = app_state.remote.broadcast_tx.clone();
+                let surface = crate::projection::RemoteWsSurface::new(broadcast_tx);
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = app_state.remote.remote_ws_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
+
             // Initialize Video Server State (loopback-only, for serving local video files)
             app.manage(VideoServerState::default());
 
