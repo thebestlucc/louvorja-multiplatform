@@ -192,10 +192,10 @@ export function ProjectorView() {
     commitSlide(newSlide);
   }, [commitSlide, useRustVideoPipeline]);
 
-  // Phase 4 — drive slide flow from the Hub Snapshot instead of legacy
-  // slide-changed / slide-cleared / getCurrentSlide. Reference-equality on
-  // currentSlide is safe: applyDelta only swaps the field when a slideChanged
-  // event arrives, so the previous reference is reused otherwise.
+  // Drive slide flow from the Hub Snapshot via projection-delta.
+  // Reference-equality on currentSlide is safe: applyDelta only swaps the
+  // field when a slideChanged event arrives, so the previous reference is
+  // reused otherwise.
   const hubSlide = projection?.currentSlide ?? null;
   const prevHubSlideRef = useRef<SlideContent | null | undefined>(undefined);
   useEffect(() => {

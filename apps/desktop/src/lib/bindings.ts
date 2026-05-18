@@ -965,17 +965,9 @@ async setSlideOnReturn(slideData: SlideContent) : Promise<Result<null, AppErrorR
     else return { status: "error", error: e  as any };
 }
 },
-async getCurrentSlide() : Promise<Result<CurrentSlideResponse, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_current_slide") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 /**
- * Phase 4 — canonical Projection State accessor. Returns a Snapshot of the
- * Hub's current state. Called by `useProjectionState` on mount; the hook then
+ * Canonical Projection State accessor. Returns a Snapshot of the Hub's
+ * current state. Called by `useProjectionState` on mount; the hook then
  * listens for `projection-delta` Tauri events and applies the universal
  * recovery rule (`delta.fromVersion != local → re-fetch snapshot`).
  */
@@ -1003,14 +995,6 @@ async setSlideContext(contextData: SlideContext) : Promise<Result<null, AppError
     else return { status: "error", error: e  as any };
 }
 },
-async getSlideContext() : Promise<Result<SlideContext | null, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_slide_context") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async setIsFrozen(frozen: boolean) : Promise<Result<null, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_is_frozen", { frozen }) };
@@ -1030,14 +1014,6 @@ async toggleBlackScreen() : Promise<Result<OverlayState, AppErrorResponse>> {
 async toggleLogoScreen() : Promise<Result<OverlayState, AppErrorResponse>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("toggle_logo_screen") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async getOverlayState() : Promise<Result<OverlayState, AppErrorResponse>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_overlay_state") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -2011,7 +1987,6 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
  * Online Videos feature — input for creating a custom single-video collection.
  */
 export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: string }
-export type CurrentSlideResponse = { slide: SlideContent | null; version: number }
 export type DeltaEvent = { kind: "slideChanged"; slide: SlideContent | null } | { kind: "contextChanged"; context: SlideContext | null } | { kind: "overlayChanged"; overlay: OverlayMode } | { kind: "freezeChanged"; frozen: boolean } | { kind: "alertChanged"; alert: Alert | null }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
