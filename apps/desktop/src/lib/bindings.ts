@@ -1987,7 +1987,6 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
  * Online Videos feature — input for creating a custom single-video collection.
  */
 export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: string }
-export type DeltaEvent = { kind: "slideChanged"; slide: SlideContent | null } | { kind: "contextChanged"; context: SlideContext | null } | { kind: "overlayChanged"; overlay: OverlayMode } | { kind: "freezeChanged"; frozen: boolean } | { kind: "alertChanged"; alert: Alert | null }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number | null; createdAt: string; updatedAt: string }
@@ -2061,7 +2060,6 @@ export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: n
  */
 export type PairingInfo = { token: string; pin: string; expiresAt: number; qrSvg: string; url: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
-export type ProjectionDelta = { fromVersion: number; toVersion: number; events: DeltaEvent[] }
 export type ProjectionSnapshot = { version: number; currentSlide: SlideContent | null; context: SlideContext | null; overlay: OverlayMode; frozen: boolean; alert: Alert | null }
 export type RefPosition = "bottom" | "top" | "hidden"
 /**
