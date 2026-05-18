@@ -72,25 +72,10 @@ pub fn listen_and_broadcast(
         }
     };
 
-    // `slide-changed` ──────────────────────────────────────────────────────
-    {
-        let tx2 = tx.clone();
-        handles.push(app.listen("slide-changed", move |event| {
-            let payload: serde_json::Value =
-                serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
-            send("slide.changed", payload, &tx2);
-        }));
-    }
-
-    // `overlay-changed` ────────────────────────────────────────────────────
-    {
-        let tx2 = tx.clone();
-        handles.push(app.listen("overlay-changed", move |event| {
-            let payload: serde_json::Value =
-                serde_json::from_str(event.payload()).unwrap_or(serde_json::Value::Null);
-            send("overlay.changed", payload, &tx2);
-        }));
-    }
+    // `slide.changed` + `overlay.changed` are now emitted directly by the
+    // RemoteWsSurface (ProjectionHub → unsigned envelopes onto `tx`). The
+    // legacy `slide-changed` / `overlay-changed` Tauri-event re-emit hops
+    // have been deleted as of Phase 6 Slice 3.
 
     // `audio-status` ────────────────────────────────────────────────────────
     {
@@ -193,8 +178,24 @@ mod tests {
     }
 
     #[test]
+    fn legacy_projection_event_listeners_were_removed() {
+        // Phase 6 Slice 3 deleted the `slide-changed` + `overlay-changed`
+        // Tauri-event re-emit hops. Those envelopes are now emitted directly
+        // by the RemoteWsSurface (ProjectionHub → unsigned envelopes).
+        let src = include_str!("events.rs");
+        assert!(
+            !src.contains("listen(\"slide-changed\""),
+            "slide-changed listener must not be re-introduced — use RemoteWsSurface instead"
+        );
+        assert!(
+            !src.contains("listen(\"overlay-changed\""),
+            "overlay-changed listener must not be re-introduced — use RemoteWsSurface instead"
+        );
+    }
+
+    #[test]
     fn new_event_names_are_documented() {
-        // Document the new event→op mappings added as part of remote bridge fixes.
+        // Document the non-projection event→op mappings still owned by this module.
         let mappings: &[(&str, &str)] = &[
             ("projector-state-changed", "projector.state"),
             ("return-state-changed",    "return_monitor.state"),

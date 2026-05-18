@@ -1,46 +1,69 @@
-//! `state.sync` handler — emits current desktop state to all WS clients.
+//! `state.sync` handler — hydrates the requesting WS client only.
 //!
-//! The PWA sends `state.sync` on every WebSocket connect so it can
-//! bootstrap its UI without waiting for the next state-change event.
-//! This handler reads the live Rust state and emits the same Tauri events
-//! that the regular command path uses; `events.rs` listeners fan them out
-//! to every connected WS client automatically.
+//! Pre-Phase-6 this handler emitted Tauri events (`slide-changed`,
+//! `audio-status`) which the `events.rs` listener fanned out to every
+//! connected WS client — meaning one client reconnecting woke every
+//! other client too.
+//!
+//! Now: projection state envelopes (`slide.changed`, `overlay.changed`,
+//! `alert.changed`, `freeze.changed`) are constructed here, signed with
+//! the requesting device's HMAC key, and sent only on `ctx.resp_tx`.
+//! Audio status still uses the legacy Tauri-emit → broadcast path (the
+//! desktop frontend's `useAudioStore` also listens to the same event;
+//! switching audio to per-session needs a frontend-side adjustment).
 
-use crate::{error::AppError, state::{AppState, AudioState}};
-use crate::db::models::SlideContent;
-use tauri::{AppHandle, Emitter, Manager};
+use crate::error::AppError;
+use crate::projection::OverlayMode;
+use crate::remote::dispatcher::DispatcherCtx;
+use crate::remote::hmac_util;
+use crate::remote::protocol::RemoteEnvelope;
+use crate::state::{AppState, AudioState};
+use tauri::{Emitter, Manager};
 
-/// Inlined replacement for the deleted `display::projection::SlideChangedPayload`.
-/// Kept inside the remote module since the remote WS protocol still publishes
-/// `slide.changed { slide, version }` envelopes and `events.rs` listens to the
-/// `"slide-changed"` Tauri event to fan that out.
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RemoteSlideChangedPayload {
-    slide: SlideContent,
-    version: u64,
-}
+pub async fn sync_state(ctx: &DispatcherCtx) -> Result<serde_json::Value, AppError> {
+    let app = &ctx.app;
 
-/// Emit current slide + audio status so freshly-connected remotes can sync.
-///
-/// Events emitted:
-/// - `"slide-changed"` with the current `SlideContent` (skipped if no slide is active)
-/// - `"audio-status"` with position/duration/volume/playing (always emitted)
-pub async fn sync_state(app: &AppHandle) -> Result<serde_json::Value, AppError> {
-    // ── 1. Current slide (read from the Projection Hub) ────────────────────
+    // ── 1. Projection state — per-session signed envelopes via resp_tx ─────
     if let Some(app_state) = app.try_state::<AppState>() {
         let (snapshot, _rx) = app_state.projection.attach().await;
-        if let Some(slide) = snapshot.current_slide {
-            let payload = RemoteSlideChangedPayload {
-                slide,
-                version: snapshot.version,
-            };
-            app.emit("slide-changed", &payload)
-                .map_err(|e| AppError::Tauri(e.to_string()))?;
+
+        if let Some(slide) = &snapshot.current_slide {
+            send_signed(
+                ctx,
+                "slide.changed",
+                serde_json::json!({ "slide": slide, "version": snapshot.version }),
+            );
         }
+
+        let (black, logo) = bools_of(&snapshot.overlay);
+        send_signed(
+            ctx,
+            "overlay.changed",
+            serde_json::json!({ "blackScreen": black, "logoScreen": logo }),
+        );
+
+        let alert_payload = match &snapshot.alert {
+            Some(a) => serde_json::json!({
+                "text": a.text,
+                "isVisible": true,
+                "isTicker": a.is_ticker,
+            }),
+            None => serde_json::json!({
+                "text": "",
+                "isVisible": false,
+                "isTicker": false,
+            }),
+        };
+        send_signed(ctx, "alert.changed", alert_payload);
+
+        send_signed(
+            ctx,
+            "freeze.changed",
+            serde_json::json!({ "frozen": snapshot.frozen }),
+        );
     }
 
-    // ── 2. Audio status ─────────────────────────────────────────────────────
+    // ── 2. Audio status — still broadcasts via Tauri emit (frontend listens too)
     if let Some(audio) = app.try_state::<AudioState>() {
         emit_audio_status(app, &audio);
     }
@@ -48,7 +71,37 @@ pub async fn sync_state(app: &AppHandle) -> Result<serde_json::Value, AppError> 
     Ok(serde_json::json!({}))
 }
 
-fn emit_audio_status(app: &AppHandle, audio: &AudioState) {
+fn bools_of(mode: &OverlayMode) -> (bool, bool) {
+    match mode {
+        OverlayMode::Black => (true, false),
+        OverlayMode::Logo => (false, true),
+        OverlayMode::None => (false, false),
+    }
+}
+
+fn send_signed(ctx: &DispatcherCtx, op: &str, payload: serde_json::Value) {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let nonce = format!("sync-{}-{}", ts, &op[..op.len().min(8)]);
+    let payload_str = serde_json::to_string(&payload).unwrap_or_default();
+    let sig = hmac_util::sign(&ctx.device_token, ts, &nonce, op, &payload_str);
+    let env = RemoteEnvelope {
+        id: None,
+        kind: "event".into(),
+        op: op.to_string(),
+        ts,
+        nonce,
+        payload,
+        sig: Some(sig),
+    };
+    if let Ok(json) = serde_json::to_string(&env) {
+        let _ = ctx.resp_tx.send(json);
+    }
+}
+
+fn emit_audio_status(app: &tauri::AppHandle, audio: &AudioState) {
     let Ok(player) = audio.player.read() else { return };
     use serde::Serialize;
 
@@ -73,14 +126,4 @@ fn emit_audio_status(app: &AppHandle, audio: &AudioState) {
     };
     drop(player);
     let _ = app.emit("audio-status", snap);
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn sync_state_event_names_are_consistent() {
-        // Guard against typos — these must match events.rs listeners.
-        assert_eq!("slide-changed", "slide-changed");
-        assert_eq!("audio-status", "audio-status");
-    }
 }
