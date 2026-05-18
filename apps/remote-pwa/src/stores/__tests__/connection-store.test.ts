@@ -436,6 +436,56 @@ describe("ConnectionStore", () => {
       ]);
     });
 
+    it("alert.changed WS event updates currentAlert", async () => {
+      const device = {
+        id: "dev-alert",
+        token: "tok-alert",
+        host: "192.168.1.111",
+        port: 7456,
+        name: "AlertDevice",
+      };
+      mockGetDevice.mockResolvedValue(device);
+
+      const store = useConnectionStore.getState();
+      await store.init();
+
+      expect(mockWsOn).toHaveBeenCalledWith("alert.changed", expect.any(Function));
+
+      simulateWsEvent("alert.changed", {
+        text: "Service starts in 5 minutes",
+        isVisible: true,
+        isTicker: true,
+      });
+
+      expect(useConnectionStore.getState().currentAlert).toEqual({
+        text: "Service starts in 5 minutes",
+        isVisible: true,
+        isTicker: true,
+      });
+    });
+
+    it("freeze.changed WS event updates frozen", async () => {
+      const device = {
+        id: "dev-freeze",
+        token: "tok-freeze",
+        host: "192.168.1.112",
+        port: 7456,
+        name: "FreezeDevice",
+      };
+      mockGetDevice.mockResolvedValue(device);
+
+      const store = useConnectionStore.getState();
+      await store.init();
+
+      expect(mockWsOn).toHaveBeenCalledWith("freeze.changed", expect.any(Function));
+
+      simulateWsEvent("freeze.changed", { frozen: true });
+      expect(useConnectionStore.getState().frozen).toBe(true);
+
+      simulateWsEvent("freeze.changed", { frozen: false });
+      expect(useConnectionStore.getState().frozen).toBe(false);
+    });
+
     it("forgetDevice clears peers", async () => {
       const device = {
         id: "dev-forget",

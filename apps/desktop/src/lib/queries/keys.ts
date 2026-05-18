@@ -57,7 +57,6 @@ export const queryKeys = {
     all: ["settings"] as const,
     detail: (key: string) => ["settings", key] as const,
   },
-  overlay: ["overlay"] as const,
   packSyncPlan: ["packSync", "plan"] as const,
   updater: {
     info: ["updater", "info"] as const,

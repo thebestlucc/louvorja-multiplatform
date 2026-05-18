@@ -251,6 +251,11 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         conn.execute("INSERT INTO schema_version (version) VALUES (44)", [])?;
     }
 
+    if current_version < 45 {
+        migrate_v45(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (45)", [])?;
+    }
+
     Ok(())
     }
 
@@ -1772,6 +1777,76 @@ fn migrate_v44(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Rewrites legacy flat-shaped `online_video` slide content to the nested
+/// `VideoSource` discriminated-union shape introduced when XOR was lifted
+/// to the type level. Idempotent: rows whose `source` is already an object
+/// are skipped.
+///
+/// Before: `{"slideType":"onlineVideo","url":"...","video_id":"...","source":"youtube|local","title":...}`
+/// After:  `{"slideType":"onlineVideo","source":{"kind":"youtube","video_id":"..."},"title":...}`
+///   or:   `{"slideType":"onlineVideo","source":{"kind":"local","url":"..."},"title":...}`
+fn migrate_v45(conn: &Connection) -> Result<(), AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, content FROM slides WHERE slide_type = 'online_video'",
+    )?;
+    let rows: Vec<(i64, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(stmt);
+
+    for (id, content) in rows {
+        let mut parsed: serde_json::Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let obj = match parsed.as_object_mut() {
+            Some(o) => o,
+            None => continue,
+        };
+
+        // Idempotent: already-migrated rows have `source` as an object.
+        if obj.get("source").map(|v| v.is_object()).unwrap_or(false) {
+            continue;
+        }
+
+        let source_str = obj
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("youtube")
+            .to_string();
+        let url = obj
+            .get("url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let video_id = obj
+            .get("video_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let new_source = if source_str == "local" {
+            serde_json::json!({ "kind": "local", "url": url })
+        } else {
+            serde_json::json!({ "kind": "youtube", "video_id": video_id })
+        };
+
+        obj.insert("source".to_string(), new_source);
+        obj.remove("url");
+        obj.remove("video_id");
+
+        let new_content = serde_json::to_string(&parsed)
+            .map_err(|e| AppError::Internal(format!("v45 serialize: {}", e)))?;
+        conn.execute(
+            "UPDATE slides SET content = ?1 WHERE id = ?2",
+            rusqlite::params![new_content, id],
+        )?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1804,7 +1879,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("schema version");
-        assert_eq!(schema_version, 44);
+        assert_eq!(schema_version, 45);
 
         for table in ["media_library_categories", "media_library_items"] {
             assert!(
@@ -1976,6 +2051,7 @@ mod tests {
             (42, migrate_v42),
             (43, migrate_v43),
             (44, migrate_v44),
+            (45, migrate_v45),
         ] {
             migration(&conn).map_err(|error| {
                 AppError::Internal(format!("migration v{version} failed: {error:?}"))
@@ -1996,5 +2072,86 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 1);
+    }
+
+    fn insert_legacy_online_video_slide(conn: &Connection, id: i64, content: &str) {
+        conn.execute(
+            "INSERT INTO presentations (id, title) VALUES (?1, 'Test')",
+            rusqlite::params![id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO slides (id, presentation_id, slide_index, slide_type, content) VALUES (?1, ?1, 0, 'online_video', ?2)",
+            rusqlite::params![id, content],
+        )
+        .unwrap();
+    }
+
+    fn read_slide_content(conn: &Connection, id: i64) -> serde_json::Value {
+        let s: String = conn
+            .query_row("SELECT content FROM slides WHERE id=?1", rusqlite::params![id], |r| r.get(0))
+            .unwrap();
+        serde_json::from_str(&s).unwrap()
+    }
+
+    #[test]
+    fn migrate_v45_rewrites_legacy_youtube_slide() {
+        let conn = Connection::open_in_memory().unwrap();
+        super::run_migrations(&conn).unwrap();
+        let legacy = r#"{"slideType":"onlineVideo","url":"","video_id":"abc123","source":"youtube","title":"Hello"}"#;
+        insert_legacy_online_video_slide(&conn, 1, legacy);
+
+        super::migrate_v45(&conn).unwrap();
+        let v = read_slide_content(&conn, 1);
+
+        assert_eq!(v["source"]["kind"], "youtube");
+        assert_eq!(v["source"]["video_id"], "abc123");
+        assert_eq!(v["title"], "Hello");
+        assert!(v.get("url").is_none(), "legacy url field should be removed");
+        assert!(v.get("video_id").is_none(), "legacy video_id field should be removed");
+    }
+
+    #[test]
+    fn migrate_v45_rewrites_legacy_local_slide() {
+        let conn = Connection::open_in_memory().unwrap();
+        super::run_migrations(&conn).unwrap();
+        let legacy = r#"{"slideType":"onlineVideo","url":"/media/clip.mp4","video_id":"","source":"local","title":null}"#;
+        insert_legacy_online_video_slide(&conn, 2, legacy);
+
+        super::migrate_v45(&conn).unwrap();
+        let v = read_slide_content(&conn, 2);
+
+        assert_eq!(v["source"]["kind"], "local");
+        assert_eq!(v["source"]["url"], "/media/clip.mp4");
+    }
+
+    #[test]
+    fn migrate_v45_is_idempotent_on_already_migrated_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        super::run_migrations(&conn).unwrap();
+        // Insert a row that's ALREADY in the new shape.
+        let new_shape = r#"{"slideType":"onlineVideo","source":{"kind":"youtube","video_id":"xyz"},"title":"T"}"#;
+        insert_legacy_online_video_slide(&conn, 3, new_shape);
+
+        super::migrate_v45(&conn).unwrap();
+        let v = read_slide_content(&conn, 3);
+
+        // Unchanged
+        assert_eq!(v["source"]["kind"], "youtube");
+        assert_eq!(v["source"]["video_id"], "xyz");
+    }
+
+    #[test]
+    fn migrate_v45_runs_during_full_migration_chain() {
+        let conn = Connection::open_in_memory().unwrap();
+        super::run_migrations(&conn).unwrap();
+        let v: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version),0) FROM schema_version",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(v >= 45, "schema_version should be >= 45, got {v}");
     }
 }

@@ -1,0 +1,23 @@
+{
+  "version": 5,
+  "currentSlide": {
+    "slideType": "lyrics",
+    "text": "Amazing grace, how sweet the sound",
+    "label": "verse 1",
+    "background": {
+      "kind": "solid",
+      "color": "#000000",
+      "imagePath": null,
+      "gradientStart": null,
+      "gradientEnd": null,
+      "gradientAngle": null,
+      "opacity": null
+    },
+    "text_color": null,
+    "text_size": null
+  },
+  "context": null,
+  "overlay": "none",
+  "frozen": false,
+  "alert": null
+}

@@ -163,6 +163,7 @@ async function playBibleItem(item: QueueItem) {
   const pres = usePresentationStore.getState();
   pres.setActiveSlideIndex(startIdx);
   displayStore.getState().setCurrentProjectionType("bible");
+  // Rust persists the slide to state even while frozen and replays on unfreeze.
   await catcher(setCurrentSlide(slides[startIdx]));
 }
 
@@ -175,13 +176,11 @@ async function playVideoItem(item: QueueItem) {
   await audioStore.getState().stop();
 
   const vm = item.videoMedia;
-  // onlineVideo SlideContent: { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null }
-  // youtube: url is empty (player uses video_id), local: url is the path
   const slide: import("../lib/bindings").SlideContent = {
     slideType: "onlineVideo" as const,
-    url: vm.videoUrl ?? "",
-    video_id: vm.videoId ?? "",
-    source: vm.videoSource,
+    source: vm.videoSource === "local"
+      ? { kind: "local", url: vm.videoUrl ?? "" }
+      : { kind: "youtube", video_id: vm.videoId ?? "" },
     title: vm.videoTitle ?? null,
   };
 
@@ -258,7 +257,8 @@ async function playVideoItem(item: QueueItem) {
     }
   }
 
-  // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle
+  // The PersistentVideoPlayer listens to slide-changed and manages its own lifecycle.
+  // Rust persists the slide to state even while frozen and replays on unfreeze.
   await catcher(setCurrentSlide(slide));
 }
 
@@ -294,6 +294,7 @@ async function playPresentationItem(item: QueueItem) {
   useMediaPlayerStore.getState().setSlides(slides);
   usePresentationStore.getState().setActiveSlideIndex(0);
   useDisplayStore.getState().setCurrentProjectionType("presentation");
+  // Rust persists the slide to state even while frozen and replays on unfreeze.
   await catcher(setCurrentSlide(slides[0]));
 }
 

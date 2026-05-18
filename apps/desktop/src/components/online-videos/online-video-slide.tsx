@@ -238,9 +238,12 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   const useRustVideoPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
   const videoPlaybackTargets = useVideoPlayerStore((s) => s.videoPlaybackTargets);
 
+  const localUrl = slide.source.kind === "local" ? slide.source.url : "";
+  const videoId = slide.source.kind === "youtube" ? slide.source.video_id : "";
+
   // Live video renderer for projector/return screens
   const renderLiveVideo = () => {
-    const isLocalFile = slide.source === "local" && !!slide.url;
+    const isLocalFile = slide.source.kind === "local" && !!localUrl;
     if (useRustVideoPipeline) {
       // Phase 3 of the frame-perfect multi-monitor video plan: the native
       // GStreamer sink renders the video BELOW this transparent webview.
@@ -264,11 +267,11 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
     return (
       <div className={cn("h-full w-full bg-black", className)}>
         {isLocalFile ? (
-          <LocalVideoFollower videoPath={slide.url} className="h-full w-full" />
-        ) : slide.video_id ? (
+          <LocalVideoFollower videoPath={localUrl} className="h-full w-full" />
+        ) : videoId ? (
           <YouTubePlayer
-            videoId={slide.video_id}
-            title={slide.title ?? slide.video_id}
+            videoId={videoId}
+            title={slide.title ?? videoId}
             className="h-full w-full"
             muted
             isFollower
@@ -291,8 +294,8 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   }
 
   if (renderMode === "return-next") {
-    const thumbUrl = slide.video_id
-      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
+    const thumbUrl = videoId
+      ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
       : null;
 
     return (
@@ -304,7 +307,7 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
           <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.25em] text-white/60 self-start">
             {t("presentations.types.onlineVideo")}
           </span>
-          <p className="text-[10px] text-white/70 truncate">{slide.title ?? slide.video_id ?? ""}</p>
+          <p className="text-[10px] text-white/70 truncate">{slide.title ?? videoId}</p>
         </div>
       </div>
     );
@@ -320,15 +323,15 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
           className="block w-full overflow-hidden break-all text-[10px] leading-tight text-white/60"
           title={slide.title ?? ""}
         >
-          {slide.title ?? slide.video_id ?? ""}
+          {slide.title ?? videoId}
         </span>
       </div>
     );
   }
 
   if (renderMode === "playing-now-preview") {
-    const thumbUrl = slide.video_id
-      ? `https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`
+    const thumbUrl = videoId
+      ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
       : null;
     return (
       <div className={cn("h-full w-full bg-black relative overflow-hidden", className)}>
@@ -351,9 +354,9 @@ export function OnlineVideoSlide({ slide, renderMode, className }: OnlineVideoSl
   // editor mode
   return (
     <div className={cn("relative h-full w-full bg-black", className)}>
-      {slide.video_id && (
+      {videoId && (
         <img
-          src={`https://i.ytimg.com/vi/${slide.video_id}/hqdefault.jpg`}
+          src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
           alt=""
           className="h-full w-full object-contain"
         />

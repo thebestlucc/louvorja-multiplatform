@@ -25,7 +25,7 @@
 // element lifecycle when the rust pipeline is OFF.
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { useSlideVersion } from "./use-slide-version";
+import { useProjectionState } from "./use-projection-state";
 import { useMediaPlayerStore } from "../stores/media-player-store";
 import { useVideoPlayerStore } from "../stores/video-player-store";
 import { useRustVideoPipelineStore } from "../stores/rust-video-pipeline-store";
@@ -44,16 +44,18 @@ import type { OfflineVideoMediaItem, OnlineVideoMediaItem } from "../types/media
 async function resolveSlideMediaSource(
   slide: Extract<SlideContent, { slideType: "onlineVideo" }>,
 ): Promise<MediaSource | null> {
-  if (slide.source === "local" && slide.url) {
+  if (slide.source.kind === "local") {
+    const url = slide.source.url;
+    if (!url) return null;
     // MediaSource::Local needs an absolute path. Managed-media paths
     // (`media/videos/...`) are stored relative to the Tauri app data dir;
     // resolve them on the fly so the rust pipeline can open the file:// URI.
-    if (slide.url.startsWith("/")) {
-      return { type: "local", absolutePath: slide.url };
+    if (url.startsWith("/")) {
+      return { type: "local", absolutePath: url };
     }
-    if (slide.url.startsWith("media/")) {
+    if (url.startsWith("media/")) {
       try {
-        const abs = await join(await appDataDir(), slide.url);
+        const abs = await join(await appDataDir(), url);
         return { type: "local", absolutePath: abs };
       } catch (err) {
         console.error("[online-video-bridge] managed media path resolve failed", err);
@@ -62,8 +64,8 @@ async function resolveSlideMediaSource(
     }
     return null;
   }
-  if (slide.video_id) {
-    return { type: "youtube", videoId: slide.video_id };
+  if (slide.source.video_id) {
+    return { type: "youtube", videoId: slide.source.video_id };
   }
   return null;
 }
@@ -168,18 +170,19 @@ export function useOnlineVideoBridge() {
         return;
       }
       // onlineVideo
-      if (slide.source === "local" && slide.url) {
+      if (slide.source.kind === "local" && slide.source.url) {
+        const url = slide.source.url;
         const item: OfflineVideoMediaItem = {
           type: "offline_video",
-          videoPath: slide.url,
+          videoPath: url,
           title: slide.title ?? "Video",
-          isManaged: slide.url.startsWith("media/"),
+          isManaged: url.startsWith("media/"),
         };
         mpState.load(item);
-      } else if (slide.video_id) {
+      } else if (slide.source.kind === "youtube" && slide.source.video_id) {
         const item: OnlineVideoMediaItem = {
           type: "online_video",
-          videoId: slide.video_id,
+          videoId: slide.source.video_id,
           videoSource: "youtube",
           title: slide.title ?? "Video",
         };
@@ -277,8 +280,8 @@ export function useOnlineVideoBridge() {
       }
 
       // Guard: if no resolvable source for the rust pipeline, bail.
-      if (!slide.source && !slide.video_id) return;
-      if (slide.source === "local" && !slide.url) return;
+      if (slide.source.kind === "local" && !slide.source.url) return;
+      if (slide.source.kind === "youtube" && !slide.source.video_id) return;
 
       // When the rust pipeline flag is on, also drive the rust runtime so
       // controls + native sinks have something to attach to. Skipped when the
@@ -347,7 +350,24 @@ export function useOnlineVideoBridge() {
     lastLoadedKeyRef.current = null;
   }, []);
 
-  useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
+  // Hub-driven slide bridge (Phase 5). Reference-equality on
+  // snapshot.currentSlide is safe — applyDelta only swaps the field when a
+  // slideChanged event arrives, so identical references mean "no slide
+  // change" (proved in Phase 4). Null → fire handleClear; non-null → fire
+  // handleSlide.
+  const projection = useProjectionState();
+  const lastSlideRef = useRef<SlideContent | null>(null);
+  useEffect(() => {
+    if (!projection) return;
+    const current = projection.currentSlide;
+    if (current === lastSlideRef.current) return;
+    lastSlideRef.current = current;
+    if (current === null) {
+      handleClear();
+    } else {
+      handleSlide(current);
+    }
+  }, [projection, handleSlide, handleClear]);
 
   // E-2 (plan): also reset on rust pipeline unload. `useMediaPlayer.stop()`
   // and `setUseRustVideoPipeline(false)` both call `videoPipeline.unload()`

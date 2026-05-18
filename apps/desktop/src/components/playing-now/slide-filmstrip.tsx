@@ -60,7 +60,7 @@ export function SlideFilmstrip({
   const activeRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    activeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [activeIndex]);
 
   if (slides.length === 0) return null;
@@ -68,10 +68,13 @@ export function SlideFilmstrip({
   return (
     <div
       className={cn(
-        "h-[88px] shrink-0 overflow-x-auto flex gap-2 px-1 py-1",
+        "flex flex-col w-[124px] overflow-y-auto border-r border-border bg-muted/30 gap-2 p-2",
         className
       )}
     >
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground pb-2 border-b border-border mb-1">
+        SLIDES
+      </div>
       {slides.map((slide, i) => {
         const { main, label } = getSlidePreview(slide);
         const isActive = i === activeIndex;
@@ -84,29 +87,31 @@ export function SlideFilmstrip({
             aria-label={`Slide ${i + 1}`}
             onClick={() => onSlideClick(i)}
             className={cn(
-              "w-[132px] h-[74px] flex-shrink-0 rounded cursor-pointer relative overflow-hidden bg-zinc-900 text-left select-none",
+              "w-full flex flex-col gap-1 rounded-md p-1 transition-colors cursor-pointer select-none text-left",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              isActive
-                ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
-                : "opacity-60 hover:opacity-90 transition-opacity"
+              isActive ? "" : "opacity-60 hover:opacity-90"
             )}
           >
-            {/* Main text — full verse, overflow clipped by parent overflow-hidden */}
-            {main && (
-              <span className="absolute inset-x-1.5 top-1.5 bottom-5 overflow-hidden text-[9px] leading-tight text-white/90 whitespace-pre-wrap break-words">
-                {main}
-              </span>
-            )}
-
-            {/* Verse label + slide number */}
-            <div className="absolute inset-x-1.5 bottom-1 flex items-end justify-between">
-              {label ? (
-                <span className="text-[10px] text-zinc-400 truncate max-w-[80px]">{label}</span>
-              ) : (
-                <span />
+            <div
+              className={cn(
+                "aspect-video bg-zinc-900 rounded overflow-hidden relative border-[1.5px]",
+                isActive ? "border-primary" : "border-transparent"
               )}
-              <span className="text-[9px] text-zinc-500 shrink-0">{i + 1}</span>
+            >
+              {main && (
+                <span className="absolute inset-0 flex items-center justify-center p-1 text-[8.5px] leading-tight text-white/80 font-normal overflow-hidden text-center line-clamp-2">
+                  {main}
+                </span>
+              )}
             </div>
+            <span
+              className={cn(
+                "text-[9px] uppercase tracking-wide font-mono truncate pl-0.5",
+                isActive ? "text-primary font-semibold" : "text-muted-foreground"
+              )}
+            >
+              {label || `${i + 1}`}
+            </span>
           </button>
         );
       })}

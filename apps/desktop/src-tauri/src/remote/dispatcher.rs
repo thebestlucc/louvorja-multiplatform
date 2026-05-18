@@ -21,13 +21,27 @@ use crate::remote::handlers::{
 };
 
 /// Context passed to every dispatcher call.
+///
+/// `resp_tx` + `device_token` let handlers send extra signed envelopes to
+/// the requesting WS client only (used by `state.sync` to hydrate the
+/// per-session projection state without broadcasting to every peer).
 pub struct DispatcherCtx {
     pub app: tauri::AppHandle,
+    pub resp_tx: tokio::sync::mpsc::UnboundedSender<String>,
+    pub device_token: Vec<u8>,
 }
 
 impl DispatcherCtx {
-    pub fn new(app: tauri::AppHandle) -> Self {
-        Self { app }
+    pub fn new(
+        app: tauri::AppHandle,
+        resp_tx: tokio::sync::mpsc::UnboundedSender<String>,
+        device_token: Vec<u8>,
+    ) -> Self {
+        Self {
+            app,
+            resp_tx,
+            device_token,
+        }
     }
 }
 
@@ -286,7 +300,7 @@ pub async fn dispatch(
         "presence.list" => presence_handler::list(&ctx.app).await,
 
         // ── State sync (on every WS connect) ────────────────────────────────
-        "state.sync" => sync_handler::sync_state(&ctx.app).await,
+        "state.sync" => sync_handler::sync_state(ctx).await,
 
         // ── Ping (keep-alive) ────────────────────────────────────────────────
         "ping" => Ok(serde_json::json!({ "op": "pong" })),

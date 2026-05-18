@@ -1,4 +1,4 @@
-import { Snowflake, MoreHorizontal } from "lucide-react";
+import { Snowflake, MoreHorizontal, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 
@@ -7,6 +7,8 @@ export interface NowPlayingHeaderProps {
   subtitle?: string;
   onFreezeToggle: () => void;
   frozen: boolean;
+  onBlackToggle: () => void;
+  isBlack: boolean;
   className?: string;
 }
 
@@ -15,6 +17,8 @@ export function NowPlayingHeader({
   subtitle,
   onFreezeToggle,
   frozen,
+  onBlackToggle,
+  isBlack,
   className,
 }: NowPlayingHeaderProps) {
   return (
@@ -29,6 +33,19 @@ export function NowPlayingHeader({
 
       {/* Right: overlay buttons */}
       <div className="flex shrink-0 items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="Toggle black screen"
+          onClick={onBlackToggle}
+          className={cn(
+            isBlack && "bg-foreground text-background hover:bg-foreground/90 hover:text-background"
+          )}
+        >
+          <Square className="h-4 w-4" aria-hidden="true" />
+          <span className="ml-1.5">Black</span>
+        </Button>
+
         <Button
           variant="outline"
           size="sm"

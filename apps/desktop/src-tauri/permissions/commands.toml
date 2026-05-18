@@ -120,13 +120,12 @@ allow = [
     "open_return_window",
     "close_return_window",
     "set_current_slide",
-    "get_current_slide",
+    "get_projection_snapshot",
     "clear_current_slide",
     "set_slide_context",
-    "get_slide_context",
+    "set_is_frozen",
     "toggle_black_screen",
     "toggle_logo_screen",
-    "get_overlay_state",
     "set_alert",
     "clear_alert",
     "identify_monitors",
@@ -296,9 +295,7 @@ identifier = "allow-projection-view-only"
 description = "Minimal commands needed for projector/return windows"
 [permission.commands]
 allow = [
-    "get_current_slide",
-    "get_slide_context",
-    "get_overlay_state",
+    "get_projection_snapshot",
     "get_timer_state",
     "get_streaming_status",
     "get_video_server_status",

@@ -39,7 +39,7 @@ function buildServiceItemSlide(item: ServiceItem): SlideContent {
     }
     case "online_video": {
       const parsed = parseOnlineVideoNotes(item.notes);
-      return { slideType: "onlineVideo", url: "", video_id: parsed?.videoId ?? "", source: "youtube", title: item.title ?? null };
+      return { slideType: "onlineVideo", source: { kind: "youtube", video_id: parsed?.videoId ?? "" }, title: item.title ?? null };
     }
     default:
       return { slideType: "text", content: item.notes ?? "", background: bg, text_color: null, text_size: null };
@@ -193,7 +193,13 @@ export async function projectServiceItem(
         const videoId = parsed?.videoId ?? "";
         const dbRecord = videoId ? await findOnlineVideoByYtId(videoId) : null;
         const localPath = dbRecord?.localPath ?? null;
-        const slideData = { slideType: "onlineVideo" as const, url: localPath ?? "", video_id: localPath ? "" : videoId, source: localPath ? "local" as const : "youtube" as const, title: item.title ?? null };
+        const slideData = {
+          slideType: "onlineVideo" as const,
+          source: localPath
+            ? { kind: "local" as const, url: localPath }
+            : { kind: "youtube" as const, video_id: videoId },
+          title: item.title ?? null,
+        };
         if (localPath) {
           mediaStore.load({ type: "offline_video", videoPath: localPath, title: item.title ?? "", isManaged: true });
         } else {

@@ -1,6 +1,5 @@
 use crate::audio::AudioPlayer;
 use crate::bible::text_split::VerseSplitResult;
-use crate::db::models::{SlideContent, SlideContext};
 use crate::error::AppError;
 use crate::migration::MigrationRuntimeState;
 use crate::streaming::StreamingServer;
@@ -11,7 +10,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use serde::Serialize;
 use specta::Type;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
@@ -178,16 +177,6 @@ pub struct AlertState {
     pub is_ticker: bool,
 }
 
-/// Combined overlay state — single mutex eliminates the ABBA deadlock
-/// that occurred when toggle_black_screen and toggle_logo_screen acquired
-/// is_black_screen and is_logo_screen in opposite order simultaneously.
-#[derive(Debug, Default)]
-pub struct OverlayRuntimeState {
-    pub is_black_screen: bool,
-    pub is_logo_screen: bool,
-    pub alert: AlertState,
-}
-
 #[derive(Default)]
 pub struct PackSyncRuntimeState {
     pub active_run_id: Option<String>,
@@ -246,16 +235,20 @@ pub struct AppState {
     pub ytdlp: Mutex<YtdlpRuntimeState>,
     pub utility_projection_stop: Mutex<Option<Sender<()>>>,
     pub timer_update_stop: Mutex<Option<Sender<()>>>,
-    pub current_slide: RwLock<Option<SlideContent>>,
-    pub current_slide_version: AtomicU64,
     pub projector_open: AtomicBool,
-    pub overlay: RwLock<OverlayRuntimeState>,
     pub return_open: AtomicBool,
-    pub slide_context: RwLock<Option<SlideContext>>,
     /// Maps action IDs to their currently registered global shortcut string.
     /// Used by update_global_shortcut to unregister before re-registering.
     pub global_shortcuts: RwLock<HashMap<String, String>>,
     pub bible_projection: Mutex<BibleProjectionState>,
+    /// Canonical Projection State owner. Single source of truth for all
+    /// projection state — slide, context, overlay, freeze, alert.
+    pub projection: Arc<crate::projection::ProjectionHub>,
+    /// Keeps the projection DeltaSurface alive for the app lifetime. Dropping
+    /// this handle cancels the surface's hub-attach loop. The DeltaSurface
+    /// emits one `projection-delta` Tauri event per Hub Delta; consumed by
+    /// the `useProjectionState` hook in all consumer windows.
+    pub delta_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
     pub remote: crate::remote::state::RemoteServerState,
     /// Singleton runtime for the Rust GStreamer video pipeline. Populated in
     /// `lib.rs` `setup()` after this struct is constructed; commands access
@@ -277,6 +270,9 @@ impl Default for AudioState {
 
 pub struct StreamingState {
     pub server: Mutex<StreamingServer>,
+    /// Keeps the projection SseSurface alive for the app lifetime. Dropping
+    /// this handle cancels the surface's hub-attach loop.
+    pub sse_surface_handle: Mutex<Option<crate::projection::SurfaceHandle>>,
 }
 
 impl Default for StreamingState {
@@ -289,6 +285,7 @@ impl StreamingState {
     pub fn new(port: u16) -> Self {
         Self {
             server: Mutex::new(StreamingServer::new(port)),
+            sse_surface_handle: Mutex::new(None),
         }
     }
 }

@@ -6,16 +6,31 @@ use crate::display::{
 };
 use crate::error::AppError;
 use crate::projection::stop_live_utility_projection;
-use crate::state::{AppState, StreamingState};
+use crate::state::{AlertState, AppState, StreamingState};
 use crate::utils::catcher::catcher;
 use display_info::DisplayInfo as ExternalDisplayInfo;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use crate::commands::streaming::{
-    empty_return_stream_payload,
-    empty_streaming_music_payload,
-};
+
+/// Build the legacy OverlayState response shape from a Hub Snapshot. Returned
+/// by the `toggle_*` / `set_alert` / `clear_alert` commands so callers that
+/// haven't yet migrated to useProjectionState still receive the current state
+/// synchronously alongside the Delta the Hub will broadcast.
+fn overlay_state_from_snapshot(
+    snapshot: &crate::projection::ProjectionSnapshot,
+) -> OverlayState {
+    let alert = snapshot.alert.as_ref().map(|a| AlertState {
+        text: a.text.clone(),
+        is_visible: true,
+        is_ticker: a.is_ticker,
+    });
+    OverlayState {
+        black_screen: matches!(snapshot.overlay, crate::projection::OverlayMode::Black),
+        logo_screen: matches!(snapshot.overlay, crate::projection::OverlayMode::Logo),
+        alert,
+    }
+}
 
 const MONITORS_CHANGED_EVENT: &str = "monitors-changed";
 const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -357,54 +372,45 @@ pub fn set_slide_on_return(
     Ok(())
 }
 
+/// Canonical Projection State accessor. Returns a Snapshot of the Hub's
+/// current state. Called by `useProjectionState` on mount; the hook then
+/// listens for `projection-delta` Tauri events and applies the universal
+/// recovery rule (`delta.fromVersion != local → re-fetch snapshot`).
 #[tauri::command]
 #[specta::specta]
-pub fn get_current_slide(
+pub async fn get_projection_snapshot(
     state: tauri::State<'_, AppState>,
-) -> Result<crate::display::projection::CurrentSlideResponse, AppError> {
-    use crate::display::projection::CurrentSlideResponse;
-    use std::sync::atomic::Ordering;
-    let current = state
-        .current_slide
-        .read()
-        .map_err(|_| AppError::Internal("lock poisoned".into()))?;
-    let version = state.current_slide_version.load(Ordering::SeqCst);
-    Ok(CurrentSlideResponse { slide: current.clone(), version })
+) -> Result<crate::projection::ProjectionSnapshot, AppError> {
+    let (snapshot, _rx) = state.projection.attach().await;
+    Ok(snapshot)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn clear_current_slide(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
     stop_live_utility_projection(&state)?;
+    // Clear slide + context atomically in the Hub. SseSurface re-broadcasts
+    // empty payloads to all live SSE consumers; DeltaSurface emits one
+    // projection-delta to all webview consumers.
     {
-        let (current, err) = catcher(state.current_slide.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut current = current.unwrap();
-        *current = None;
+        let hub = state.projection.clone();
+        tauri::async_runtime::block_on(async move {
+            let _ = hub
+                .apply_batch(vec![
+                    crate::projection::Mutation::SetSlide(None),
+                    crate::projection::Mutation::SetContext(None),
+                ])
+                .await;
+        });
     }
-    {
-        let (ctx, err) = catcher(state.slide_context.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut ctx = ctx.unwrap();
-        *ctx = None;
-    }
-    let version = state.current_slide_version.fetch_add(1, Ordering::SeqCst) + 1;
-    app.emit("slide-cleared", serde_json::json!({ "version": version }))
-        .map_err(|e| AppError::Tauri(e.to_string()))?;
 
+    // Video state clear stays direct: video broadcaster is not yet on the Hub
+    // (out of scope for Phase 2/3).
     if let Ok(server) = streaming_state.server.lock() {
-        server.broadcast_music(&empty_streaming_music_payload().to_string());
-        server.broadcast_bible(&serde_json::json!({ "reference": "", "text": "" }).to_string());
-        server.broadcast_return(&empty_return_stream_payload().to_string());
-        // Clear video state on streaming clients
         let video_clear = serde_json::json!({
             "type": "state",
             "action": "clear",
@@ -433,78 +439,70 @@ pub fn set_slide_context(
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_slide_context(
+pub fn set_is_frozen(
+    frozen: bool,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
-) -> Result<Option<SlideContext>, AppError> {
-    let (ctx, err) = catcher(state.slide_context.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let ctx = ctx.unwrap();
-    Ok(ctx.clone())
+    _streaming_state: tauri::State<'_, StreamingState>,
+) -> Result<(), AppError> {
+    // Hub-side freeze gate (Phase 5): the Hub buffers field mutations while
+    // frozen and emits one coalesced Delta on unfreeze. No AppState mirror,
+    // no manual flush — `hub.apply(SetFreeze)` is the single source of truth.
+    let hub = state.projection.clone();
+    tauri::async_runtime::block_on(async move {
+        let _ = hub
+            .apply(crate::projection::Mutation::SetFreeze(frozen))
+            .await;
+    });
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn toggle_black_screen(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.is_black_screen = !overlay.is_black_screen;
-    if overlay.is_black_screen {
-        overlay.is_logo_screen = false;
-    }
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-    let _ = app.emit("overlay-changed", &result);
-    Ok(result)
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let (snap, _rx) = hub.attach().await;
+        let next = if matches!(snap.overlay, crate::projection::OverlayMode::Black) {
+            crate::projection::OverlayMode::None
+        } else {
+            crate::projection::OverlayMode::Black
+        };
+        let _ = state
+            .projection
+            .apply(crate::projection::Mutation::SetOverlay(next))
+            .await;
+        let (snap2, _rx2) = state.projection.attach().await;
+        snap2
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn toggle_logo_screen(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.is_logo_screen = !overlay.is_logo_screen;
-    if overlay.is_logo_screen {
-        overlay.is_black_screen = false;
-    }
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-    let _ = app.emit("overlay-changed", &result);
-    Ok(result)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.read());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let overlay = overlay.unwrap();
-    Ok(OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    })
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let (snap, _rx) = hub.attach().await;
+        let next = if matches!(snap.overlay, crate::projection::OverlayMode::Logo) {
+            crate::projection::OverlayMode::None
+        } else {
+            crate::projection::OverlayMode::Logo
+        };
+        let _ = state
+            .projection
+            .apply(crate::projection::Mutation::SetOverlay(next))
+            .await;
+        let (snap2, _rx2) = state.projection.attach().await;
+        snap2
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
@@ -512,63 +510,36 @@ pub fn get_overlay_state(state: tauri::State<'_, AppState>) -> Result<OverlaySta
 pub fn set_alert(
     text: String,
     is_ticker: bool,
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
-    streaming_state: tauri::State<'_, StreamingState>,
+    _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.alert.text = text;
-    overlay.alert.is_ticker = is_ticker;
-    overlay.alert.is_visible = true;
-
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-    let _ = app.emit("overlay-changed", &result);
-
-    if let Ok(server) = streaming_state.server.lock() {
-        if let Ok(payload) = serde_json::to_string(&overlay.alert) {
-            server.broadcast_alert(&payload);
-        }
-    }
-
-    Ok(result)
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let alert = crate::projection::Alert { text, is_ticker };
+        let _ = hub
+            .apply(crate::projection::Mutation::SetAlert(Some(alert)))
+            .await;
+        let (snap, _rx) = hub.attach().await;
+        snap
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn clear_alert(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
-    streaming_state: tauri::State<'_, StreamingState>,
+    _streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<OverlayState, AppError> {
-    let (overlay, err) = catcher(state.overlay.write());
-    if let Some(e) = err {
-        return Err(e);
-    }
-    let mut overlay = overlay.unwrap();
-    overlay.alert.is_visible = false;
-
-    let result = OverlayState {
-        black_screen: overlay.is_black_screen,
-        logo_screen: overlay.is_logo_screen,
-        alert: Some(overlay.alert.clone()),
-    };
-    let _ = app.emit("overlay-changed", &result);
-
-    if let Ok(server) = streaming_state.server.lock() {
-        if let Ok(payload) = serde_json::to_string(&overlay.alert) {
-            server.broadcast_alert(&payload);
-        }
-    }
-
-    Ok(result)
+    let hub = state.projection.clone();
+    let snapshot = tauri::async_runtime::block_on(async move {
+        let _ = hub.apply(crate::projection::Mutation::SetAlert(None)).await;
+        let (snap, _rx) = hub.attach().await;
+        snap
+    });
+    Ok(overlay_state_from_snapshot(&snapshot))
 }
 
 #[tauri::command]

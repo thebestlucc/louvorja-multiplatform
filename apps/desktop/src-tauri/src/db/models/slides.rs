@@ -122,9 +122,19 @@ pub enum BackgroundKind { #[default] Solid, Image, Gradient }
 #[serde(rename_all = "snake_case")]
 pub enum VideoMode { #[default] Fullscreen, Background }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum VideoSource { #[default] Local, Youtube }
+/// `online_video` slide payload — XOR invariant enforced at type level.
+/// `Local { url }` carries a filesystem path (downloaded video).
+/// `Youtube { video_id }` carries the 11-char YouTube ID.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum VideoSource {
+    Local { url: String },
+    Youtube { video_id: String },
+}
+
+impl Default for VideoSource {
+    fn default() -> Self { VideoSource::Local { url: String::new() } }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -215,8 +225,6 @@ pub enum SlideContent {
         text_size: Option<i32>,
     },
     OnlineVideo {
-        url: String,
-        video_id: String,
         source: VideoSource,
         title: Option<String>,
     },
@@ -349,18 +357,18 @@ impl SlideContent {
         }
     }
 
-    /// Extract online video URL.
+    /// Extract online video URL. Only present for Local source.
     pub fn video_url(&self) -> Option<&str> {
         match self {
-            SlideContent::OnlineVideo { url, .. } => Some(url.as_str()),
+            SlideContent::OnlineVideo { source: VideoSource::Local { url }, .. } => Some(url.as_str()),
             _ => None,
         }
     }
 
-    /// Extract online video ID.
+    /// Extract online video ID. Only present for Youtube source.
     pub fn video_id(&self) -> Option<&str> {
         match self {
-            SlideContent::OnlineVideo { video_id, .. } => Some(video_id.as_str()),
+            SlideContent::OnlineVideo { source: VideoSource::Youtube { video_id }, .. } => Some(video_id.as_str()),
             _ => None,
         }
     }
@@ -368,10 +376,10 @@ impl SlideContent {
     /// Extract online video source as string.
     pub fn video_source(&self) -> Option<&str> {
         match self {
-            SlideContent::OnlineVideo { source, .. } => match source {
-                VideoSource::Youtube => Some("youtube"),
-                VideoSource::Local => Some("local"),
-            },
+            SlideContent::OnlineVideo { source, .. } => Some(match source {
+                VideoSource::Youtube { .. } => "youtube",
+                VideoSource::Local { .. } => "local",
+            }),
             _ => None,
         }
     }
@@ -382,5 +390,58 @@ impl SlideContent {
             SlideContent::OnlineVideo { title, .. } => title.as_deref(),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn local_slide(url: &str) -> SlideContent {
+        SlideContent::OnlineVideo {
+            source: VideoSource::Local { url: url.to_string() },
+            title: None,
+        }
+    }
+
+    fn youtube_slide(video_id: &str) -> SlideContent {
+        SlideContent::OnlineVideo {
+            source: VideoSource::Youtube { video_id: video_id.to_string() },
+            title: Some("Test".to_string()),
+        }
+    }
+
+    #[test]
+    fn local_video_has_url_no_video_id() {
+        let slide = local_slide("/path/to/file.mp4");
+        assert_eq!(slide.video_url(), Some("/path/to/file.mp4"));
+        assert_eq!(slide.video_id(), None);
+        assert_eq!(slide.video_source(), Some("local"));
+    }
+
+    #[test]
+    fn youtube_video_has_video_id_no_url() {
+        let slide = youtube_slide("abc123");
+        assert_eq!(slide.video_id(), Some("abc123"));
+        assert_eq!(slide.video_url(), None);
+        assert_eq!(slide.video_source(), Some("youtube"));
+    }
+
+    #[test]
+    fn local_variant_json_roundtrip() {
+        let slide = local_slide("/movies/clip.mp4");
+        let json = serde_json::to_string(&slide).expect("serialize");
+        let back: SlideContent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.video_url(), Some("/movies/clip.mp4"));
+        assert_eq!(back.video_id(), None);
+    }
+
+    #[test]
+    fn youtube_variant_json_roundtrip() {
+        let slide = youtube_slide("dQw4w9WgXcQ");
+        let json = serde_json::to_string(&slide).expect("serialize");
+        let back: SlideContent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.video_id(), Some("dQw4w9WgXcQ"));
+        assert_eq!(back.video_url(), None);
     }
 }

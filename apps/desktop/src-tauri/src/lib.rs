@@ -22,8 +22,8 @@ mod video_server;
 mod youtube;
 mod ytdlp;
 
-use state::{AppState, AudioState, OverlayRuntimeState, StreamingState, TimerRuntimeState, VideoServerState};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use state::{AppState, AudioState, StreamingState, TimerRuntimeState, VideoServerState};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
 use tauri::{Emitter, Manager};
 
@@ -197,13 +197,12 @@ pub fn run() {
             commands::display::set_current_slide,
             commands::display::set_slide_on_projector,
             commands::display::set_slide_on_return,
-            commands::display::get_current_slide,
+            commands::display::get_projection_snapshot,
             commands::display::clear_current_slide,
             commands::display::set_slide_context,
-            commands::display::get_slide_context,
+            commands::display::set_is_frozen,
             commands::display::toggle_black_screen,
             commands::display::toggle_logo_screen,
-            commands::display::get_overlay_state,
             commands::display::set_alert,
             commands::display::clear_alert,
             commands::display::identify_monitors,
@@ -509,12 +508,8 @@ pub fn run() {
                 ytdlp: Mutex::new(crate::state::YtdlpRuntimeState::default()),
                 utility_projection_stop: Mutex::new(None),
                 timer_update_stop: Mutex::new(None),
-                current_slide: RwLock::new(None),
-                current_slide_version: AtomicU64::new(0),
                 projector_open: AtomicBool::new(false),
-                overlay: RwLock::new(OverlayRuntimeState::default()),
                 return_open: AtomicBool::new(false),
-                slide_context: RwLock::new(None),
                 global_shortcuts: RwLock::new(std::collections::HashMap::new()),
                 bible_projection: Mutex::new(state::BibleProjectionState {
                     font_system,
@@ -525,9 +520,26 @@ pub fn run() {
                     projector_size: None,
                     part_index: 0,
                 }),
+                projection: crate::projection::ProjectionHub::new(),
+                delta_surface_handle: Mutex::new(None),
                 remote: crate::remote::state::RemoteServerState::default(),
                 video_pipeline: Some(video_pipeline_runtime),
             });
+
+            // Wire the projection DeltaSurface: Hub → single
+            // `projection-delta` Tauri event per Delta. Consumed by the
+            // `useProjectionState` hook in ProjectorView + ReturnView, which
+            // applies each Delta to a local mirror of the Snapshot they
+            // fetched on mount via `get_projection_snapshot`.
+            {
+                let app_state = app.state::<AppState>();
+                let hub = app_state.projection.clone();
+                let surface = crate::projection::DeltaSurface::new(app.handle().clone());
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = app_state.delta_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
 
             // Manage a disabled AudioState immediately (non-blocking).
             // A background thread attempts real audio init with a 5s timeout;
@@ -556,6 +568,59 @@ pub fn run() {
 
             // Initialize Streaming Server State
             app.manage(StreamingState::default());
+
+            // Wire the projection SseSurface: snapshot/Delta funnel from the
+            // ProjectionHub into the four projection SSE broadcasters. After
+            // this, every projection state change flows Hub → Surface → SSE,
+            // and late-joining SSE consumers get a canonical Snapshot via
+            // SseSurface::materialize_snapshot_for instead of stale latest_message.
+            {
+                let app_state = app.state::<AppState>();
+                let streaming_state = app.state::<StreamingState>();
+                let hub = app_state.projection.clone();
+                let (music_bc, bible_bc, return_bc, alert_bc) = {
+                    let server = streaming_state.server.lock().expect("streaming server lock");
+                    (
+                        server.music_broadcaster.clone(),
+                        server.bible_broadcaster.clone(),
+                        server.return_broadcaster.clone(),
+                        server.alert_broadcaster.clone(),
+                    )
+                };
+                let surface = crate::projection::SseSurface::new(
+                    music_bc,
+                    bible_bc,
+                    return_bc,
+                    alert_bc,
+                    hub.clone(),
+                    Some(app_data_dir.clone()),
+                );
+                if let Ok(server) = streaming_state.server.lock() {
+                    server.set_sse_surface(surface.clone());
+                }
+                // Spawn-surface drives the Hub→Surface loop for app lifetime;
+                // dropping the stored SurfaceHandle would cancel it.
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = streaming_state.sse_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
+
+            // Wire the RemoteWsSurface: ProjectionHub → unsigned envelopes onto
+            // the remote broadcast channel. Each WS session subscribes a
+            // broadcast::Receiver and signs envelopes with its per-device HMAC
+            // key before forwarding to the socket. Replaces the legacy
+            // `slide-changed` / `overlay-changed` Tauri event re-emit loop.
+            {
+                let app_state = app.state::<AppState>();
+                let hub = app_state.projection.clone();
+                let broadcast_tx = app_state.remote.broadcast_tx.clone();
+                let surface = crate::projection::RemoteWsSurface::new(broadcast_tx);
+                let handle = crate::projection::spawn_surface(hub, surface);
+                if let Ok(mut slot) = app_state.remote.remote_ws_surface_handle.lock() {
+                    *slot = Some(handle);
+                };
+            }
 
             // Initialize Video Server State (loopback-only, for serving local video files)
             app.manage(VideoServerState::default());

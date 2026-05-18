@@ -23,14 +23,69 @@ fn map_verse_row(row: &Row) -> Result<Verse, rusqlite::Error> {
     })
 }
 
-fn sanitize_fts_query(query: &str) -> String {
-    query
-        .chars()
+fn sanitize_words(s: &str) -> String {
+    s.chars()
         .filter(|c| c.is_alphanumeric() || c.is_whitespace())
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<&str>>()
         .join(" ")
+}
+
+/// Build an FTS5 MATCH expression from raw user input.
+/// - Substrings wrapped in `"..."` become exact phrase queries.
+/// - Bare words become prefix queries (`word*`).
+/// - Tokens are joined with implicit AND.
+/// - Unclosed trailing `"` is treated as a phrase (forgiving).
+/// - Diacritics and case are normalized by FTS5's unicode61 tokenizer
+///   at both index and query time, so accented input still matches.
+fn build_fts_query(query: &str) -> String {
+    if !query.contains('"') {
+        let sanitized = sanitize_words(query);
+        if sanitized.is_empty() {
+            return String::new();
+        }
+        return format!("{}*", sanitized);
+    }
+
+    let mut parts: Vec<String> = Vec::new();
+    let mut buf = String::new();
+    let mut in_quote = false;
+
+    for c in query.chars() {
+        if c == '"' {
+            if in_quote {
+                let phrase = sanitize_words(&buf);
+                if !phrase.is_empty() {
+                    parts.push(format!("\"{}\"", phrase));
+                }
+                buf.clear();
+                in_quote = false;
+            } else {
+                let words = sanitize_words(&buf);
+                for w in words.split_whitespace() {
+                    parts.push(format!("{}*", w));
+                }
+                buf.clear();
+                in_quote = true;
+            }
+        } else {
+            buf.push(c);
+        }
+    }
+
+    let trailing = sanitize_words(&buf);
+    if in_quote {
+        if !trailing.is_empty() {
+            parts.push(format!("\"{}\"", trailing));
+        }
+    } else {
+        for w in trailing.split_whitespace() {
+            parts.push(format!("{}*", w));
+        }
+    }
+
+    parts.join(" ")
 }
 
 pub fn get_versions(conn: &Connection) -> Result<Vec<BibleVersion>, AppError> {
@@ -124,9 +179,8 @@ pub fn search_bible_text(
     }
 
     // 1. Try FTS5 text search
-    let sanitized = sanitize_fts_query(trimmed);
-    if !sanitized.is_empty() {
-        let fts_query = format!("{}*", sanitized);
+    let fts_query = build_fts_query(trimmed);
+    if !fts_query.is_empty() {
 
         let map_fts = |row: &Row| -> Result<BibleSearchResult, rusqlite::Error> {
             let verse = map_verse_row(row)?;
@@ -263,12 +317,10 @@ pub fn search_bible_global(
         return Ok(vec![]);
     }
 
-    let sanitized = sanitize_fts_query(trimmed);
-    if sanitized.is_empty() {
+    let fts_query = build_fts_query(trimmed);
+    if fts_query.is_empty() {
         return Ok(vec![]);
     }
-
-    let fts_query = format!("{}*", sanitized);
 
     let mut stmt = conn.prepare(
         "SELECT v.id, v.version_id, v.book, v.chapter, v.verse, v.text,
@@ -278,8 +330,7 @@ pub fn search_bible_global(
          JOIN bible_fts ON bible_fts.rowid = v.id
          JOIN bible_versions bv ON bv.id = v.version_id
          WHERE bible_fts MATCH ?1
-         ORDER BY rank
-         LIMIT 50",
+         ORDER BY rank",
     )?;
 
     let results = stmt

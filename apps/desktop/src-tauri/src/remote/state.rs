@@ -76,6 +76,8 @@ pub struct RemoteServerState {
     /// Tauri event listener IDs registered when the remote server starts.
     /// Used with `app.unlisten(id)` on `stop_remote_server` to prevent listener accumulation across restarts.
     pub listener_handles: Arc<Mutex<Vec<tauri::EventId>>>,
+    /// Cancels the Hub → RemoteWsSurface loop when dropped. Held for app lifetime.
+    pub remote_ws_surface_handle: Arc<Mutex<Option<crate::projection::SurfaceHandle>>>,
     /// Rate limiter for PIN pairing attempts to prevent brute-force attacks.
     pub pin_limiter: Arc<PinRateLimiter>,
     /// H7: IP-based rate limiter for /pair/* endpoints (5 req/min per IP).
@@ -95,6 +97,7 @@ impl Default for RemoteServerState {
             connections: Arc::new(Mutex::new(HashMap::new())),
             broadcast_tx: Arc::new(tx),
             listener_handles: Arc::new(Mutex::new(Vec::new())),
+            remote_ws_surface_handle: Arc::new(Mutex::new(None)),
             pin_limiter: Arc::new(PinRateLimiter::new()),
             pair_rate_limiter: Arc::new(PairRateLimiter::default()),
             suspicious_tracker: Arc::new(SuspiciousHmacTracker::default()),

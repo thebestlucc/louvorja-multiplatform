@@ -58,6 +58,12 @@ export interface QueueState {
   history: QueueItem[];
 }
 
+export interface AlertPayload {
+  text: string;
+  isVisible: boolean;
+  isTicker: boolean;
+}
+
 export interface AudioStatus {
   /** Position in seconds */
   position: number;
@@ -90,6 +96,10 @@ export interface ConnectionState_ {
   currentQueue: QueueState | null;
   /** Last received audio.status payload — persists across route navigation. */
   currentAudioStatus: AudioStatus | null;
+  /** Last received alert.changed payload — persists across route navigation. */
+  currentAlert: AlertPayload | null;
+  /** Last received freeze.changed value — whether projection is frozen. */
+  frozen: boolean;
 }
 
 interface ConnectionActions {
@@ -117,6 +127,10 @@ interface ConnectionActions {
   _setCurrentQueue: (queue: QueueState) => void;
   /** Internal — update current audio status. */
   _setAudioStatus: (status: AudioStatus) => void;
+  /** Internal — update current alert. */
+  _setCurrentAlert: (alert: AlertPayload) => void;
+  /** Internal — update frozen indicator. */
+  _setFrozen: (frozen: boolean) => void;
 }
 
 // ─── Payload validators (used inside store handlers) ─────────────────────────
@@ -205,6 +219,8 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
   currentService: null,
   currentQueue: null,
   currentAudioStatus: null,
+  currentAlert: null,
+  frozen: false,
 
   _setWsState: (wsState) => set({ wsState }),
   _setLatency: (latencyMs) => set({ latencyMs }),
@@ -213,6 +229,8 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
   _setCurrentService: (currentService) => set({ currentService: currentService ?? null }),
   _setCurrentQueue: (currentQueue) => set({ currentQueue }),
   _setAudioStatus: (currentAudioStatus) => set({ currentAudioStatus }),
+  _setCurrentAlert: (currentAlert) => set({ currentAlert }),
+  _setFrozen: (frozen) => set({ frozen }),
 
   init: async () => {
     const device = await getDevice();
@@ -289,6 +307,20 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
       const status = parseAudioStatus(payload);
       if (!status) return;
       get()._setAudioStatus(status);
+    });
+    ws.on("alert.changed", (payload) => {
+      const p = payload as Record<string, unknown> | null;
+      if (!p || typeof p !== "object") return;
+      get()._setCurrentAlert({
+        text: typeof p.text === "string" ? p.text : "",
+        isVisible: typeof p.isVisible === "boolean" ? p.isVisible : false,
+        isTicker: typeof p.isTicker === "boolean" ? p.isTicker : false,
+      });
+    });
+    ws.on("freeze.changed", (payload) => {
+      const p = payload as Record<string, unknown> | null;
+      if (!p || typeof p !== "object") return;
+      get()._setFrozen(typeof p.frozen === "boolean" ? p.frozen : false);
     });
 
     // TODO(review): Add basic host/port validation before connecting — malformed data
@@ -379,6 +411,20 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
       if (!status) return;
       get()._setAudioStatus(status);
     });
+    ws.on("alert.changed", (payload) => {
+      const p = payload as Record<string, unknown> | null;
+      if (!p || typeof p !== "object") return;
+      get()._setCurrentAlert({
+        text: typeof p.text === "string" ? p.text : "",
+        isVisible: typeof p.isVisible === "boolean" ? p.isVisible : false,
+        isTicker: typeof p.isTicker === "boolean" ? p.isTicker : false,
+      });
+    });
+    ws.on("freeze.changed", (payload) => {
+      const p = payload as Record<string, unknown> | null;
+      if (!p || typeof p !== "object") return;
+      get()._setFrozen(typeof p.frozen === "boolean" ? p.frozen : false);
+    });
 
     const wsUrl = `ws://${info.host}:${info.port}/ws`;
 
@@ -417,6 +463,8 @@ export const useConnectionStore = create<ConnectionState_ & ConnectionActions>((
       currentService: null,
       currentQueue: null,
       currentAudioStatus: null,
+      currentAlert: null,
+      frozen: false,
     });
   },
 }));

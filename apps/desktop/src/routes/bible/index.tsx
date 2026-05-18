@@ -39,7 +39,7 @@ function BibleIndex() {
   };
 
   const { t } = useTranslation();
-  const { settings: projectionSettings, updateSettings: updateProjectionSettings } =
+  const { settings: projectionSettings, updateSettings: updateProjectionSettings, loaded: settingsLoaded } =
     useProjectionSettings();
   const bible = useBible(projectionSettings);
   const { book, chapter, verse } = Route.useSearch();
@@ -49,9 +49,18 @@ function BibleIndex() {
   const presentationSlides = useMediaPlayerStore((s) => s.slides);
   const activeSplitIndex = usePresentationStore((s) => s.activeSlideIndex);
   const deepLinkApplied = useRef(false);
+  const settingsInitRef = useRef(false);
   const pendingVerseNavigationRef = useRef<PendingVerseNavigation | null>(null);
   const shiftAnchorRef = useRef<number | null>(null);
   const initialBookFocusDone = useRef(false);
+
+  // Re-project when settings change while projecting
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    if (!settingsInitRef.current) { settingsInitRef.current = true; return; }
+    if (bible.isProjecting) bible.updateBibleProjection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectionSettings, settingsLoaded]);
 
   // Auto-select default version when loaded (prefer NAA, fall back to first)
   useEffect(() => {

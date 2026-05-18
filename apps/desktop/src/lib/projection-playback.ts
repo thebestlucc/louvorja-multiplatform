@@ -228,7 +228,8 @@ export async function projectSlideWithType(
   // This ensures the new content appears immediately without interruption
   const wasActive = isProjectionActive();
 
-  if (useDisplayStore.getState().isFrozen) return;
+  // While frozen, Rust persists the slide to state but skips emission. On
+  // unfreeze, set_is_frozen replays the latest. Do NOT short-circuit here.
   await setCurrentSlide(slideData);
   useDisplayStore.getState().setCurrentProjectionType(projectionType);
 

@@ -710,6 +710,7 @@ pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), Ap
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA cache_size=-8000;
+         PRAGMA temp_store=MEMORY;
          CREATE VIRTUAL TABLE IF NOT EXISTS musics_fts USING fts5(name, lyrics);",
     )
     .map_err(AppError::Database)?;
@@ -721,6 +722,10 @@ pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), Ap
     if count > 0 {
         return Ok(());
     }
+
+    // synchronous=OFF: eliminates WAL fsyncs during bulk INSERT + OPTIMIZE.
+    // FTS is rebuilt from musics on next sync if interrupted — safe trade-off.
+    let _ = conn.execute_batch("PRAGMA synchronous=OFF;");
 
     let lang_short = bcp47_to_lang_code(lang_bcp47);
     let mut stmt = conn
@@ -739,6 +744,9 @@ pub fn init_content_db_fts(conn: &Connection, lang_bcp47: &str) -> Result<(), Ap
         [],
     )
     .map_err(AppError::Database)?;
+
+    // Restore synchronous mode — safe if conn comes from an r2d2 pool.
+    let _ = conn.execute_batch("PRAGMA synchronous=NORMAL;");
     Ok(())
 }
 

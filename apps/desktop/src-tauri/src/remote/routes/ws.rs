@@ -320,7 +320,11 @@ async fn handle_socket(
 
                     // 4. Dispatch via dispatcher (requires AppHandle).
                     if let Some(ref app) = app_handle {
-                        let ctx = DispatcherCtx::new(app.clone());
+                        let ctx = DispatcherCtx::new(
+                            app.clone(),
+                            resp_tx.clone(),
+                            device_token.clone(),
+                        );
                         match dispatcher::dispatch(&env.op, &env.payload, &ctx).await {
                             Ok(result_payload) => {
                                 // D6: send response to this client only via per-session channel.

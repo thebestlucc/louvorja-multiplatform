@@ -186,20 +186,18 @@ describe("playItemByKind dispatch", () => {
     const vm = { videoSource: "youtube" as const, videoId: "abc123", videoTitle: "Test Video" };
     const slide: import("../../src/lib/bindings").SlideContent = {
       slideType: "onlineVideo",
-      url: vm.videoId ? "" : (vm.videoId ?? ""),
-      video_id: vm.videoId ?? "",
-      source: vm.videoSource,
+      source: vm.videoSource === "youtube"
+        ? { kind: "youtube", video_id: vm.videoId ?? "" }
+        : { kind: "local", url: "" },
       title: vm.videoTitle ?? null,
     };
 
     assert.strictEqual(slide.slideType, "onlineVideo");
-    assert.strictEqual(
-      (slide as { slideType: "onlineVideo"; video_id: string }).video_id,
-      "abc123",
-    );
-    assert.strictEqual(
-      (slide as { slideType: "onlineVideo"; source: string }).source,
-      "youtube",
-    );
+    if (slide.slideType === "onlineVideo" && slide.source.kind === "youtube") {
+      assert.strictEqual(slide.source.video_id, "abc123");
+      assert.strictEqual(slide.source.kind, "youtube");
+    } else {
+      assert.fail("expected youtube source");
+    }
   });
 });

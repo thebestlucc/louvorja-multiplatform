@@ -236,13 +236,11 @@ runs:
       run: |
         # Official universal pkg (includes both arm64 and x86_64 slices) — required
         # for universal-apple-darwin builds. Homebrew only ships host-arch builds.
-        # URL path is /macos/ (the /osx/ path is the legacy mirror; /macos/ is
-        # what current 1.24.x uploads use).
         GST_VERSION="1.24.13"
         TMP="$(mktemp -d)"
-        curl -fL --retry 3 -o "${TMP}/runtime.pkg" \
+        curl -fL --retry 3 --user-agent "curl/8.0" -o "${TMP}/runtime.pkg" \
           "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-${GST_VERSION}-universal.pkg"
-        curl -fL --retry 3 -o "${TMP}/devel.pkg" \
+        curl -fL --retry 3 --user-agent "curl/8.0" -o "${TMP}/devel.pkg" \
           "https://gstreamer.freedesktop.org/data/pkg/macos/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-universal.pkg"
         sudo installer -pkg "${TMP}/runtime.pkg" -target /
         sudo installer -pkg "${TMP}/devel.pkg" -target /
@@ -287,9 +285,9 @@ runs:
           $develUrl   = "https://gstreamer.freedesktop.org/data/pkg/windows/$GST_VERSION/msvc/gstreamer-1.0-devel-msvc-$arch-$GST_VERSION.msi"
           Write-Host "  runtime: $runtimeUrl"
           Write-Host "  devel:   $develUrl"
-          curl.exe --fail --location --retry 3 --silent --show-error --output $runtime $runtimeUrl
+          curl.exe --fail --location --retry 3 --user-agent "curl/8.0" --silent --show-error --output $runtime $runtimeUrl
           if ($LASTEXITCODE -ne 0) { throw "curl runtime exit $LASTEXITCODE" }
-          curl.exe --fail --location --retry 3 --silent --show-error --output $devel   $develUrl
+          curl.exe --fail --location --retry 3 --user-agent "curl/8.0" --silent --show-error --output $devel   $develUrl
           if ($LASTEXITCODE -ne 0) { throw "curl devel exit $LASTEXITCODE" }
           Write-Host "  runtime: $((Get-Item $runtime).Length) bytes"
           Write-Host "  devel:   $((Get-Item $devel).Length) bytes"

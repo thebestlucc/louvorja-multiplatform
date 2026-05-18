@@ -1,0 +1,25 @@
+{
+  "fromVersion": 4,
+  "toVersion": 5,
+  "events": [
+    {
+      "kind": "slideChanged",
+      "slide": {
+        "slideType": "lyrics",
+        "text": "Amazing grace, how sweet the sound",
+        "label": "verse 1",
+        "background": {
+          "kind": "solid",
+          "color": "#000000",
+          "imagePath": null,
+          "gradientStart": null,
+          "gradientEnd": null,
+          "gradientAngle": null,
+          "opacity": null
+        },
+        "text_color": null,
+        "text_size": null
+      }
+    }
+  ]
+}

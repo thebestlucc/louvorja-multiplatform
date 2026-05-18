@@ -1,7 +1,7 @@
 // src/components/online-videos/persistent-video-player.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emitTo } from "@tauri-apps/api/event";
-import { useSlideVersion } from "../../hooks/use-slide-version";
+import { useProjectionState } from "../../hooks/use-projection-state";
 import type { YTPlayer } from "../../lib/youtube-api";
 import { useVideoPlayerStore } from "../../stores/video-player-store";
 import { YouTubeMaster } from "./youtube-master";
@@ -267,7 +267,22 @@ export function PersistentVideoPlayer() {
     }
   }, [handleClear]);
 
-  useSlideVersion({ onSlide: handleSlide, onClear: handleClear });
+  // Hub-driven slide bridge (Phase 5). Reference-equality on
+  // snapshot.currentSlide is safe (Phase 4 receipt): only swaps when a
+  // slideChanged event arrives, so identical refs mean "no slide change."
+  const projection = useProjectionState();
+  const lastSlideRef = useRef<SlideContent | null>(null);
+  useEffect(() => {
+    if (!projection) return;
+    const current = projection.currentSlide;
+    if (current === lastSlideRef.current) return;
+    lastSlideRef.current = current;
+    if (current === null) {
+      handleClear();
+    } else {
+      handleSlide(current);
+    }
+  }, [projection, handleSlide, handleClear]);
 
   // Listen to video-control for YouTube (local video handled in LocalVideoMaster)
   useEffect(() => {
@@ -308,16 +323,22 @@ export function PersistentVideoPlayer() {
 
   const useRustPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
 
-  const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source !== "local" ? activeSlide.video_id : undefined;
-  const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
+  const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source.kind === "youtube"
+    ? activeSlide.source.video_id
+    : undefined;
+  const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source.kind : undefined;
 
-  const isLocalVideo = activeSlide?.slideType === "onlineVideo" && activeSlide.source === "local" && !!activeSlide.url;
-  const localVideoUrl = activeSlide?.slideType === "onlineVideo" ? activeSlide.url : null;
+  const isLocalVideo = activeSlide?.slideType === "onlineVideo"
+    && activeSlide.source.kind === "local"
+    && !!activeSlide.source.url;
+  const localVideoUrl = activeSlide?.slideType === "onlineVideo" && activeSlide.source.kind === "local"
+    ? activeSlide.source.url
+    : null;
 
   // When the Rust GStreamer pipeline is active it owns audio output (autoaudiosink).
   // Rendering YouTubeMaster or LocalVideoMaster alongside it would produce double
   // audio and conflict with the Rust-path controls. Suppress HTML5 players entirely;
-  // useSlideVersion / handleSlide still run so media-player-store stays populated.
+  // useProjectionState / handleSlide still run so media-player-store stays populated.
   if (useRustPipeline) {
     return null;
   }

@@ -7,7 +7,6 @@ import {
   clearAlert,
   toggleBlackScreen,
   toggleLogoScreen,
-  getOverlayState,
   setSetting,
   updateGlobalShortcut,
 } from "../tauri";
@@ -52,53 +51,26 @@ export function useSetShortcut() {
   });
 }
 
-// Overlay / Display
-export function useOverlayState() {
-  return useQuery({
-    queryKey: queryKeys.overlay,
-    queryFn: () => getOverlayState(),
-  });
-}
-
+// Overlay / Display — read state via useProjectionState (Phase 5). The
+// mutations below no longer cache their response in queryKeys.overlay; the
+// Hub broadcasts a projection-delta that all consumers pick up directly.
 export function useToggleBlackScreen() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => toggleBlackScreen(),
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.overlay, data);
-    },
-  });
+  return useMutation({ mutationFn: () => toggleBlackScreen() });
 }
 
 export function useToggleLogoScreen() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => toggleLogoScreen(),
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.overlay, data);
-    },
-  });
+  return useMutation({ mutationFn: () => toggleLogoScreen() });
 }
 
 export function useSetAlert() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ text, isTicker }: { text: string; isTicker: boolean }) =>
       setAlert(text, isTicker),
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.overlay, data);
-    },
   });
 }
 
 export function useClearAlert() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => clearAlert(),
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.overlay, data);
-    },
-  });
+  return useMutation({ mutationFn: () => clearAlert() });
 }
 
 export function useIdentifyMonitors() {

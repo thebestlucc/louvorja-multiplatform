@@ -4,7 +4,6 @@ use crate::db::models::slides::{BibleMode, BackgroundConfig, BackgroundKind};
 use crate::display::projection::update_current_slide;
 use crate::error::AppError;
 use crate::state::{AppState, BibleNavContext, BibleProjectionState, StreamingState};
-use crate::utils::catcher::catcher;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use tauri::{AppHandle, Emitter, Manager};
@@ -32,40 +31,6 @@ fn build_bible_context_payload(
         "partIndex": part_index,
         "totalParts": total_parts,
     })
-}
-
-fn broadcast_bible_stream_payloads(
-    server: &crate::streaming::StreamingServer,
-    slide_data: &SlideContent,
-    reference: &str,
-) {
-    let music_json = serde_json::json!({
-        "label": "",
-        "text": "",
-        "title": "",
-        "subtitle": "",
-    });
-    server.broadcast_music(&music_json.to_string());
-
-    let bible_json = serde_json::json!({
-        "reference": reference,
-        "text": slide_data.text().unwrap_or(""),
-    });
-    server.broadcast_bible(&bible_json.to_string());
-
-    let return_json = serde_json::json!({
-        "current": {
-            "label": slide_data.label().unwrap_or(""),
-            "text": slide_data.text().unwrap_or(""),
-            "title": slide_data.title().unwrap_or(""),
-            "subtitle": slide_data.subtitle().unwrap_or(""),
-        },
-        "next": null,
-        "index": 0,
-        "total": 1,
-        "title": reference,
-    });
-    server.broadcast_return(&return_json.to_string());
 }
 
 #[tauri::command]
@@ -260,14 +225,12 @@ pub fn navigate_bible_verse(
     state: tauri::State<'_, AppState>,
     streaming_state: tauri::State<'_, StreamingState>,
 ) -> Result<(), AppError> {
-    // Read current slide
-    let current_slide = {
-        let (current, err) = catcher(state.current_slide.read());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        current.unwrap().clone()
-    };
+    // Read current slide from the Projection Hub.
+    let hub = state.projection.clone();
+    let current_slide = tauri::async_runtime::block_on(async move {
+        let (snapshot, _rx) = hub.attach().await;
+        snapshot.current_slide
+    });
 
     let slide = current_slide.ok_or_else(|| AppError::Internal("No slide projected".into()))?;
     if slide.slide_type() != "bible" {
@@ -387,34 +350,11 @@ pub fn navigate_bible_verse(
 
     drop(conn);
 
-    // Update current slide state
-    {
-        let (current, err) = catcher(state.current_slide.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut current = current.unwrap();
-        *current = Some(slide_data.clone());
-    }
-
-    let slide_context = SlideContext {
-        next: None,
-        index: 0,
-        total: 1,
-        title: new_reference.clone(),
-        current_slide_start_ms: None,
-        next_slide_start_ms: None,
-        audio_duration_ms: None,
-    };
-    {
-        let (context, err) = catcher(state.slide_context.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut context = context.unwrap();
-        *context = Some(slide_context.clone());
-    }
-
+    // update_current_slide handles both the Hub mutation and the SlideContext
+    // fallback (Hub-side now reuses or rebuilds based on title transitions).
+    // The explicit new_reference context derived above intentionally matches
+    // the fallback shape so the bible nav UI surfaces a clean reference.
+    let _ = new_reference;
     update_current_slide(&app, &state, &streaming_state, slide_data)?;
 
     Ok(())
@@ -587,13 +527,17 @@ fn project_split_slide(
         next_slide_start_ms: None,
         audio_duration_ms: None,
     };
+    // Apply Bible-specific context (carries `next` part + accurate index/total)
+    // to the Hub before update_current_slide funnels the slide. The
+    // streaming/projection Surfaces see one Snapshot with both fields lined up.
     {
-        let (ctx, err) = catcher(state.slide_context.write());
-        if let Some(e) = err {
-            return Err(e);
-        }
-        let mut ctx = ctx.unwrap();
-        *ctx = Some(slide_context.clone());
+        let hub = state.projection.clone();
+        let ctx_for_hub = slide_context.clone();
+        tauri::async_runtime::block_on(async move {
+            let _ = hub
+                .apply(crate::projection::Mutation::SetContext(Some(ctx_for_hub)))
+                .await;
+        });
     }
 
     update_current_slide(app, state, streaming_state, slide.clone())?;

@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
 import { Badge } from "../../components/ui/badge";
-import { useOverlayState, useSetAlert, useClearAlert } from "../../lib/queries";
+import { useSetAlert, useClearAlert } from "../../lib/queries";
+import { useProjectionState } from "../../hooks/use-projection-state";
 import { catcher } from "../../lib/catcher";
 import { cn } from "../../lib/utils";
 
@@ -16,17 +17,24 @@ export const Route = createFileRoute("/utilities/interactive-text")({
 
 function InteractiveTextPage() {
   const { t } = useTranslation();
-  const { data: overlayState } = useOverlayState();
+  const projection = useProjectionState();
   const setAlertMutation = useSetAlert();
   const clearAlertMutation = useClearAlert();
 
   const [text, setText] = useState("");
   const [isTicker, setIsTicker] = useState(false);
 
-  const currentAlert = overlayState?.alert;
-  const isActive = currentAlert?.isVisible && currentAlert?.text;
+  // Hub Alert has { text, isTicker }; project to AlertState-style shape the
+  // JSX below already expects (isVisible derived from non-null).
+  const currentAlert = projection?.alert
+    ? {
+        text: projection.alert.text,
+        isVisible: true,
+        isTicker: projection.alert.isTicker,
+      }
+    : null;
+  const isActive = !!currentAlert?.isVisible && !!currentAlert?.text;
 
-  // Sync local state when an alert is already active
   useEffect(() => {
     if (currentAlert?.isVisible) {
       setText(currentAlert.text);
