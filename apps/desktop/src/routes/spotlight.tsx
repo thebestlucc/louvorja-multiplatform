@@ -205,7 +205,7 @@ function SpotlightWindow() {
       ]);
 
       setHymns((h ?? []).slice(0, 5));
-      setBibleResults((b ?? []).slice(0, 5));
+      setBibleResults([...(b ?? [])]);
       // Merge main DB + content DB collection results
       const allCollections = [...(c ?? []), ...(cc ?? [])];
       setCollectionResults(allCollections.slice(0, 5));
