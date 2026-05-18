@@ -6,7 +6,7 @@ use crate::db::models::{SlideContent, SlideContext};
 use crate::projection::delta::{DeltaEvent, ProjectionDelta};
 use crate::projection::hub::ProjectionHub;
 use crate::projection::snapshot::ProjectionSnapshot;
-use crate::projection::state::Alert;
+use crate::projection::state::{Alert, OverlayMode};
 use crate::projection::surface::ProjectionSurface;
 use crate::streaming::SseBroadcaster;
 use std::path::PathBuf;
@@ -30,6 +30,8 @@ struct PayloadCache {
     slide: Option<SlideContent>,
     context: Option<SlideContext>,
     alert: Option<Alert>,
+    overlay: OverlayMode,
+    frozen: bool,
 }
 
 impl PayloadCache {
@@ -37,6 +39,8 @@ impl PayloadCache {
         self.slide = snapshot.current_slide.clone();
         self.context = snapshot.context.clone();
         self.alert = snapshot.alert.clone();
+        self.overlay = snapshot.overlay.clone();
+        self.frozen = snapshot.frozen;
     }
 }
 
@@ -78,7 +82,14 @@ impl SseSurface {
             let (s, _rx) = self.hub.attach().await;
             s
         });
-        self.payload_for(channel, &snapshot.current_slide, &snapshot.context, &snapshot.alert)
+        self.payload_for(
+            channel,
+            &snapshot.current_slide,
+            &snapshot.context,
+            &snapshot.alert,
+            &snapshot.overlay,
+            snapshot.frozen,
+        )
     }
 
     fn payload_for(
@@ -87,11 +98,17 @@ impl SseSurface {
         slide: &Option<SlideContent>,
         context: &Option<SlideContext>,
         alert: &Option<Alert>,
+        overlay: &OverlayMode,
+        frozen: bool,
     ) -> String {
         match channel {
-            SseChannel::Music => music_payload(slide, context, self.app_data_dir.as_deref()),
-            SseChannel::Bible => bible_payload(slide),
-            SseChannel::Return => return_payload(slide, context, self.app_data_dir.as_deref()),
+            SseChannel::Music => {
+                music_payload(slide, context, overlay, frozen, self.app_data_dir.as_deref())
+            }
+            SseChannel::Bible => bible_payload(slide, overlay, frozen),
+            SseChannel::Return => {
+                return_payload(slide, context, overlay, frozen, self.app_data_dir.as_deref())
+            }
             SseChannel::Alert => alert_payload(alert),
         }
     }
@@ -100,11 +117,15 @@ impl SseSurface {
         let cache = self.cache.lock().unwrap();
         let slide = cache.slide.clone();
         let context = cache.context.clone();
+        let overlay = cache.overlay.clone();
+        let frozen = cache.frozen;
         drop(cache);
         let adr = self.app_data_dir.as_deref();
-        self.music.broadcast(&music_payload(&slide, &context, adr));
-        self.bible.broadcast(&bible_payload(&slide));
-        self.return_.broadcast(&return_payload(&slide, &context, adr));
+        self.music
+            .broadcast(&music_payload(&slide, &context, &overlay, frozen, adr));
+        self.bible.broadcast(&bible_payload(&slide, &overlay, frozen));
+        self.return_
+            .broadcast(&return_payload(&slide, &context, &overlay, frozen, adr));
     }
 
     fn broadcast_alert(&self) {
@@ -141,8 +162,14 @@ impl ProjectionSurface for SseSurface {
                         cache.alert = alert.clone();
                         alert_touched = true;
                     }
-                    // overlay + freeze do not flow over SSE in Phase 2.
-                    DeltaEvent::OverlayChanged { .. } | DeltaEvent::FreezeChanged { .. } => {}
+                    DeltaEvent::OverlayChanged { overlay } => {
+                        cache.overlay = overlay.clone();
+                        slide_touched = true;
+                    }
+                    DeltaEvent::FreezeChanged { frozen } => {
+                        cache.frozen = *frozen;
+                        slide_touched = true;
+                    }
                 }
             }
         }
@@ -165,34 +192,58 @@ impl ProjectionSurface for SseSurface {
 fn music_payload(
     slide: &Option<SlideContent>,
     context: &Option<SlideContext>,
+    overlay: &OverlayMode,
+    frozen: bool,
     app_data_dir: Option<&std::path::Path>,
 ) -> String {
-    match slide {
-        Some(s) if s.slide_type() == "bible" => empty_streaming_music_payload().to_string(),
-        Some(s) => build_music_stream_payload(s, context.as_ref(), app_data_dir).to_string(),
-        None => empty_streaming_music_payload().to_string(),
-    }
+    let mut payload = match slide {
+        Some(s) if s.slide_type() == "bible" => empty_streaming_music_payload(),
+        Some(s) => build_music_stream_payload(s, context.as_ref(), app_data_dir),
+        None => empty_streaming_music_payload(),
+    };
+    inject_overlay_freeze(&mut payload, overlay, frozen);
+    payload.to_string()
 }
 
-fn bible_payload(slide: &Option<SlideContent>) -> String {
-    match slide {
+fn bible_payload(slide: &Option<SlideContent>, overlay: &OverlayMode, frozen: bool) -> String {
+    let mut payload = match slide {
         Some(s) if s.slide_type() == "bible" => serde_json::json!({
             "reference": s.title().or_else(|| s.label()).unwrap_or(""),
             "text": s.text().unwrap_or(""),
-        })
-        .to_string(),
-        _ => serde_json::json!({ "reference": "", "text": "" }).to_string(),
-    }
+        }),
+        _ => serde_json::json!({ "reference": "", "text": "" }),
+    };
+    inject_overlay_freeze(&mut payload, overlay, frozen);
+    payload.to_string()
 }
 
 fn return_payload(
     slide: &Option<SlideContent>,
     context: &Option<SlideContext>,
+    overlay: &OverlayMode,
+    frozen: bool,
     app_data_dir: Option<&std::path::Path>,
 ) -> String {
-    match slide {
-        Some(s) => build_return_stream_payload(s, context.as_ref(), app_data_dir).to_string(),
-        None => empty_return_stream_payload().to_string(),
+    let mut payload = match slide {
+        Some(s) => build_return_stream_payload(s, context.as_ref(), app_data_dir),
+        None => empty_return_stream_payload(),
+    };
+    inject_overlay_freeze(&mut payload, overlay, frozen);
+    payload.to_string()
+}
+
+fn overlay_label(overlay: &OverlayMode) -> &'static str {
+    match overlay {
+        OverlayMode::None => "none",
+        OverlayMode::Black => "black",
+        OverlayMode::Logo => "logo",
+    }
+}
+
+fn inject_overlay_freeze(payload: &mut serde_json::Value, overlay: &OverlayMode, frozen: bool) {
+    if let Some(map) = payload.as_object_mut() {
+        map.insert("overlay".to_string(), serde_json::json!(overlay_label(overlay)));
+        map.insert("frozen".to_string(), serde_json::json!(frozen));
     }
 }
 
@@ -364,6 +415,48 @@ mod tests {
         assert_eq!(m_rx.try_iter().count(), 1, "music must fire exactly once");
         assert_eq!(b_rx.try_iter().count(), 1, "bible must fire exactly once");
         assert_eq!(r_rx.try_iter().count(), 1, "return must fire exactly once");
+    }
+
+    #[tokio::test]
+    async fn deliver_overlay_change_rebroadcasts_slide_channels_with_overlay_field() {
+        let (surface, hub, music, _bible, return_, _alert) = build();
+        hub.apply(Mutation::SetSlide(Some(lyrics("verse")))).await.unwrap();
+        let (snapshot, mut rx) = hub.attach().await;
+        surface.hydrate(&snapshot);
+
+        let (_m_id, m_rx) = music.subscribe();
+        let (_r_id, r_rx) = return_.subscribe();
+
+        hub.apply(Mutation::SetOverlay(OverlayMode::Black)).await.unwrap();
+        let delta = rx.recv().await.expect("overlay delta");
+        surface.deliver(&delta);
+
+        let m = m_rx.try_iter().next().expect("music broadcast on overlay");
+        assert!(m.contains(r#""overlay":"black""#), "music must include overlay=black: {m}");
+        let r = r_rx.try_iter().next().expect("return broadcast on overlay");
+        assert!(r.contains(r#""overlay":"black""#), "return must include overlay=black: {r}");
+    }
+
+    #[tokio::test]
+    async fn deliver_freeze_change_rebroadcasts_slide_channels_with_frozen_field() {
+        let (surface, hub, music, _bible, return_, _alert) = build();
+        // Seed slide BEFORE attach so hydrate sees it.
+        hub.apply(Mutation::SetSlide(Some(lyrics("verse")))).await.unwrap();
+        let (snapshot, mut rx) = hub.attach().await;
+        surface.hydrate(&snapshot);
+
+        // Subscribe AFTER hydrate so we only count delivery-driven broadcasts.
+        let (_m_id, m_rx) = music.subscribe();
+        let (_r_id, r_rx) = return_.subscribe();
+
+        hub.apply(Mutation::SetFreeze(true)).await.unwrap();
+        let delta = rx.recv().await.expect("freeze delta");
+        surface.deliver(&delta);
+
+        let m = m_rx.try_iter().next().expect("music broadcast on freeze");
+        assert!(m.contains(r#""frozen":true"#), "music must include frozen=true: {m}");
+        let r = r_rx.try_iter().next().expect("return broadcast on freeze");
+        assert!(r.contains(r#""frozen":true"#), "return must include frozen=true: {r}");
     }
 
     #[test]
