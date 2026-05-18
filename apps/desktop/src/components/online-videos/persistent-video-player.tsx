@@ -323,11 +323,17 @@ export function PersistentVideoPlayer() {
 
   const useRustPipeline = useVideoPlayerStore((s) => s.useRustVideoPipeline);
 
-  const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source !== "local" ? activeSlide.video_id : undefined;
-  const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source : undefined;
+  const activeVideoId = activeSlide?.slideType === "onlineVideo" && activeSlide.source.kind === "youtube"
+    ? activeSlide.source.video_id
+    : undefined;
+  const activeVideoSource = activeSlide?.slideType === "onlineVideo" ? activeSlide.source.kind : undefined;
 
-  const isLocalVideo = activeSlide?.slideType === "onlineVideo" && activeSlide.source === "local" && !!activeSlide.url;
-  const localVideoUrl = activeSlide?.slideType === "onlineVideo" ? activeSlide.url : null;
+  const isLocalVideo = activeSlide?.slideType === "onlineVideo"
+    && activeSlide.source.kind === "local"
+    && !!activeSlide.source.url;
+  const localVideoUrl = activeSlide?.slideType === "onlineVideo" && activeSlide.source.kind === "local"
+    ? activeSlide.source.url
+    : null;
 
   // When the Rust GStreamer pipeline is active it owns audio output (autoaudiosink).
   // Rendering YouTubeMaster or LocalVideoMaster alongside it would produce double

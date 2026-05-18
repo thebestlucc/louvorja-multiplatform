@@ -41,14 +41,11 @@ function parseThumbnail(images: string | null): string | null {
 }
 
 function buildVideoSlidePayload(video: OnlineVideo): SlideContent {
-  const isLocal = !!video.localPath;
   return {
     slideType: "onlineVideo",
-    url: isLocal ? (video.localPath ?? "") : "",
-    // Always preserve videoId — enricher (thumbnail, metadata) needs it
-    // regardless of source. Local items with a YouTube videoId keep both.
-    video_id: video.videoId ?? "",
-    source: isLocal ? "local" : "youtube",
+    source: video.localPath
+      ? { kind: "local", url: video.localPath }
+      : { kind: "youtube", video_id: video.videoId ?? "" },
     title: video.title ?? null,
   };
 }

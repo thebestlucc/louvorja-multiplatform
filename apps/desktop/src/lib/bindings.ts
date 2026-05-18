@@ -1987,6 +1987,7 @@ export type CollectionWithSongs = { collection: Collection; songs: CollectionSon
  * Online Videos feature — input for creating a custom single-video collection.
  */
 export type CreateCustomPlaylistInput = { collectionTitle: string; videoUrl: string }
+export type DeltaEvent = { kind: "slideChanged"; slide: SlideContent | null } | { kind: "contextChanged"; context: SlideContext | null } | { kind: "overlayChanged"; overlay: OverlayMode } | { kind: "freezeChanged"; frozen: boolean } | { kind: "alertChanged"; alert: Alert | null }
 export type Favorite = { id: number; itemType: string; itemId: number; createdAt: string }
 export type GradientOverlay = { angle: number; startColor: string; endColor: string }
 export type Hymn = { id: number; number: number | null; title: string; author: string | null; album: string | null; lyrics: string | null; chords: string | null; audioPath: string | null; playbackPath: string | null; category: string | null; notes: string | null; coverPath: string | null; lyricsSync: string | null; apiMusicId: number | null; createdAt: string; updatedAt: string }
@@ -2060,6 +2061,7 @@ export type PackSyncPlanItem = { packId: string; packUrl: string; packVersion: n
  */
 export type PairingInfo = { token: string; pin: string; expiresAt: number; qrSvg: string; url: string }
 export type Presentation = { id: number; title: string; author: string | null; aspectRatio: string; libraryKind: string | null; filePath: string | null; createdAt: string; updatedAt: string }
+export type ProjectionDelta = { fromVersion: number; toVersion: number; events: DeltaEvent[] }
 export type ProjectionSnapshot = { version: number; currentSlide: SlideContent | null; context: SlideContext | null; overlay: OverlayMode; frozen: boolean; alert: Alert | null }
 export type RefPosition = "bottom" | "top" | "hidden"
 /**
@@ -2080,7 +2082,7 @@ export type ScheduleMonth = { id: number; year: number; month: number; notes: st
 export type ScheduleMonthDetail = { month: ScheduleMonth; departments: ScheduleDepartment[]; days: ScheduleDay[] }
 export type Setting = { key: string; value: string }
 export type Slide = { id: number; presentationId: number; slideIndex: number; slideType: string; content: string; notes: string | null; transition: string | null }
-export type SlideContent = { slideType: "cover"; title: string; subtitle: string | null; label: string | null; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "lyrics"; text: string; label: string | null; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "text"; content: string; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "image"; path: string; caption: string | null; fit: ImageFit; background: BackgroundConfig } | { slideType: "video"; path: string; auto_play: boolean; loop_video: boolean; muted: boolean; mode: VideoMode; overlay_text: string | null; audio_path: string | null } | { slideType: "bible"; reference: string; text: string; mode: BibleMode; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null } | { slideType: "pause" }
+export type SlideContent = { slideType: "cover"; title: string; subtitle: string | null; label: string | null; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "lyrics"; text: string; label: string | null; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "text"; content: string; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "image"; path: string; caption: string | null; fit: ImageFit; background: BackgroundConfig } | { slideType: "video"; path: string; auto_play: boolean; loop_video: boolean; muted: boolean; mode: VideoMode; overlay_text: string | null; audio_path: string | null } | { slideType: "bible"; reference: string; text: string; mode: BibleMode; background: BackgroundConfig; text_color: string | null; text_size: number | null } | { slideType: "onlineVideo"; source: VideoSource; title: string | null } | { slideType: "pause" }
 export type SlideContext = { next: SlideContent | null; index: number; total: number; title: string; currentSlideStartMs: number | null; nextSlideStartMs: number | null; audioDurationMs: number | null }
 export type StreamingInfo = { isRunning: boolean; ip: string | null; port: number; urls: StreamingUrls | null; connections: number; broadcastEnabled: boolean }
 export type StreamingUrls = { music: string; bible: string; returnMonitor: string }
@@ -2124,7 +2126,7 @@ export type VideoPipelineSinkDegraded = { windowLabel: string; reason: string }
  */
 export type VideoPipelineState = { positionSecs: number; durationSecs: number; paused: boolean; volume: number }
 export type VideoServerInfo = { isRunning: boolean; port: number; accessToken: string }
-export type VideoSource = "local" | "youtube"
+export type VideoSource = { kind: "local"; url: string } | { kind: "youtube"; video_id: string }
 /**
  * Payload forwarded from the frontend video master to streaming SSE clients.
  * The `event_type` field distinguishes state snapshots from transient commands

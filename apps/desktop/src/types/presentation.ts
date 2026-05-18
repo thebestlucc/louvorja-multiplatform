@@ -135,9 +135,7 @@ export function defaultSlide(type: SlideType): SlideContent {
     case "onlineVideo":
       return {
         slideType: "onlineVideo",
-        url: "",
-        video_id: "",
-        source: "youtube",
+        source: { kind: "youtube", video_id: "" },
         title: null,
       };
     case "pause":
@@ -273,14 +271,16 @@ export function parseLegacySlideContent(raw: string | SlideContent): SlideConten
         text_size: legacy.textSize ?? null,
       };
     case "online_video":
-    case "onlineVideo":
+    case "onlineVideo": {
+      const src = legacy.videoSource === "local"
+        ? { kind: "local" as const, url: legacy.videoUrl ?? "" }
+        : { kind: "youtube" as const, video_id: legacy.videoId ?? "" };
       return {
         slideType: "onlineVideo",
-        url: legacy.videoUrl ?? "",
-        video_id: legacy.videoId ?? "",
-        source: (legacy.videoSource as "local" | "youtube") ?? "youtube",
+        source: src,
         title: legacy.videoTitle ?? null,
       };
+    }
     case "pause":
       return { slideType: "pause" };
     default:

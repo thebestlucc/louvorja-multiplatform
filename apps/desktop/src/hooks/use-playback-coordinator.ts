@@ -176,13 +176,11 @@ async function playVideoItem(item: QueueItem) {
   await audioStore.getState().stop();
 
   const vm = item.videoMedia;
-  // onlineVideo SlideContent: { slideType: "onlineVideo"; url: string; video_id: string; source: VideoSource; title: string | null }
-  // youtube: url is empty (player uses video_id), local: url is the path
   const slide: import("../lib/bindings").SlideContent = {
     slideType: "onlineVideo" as const,
-    url: vm.videoUrl ?? "",
-    video_id: vm.videoId ?? "",
-    source: vm.videoSource,
+    source: vm.videoSource === "local"
+      ? { kind: "local", url: vm.videoUrl ?? "" }
+      : { kind: "youtube", video_id: vm.videoId ?? "" },
     title: vm.videoTitle ?? null,
   };
 
