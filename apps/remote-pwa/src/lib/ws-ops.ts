@@ -59,10 +59,15 @@ const SERVICE_JUMP_TO     = "service.jump_to"     as const;
 const SERVICE_STATE       = "service.state"       as const;
 
 // ── Display / Overlay ─────────────────────────────────────────────────────────
-const DISPLAY_OVERLAY = "display.overlay" as const;
-const OVERLAY_BLACK   = "overlay.black"   as const;
-const OVERLAY_CLEAR   = "overlay.clear"   as const;
-const OVERLAY_LOGO    = "overlay.logo"    as const;
+const DISPLAY_OVERLAY  = "display.overlay"  as const;
+const OVERLAY_BLACK    = "overlay.black"    as const;
+const OVERLAY_CLEAR    = "overlay.clear"    as const;
+const OVERLAY_LOGO     = "overlay.logo"     as const;
+const OVERLAY_CHANGED  = "overlay.changed"  as const;
+
+// ── Alert / Freeze (inbound only) ─────────────────────────────────────────────
+const ALERT_CHANGED  = "alert.changed"  as const;
+const FREEZE_CHANGED = "freeze.changed" as const;
 
 // ── Shortcut ──────────────────────────────────────────────────────────────────
 const SHORTCUT_TRIGGER = "shortcut.trigger" as const;
@@ -137,6 +142,10 @@ export const WsOps = {
   OVERLAY_BLACK,
   OVERLAY_CLEAR,
   OVERLAY_LOGO,
+  OVERLAY_CHANGED,
+
+  ALERT_CHANGED,
+  FREEZE_CHANGED,
 
   SHORTCUT_TRIGGER,
 
